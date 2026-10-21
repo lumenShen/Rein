@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
+import ExerciseTrendCard from '@/components/exercise/ExerciseTrendCard.vue'
 import type { ExerciseAdvice } from '@/utils/trainingAdvice'
 
 /**
@@ -102,6 +103,19 @@ const lastDateShort = computed(() => {
           实心 = 实际做的次数，空心 = 留的余力。<StatusChip tone="accent" size="sm">不是力竭</StatusChip>
         </p>
       </header>
+
+      <!-- ---------- 1.5 历史最高 + 近 14 天趋势 ----------
+           用户点开「建议说明」时第二个问题几乎总是「我以前最多做到多少、最近在涨还是掉」。
+           这两个数字与建议重量同源（同一次训练聚合），不需要再点一次抽屉。 -->
+      <section v-if="advice.bestWeight != null || advice.trend" class="scard">
+        <ExerciseTrendCard
+          :best-weight="advice.bestWeight"
+          :best-reps="advice.bestReps"
+          :best-date="advice.bestDate"
+          :best-e1rm="advice.bestE1rm"
+          :trend="advice.trend"
+        />
+      </section>
 
       <!-- ---------- 2. 计算链 ---------- -->
       <section v-if="isStrength" class="scard">

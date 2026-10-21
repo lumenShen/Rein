@@ -409,7 +409,7 @@ const ICON_BTN = 54
   display: flex;
   flex-direction: column;
   gap: var(--sp-22);
-  padding: 18px var(--page-pad-x) 20px;
+  padding: var(--sp-18) var(--page-pad-x) var(--sp-20);
   pointer-events: none; /* 空处留给壁纸拖动 */
 }
 

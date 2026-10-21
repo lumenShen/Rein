@@ -6305,7 +6305,22 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'session_for_workout': {
       const w = workouts.find((x) => x.id === Number(args.workoutId))
       const s = w?.sessionId != null ? sessions.find((x) => x.id === w.sessionId) : undefined
-      return delay((s ? structuredClone(s) : null) as T)
+      if (!w || !s) return delay(null as T)
+      // 与 Rust 同语义：把这一场已落库的逐组明细一并返回（详情页的权威数据源）
+      const rows = strengthSets
+        .filter((x) => x.workoutId === w.id)
+        .map((x) => ({
+          exerciseKey: x.exerciseKey,
+          exerciseName: x.exerciseName,
+          exerciseId: x.exerciseId || null,
+          kind: x.kind,
+          setNo: x.setNo,
+          weightKg: x.weightKg,
+          reps: x.reps,
+          sec: x.sec,
+          warmup: x.warmup,
+        }))
+      return delay(structuredClone({ ...s, sets: rows }) as T)
     }
 
     /* ---------- 重量曲线（逐组记录查询，与 Rust 同语义；聚合键 = 动作库 id） ---------- */

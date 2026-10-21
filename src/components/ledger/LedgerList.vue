@@ -58,10 +58,10 @@ const groups = computed<DayGroup[]>(() => {
             </i>
             <div class="flex-1 meta">
               <span class="lbl">{{ categoryOf(e.category)?.label ?? e.category }}</span>
-              <span v-if="e.note" class="note t-3">{{ e.note }}</span>
+              <span v-if="e.note" class="note">{{ e.note }}</span>
             </div>
             <b class="num amt" :class="e.kind">
-              {{ e.kind === 'expense' ? '−' : '+' }}¥{{ fmtCents(e.amountCents) }}
+              <i class="sign">{{ e.kind === 'expense' ? '−' : '+' }}</i><i class="cur">¥</i>{{ fmtCents(e.amountCents) }}
             </b>
           </button>
         </li>
@@ -145,6 +145,9 @@ const groups = computed<DayGroup[]>(() => {
 
 .note {
   font-size: var(--fs-footnote);
+  /* 备注是识别这笔钱花在哪的第二依据（「午餐 + 咖啡」），不是脚注 → --text-2；
+     原来的 --text-3 在 12px 上只有约 3:1，暗色里更糊 */
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -161,6 +164,20 @@ const groups = computed<DayGroup[]>(() => {
   /* 一个金额串不折行：「−¥12,345.67」拆成两行就等于读错 */
   white-space: nowrap;
   color: var(--text-1);
+}
+
+/* 正负号与币种符号降一档（12 / medium / 次档灰）：它们是语义与量纲，
+   不是第二位读数。此前「−¥32.5」五个字符同粗，一眼读不出主数字从哪开始。 */
+.amt .sign,
+.amt .cur {
+  font-style: normal;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
+}
+
+.amt .cur {
+  margin-right: var(--gap-text);
 }
 
 /* 收入与支出同色：色彩配额里金额是**数值**（STANDARDS §4），一律 --text-1；

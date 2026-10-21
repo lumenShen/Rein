@@ -3,19 +3,24 @@ import { computed, ref, watch } from 'vue'
 
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
+import ExerciseGuideBlock from '@/components/exercise/ExerciseGuideBlock.vue'
 import ExerciseHistoryPanel from '@/components/exercise/ExerciseHistoryPanel.vue'
+import ExerciseTrendCard from '@/components/exercise/ExerciseTrendCard.vue'
 import MuscleMap from '@/components/exercise/MuscleMap.vue'
 import WeightCurve from '@/components/exercise/WeightCurve.vue'
 import { sessionService } from '@/services/sessionService'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
-import { fmtDateCn } from '@/utils/date'
+import { fmtDateCn, todayStr } from '@/utils/date'
+import { buildExerciseHistory } from '@/utils/strengthStats'
+import { computeStrengthTrend, type StrengthTrend } from '@/utils/strengthTrend'
 import { aggregateStrengthDays, fmtKg, type StrengthDay } from '@/utils/strength'
 import type { PlanExercise } from '@/types'
 import { exerciseBadge } from '@/utils/plan'
 
 /** 动作详情抽屉：课程详情页点击动作唤起。
- *  内容 = 动作名与徽标 + 激活肌群图 + 训练参数格 + 重量变化曲线（有记录才显示）+ 动作要点。
- *  名称/肌群取动作库（改名跟随），曲线按动作库 id 查询。 */
+ *  顺序按「训练前怎么读」排：**动作详解（准备/轨迹/注意）在最上面** —— 它是用户
+ *  打开这个抽屉的第一诉求；肌群图与参数是背景信息；历史最高与趋势回答「我现在什么水平」；
+ *  曲线与逐项成绩是存档。 */
 const props = defineProps<{
   open: boolean
   exercise: PlanExercise | null
@@ -31,14 +36,22 @@ const displayName = computed(() => (props.exercise ? lib.resolveName(props.exerc
 /** 激活肌群：库内显式数据优先，其次课程条目，最后按名关键词识别 */
 const activation = computed(() => (props.exercise ? lib.musclesOf(props.exercise) : null))
 
-/** 动作要领：来自动作库（课程条目不存要领） */
-const steps = computed(() =>
-  props.exercise ? (lib.get(props.exercise.exerciseId)?.steps ?? []) : [],
-)
+/** 结构化动作详解（内置动作）；自建动作回落库里那句 tips */
+const guide = computed(() => (props.exercise ? lib.guideOf(props.exercise) : null))
 
-/* ---------- 重量曲线：打开且动作有力量记录时加载 ---------- */
+/** 库内要点：自建动作没有详解数据时的兜底 */
+const tips = computed(() => (props.exercise ? lib.tipsOf(props.exercise) : ''))
+
+/* ---------- 历史：曲线 / 历史最高 / 14 天趋势 ---------- */
 
 const curveDays = ref<StrengthDay[]>([])
+const trend = ref<StrengthTrend | null>(null)
+const best = ref<{ weight: number | null; reps: number | null; date: string | null; e1rm: number | null }>({
+  weight: null,
+  reps: null,
+  date: null,
+  e1rm: null,
+})
 const curveLoadedFor = ref('')
 
 watch(
@@ -48,13 +61,29 @@ watch(
     if (!open || !key || curveLoadedFor.value === key) return
     curveLoadedFor.value = key
     curveDays.value = []
+    trend.value = null
+    best.value = { weight: null, reps: null, date: null, e1rm: null }
     void sessionService
       .strengthHistory(key)
       .then((rows) => {
         curveDays.value = aggregateStrengthDays(rows).slice(-10)
+        // 历史最高与趋势走 strengthStats 的同一份聚合（PR 口径全端只有一份）
+        const hist = buildExerciseHistory(rows)
+        const w = hist.prs.weight
+        best.value = {
+          weight: w?.value ?? null,
+          reps: w?.reps ?? null,
+          date: w?.date ?? null,
+          e1rm: hist.prs.e1rm?.value ?? null,
+        }
+        trend.value = computeStrengthTrend(
+          hist.sessions.map((s) => ({ date: s.date, e1rm: s.bestE1rm })),
+          todayStr(),
+        )
       })
       .catch(() => {
         curveDays.value = []
+        trend.value = null
       })
   },
   { immediate: true },
@@ -110,6 +139,18 @@ const stats = computed<{ k: string; v: string }[]>(() => {
       </div>
       <!-- 摘要行删去：参数格（组数/次数/重量/休息）是同一组事实的更全写法 -->
 
+      <!-- 动作详解放在最顶：用户点开这个抽屉，第一诉求是「这个动作怎么做」，
+           而不是先看肌群图与参数格。三段（准备 / 开始·结束 / 注意）的顺序
+           就是一次动作的时间顺序。 -->
+      <template v-if="guide">
+        <p class="sec">动作详解</p>
+        <ExerciseGuideBlock :guide="guide" />
+      </template>
+      <template v-else-if="tips">
+        <p class="sec">动作要点</p>
+        <p class="tips">{{ tips }}</p>
+      </template>
+
       <template v-if="activation">
         <p class="sec">激活肌群</p>
         <div class="mapcard">
@@ -125,6 +166,28 @@ const stats = computed<{ k: string; v: string }[]>(() => {
           <div class="k">{{ s.k }}</div>
         </div>
       </div>
+
+      <!-- 历史最高与 14 天趋势：与「重量建议说明」抽屉同一份口径（strengthStats + strengthTrend），
+           两处数字必须能对上 —— 建议抽屉里说「历史最高 80kg」，这里不能是 78 -->
+      <template v-if="best.weight != null || trend">
+        <p class="sec">
+          历史最高与趋势
+          <InfoHint
+            class="sec-hint"
+            title="两个数字的口径"
+            content="历史最高：所有记录里最重的那一组，不限时间，是该动作的个人纪录。
+
+近 14 天趋势：只看最近两周，每次训练取当天最好的 e1RM 连成线，按「越近权重越高」拟合一条直线，外推到今天。虚线是预测，不是已经做到的成绩。"
+          />
+        </p>
+        <ExerciseTrendCard
+          :best-weight="best.weight"
+          :best-reps="best.reps"
+          :best-date="best.date"
+          :best-e1rm="best.e1rm"
+          :trend="trend"
+        />
+      </template>
 
       <template v-if="curveDays.length">
         <p class="sec">
@@ -160,18 +223,6 @@ const stats = computed<{ k: string; v: string }[]>(() => {
           />
         </p>
         <ExerciseHistoryPanel :exercise-id="exercise.exerciseId" />
-      </template>
-
-      <template v-if="exercise.tips">
-        <p class="sec">动作要点</p>
-        <p class="tips">{{ exercise.tips }}</p>
-      </template>
-
-      <template v-if="steps.length">
-        <p class="sec">动作要领</p>
-        <ol class="steps">
-          <li v-for="(s, i) in steps" :key="i">{{ s }}</li>
-        </ol>
       </template>
     </template>
   </SheetModal>
@@ -218,43 +269,6 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 
 .sec-hint {
   margin-left: auto;
-}
-
-/* 动作要领：分步说明 */
-.steps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-sm);
-  padding-left: 0;
-  list-style: none;
-  counter-reset: step;
-}
-
-.steps li {
-  position: relative;
-  /* 序号圆点 18 + 间距 → 24（4/8 体系），原来 26 落在格点外 */
-  padding-left: var(--sp-24);
-  font-size: var(--fs-footnote);
-  line-height: var(--lh-body);
-  color: var(--text-1);
-  counter-increment: step;
-}
-
-.steps li::before {
-  content: counter(step);
-  position: absolute;
-  left: 0;
-  top: 1px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  /* 序号是数值：走中性色。色相只留在圆点底上（色点/标记图元，STANDARDS §4） */
-  background: var(--c-exercise-soft);
-  color: var(--text-1);
-  font-size: var(--fs-micro);
-  font-weight: var(--fw-bold);
-  line-height: 18px;
-  text-align: center;
 }
 
 .curvebox {

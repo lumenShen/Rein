@@ -525,6 +525,102 @@ const mealChips = computed(() =>
   justify-content: center;
 }
 
+/* ---------- 摄入总览（hero 格）：把「被拉高」变成结构 ----------
+   hero 与「待办」并排、同跨两行（实测 ≈690 高），而营养域的 dense 版式只会把
+   标题/主数值/条/图例堆在上部约 150 —— 中间空出 400 多，整张卡读成「没画完」。
+   施工单第 1 条要求「拉伸后内容要重新排版」，所以只在这一颗调用点上重排高度：
+   · 上半区：主数值与热量条放大（同一屏里它的主读数地位不变，只是不再挤成一条）；
+   · 下半区：三大宏量从「三列小条」改成一整块浅井（--radius-m-nest + --surface-inset）
+     里的三行分解 —— 行自己吸收高度、条加粗，空间被结构吃掉，而不是靠
+     justify-content 摊成几道等宽的缝。
+   组件内部的实现（nutrition 域）不动，避免与营养页那套共用实现分叉。 */
+.t-hero :deep(.ov) {
+  height: 100%;
+  /* 卡内三块（主读数 / 图例 / 宏量井）之间恒为 12（卡内区块档），
+     不再各处各写一个 margin-top */
+  gap: var(--gap-md);
+}
+
+.t-hero :deep(.big) {
+  /* 主数值是这一格唯一的英雄数字：回到 display-s（dense 为塞进窄卡压到 18） */
+  font-size: var(--fs-display-s);
+  letter-spacing: -1.2px;
+}
+
+.t-hero :deep(.rest-v) {
+  font-size: var(--fs-title2);
+}
+
+/* 条加粗一档：12 在 690 高的卡里是一根线，读不出「已经吃到这里了」 */
+.t-hero :deep(.bar.lg) {
+  height: var(--sp-20);
+  margin-top: var(--gap-sm);
+}
+
+/* 图例与上方条、与下方宏量井各 8 / 12：图例是条的注解，不单独成块 */
+.t-hero :deep(.legend) {
+  margin-top: 0;
+}
+
+/* 分隔线由宏量井自己承担（浅井 + 圆角就是分界），不再叠一根发丝线 */
+.t-hero :deep(.hr) {
+  display: none;
+}
+
+.t-hero :deep(.macros) {
+  flex: 1 1 auto;
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
+  background: var(--surface-inset);
+}
+
+/* 一行宏量 = 标签 + 数值同一行、条在下方整行跨满：
+   行高随卡片剩余高度伸缩，条也就不必再压成 8px 的细线 */
+.t-hero :deep(.mc) {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  align-items: center;
+  column-gap: var(--gap-md);
+  row-gap: var(--gap-sm);
+  padding-block: var(--gap-tight);
+}
+
+.t-hero :deep(.mc > .m-label) {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
+}
+
+.t-hero :deep(.mc > .m-val) {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-end;
+}
+
+/* 条在第二行跨满两列：与上面那行标签同宽，读数与图元才对得上 */
+.t-hero :deep(.mc > .bar) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  height: var(--sp-12);
+}
+
+.t-hero :deep(.m-cur) {
+  font-size: var(--fs-title2);
+}
+
+.t-hero :deep(.m-tgt) {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
+}
+
 .b-ai {
   display: flex;
   flex-direction: column;

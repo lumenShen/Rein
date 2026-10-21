@@ -50,13 +50,13 @@ const rows = computed(() =>
 
     <ul class="list">
       <li v-for="r in rows" :key="r.key" class="item">
-        <div class="row between top">
+        <div class="row between">
           <span class="name row center">
             <i class="dot" :style="{ background: `var(${r.colorVar})` }" />
             {{ r.label }}
           </span>
           <span class="num val">
-            {{ r.current }}<em> / {{ r.target }} {{ r.unit }}</em>
+            {{ r.current }}<em>/ {{ r.target }}</em><i class="unit">{{ r.unit }}</i>
           </span>
         </div>
       </li>
@@ -106,7 +106,12 @@ const rows = computed(() =>
 }
 
 .item {
-  /* 单行数值行按 48 档：12 上下 + 16 字（行高 24）= 48 */
+  /* 单行数值行按 48 档：12 上下 + 16 字（行高 24）= 48。
+     用 min-height + 居中而不是靠 padding 撑：三条的行高必须严格相等，
+     否则右列数值每行基线差 1px，「一列对齐」就不成立。 */
+  display: flex;
+  align-items: center;
+  min-height: var(--row-h);
   padding: var(--sp-12) 0;
 }
 
@@ -114,9 +119,9 @@ const rows = computed(() =>
   border-top: 0.5px solid var(--line);
 }
 
-.top {
-  /* 这张卡的行只有「名称 / 当前·目标」一行，下面不挂进度条：留一格 4 即可 */
-  margin-bottom: var(--gap-tight);
+/* 名称 / 数值两端对齐：内层行必须吃满整行宽 */
+.item > .row {
+  width: 100%;
 }
 
 .name {
@@ -144,10 +149,21 @@ const rows = computed(() =>
 
 .val em {
   font-style: normal;
+  /* 目标值是要读的依据（判断达没达标），不退到 --text-3；
+     与当前值靠字重 + 字号两档拉开，不靠再压一档灰 */
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  /* 数值与「/ 目标」是同一行内的最小一对：4（--gap-tight） */
+  margin-left: var(--gap-tight);
+}
+
+/* 单位再降一档（micro + 三级灰）：它是量纲，不是第二个读数 */
+.unit {
+  margin-left: var(--gap-text);
+  font-style: normal;
+  font-size: var(--fs-micro);
   font-weight: var(--fw-regular);
   color: var(--text-3);
-  font-size: var(--fs-caption);
-  /* 数值与「/ 目标 单位」是同一行内的最小一对：4（--gap-tight），不用裸值 2 */
-  margin-left: var(--gap-tight);
 }
 </style>

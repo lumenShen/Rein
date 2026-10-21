@@ -106,7 +106,8 @@ const stats = computed(() => {
 .month {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  /* 概览行与月卡之间是「说明 → 内容」的一档（8），比卡片间距紧一档 */
+  gap: var(--gap-sm);
 }
 
 .sum {
@@ -115,11 +116,13 @@ const stats = computed(() => {
   padding: 0 var(--sp-2);
 }
 
+/* 星期表头必须与下面的日期格**同一条列宽**：两边都用 1fr，还要同 gap、同左右内距 ——
+   此前表头 gap 4、日期格 gap 2，七列累积下来最后一天偏出将近 8px，读起来像没对齐。 */
 .head {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: var(--sp-4);
-  padding: var(--sp-2) var(--sp-6) var(--sp-6);
+  gap: var(--sp-2);
+  padding: 0 0 var(--gap-sm);
 }
 
 .head span {
@@ -134,7 +137,7 @@ const stats = computed(() => {
   /* 内容容器档 16：整月是一张卡面，与日 / 周视图同层；20 是按钮档 */
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: var(--sp-8) var(--sp-6);
+  padding: var(--pad-card-tight);
 }
 
 .grid {
@@ -148,7 +151,7 @@ const stats = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-4);
+  padding: var(--sp-4);
   border-radius: var(--radius-s);
   text-align: left;
   overflow: hidden;
@@ -161,7 +164,12 @@ const stats = computed(() => {
   transform: scale(0.97);
 }
 
-/* 「今天」= 日期落进 accent 实心圆（iOS 日历语义），不再描整个格子 */
+/* 「今天」：日期落进 accent 实心圆（iOS 日历语义），再给整格一层极浅的底 ——
+   一眼扫过整月时，先看到的是那块面，再读到圈里的数字。 */
+.cell.today {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
 .cell.today .d {
   color: var(--on-accent);
   background: var(--accent);
@@ -187,19 +195,33 @@ const stats = computed(() => {
   min-width: 0;
 }
 
-/* 课程色条：整面 soft tint（课表三视图同一档浓度，与日视图 / 周视图同画法），
-   不再靠 2px 左边框（side-tab 收编）。底色混的是承载它的 --surface（牌面），
-   与原先混 transparent 再压到牌面上等效，但合成关系更明确。 */
+/* 课程条：中性底 + 左侧 3px 色条（与周视图课块、日视图课程卡同一套色相语言）。
+   一格里的条只有十来像素高，整面染色会把相邻两门课糊成一块；
+   色条既保住了「哪门课」的识别，也让每条之间的间隙读得出来。 */
 .chip {
+  position: relative;
   font-size: var(--fs-micro);
   line-height: var(--lh-title);
-  padding: var(--sp-2) var(--sp-4);
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--blk) 12%, var(--surface));
+  /* 一格只有 50 上下，色条占掉的每一像素都从课名里扣：左内距 8（条 3 + 缝 5）、
+     右内距 2，正文才留得下三个汉字（月视图本来就是「看个大概」，不是读全名的地方） */
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-8);
+  /* 小标签档 4：这一格里的条是「标签」而不是「块」 */
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--blk);
 }
 
 /* 「假 / 调」：直接缀在课名前面（色条太窄，放不下独立角标） */

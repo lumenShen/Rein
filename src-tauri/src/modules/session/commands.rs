@@ -9,7 +9,8 @@ use crate::modules::exercise::workout_by_id;
 use crate::state::AppState;
 
 use super::models::{
-    FinishInput, SessionRecord, StrengthExerciseRef, StrengthLastWeight, StrengthSetRecord,
+    FinishInput, SessionRecord, SessionSetRow, StrengthExerciseRef, StrengthLastWeight,
+    StrengthSetRecord,
 };
 
 /// 一行原始数据（state_json 先取字符串，再解析）
@@ -41,6 +42,7 @@ fn to_record(raw: RawRow) -> Result<SessionRecord> {
         weight_kg: raw.8,
         elapsed_sec: raw.9,
         state,
+        sets: Vec::new(),
     })
 }
 
@@ -272,8 +274,36 @@ pub(crate) fn session_abort_on(conn: &rusqlite::Connection, id: i64) -> Result<(
     Ok(())
 }
 
+/// 一场训练已落库的逐组明细（按 `workout_sets.id` 升序 = 当时的登记顺序）。
+fn sets_for_workout(conn: &rusqlite::Connection, workout_id: i64) -> Result<Vec<SessionSetRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT exercise_key, exercise_name, exercise_id, kind, set_no, weight_kg, reps, sec, warmup \
+         FROM workout_sets WHERE workout_id = ?1 ORDER BY id ASC",
+    )?;
+    let list = stmt
+        .query_map([workout_id], |r| {
+            Ok(SessionSetRow {
+                exercise_key: r.get(0)?,
+                exercise_name: r.get(1)?,
+                exercise_id: r.get(2)?,
+                kind: r.get(3)?,
+                set_no: r.get(4)?,
+                weight_kg: r.get(5)?,
+                reps: r.get(6)?,
+                sec: r.get(7)?,
+                warmup: r.get::<_, i64>(8)? != 0,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(list)
+}
+
 /// 按训练记录反查其来源会话（含最后一帧快照：轨迹 / 做组明细）。
 /// 手动添加的记录没有来源会话，返回 None。
+///
+/// 同时把 `workout_sets` 的逐组明细一并返回：`state.doneSets` 的键是**课程条目 id**，
+/// 课程被整体覆盖（AI 重写 / 手动增删）后键就失效，只有落库明细带着当时的动作名与
+/// 动作库 id，是详情页唯一稳定的真源。见 `SessionSetRow` 的说明。
 #[tauri::command]
 pub fn session_for_workout(
     state: State<AppState>,
@@ -302,7 +332,11 @@ pub fn session_for_workout(
         },
     );
     match res {
-        Ok(raw) => Ok(Some(to_record(raw)?)),
+        Ok(raw) => {
+            let mut rec = to_record(raw)?;
+            rec.sets = sets_for_workout(&conn, workout_id)?;
+            Ok(Some(rec))
+        }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.into()),
     }

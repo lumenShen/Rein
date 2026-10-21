@@ -21,8 +21,7 @@ import WeekSummary from '@/components/todo/WeekSummary.vue'
 import WeekTimeline from '@/components/todo/WeekTimeline.vue'
 import { addDays, fmtDateCn, minToHHmm, nowMin, todayStr, weekDates } from '@/utils/date'
 import { busyIntervals, freeGaps } from '@/utils/schedule'
-import type { Todo, TodoDraft, TodoInput, TodoSubtask } from '@/types'
-import QuickAddBar from '@/components/todo/QuickAddBar.vue'
+import type { Todo, TodoSubtask } from '@/types'
 import TodoEditorSheet from '@/components/todo/TodoEditorSheet.vue'
 import CourseDetailSheet from '@/components/campus/CourseDetailSheet.vue'
 
@@ -101,33 +100,6 @@ const editorTarget = computed<Todo | null>(
 )
 const editorId = ref<number | null>(null)
 const addOpen = ref(false)
-
-/* ---------- 一句话记待办 → 编辑器 ---------- */
-
-/** 输入条解析出的草稿填进编辑器时，走**独立的抽屉实例**：
- *  editorId/editorTarget 是「编辑既有待办」的通道，共用会把正在编辑的那条覆盖掉。 */
-const draftOpen = ref(false)
-const draftInitial = ref<Partial<TodoInput> | null>(null)
-const quickBar = ref<InstanceType<typeof QuickAddBar> | null>(null)
-
-/** 点输入条箭头：把草稿铺成 TodoInput 预填，打开新的待办编辑器等用户确认 */
-function onQuickFill(draft: TodoDraft): void {
-  draftInitial.value = {
-    title: draft.title,
-    date: draft.date,
-    startMin: draft.startMin,
-    durationMin: draft.durationMin,
-    category: draft.category,
-    priority: draft.priority,
-    notes: draft.notes,
-  }
-  draftOpen.value = true
-}
-
-/** 保存后清空输入条；取消（未保存）则保留预览，用户可接着改那句话 */
-function onQuickSaved(): void {
-  quickBar.value?.clear()
-}
 
 /** 课表派生行是只读投影：点开的是课程详情，不是待办编辑器（见 CourseDetailSheet）。
  *  与 editorTarget 同理按 id 派生 —— 存对象快照的话，打卡后面板读到的还是旧对象。 */
@@ -390,9 +362,6 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
-    <!-- AI 一句话记待办：输入一句自然语言 → 预览 chip → 点箭头填入编辑器 -->
-    <QuickAddBar ref="quickBar" :date="today" @fill="onQuickFill" />
-
     <!-- 视图切换 + 智能排程 -->
     <div class="toolbar row">
       <SegmentedControl v-model="segment" :options="VIEW_OPTIONS" class="viewseg" aria-label="视图" />
@@ -508,15 +477,6 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 
     <DailyRitual :open="ritualOpen" :candidates="ritualCandidates" @close="closeRitual" @confirm="onRitualConfirm" />
     <TodoEditorSheet :open="editorOpen" :todo="editorTarget" :date="canvasDate" @close="editorOpen = false" />
-    <!-- 一句话记待办走独立实例（todo=null 恒为新建），不与上面的「编辑既有待办」互相覆盖 -->
-    <TodoEditorSheet
-      :open="draftOpen"
-      :todo="null"
-      :initial="draftInitial"
-      :date="canvasDate"
-      @close="draftOpen = false"
-      @saved="onQuickSaved"
-    />
     <CourseDetailSheet
       :open="courseOpen"
       :todo="course"

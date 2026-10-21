@@ -62,6 +62,13 @@ const isThisPeriod = computed(() => {
   return t >= from && t <= to
 })
 
+/**
+ * 回到本段的快捷标签 —— 只在**已经离开本段**时出现。
+ * 三个视图的「本段」不是同一个词：日视图回今天、周视图回本周、月视图回本月，
+ * 写成一句「回到本周」放在日视图里会读成「跳到本周的某一天」，语义是错的。
+ */
+const backLabel = computed(() => (view.value === 'day' ? '今天' : view.value === 'month' ? '本月' : '本周'))
+
 /** 学期是否真的落在当前浏览区间内 —— 区间外不必提示“没课”，那只是寒假/暑假 */
 const semesterCovers = computed(() => {
   const s = store.semester
@@ -72,6 +79,18 @@ const semesterCovers = computed(() => {
 
 const showEmpty = computed(() => !store.hasAccount)
 const showNoData = computed(() => store.hasAccount && store.entries.length === 0)
+
+/**
+ * 「没课」有三种，说法必须分开 —— 用户下一步要做的事完全不同：
+ * 1. 不在本学期内：翻错日期了 → 回本周；
+ * 2. 本学期没有排课：教务还没出课表 / 同步没跑 → 去配置页重同步；
+ * 3. 这一段没有：学期有课，只是这一周/这一天没排 → 换个日期看看。
+ * 判据取「本学期课程表是否为空」（courses 是整学期清单，不受当前区间过滤）。
+ */
+const emptyCase = computed<'outOfTerm' | 'noCourses' | 'noEntries'>(() => {
+  if (!semesterCovers.value) return 'outOfTerm'
+  return store.courses.length === 0 ? 'noCourses' : 'noEntries'
+})
 
 async function reload(): Promise<void> {
   const [from, to] = range.value
@@ -155,7 +174,9 @@ watch([view, anchor], reload)
 </script>
 
 <template>
-  <div class="page">
+  <!-- 周视图是「一屏一张表」：页面高度锁一屏，网格才分得到剩余高度（见 .fit-h）。
+       日 / 月视图是普通内容流，跟着内容长，装不下时整页滚。 -->
+  <div class="page" :class="{ 'fit-h': view === 'week' && !showEmpty && !showNoData }">
     <PageHeader title="我的课表" :subtitle="store.headerSubtitle" back>
       <template #action>
         <button
@@ -187,6 +208,10 @@ watch([view, anchor], reload)
     </EmptyState>
 
     <template v-else>
+      <!-- 一条工具行：视图切换在左、日期步进在右，同高（32）同圆角。
+           它们改的是同一件事（在看哪一段），分成两个高度、两套圆角的控件时，
+           读起来像两组互不相干的东西。回到本段的快捷键只在离开本段后出现 ——
+           已经在本段时它没有可做的事，占着位置只会挤掉日期。 -->
       <div class="bar">
         <SegmentedControl v-model="view" :options="viewOptions" class="seg" />
         <div class="nav">
@@ -199,17 +224,33 @@ watch([view, anchor], reload)
           <button class="nv" aria-label="下一段" @click="step(1)">
             <ChevronRight :size="17" :stroke-width="2.4" />
           </button>
+          <button v-if="!isThisPeriod" class="back" @click="goToday">{{ backLabel }}</button>
         </div>
       </div>
 
       <EmptyState
         v-if="showNoData"
         :icon="CalendarX2"
-        :title="semesterCovers ? '这段时间没有课' : '不在本学期内'"
-        :hint="semesterCovers ? '换个日期看看，或者回本周' : `当前学期：${store.semester?.name ?? '未设置'}`"
+        :title="
+          emptyCase === 'outOfTerm'
+            ? '不在本学期内'
+            : emptyCase === 'noCourses'
+              ? '本学期还没有课表'
+              : '这段时间没有课'
+        "
+        :hint="
+          emptyCase === 'outOfTerm'
+            ? `当前学期：${store.semester?.name ?? '未设置'}`
+            : emptyCase === 'noCourses'
+              ? '教务那边还没排课，或者同步没跑完 —— 去配置页重新同步一次'
+              : '换个日期看看，或者回本周'
+        "
       >
         <template #action>
-          <button class="cta" @click="goToday">回到今天</button>
+          <button v-if="emptyCase === 'noCourses'" class="cta" @click="router.push({ name: 'campus-settings' })">
+            去重新同步
+          </button>
+          <button v-else class="cta" @click="goToday">回到今天</button>
         </template>
       </EmptyState>
 
@@ -281,6 +322,21 @@ watch([view, anchor], reload)
   flex-direction: column;
   /* 工具栏、课表、底部入口是三个各自成块的区域，块间取有明显边界的一档（16） */
   gap: var(--gap-lg);
+  /* 手机壳是**文档滚动**：页面至少一屏高，空态与短内容也把底部入口压到该在的位置 */
+  min-height: calc(100dvh - var(--safe-top));
+}
+
+/* 周视图专用：高度**确定**才谈得上「把剩余高度分给课表」。
+   用 min-height 时页面高度由内容反推，弹性子项分不到剩余空间，
+   课表会撑成两倍高、底部两条入口被 Dock 压住；定高后网格吃剩余，入口落在它之后。 */
+.page.fit-h {
+  height: calc(100dvh - var(--safe-top));
+}
+
+/* 内容层继承 .page 的弹性列，还要自己吃满剩余高度（base.css 只镜像布局，不给弹性系数） */
+.rubber-layer {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ============================================================
@@ -293,6 +349,17 @@ watch([view, anchor], reload)
   max-width: var(--desk-wide);
   margin-inline: auto;
   gap: var(--desk-gap);
+  /* 桌面主人区（.desk-main）自己就是滚动容器：页面撑满它的可视高度即可，
+     不必再把 100dvh 当参照（那样会多算一层窗口标题栏） */
+  min-height: 100%;
+}
+
+/* 桌面周视图同样要一个**确定高度**，课表才分得到剩余空间。
+   这里不能用 100%：页面的父级是壳层那个 [data-rubber-shell] 空壳（高度 auto），
+   百分比会退化成 auto。改从视口算，并扣掉无边框窗口里那条自绘标题栏（--titlebar-h，
+   浏览器预览里没有它，页面会矮 40 —— 那 40 是底色，不承载内容）。 */
+.desk-main .page.fit-h {
+  height: calc(100dvh - var(--titlebar-h));
 }
 
 /* 顶部工具栏：手机上是「分段控件 132px | 日期导航吃掉剩余」——桌面上那条导航
@@ -320,6 +387,8 @@ watch([view, anchor], reload)
   align-items: center;
   /* 分段控件与日期导航两块控件相邻，取卡片间一档，窄屏不挤 */
   gap: var(--gap-md);
+  /* 同高（32）是这一行唯一的几何约束：两块控件都锁在这个高度上 */
+  height: var(--sp-32);
 }
 
 /* ---------- 课表下方的常驻入口 ---------- */
@@ -328,7 +397,8 @@ watch([view, anchor], reload)
   flex-direction: column;
   /* 两行入口本身就是卡片，行间按卡片间距 12，比原来的 8 分得开 */
   gap: var(--gap-md);
-  margin-top: var(--gap-tight);
+  /* 与课表之间由 .page 的块间间距给出（16），这里不再叠一层边距 */
+  margin-top: 0;
 }
 
 .link-row {
@@ -388,9 +458,14 @@ watch([view, anchor], reload)
 
 .seg {
   flex: none;
-  width: 132px;
+  /* 三段单字（日 / 周 / 月）：108 = 36 一段，比原来的 132 省下 24 给日期读数 */
+  width: calc(var(--sp-36) * 3);
+  /* 与右侧日期导航同圆角 —— 两个容器一左一右贴着，圆角不同就会读成两组控件 */
+  border-radius: var(--radius-s);
 }
 
+/* 日期导航与分段控件同高同圆角：32 / 8。内缩 2 让箭头与容器边缘等距，
+   与分段控件轨道里滑块的内缩是同一档 */
 .nav {
   flex: 1;
   display: flex;
@@ -401,27 +476,29 @@ watch([view, anchor], reload)
   box-shadow: var(--shadow-card);
   padding: var(--sp-2);
   min-width: 0;
+  height: var(--sp-32);
 }
 
 .nv {
   position: relative;
   flex: none;
-  width: 30px;
-  height: 28px;
+  width: var(--sp-28);
+  height: var(--sp-28);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-xs);
+  /* 圆形箭头钮：与胶囊容器里的「一格」区分开，它是一次步进而不是一个选项 */
+  border-radius: var(--radius-full);
   color: var(--text-2);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
-/* 命中区 44×44，视觉尺寸不动：左右各外扩 7px 刚好吃掉 4px 间隙、
+/* 命中区 44×44，视觉尺寸不动：左右各外扩 8 刚好吃掉 4px 间隙、
    再压进日期按钮的 4px 内距（文字不从那里开始），不会抢走文字上的点击 */
 .nv::after {
   content: '';
   position: absolute;
-  inset: -8px -7px;
+  inset: -8px;
 }
 
 .nv:active {
@@ -454,8 +531,36 @@ watch([view, anchor], reload)
   inset: -8px 0;
 }
 
+/* 已经在本段时：日期按钮刷 accent，充当「你在这里」的锚点（此时右侧的
+   「回到本段」胶囊不显示，工具行里只有这一处强调色，不会打架）。 */
 .label:disabled {
   color: var(--accent-strong);
+}
+
+/* 回到本段的胶囊：24 高（--chip-h）、full 圆角，落在导航轨的 28 内高里。
+   accent-soft 上的文字走 accent-strong —— --accent 压浅蓝底达不到 AA。 */
+.back {
+  flex: none;
+  position: relative;
+  height: var(--chip-h);
+  padding: 0 var(--sp-8);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 24 高的胶囊：纵向补到 44 的命中区（导航轨本身只有 32，热区溢出去不改变布局） */
+.back::after {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+}
+
+.back:active {
+  transform: scale(0.94);
 }
 
 .cta {

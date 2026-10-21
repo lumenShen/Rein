@@ -89,15 +89,15 @@ const trendEmpty = computed(() =>
            领域色退到字段名前的 6px 色点上；红/绿的最终归宿是下方图表的柱与图例。 -->
       <div class="num-cell">
         <em><i class="dot" style="background: var(--led-expense)" />本月支出</em>
-        <b class="num">¥{{ fmtCents(spend) }}</b>
+        <b class="num"><i class="cur">¥</i>{{ fmtCents(spend) }}</b>
       </div>
       <div class="num-cell">
         <em><i class="dot" style="background: var(--led-income)" />本月收入</em>
-        <b class="num">¥{{ fmtCents(income) }}</b>
+        <b class="num"><i class="cur">¥</i>{{ fmtCents(income) }}</b>
       </div>
       <div class="num-cell">
         <em>结余</em>
-        <b class="num">¥{{ fmtCents(income - spend) }}</b>
+        <b class="num"><i class="cur">¥</i>{{ fmtCents(income - spend) }}</b>
       </div>
     </div>
 
@@ -115,10 +115,11 @@ const trendEmpty = computed(() =>
           <i :style="{ '--p': `${Math.min(progress * 100, 100)}%` }" />
         </div>
         <p class="bmeta t-2">
-          已用 <b class="num">¥{{ fmtCents(spend) }}</b> / 预算
-          <b class="num">¥{{ fmtCents(budget) }}</b>
+          已用 <b class="num"><i class="cur">¥</i>{{ fmtCents(spend) }}</b>
+          <span class="bsep">/</span> 预算
+          <b class="num"><i class="cur">¥</i>{{ fmtCents(budget) }}</b>
           <span v-if="isCurrentMonth && spend <= budget" class="daily num">
-            · 剩余每天还可 ¥{{ fmtCents(dailyRemaining) }}
+            剩余每天还可 ¥{{ fmtCents(dailyRemaining) }}
           </span>
         </p>
       </template>
@@ -161,7 +162,7 @@ const trendEmpty = computed(() =>
             <i class="dot" :style="{ background: s.colorVar }" />
             <span class="lbl">{{ categoryOf(s.key)?.label ?? s.key }}</span>
             <em class="num pct">{{ Math.round(s.pct * 100) }}%</em>
-            <b class="num">¥{{ fmtCents(s.amountCents) }}</b>
+            <b class="num"><i class="cur">¥</i>{{ fmtCents(s.amountCents) }}</b>
           </li>
         </ul>
       </div>
@@ -229,6 +230,16 @@ const trendEmpty = computed(() =>
   font-size: var(--fs-title3);
   font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
+}
+
+/* 币种符号降一档：¥ 是量纲，不是读数。此前 ¥2845.8 整串同粗同号，
+   一格里像有两个数字在抢注意力 */
+.cur {
+  margin-right: var(--gap-text);
+  font-style: normal;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
 }
 
 h3 {
@@ -303,6 +314,10 @@ h3 {
 }
 
 .daily {
+  /* 「剩余每天还可」是预算的第二结论，不跟「已用 / 预算」挤在同一行抢读数：
+     另起一行、主次文本上下 2，并保持 --text-2 的次要档 */
+  display: block;
+  margin-top: var(--gap-text);
   color: var(--text-2);
 }
 
@@ -378,13 +393,22 @@ h3 {
   color: var(--text-1);
 }
 
+/* 占比与金额是两列数值：各自定宽 + 右对齐，7 行扫下来两列的末位各成一条竖线。
+   此前两列都靠内容宽度自然伸缩，「63% / 1%」的右缘一列一列错开 8px。 */
 .pct {
   /* 占比是这张图要传达的数字，不能落 --text-3 */
+  flex: none;
+  width: 40px;
+  text-align: right;
   color: var(--text-2);
 }
 
 .legend b {
+  flex: none;
+  width: 64px;
+  text-align: right;
   font-weight: var(--fw-semibold);
+  color: var(--text-1);
 }
 
 .dot {

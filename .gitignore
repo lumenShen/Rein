@@ -108,3 +108,8 @@ docs/shots/
 
 # HEIC 测试样例（第三方二进制，用 `npm run heic:fixture` 拉取）
 src-tauri/resources/test/heic/
+
+# 并行会话的临时探针与截图产物（probe 脚本 + 截图，不入库）
+scratch/
+# HarmonyOS 设计文档的批量配图缓存（35MB，可由 fetch-hw-images.mjs 复现）
+docs/design/huawei/img-all/

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowDownUp, ChevronRight, Pencil, Search, SlidersHorizontal } from 'lucide-vue-next'
+import { ArrowDownUp, ChevronRight, Plus, Search, SlidersHorizontal } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -12,7 +12,6 @@ import FoodPickerSheet from '@/components/diet/FoodPickerSheet.vue'
 import FoodFilterSheet, { EMPTY_FOOD_FILTER, countFoodFilter } from '@/components/diet/FoodFilterSheet.vue'
 import { dietService } from '@/services/dietService'
 import { fmtNutrient } from '@/utils/format'
-import { macroEnergyShare } from '@/utils/nutritionCalc'
 import type { Food, FoodFilter, FoodUnit } from '@/types'
 
 /**
@@ -180,14 +179,6 @@ const list = computed(() => {
 
 const shown = computed(() => (expanded.value ? list.value : list.value.slice(0, CAP)))
 
-/* 宏量供能占比（蛋白/碳水 ×4、脂肪 ×9）：三段迷你条，口径与详情抽屉同源 */
-function macroSegs(f: Food): { color: string; pct: number }[] {
-  return macroEnergyShare(f.protein, f.carb, f.fat).map((s) => ({
-    color: `var(${s.colorVar})`,
-    pct: s.pct,
-  }))
-}
-
 /** 份量参考：份名与克数必须取自同一档（默认单位按名称匹配，匹配不到退回第一档）——
  *  分别取会渲染出「1 碗 ≈ 150 g」这种碗名对不上克数的组合 */
 function unitOf(f: Food): FoodUnit | null {
@@ -212,9 +203,17 @@ function unitOf(f: Food): FoodUnit | null {
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
-    <div class="finder row">
-      <Search :size="17" class="t-3" />
-      <input v-model="query" type="text" placeholder="搜索食物或分类，如「主食」「牛奶」">
+    <!-- 搜索 + 主操作同一行：「记录」是这一页唯一的入口，按施工单 §4「列表页主操作不放
+         fixed 悬浮钮」收回内容流 —— 悬浮钮会长期盖住列表最后两行（截图里压的正是土豆那一行）。 -->
+    <div class="searchrow row">
+      <div class="finder row">
+        <Search :size="17" class="t-3" />
+        <input v-model="query" type="text" placeholder="搜索食物或分类">
+      </div>
+      <button class="record-inline row center pressable" @click="onAdd">
+        <Plus :size="16" :stroke-width="2.6" />
+        <span>记录</span>
+      </button>
     </div>
 
     <!-- 分类筛选 -->
@@ -239,24 +238,26 @@ function unitOf(f: Food): FoodUnit | null {
       </button>
       <span v-if="filterCount > 0" class="meta num t-3">符合 {{ list.length }} 项</span>
     </div>
-
     <!-- d-full：这张卡通栏（壳层默认把 .page 的直接子级 .card 压成半栏）；列表在卡**内部**摊成多栏 -->
     <section class="card d-full foods-card">
       <ul v-if="list.length" class="foods d-list">
         <!-- v-memo：条目内容只依赖 f，重排/重筛时同 id 节点直接复用、跳过 patch -->
         <li v-for="f in shown" :key="f.id" v-memo="[f.id]">
           <button class="row item" @click="openFood(f)">
-            <span class="flex-1">
+            <span class="flex-1 namecol">
               <b>{{ f.name }}</b>
               <small>
                 <PillChip tone="muted" size="sm">{{ f.category ?? '其他' }}</PillChip>
-                <template v-if="unitOf(f)">份量 1 {{ unitOf(f)!.name }} ≈ {{ unitOf(f)!.grams }} g</template>
+                <span v-if="unitOf(f)" class="unitline">份量 1 {{ unitOf(f)!.name }} ≈ {{ unitOf(f)!.grams }} g</span>
               </small>
             </span>
+            <!-- 右侧读数两行：热量 / 三项宏量。宏量按三列固定栅格右对齐，
+                 扫一列时 2.6 / 25.9 / 0.3 的小数点能落成同一条竖线。
+                 供能占比条从这里撤掉：它是派生读数，详情抽屉里有完整呈现，
+                 留在列表里会把行撑成三行（施工单 §1「列表行 双行 64」）。 -->
             <span class="nutr">
-              <span class="num kcal">{{ Math.round(f.kcal) }}<em>大卡</em></span>
-              <span v-if="macroSegs(f).length" class="mbar">
-                <i v-for="(s, i) in macroSegs(f)" :key="i" :style="{ flex: s.pct, background: s.color }" />
+              <span class="krow">
+                <b class="num kcal">{{ Math.round(f.kcal) }}</b><em>大卡</em>
               </span>
               <span class="num mline">
                 <span><i class="dot" style="background: var(--c-protein)" />{{ fmtNutrient(f.protein) }}g</span>
@@ -296,14 +297,6 @@ function unitOf(f: Food): FoodUnit | null {
       @close="filterOpen = false"
     />
 
-    <!-- 右下角悬浮按钮：快速记一笔（Teleport 出页面层：translate 会改 fixed 后代的包含块） -->
-    <Teleport to="body">
-      <button class="fab row center" aria-label="记录食物" @click="onAdd">
-        <Pencil :size="18" :stroke-width="2.4" />
-        <span>记录</span>
-      </button>
-    </Teleport>
-
     <!-- 详情抽屉（Teleport；保证页面单根） -->
     <FoodDetailDrawer :open="detailOpen" :food="detailFood" @close="detailOpen = false" @record="onRecord" />
 
@@ -319,7 +312,14 @@ function unitOf(f: Food): FoodUnit | null {
   padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
+/* 搜索行：输入框吃余量，主操作贴右端（与记账页的筛选行同一构图） */
+.searchrow {
+  gap: var(--gap-sm);
+}
+
 .finder {
+  flex: 1;
+  min-width: 0;
   gap: var(--gap-sm);
   /* 搜索栏当输入框：上下 10（40 档）、左右 16 */
   padding: var(--sp-10) var(--pad-card);
@@ -332,12 +332,27 @@ function unitOf(f: Food): FoodUnit | null {
 
 .finder input {
   flex: 1;
+  min-width: 0;
   font-size: var(--fs-subhead);
+}
+
+/* 主操作胶囊：与搜索框同高 40（--control-md），左右 16；按墨色实底（页面唯一的实心入口） */
+.record-inline {
+  position: relative;
+  flex: none;
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--pad-card);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
 }
 
 .cats {
   /* 分类胶囊是**有明确边界**的控件（各自带底与影）：换行时上下 16、同一行内 8。
-     上下留 16 也是给每枚胶囊的 ::after 热区留出互不重叠的余量（28 + 8×2 = 44）。 */
+     上下留 16 同时给每枚胶囊的 ::after 热区留出互不重叠的余量（32 + 8×2 = 48）。 */
   gap: var(--gap-lg) var(--gap-sm);
   flex-wrap: wrap;
   margin-top: var(--sp-12);
@@ -345,8 +360,13 @@ function unitOf(f: Food): FoodUnit | null {
 
 .chip {
   position: relative;
-  /* 胶囊：上下 6 + 12 字 ≈ 28（--control-sm），左右 12 */
-  padding: var(--sp-6) var(--pad-inline);
+  display: inline-flex;
+  align-items: center;
+  /* 可点胶囊统一 32（施工单 §2「胶囊高 24（小）/32（可点）」）：
+     分类与排序/筛选是同一类可点控件，此前 28 与记账页的 40 各写一档 */
+  min-height: var(--sp-32);
+  /* 固定高 + flex 居中，纵向不再叠内距；左右 12 */
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -355,12 +375,11 @@ function unitOf(f: Food): FoodUnit | null {
   color: var(--text-2);
 }
 
-/* 28 的胶囊命中区纵向撑到 44（横向由胶囊自身宽度承担，均 ≥ 44）：
-   视觉尺寸不变，只把看不见的热区补到规范下限。 */
+/* 32 的胶囊命中区纵向撑到 48（上下各 8）：视觉尺寸不变，热区回到触控下限之上 */
 .chip::after {
   content: '';
   position: absolute;
-  inset: -8px 0;
+  inset: calc(-1 * var(--gap-sm)) 0;
 }
 
 .chip.on {
@@ -387,17 +406,20 @@ function unitOf(f: Food): FoodUnit | null {
 }
 
 .card {
-  /* 与筛选区 12（卡间距）；行自带上下内距，卡只留 6 的顶底余量 + 16 左右 */
+  /* 与筛选区 12（卡间距）；卡片内距 16（--pad-card）—— 行的高由行自己承担，
+     卡不再另塞 6 的「半个内距」（那会让首行比后续行多 6，视觉上首行偏低） */
   margin-top: var(--gap-md);
-  padding: var(--sp-6) var(--pad-card);
+  padding: var(--pad-card);
 }
 
 .item {
   width: 100%;
+  align-items: center;
   text-align: left;
   /* 名称列与右侧营养块：12 */
   gap: var(--gap-md);
-  /* 双行食物行（名称 + 分类/单位）按 64 档：12 上下 + 两行文本 */
+  /* 双行食物行（名称 + 分类/单位）按 64 档：12 上下 + 两行文本（24 + 17 + 2） */
+  min-height: var(--row-h-double);
   padding: var(--sp-12) 0;
 }
 
@@ -405,28 +427,53 @@ function unitOf(f: Food): FoodUnit | null {
   border-top: 0.5px solid var(--line);
 }
 
+/* 名称列：两行都只留一行，超长省略。名字长短不一时行高才不会跟着抖 */
+.namecol {
+  min-width: 0;
+}
+
 .item b {
   display: block;
   font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item small {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--gap-tight) var(--sp-6);
+  min-width: 0;
   /* 分类与单位是选食物时的核对依据 → --text-2 */
   color: var(--text-2);
   font-size: var(--fs-caption);
+  white-space: nowrap;
 }
 
-/* 右侧营养块：大卡 + 供能占比迷你条 + 宏量点阵，纵向右对齐 */
+/* 份量那半句可以省略，分类胶囊不许被压：名字列窄的时候丢掉的是「≈ 200 g」，
+   而不是「这是主食」——后者才是筛库时的判断依据 */
+.unitline {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 右侧读数：两行固定右列。列宽固定，行与行之间的 kcal 末位与宏量三列才落在同一竖线上 */
 .nutr {
   flex: none;
+  width: 144px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  /* 热量行与宏量行：主次文本上下 2（--gap-text），不是 4 */
+  gap: var(--gap-text);
+}
+
+.krow {
+  display: flex;
+  align-items: baseline;
   gap: var(--gap-tight);
 }
 
@@ -445,28 +492,17 @@ function unitOf(f: Food): FoodUnit | null {
   font-size: var(--fs-caption);
   font-weight: var(--fw-regular);
   color: var(--text-2);
-  margin-left: var(--gap-tight);
 }
 
-.mbar {
-  display: flex;
-  /* 三段供能条之间 2（同一根条上的缝，再大会断成三根） */
-  gap: var(--gap-text);
-  width: 84px;
-  height: 4px;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.mbar i {
-  display: block;
-  height: 100%;
-}
-
+/* 宏量三列：定宽右列里的三段等宽轨道。数字右对齐 → 2.6 / 25.9 / 0.3
+   不论是几位数，末位都落在轨道右缘，整列扫下来是一条竖线。
+   色点只做「蛋白 / 碳水 / 脂肪」的认色，不承担排版宽度。 */
 .mline {
-  display: flex;
-  gap: var(--gap-sm);
-  /* 三段宏量克数是「这一份含多少蛋白/碳水/脂肪」，是要读的数，不吃 11px */
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-tight);
+  width: 100%;
+  /* 三段宏量克数是要读的数，不吃 10px */
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -474,13 +510,15 @@ function unitOf(f: Food): FoodUnit | null {
 .mline span {
   display: inline-flex;
   align-items: center;
-  gap: var(--gap-tight);
+  justify-content: flex-end;
+  gap: var(--gap-text);
+  white-space: nowrap;
 }
 
 .dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
   flex: none;
 }
 
@@ -523,31 +561,13 @@ function unitOf(f: Food): FoodUnit | null {
 }
 
 /* 栏变窄之后，行与行之间只剩留白，扫读时容易串行：桌面给每条加一条发丝下边线
-   （移动端维持原来的纯留白分隔，观感不变）。 */
+   （移动端维持原来的纯留白分隔，观感不变）。桌面只留下边线，否则与 `.item + .item`
+   的上下边线叠成 1px 双线。 */
 .desk-main .foods .item {
   border-bottom: 0.5px solid var(--line);
 }
 
-/* 「记录」悬浮按钮（TabBar 之上，锚定页面右缘） */
-.fab {
-  position: fixed;
-  /* 右缘跟随页面留白（手机 16 / 桌面 40），底部让开悬浮 Dock 再收一格 14：
-     与页面四边的留白同源，换壳（窄栏 → 桌面）时自动对齐 */
-  right: max(var(--page-pad-x), calc(50% - var(--frame-max) / 2 + var(--page-pad-x)));
-  bottom: calc(var(--dock-top) + var(--sp-14));
-  z-index: 50;
-  gap: var(--sp-6);
-  padding: var(--sp-12) var(--sp-20);
-  border-radius: var(--radius-full);
-  background: var(--text-1);
-  color: var(--bg);
-  box-shadow: var(--shadow-float);
-  font-size: var(--fs-headline);
-  font-weight: var(--fw-bold);
-  transition: transform var(--dur-fast) var(--ease-standard);
-}
-
-.fab:active {
-  transform: scale(0.95);
+.desk-main .foods .item + .item {
+  border-top: 0;
 }
 </style>

@@ -465,7 +465,7 @@ onUnmounted(() => {
 
 .mono {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 0.94em;
+  font-size: var(--fs-caption);
   letter-spacing: 0.02em;
 }
 

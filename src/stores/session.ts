@@ -20,8 +20,10 @@ import { useExerciseStore } from '@/stores/exercise'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePlanStore } from '@/stores/plan'
 import { todayStr } from '@/utils/date'
+import { planExerciseFromLib } from '@/utils/plan'
 import { computeTrainingAdvice, type ExerciseAdvice, type TrainingAdvice } from '@/utils/trainingAdvice'
 import { setVolumeKg } from '@/utils/sessionSummary'
+import { remapPlanKeys } from '@/utils/sessionRemap'
 import { warmupPlan, type WarmupPrescription } from '@/utils/warmup'
 import { RUN_PLAN_ID } from '@/types'
 import type {
@@ -30,6 +32,7 @@ import type {
   GatewaySessionFinish,
   PlanExercise,
   PlanExerciseOverride,
+  PlanExerciseRef,
   SessionPhase,
   SessionRecord,
   SessionSetSlot,
@@ -161,6 +164,15 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
       readiness: readiness.value,
       postFeeling: postFeeling.value,
       exerciseOverrides: exerciseOverrides.value,
+      // 条目身份随快照走：课程在会话期间被整体覆盖后，恢复时靠它把旧键迁到新条目
+      planRefs: (plan.value?.exercises ?? []).map((e) => ({
+        id: e.id,
+        exerciseId: e.exerciseId,
+        name: e.name,
+      })),
+      // 这一场的结构实况（含插入 / 删除 / 换动作 / 改组数）：恢复时照搬，
+      // 不再按 planId 从课程库重建 —— 见 SessionSnapshotState.sessionPlan 的注释
+      sessionPlan: plan.value ? plan.value.exercises.map(cloneExercise) : undefined,
     }
   }
 
@@ -553,13 +565,23 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
   }
 
   /**
-   * 进入某动作时的重量预填：还在做激活热身 → 取当前热身组的处方重量，
-   * 否则用正式组重量（上次实际 / 计划建议）。热身态与正式态共用同一个 weight 状态，
-   * 两个阶段都支持现场调整，切换阶段时必须重新预填，否则热身的小重量会带进正式组。
+   * 进入某动作时的重量预填：**处在热身相位**且还有热身组 → 取当前热身组的处方重量，
+   * 否则用正式组重量（今日建议 / 上次实际 / 计划建议）。热身态与正式态共用同一个 weight
+   * 状态，两个阶段都支持现场调整，切换阶段时必须重新预填，否则热身的小重量会带进正式组。
+   *
+   * ⚠️ 「还有待做热身」不能单独当判据：跳过热身之后再换动作，新动作的处方又变回「未做」，
+   * 只看 `warmupPending` 会把**热身第一组的重量**预填成正式组重量（用户就拿着 45kg 当
+   * 工作重量做了），而界面上那些热身格早已标成「已跳过」。相位才是唯一判据 ——
+   * `inWarmup` 默认由相位推出，个别调用点（重做正式组）显式传 false。
    */
-  function weightForPhase(e: PlanExercise): number {
-    if (warmupPending(e)) return warmupsFor(e)[warmupDone(e)]?.weightKg ?? weightFor(e)
+  function weightForPhase(e: PlanExercise, inWarmup = isWarmupPhase()): number {
+    if (inWarmup && warmupPending(e)) return warmupsFor(e)[warmupDone(e)]?.weightKg ?? weightFor(e)
     return e.kind === 'strength' ? weightFor(e) : 0
+  }
+
+  /** 此刻是不是「在做热身」（含热身组间休息） */
+  function isWarmupPhase(): boolean {
+    return phase.value === 'warmup' || (phase.value === 'rest' && restWarmup.value)
   }
 
   /**
@@ -846,7 +868,8 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     exIndex.value++
     setIndex.value = 1
     const next = currentEx.value!
-    weight.value = weightForPhase(next)
+    // 相位还没写，预填方向要显式给：下一步是热身就取热身处方，否则正式组重量
+    weight.value = weightForPhase(next, warmupPending(next))
     syncReps(next)
     phase.value = warmupPending(next)
       ? 'warmup'
@@ -948,6 +971,49 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     touch()
   }
 
+  /** 会话内单动作组数上限（与课程编辑器的组数上限一致） */
+  const MAX_SESSION_SETS = 20
+
+  /** 这一场最多几个动作（防模型批量插入把课程撑成一长串） */
+  const MAX_SESSION_EXERCISES = 20
+
+  /**
+   * 把这一场里某个动作的**目标组数**改成 n —— **只改当前会话，不写回课程库**。
+   *
+   * 与 `addExtraSet` 的分工：那个是「再加一组」，只能对当前动作 +1；这个回答的是
+   * 「这场深蹲改成 5 组」—— 可以加也可以减，可以指定任意还没做完的动作。
+   * 想永久改课程请走 `upsert_plan`（库侧），两条路不要互相代劳。
+   *
+   * 规则：
+   *  - n ∈ 1..`MAX_SESSION_SETS`，且不能小于**已完成**的正式组数（做完的组不能凭空消失）；
+   *  - 直接改内存 plan 的 `sets` 并把 `extraSets` 归零 —— `effSets = sets + extra`，
+   *    两边都改会让组数翻倍；
+   *  - `skippedSets` 里超出 n 的组号一并清掉，否则恢复时会被 `alignProgressToPlan` 裁掉；
+   *  - 改的是当前动作时，组号钳回 n 以内。
+   *
+   * 返回 false = 参数不合法 / 与已完成组数冲突（调用方按原因回话）。
+   */
+  function setExerciseSets(exIdx: number, n: number): boolean {
+    const p = plan.value
+    if (!p || phase.value === 'summary') return false
+    const ex = p.exercises[exIdx]
+    if (!ex) return false
+    if (!Number.isInteger(n) || n < 1 || n > MAX_SESSION_SETS) return false
+    const done = exDoneCount(ex.id)
+    if (n < done) return false
+    ex.sets = n
+    delete extraSets.value[ex.id]
+    const skipped = skippedSets.value[ex.id]
+    if (skipped) {
+      const kept = skipped.filter((x) => x >= 1 && x <= n)
+      if (kept.length) skippedSets.value[ex.id] = kept
+      else delete skippedSets.value[ex.id]
+    }
+    if (exIdx === exIndex.value) setIndex.value = Math.min(setIndex.value, n)
+    touch()
+    return true
+  }
+
   /**
    * 上一组：撤销最近完成的一组正式组并回到该组重做（可能跳回上一个动作）。
    * 激活热身组不可重做；返回 false = 没有可重做的组。
@@ -979,7 +1045,8 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     exIndex.value = idx
     setIndex.value = Math.min(effSets(ex), arr.filter((d) => !d.warmup).length + 1)
     clearSkippedFrom(idx, setIndex.value) // 回退后该区间重新变成待做
-    weight.value = weightForPhase(ex)
+    // 重做的是**正式组**：即便这个动作还有没做的热身，也不该把热身重量填回来
+    weight.value = weightForPhase(ex, false)
     syncReps(ex)
     phase.value = ex.kind === 'strength' ? 'exercise' : 'timed-ready'
     flashOverlay(`${ex.name} · 重做`, `第 ${setIndex.value} 组`)
@@ -1091,14 +1158,22 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
   }
 
   /**
-   * 临时把某个未做的动作换成另一个动作：只换动作本体（名称 / 要点 / 肌群 / 库内默认重量），
-   * 组数、次数、休息、热身组等编排全部沿用本课程原动作——全课组数不变，
-   * 因此不会打乱已有进度与全课组清单的下标。仅允许换成同类型动作。
+   * 临时把某个未做的动作换成另一个动作：**只换动作本体与其处方**，不动这一场的进度。
    *
-   * ⚠️ **重量必须一起换**：`{...cur}` 会把**被换掉那个动作**的课程处方重量留在新动作上
+   * ⚠️ 重量必须一起换：`{...cur}` 会把**被换掉那个动作**的课程处方重量留在新动作上
    * （卧推 60kg 换成划船，划船也是 60kg）。而新动作此刻既不在建议表里、也不在上次重量表里，
    * `weightFor` 的三级回落会一路落到这个错的值上。所以这里显式改取**新动作**在库内的
    * 默认重量，并异步补上它的建议与上次做组重量。
+   *
+   * ⚠️ 组数 / 次数 / 休息同样必须一起换 —— 这是「智能推荐失效」最容易漏的一环：
+   * 建议引擎的 `targetSets` / `targetReps` 取的是**条目上的处方**（目标组数决定「上次是否
+   * 全部做满」这个加档判据，目标次数决定加档门槛）。沿用旧动作的 4 组 × 8 次去评估
+   * 新动作的历史（比如它上次是 3 组 × 12 次），做满判据永远不成立 → 建议重量永远不涨，
+   * 或者反过来一上来就误判加档。这里取库内默认处方，拿不到才回落原值。
+   *
+   * ⚠️ 热身组必须清空：`warmups` 是**旧动作**按旧重量编的绝对重量，新动作拿不到工作重量
+   * 时 `warmupPlanFor` 会把它当回落 —— 20kg 的卧推热身会原样套到引体向上（自重）上。
+   * 旧动作已经做过的热身组记录也一并清掉：它们记的是旧动作的小重量。
    */
   function swapExercise(exIdx: number, src: SwapCandidate): boolean {
     const p = plan.value
@@ -1107,7 +1182,14 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     if (!cur || !canSwapExercise(exIdx)) return false
     if (src.exerciseId && src.exerciseId === cur.exerciseId) return false
     const isCurrent = exIdx === exIndex.value
-    const nextWeightKg = useExerciseLibStore().get(src.exerciseId)?.defaultWeightKg ?? null
+    const lib = useExerciseLibStore()
+    const rec = lib.get(src.exerciseId)
+    const nextWeightKg = rec?.defaultWeightKg ?? null
+    const nextSets =
+      rec && rec.defaultSets >= 1 ? Math.min(MAX_SESSION_SETS, rec.defaultSets) : cur.sets
+    const nextReps = rec ? rec.defaultReps : cur.reps
+    const nextRestSec = rec && rec.defaultRestSec > 0 ? rec.defaultRestSec : cur.restSec
+
     p.exercises[exIdx] = {
       ...cur,
       exerciseId: src.exerciseId,
@@ -1117,7 +1199,14 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
       // 库内没有这个动作（或它没配默认重量）时置空而不是留着旧值 ——
       // 「不知道」比「一个别的动作的重量」诚实，后续回落链自己会处理
       weightKg: nextWeightKg,
+      sets: nextSets,
+      reps: nextReps,
+      restSec: nextRestSec,
+      warmups: undefined,
     }
+    // 旧动作做过的热身组（若有）不再属于新动作
+    const done = doneSets.value[cur.id]
+    if (done?.some((d) => d.warmup)) doneSets.value[cur.id] = done.filter((d) => !d.warmup)
     // 登记覆盖，随快照落盘：否则中断接管会把它抹回原动作（见 exerciseOverrides 的注释）
     exerciseOverrides.value = {
       ...exerciseOverrides.value,
@@ -1127,13 +1216,24 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         tips: src.tips || cur.tips,
         muscles: src.muscles,
         weightKg: nextWeightKg,
+        sets: nextSets,
+        reps: nextReps,
+        restSec: nextRestSec,
       },
     }
+    const next = p.exercises[exIdx]!
+    // 组数可能变小（原来 5 组、新动作库内默认 3 组）：当前组号要钳回来
+    if (isCurrent) setIndex.value = Math.min(setIndex.value, effSets(next))
     let auto = 0
     if (isCurrent) {
-      auto = weightForPhase(p.exercises[exIdx]!)
+      // 热身处方已按新动作重算：新动作没有热身（自重 / 轻负荷）时不能再停在热身相位，
+      // 否则用户会卡在一屏没有可完成组的界面上（与 applyRecord 的守卫同一个理由）
+      if (phase.value === 'warmup' && !warmupPending(next)) {
+        phase.value = next.kind === 'strength' ? 'exercise' : 'timed-ready'
+      }
+      auto = weightForPhase(next)
       weight.value = auto
-      syncReps(p.exercises[exIdx]!)
+      syncReps(next)
     }
     touch()
     // 建议表与上次重量表都还指着旧动作：异步补齐，落地后若用户还没动过重量就把预填升级为
@@ -1141,13 +1241,122 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     void Promise.all([mergeLastWeights([src.exerciseId]), loadAdvice()]).then(() => {
       const swapped = plan.value?.exercises[exIdx]
       if (!swapped || swapped.exerciseId !== src.exerciseId) return // 期间又换了一次
-      if (!isCurrent || weight.value !== auto) return // 非当前动作，或用户已手改过重量
+      if (!isCurrent) return
+      if (phase.value === 'warmup') {
+        resyncWarmupPrefill() // 还没做热身：预填跟着新处方走
+        return
+      }
+      if (weight.value !== auto) return // 用户已手改过重量
       const refreshed = weightForPhase(swapped)
       if (refreshed !== auto) {
         weight.value = refreshed
         touch()
       }
     })
+    return true
+  }
+
+  /* ---------- 这一场的动作编排：插入 / 删除 / 改处方（都不写回课程库） ---------- */
+
+  /**
+   * 在这一场**插入**一个动作（不写回课程库）。返回插入后的下标（0 起）；失败返回 null。
+   *
+   * 位置只允许落在**当前动作之后**（`at ∈ [exIndex+1, len]`，缺省追加到末尾）：
+   * 插到游标之前会让 `setSlots` 把新格子判成「已完成」（游标之前的格子非完成即跳过），
+   * 而它一组都没做 —— 那种错位没有任何一层能纠正。想「现在就换一个动作做」请用
+   * `swapExercise`（换掉当前这个），语义清楚得多。
+   *
+   * 处方取库内默认值（见 `utils/plan.ts::planExerciseFromLib`），随后异步补建议与上次重量，
+   * 轮到它时 `weightForPhase` 才能给出「今日建议」而不是一张通用处方。
+   */
+  function insertExercise(
+    exerciseId: string,
+    opts?: { at?: number; sets?: number; reps?: number | null },
+  ): number | null {
+    const p = plan.value
+    if (!p || phase.value === 'summary') return null
+    if (p.exercises.length >= MAX_SESSION_EXERCISES) return null
+    const rec = useExerciseLibStore().get(exerciseId)
+    if (!rec || rec.hidden) return null
+    const ex = planExerciseFromLib(rec)
+    if (opts?.sets != null && Number.isFinite(opts.sets)) {
+      ex.sets = Math.min(MAX_SESSION_SETS, Math.max(1, Math.round(opts.sets)))
+    }
+    if (opts?.reps !== undefined) {
+      ex.reps =
+        opts.reps == null || !Number.isFinite(opts.reps) ? null : Math.max(0, Math.round(opts.reps))
+    }
+    const len = p.exercises.length
+    const at = Math.min(Math.max(exIndex.value + 1, Math.trunc(opts?.at ?? len)), len)
+    p.exercises.splice(at, 0, ex)
+    touch()
+    void Promise.all([mergeLastWeights([ex.exerciseId]), loadAdvice()])
+    return at
+  }
+
+  /**
+   * 从这一场**删除**一个动作（不写回课程库）。
+   *
+   * 只允许删「还没轮到 / 还没开始做」的动作：
+   *  - 当前动作不能删 —— 它正占着相位与组游标，删掉要同时挪相位、组号、休息流向，
+   *    出错就是卡死在一屏没有可完成组的界面；想跳过它请用「跳过当前组」；
+   *  - 已经完成过组的不能删 —— 那些组已经计入这一场的容量与统计，删动作等于悄悄丢数据；
+   *  - 最后一个不能删 —— 一节课至少要有一个动作。
+   *
+   * 该动作残留的跳过登记 / 加练数 / 覆盖表一并清掉，免得留下孤儿键。
+   */
+  function removeExercise(exIdx: number): boolean {
+    const p = plan.value
+    if (!p || phase.value === 'summary') return false
+    if (p.exercises.length <= 1) return false
+    const ex = p.exercises[exIdx]
+    if (!ex || exIdx === exIndex.value) return false
+    if (exDoneCount(ex.id) > 0) return false
+    p.exercises.splice(exIdx, 1)
+    if (exIdx < exIndex.value) exIndex.value -= 1
+    delete doneSets.value[ex.id]
+    delete extraSets.value[ex.id]
+    delete skippedSets.value[ex.id]
+    delete exerciseOverrides.value[ex.id]
+    touch()
+    return true
+  }
+
+  /**
+   * 改这一场某个动作的**处方**（组数 / 每组次数 / 组间休息）——不写回课程库。
+   *
+   * 组数走 `setExerciseSets`（它维护「不能少于已完成组数」「跳过登记裁到新组数」两条不变量）；
+   * 次数与休息直接写条目。改的是当前动作时，现场次数同步过去（用户看到的就是新处方）。
+   */
+  function setExercisePrescription(
+    exIdx: number,
+    patch: { sets?: number; reps?: number | null; restSec?: number },
+  ): boolean {
+    const p = plan.value
+    if (!p || phase.value === 'summary') return false
+    const ex = p.exercises[exIdx]
+    if (!ex) return false
+    if (patch.sets != null && !setExerciseSets(exIdx, patch.sets)) return false
+    if (patch.reps !== undefined) {
+      ex.reps =
+        patch.reps == null || !Number.isFinite(patch.reps) ? null : Math.max(0, Math.round(patch.reps))
+    }
+    if (patch.restSec != null && Number.isFinite(patch.restSec)) {
+      ex.restSec = Math.min(600, Math.max(0, Math.round(patch.restSec)))
+    }
+    if (exIdx === exIndex.value) syncReps(ex)
+    touch()
+    return true
+  }
+
+  /**
+   * 快照里的结构实况落回本地 plan（恢复 / 外部驱动共用）。
+   * `entries` 为空 = 老快照，保持调用方已经建好的 plan 不动，返回 false。
+   */
+  function applySessionPlan(entries: PlanExercise[] | undefined): boolean {
+    if (!entries?.length) return false
+    if (!plan.value) return false
+    plan.value = { ...plan.value, exercises: entries.map(cloneExercise) }
     return true
   }
 
@@ -1290,10 +1499,12 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     readiness.value = st.readiness ?? null
     postFeeling.value = st.postFeeling ?? null
     reps.value = st.reps ?? null
-    // 外部也可能换过动作（AI 工具的 swap_exercise 或外部客户端自持状态）：身份要跟着落回
-    // 本地 plan，否则下一拍 touch() 会用本地那份「没换过」的 plan 把外部状态写回去。
-    exerciseOverrides.value = st.exerciseOverrides ?? {}
-    applyExerciseOverrides(st.exerciseOverrides)
+    // 结构实况先落回（插入 / 删除 / 换动作 / 改组数都可能来自外部），再按覆盖表补身份：
+    // 不落回的话下一拍 touch() 会用本地那份「没改过」的 plan 把外部状态写回去。
+    if (!applySessionPlan(st.sessionPlan)) {
+      exerciseOverrides.value = st.exerciseOverrides ?? {}
+      applyExerciseOverrides(st.exerciseOverrides)
+    }
     restIsTemp.value = st.restIsTemp ?? false
     restWarmup.value = st.restWarmup ?? false
     restTargetIsNextSet.value = st.restTargetIsNextSet ?? true
@@ -1395,7 +1606,40 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
       ex.tips = ov.tips
       ex.muscles = ov.muscles
       ex.weightKg = ov.weightKg
+      // 处方也挂在同一个覆盖里：只重放身份会让「换动作前设好的组数 / 次数」被课程库覆盖
+      if (ov.sets != null) ex.sets = ov.sets
+      if (ov.reps !== undefined) ex.reps = ov.reps
+      if (ov.restSec != null) ex.restSec = ov.restSec
     }
+  }
+
+  /**
+   * 把快照里以**旧课程条目 id** 为键的进度迁到当前课程的新条目上（迁移规则见
+   * `utils/sessionRemap.ts`）。
+   *
+   * 触发场景：会话进行中课程被整体覆盖（AI 的 `upsert_plan` 重写、手动增删重排），
+   * 条目 id 全换了一遍；而恢复是按 planId 从课程库**重建** plan 的。不迁移的话，
+   * 紧接着的 `alignProgressToPlan` 会把「一个键都不在课程里」的进度整批清空，
+   * 下一拍 `touch()` 再把这个空进度写回快照 —— 已完成的组就此永久消失。
+   *
+   * 老快照没有 `planRefs`，无法迁移（已知的历史限制）。
+   */
+  function remapSnapshotKeys(refs: PlanExerciseRef[] | undefined): void {
+    const p = plan.value
+    if (!p) return
+    const next = remapPlanKeys(refs, p.exercises, {
+      doneSets: doneSets.value,
+      extraSets: extraSets.value,
+      skippedSets: skippedSets.value,
+      overrides: exerciseOverrides.value,
+    })
+    if (!next) return
+    doneSets.value = next.doneSets
+    extraSets.value = next.extraSets
+    skippedSets.value = next.skippedSets
+    exerciseOverrides.value = next.overrides
+    // 换动作的身份也挂在同一个键上：键迁完后要按新键重放一次，否则当前动作会显示回原动作
+    applyExerciseOverrides(next.overrides)
   }
 
   /**
@@ -1467,19 +1711,35 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     }
     sessionId.value = rec.id
     startedAtIso.value = rec.startedAt
-    plan.value = { ...p, exercises: p.exercises.map(cloneExercise) }
-    // 换动作的身份必须先重放：下面 `reps.value` 的回落链要读重建后的 plan
-    applyExerciseOverrides(rec.state.exerciseOverrides)
-    exIndex.value = Math.min(Math.max(0, Math.trunc(rec.exIndex)), Math.max(0, p.exercises.length - 1))
+    const savedPlan = rec.state.sessionPlan
+    // 有结构实况就**照搬这一场**（插入 / 删除 / 换动作 / 改组数都在里面），只在没有时才
+    // 按 planId 从课程库重建 —— 课程库不知道这一场被现场改成了什么样。
+    plan.value = {
+      ...p,
+      exercises: (savedPlan?.length ? savedPlan : p.exercises).map(cloneExercise),
+    }
+    if (!savedPlan?.length) {
+      // 老快照：换动作的身份只能从覆盖表重放（下面 `reps.value` 的回落链要读重建后的 plan）
+      exerciseOverrides.value = rec.state.exerciseOverrides ?? {}
+      applyExerciseOverrides(rec.state.exerciseOverrides)
+    }
+    exIndex.value = Math.min(
+      Math.max(0, Math.trunc(rec.exIndex)),
+      Math.max(0, plan.value.exercises.length - 1),
+    )
     weight.value = rec.weightKg
     doneSets.value = rec.state.doneSets ?? {}
     extraSets.value = rec.state.extraSets ?? {}
     skippedSets.value = rec.state.skippedSets ?? {}
+    // 课程在会话期间被整体覆盖过（条目 id 全换）时，先把旧键迁到当前课程的新条目 ——
+    // 顺序不能反：迁移之后再裁剪，否则整批进度会被当成「不属于当前课程」清掉。
+    // 带 sessionPlan 时键本来就对得上，这一步是恒等的空操作。
+    remapSnapshotKeys(rec.state.planRefs)
     // 进度先对齐到**当前课程**（裁掉已删动作的登记、把每个动作的登记裁到它的实际组数），
     // 再据此钳组号 —— 两件事都要用「对齐后」的 extraSets 算 effSets，所以顺序是死的
     alignProgressToPlan()
     setIndex.value = clampSetIndex(rec.setIndex)
-    reps.value = rec.state.reps ?? p.exercises[exIndex.value]?.reps ?? null
+    reps.value = rec.state.reps ?? currentEx.value?.reps ?? null
     restIsTemp.value = false
     restWarmup.value = rec.state.restWarmup ?? false
     restTargetIsNextSet.value = rec.state.restTargetIsNextSet ?? true
@@ -1620,6 +1880,10 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     skipRest,
     startTempRest,
     addExtraSet,
+    setExerciseSets,
+    setExercisePrescription,
+    insertExercise,
+    removeExercise,
     redoLastSet,
     effSets,
     exDoneCount,

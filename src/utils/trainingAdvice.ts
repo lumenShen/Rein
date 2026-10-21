@@ -38,6 +38,7 @@
 
 import { MUSCLE_LABELS, resolveActivation, type Level, type MuscleKey } from '@/config/muscles'
 import type { ExerciseRecord, PlanExercise, StrengthSetRecord } from '@/types'
+import { computeStrengthTrend, type StrengthTrend } from './strengthTrend'
 
 /* ---------------- 科学依据数据表 ---------------- */
 
@@ -193,6 +194,14 @@ export interface ExerciseAdvice {
   lastWeight: number | null
   lastReps: number | null
   lastDate: string | null
+  /** 历史最高：单组最大重量（不限窗口），与该组的次数、日期 */
+  bestWeight: number | null
+  bestReps: number | null
+  bestDate: string | null
+  /** 历史最高估算极限 e1RM（不限窗口） */
+  bestE1rm: number | null
+  /** 近 14 天 e1RM 趋势；样本不足（无记录）时为 null */
+  trend: StrengthTrend | null
   hasHistory: boolean
   /** 逐条中文依据（沉浸页「为什么」展开） */
   rationale: string[]
@@ -377,6 +386,11 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
         lastWeight: null,
         lastReps: null,
         lastDate: null,
+        bestWeight: null,
+        bestReps: null,
+        bestDate: null,
+        bestE1rm: null,
+        trend: null,
         hasHistory: false,
         rationale: [`${item.kind === 'timed' ? '计时' : '有氧'}动作不做重量建议`],
         factors: [],
@@ -455,6 +469,22 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
     const trendNote = last
       ? `上次 ${fmt(last.topWeight)}kg × ${last.topReps}（估算 1RM ${Math.round(last.e1rm)}kg）`
       : '暂无历史记录'
+
+    /* 历史最高与 14 日趋势（建议抽屉 / 动作详情共用）。
+     * 「最高」不限窗口 —— 那是个人纪录；「趋势」只看近两周 —— 那是当下走向。
+     * 两者混成一个数会同时失真：半年前的一次爆种会永远把趋势线拉成下跌。 */
+    let bestPerf: SessionPerf | null = null
+    let bestE1rm = 0
+    for (const perf of stat?.sessions ?? []) {
+      if (!bestPerf || perf.topWeight > bestPerf.topWeight) bestPerf = perf
+      if (perf.e1rm > bestE1rm) bestE1rm = perf.e1rm
+    }
+    const trend = stat
+      ? computeStrengthTrend(
+          stat.sessions.map((p) => ({ date: p.date, e1rm: p.e1rm })),
+          today,
+        )
+      : null
 
     const readiness = clamp(recoveryFactor * volumeFactor * trendFactor * selfFactor, 0.85, 1.06)
     const todayCeiling = baselineE1rm ? baselineE1rm * readiness : null
@@ -569,6 +599,11 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
       lastWeight: last?.topWeight ?? null,
       lastReps: last?.topReps ?? null,
       lastDate: last?.date ?? null,
+      bestWeight: bestPerf?.topWeight ?? null,
+      bestReps: bestPerf?.topReps ?? null,
+      bestDate: bestPerf?.date ?? null,
+      bestE1rm: bestE1rm > 0 ? Math.round(bestE1rm * 10) / 10 : null,
+      trend,
       hasHistory: !!last,
       rationale,
       factors: exFactors,

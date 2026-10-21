@@ -45,7 +45,7 @@ const cells = computed(() =>
             <StatusChip v-if="c.isLimit" tone="warn" size="sm">上限</StatusChip>
           </span>
           <span class="num val">
-            {{ c.value }}<em> / {{ c.dri }}{{ c.unit }}</em>
+            {{ c.value }}<em>/ {{ c.dri }}</em><i class="unit">{{ c.unit }}</i>
           </span>
         </div>
         <div class="bar">
@@ -98,7 +98,13 @@ const cells = computed(() =>
 }
 
 .item {
-  /* 双行数值行（名称·数值 + 进度条）按 64 档：12 上下 + 一行 24 + 条 4 + 间距 8 ≈ 60 */
+  /* 双行数值行（名称·数值 + 进度条）按 64 档：12 上下 + 一行 24 + 条 4 + 间距 8 ≈ 60。
+     用 min-height 钉住，14 行扫读时每根进度条落在同一节拍上；多出的 4 由居中均分，
+     不堆在行底（否则条会贴着下一条的发丝线）。 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--row-h-double);
   padding: var(--sp-12) 0;
 }
 
@@ -137,16 +143,28 @@ const cells = computed(() =>
 .val em {
   font-style: normal;
   font-weight: var(--fw-regular);
-  color: var(--text-3);
+  /* DRI 对照值是判断「够没够」的另一半，必须读得出来 → --text-2（原 --text-3 只有 3:1） */
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  /* 数值与「/ DRI 单位」是同一行内的最小一对：4 */
+  /* 数值与「/ DRI」是同一行内的最小一对：4 */
   margin-left: var(--gap-tight);
+}
+
+/* 单位：micro + 三级灰，和数字不同粗也不同档（量纲不是读数） */
+.unit {
+  margin-left: var(--gap-text);
+  font-style: normal;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-regular);
+  color: var(--text-3);
 }
 
 .bar {
   height: 4px;
   border-radius: var(--radius-full);
-  background: var(--surface-2);
+  /* 底槽必须看得见：--surface-2 (#f2f2f4) 压在白卡 (#ffffff) 上只差 3 阶，
+     截图里 14 根条像悬空的一截蓝线。--surface-3 是「贴白卡、必须被读出来」那一档。 */
+  background: var(--surface-3);
   overflow: hidden;
 }
 

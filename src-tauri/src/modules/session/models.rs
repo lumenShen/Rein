@@ -21,6 +21,35 @@ pub struct SessionRecord {
     pub elapsed_sec: f64,
     /// 前端状态快照（doneSets / phase 等，见 stores/session.ts）
     pub state: Value,
+    /// 逐组落库明细（`workout_sets`，按落库顺序）。仅 `session_for_workout` 填充，
+    /// 其它返回路径为空 —— 见 [`SessionSetRow`] 的说明。
+    pub sets: Vec<SessionSetRow>,
+}
+
+/// 一场训练已落库的逐组明细（`workout_sets` 的一行）。
+///
+/// **为什么详情页要读它、而不是只读 `state.doneSets`**：`doneSets` 的键是
+/// **课程条目 id**（`PlanExercise.id`，前端 `crypto.randomUUID()` 生成的），
+/// 而课程可以事后被整体覆盖（AI 的 `upsert_plan` 老版本每次都重建 id、手动编辑也可能
+/// 增删重排）。键一变，历史记录的每一组都匹配不到课程条目 —— 详情页于是把真实数据
+/// 摊成十几条「其他动作」，而课程动作全部显示「未完成」，完成组数分母还虚增一倍。
+/// 本表在保存训练时就把**当时的动作名 + 动作库 id** 固化了，是详情页唯一稳定的真源。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSetRow {
+    /// 当时课程条目 id（可能已不存在于课程里，仅作参考）
+    pub exercise_key: String,
+    /// 当时登记的动作名（课程改名 / 动作被删也不追溯，与重量曲线同一口径）
+    pub exercise_name: String,
+    /// 动作库 id（重量曲线聚合键）；老记录可能为空
+    pub exercise_id: Option<String>,
+    pub kind: String,
+    /// 正式组与热身组各从 1 计
+    pub set_no: i64,
+    pub weight_kg: Option<f64>,
+    pub reps: Option<i64>,
+    pub sec: Option<i64>,
+    pub warmup: bool,
 }
 
 /// 正常结束（用户确认保存）时的提交体

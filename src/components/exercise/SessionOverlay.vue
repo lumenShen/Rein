@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLayout } from 'animejs'
-import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Info, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Info, ListPlus, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
@@ -22,6 +22,7 @@ const WeightAdviceSheet = defineAsyncComponent(
 )
 const MuscleMap = defineAsyncComponent(() => import('@/components/exercise/MuscleMap.vue'))
 import SessionBigNumberInput from '@/components/exercise/SessionBigNumberInput.vue'
+import SessionStageBubble from '@/components/exercise/SessionStageBubble.vue'
 import SessionCourseDrawer from '@/components/exercise/SessionCourseDrawer.vue'
 import SessionExerciseSwapSheet from '@/components/exercise/SessionExerciseSwapSheet.vue'
 import SessionGlassButton from '@/components/exercise/SessionGlassButton.vue'
@@ -46,6 +47,8 @@ import {
   settleClosed,
   type ImmersiveOriginSnapshot,
 } from '@/system/sessionImmersive'
+import { setDurationSec } from '@/config/exerciseGuide'
+import ExerciseGuideBlock from '@/components/exercise/ExerciseGuideBlock.vue'
 import { fmtKg } from '@/utils/strength'
 import type { SwapCandidate } from '@/types'
 
@@ -74,6 +77,8 @@ const moreOpen = ref(false)
 const detailOpen = ref(false)
 const courseOpen = ref(false)
 const swapOpen = ref(false)
+/** 插入动作面板（末尾加一个动作，课程库不变） */
+const insertOpen = ref(false)
 
 /** bind 菜单锚定元素：坞内触发各菜单的图标钮；临时休息从更多菜单二级唤起，沿用更多钮位置 */
 const moreAnchor = ref<HTMLElement | null>(null)
@@ -292,33 +297,61 @@ const dockMode = computed<'warmup' | 'exercise' | 'rest' | 'timed-ready' | 'time
  * 行高写成常量，样式里也只引用这两个常量。
  */
 const DOCK_ROW_H = 54
-const DOCK_TRACK_H = 64
+/** 气泡轨高度：与 SessionStageBubble 的 .stagewrap 同高 */
+const DOCK_TRACK_H = 52
 const DOCK_GAP = 12
 
+/** 气泡出现在热身 / 做组 / 组间休息三个阶段（计时与总结有自己的主体显示） */
+const bubbleDock = computed(
+  () => dockMode.value === 'warmup' || dockMode.value === 'exercise' || dockMode.value === 'rest',
+)
+
 const dockHeight = computed(() => {
-  if (dockMode.value === 'warmup' || dockMode.value === 'exercise') return DOCK_TRACK_H + DOCK_GAP + DOCK_ROW_H
   if (dockMode.value === 'none') return 0
-  return DOCK_ROW_H
+  return (bubbleDock.value ? DOCK_TRACK_H + DOCK_GAP : 0) + DOCK_ROW_H
+})
+
+/* ---------- 灵动气泡（替代原来的组格轨） ----------
+ * 组格只能在完成后告诉你结果，训练中真正需要的是「此刻该干什么」：
+ * 准备姿势还剩几秒 / 第几个 / 该结束了。逐组进度仍在顶栏「n/N 组」胶囊与全课抽屉里。
+ */
+
+/** 当前动作的结构化详解（自建动作没有，界面回落 tips） */
+const curGuide = computed(() => lib.guideOf(s.currentEx))
+
+/** 当前这一组要做的次数（热身组取热身处方，正式组取现场次数） */
+const curReps = computed<number | null>(() => {
+  const ex = s.currentEx
+  if (!ex) return null
+  if (s.phase === 'warmup') return curWarmup.value?.reps ?? null
+  return s.reps ?? ex.reps
 })
 
 /**
- * 坞内组格：读 store 的 `setSlots`（与顶栏「n/N 组」胶囊、全课抽屉同一份数据源），
- * 每一格按**自己的状态**渲染。
- *
- * 为什么不能用「已完成数前推」（旧实现 `i <= workingDone`）：跳过一组之后那种数量对齐
- * 就整体错位 —— 跳过第 1 组再做完第 2 组时 `workingDone = 1`，✓ 会落在写着「1」的格上，
- * 而同一刻抽屉与顶栏的口径是「1 跳过 / 2 完成 / 3 当前」。训练时唯一一眼可见的读数
- * 因此是错的。格状态由 `setSlots` 的游标唯一决定，这里只做呈现。
+ * 单组预计动作秒数：力量 = 次数 × 每次循环秒数（内置动作的「AI 预填时长」），
+ * 计时 / 有氧取各自处方秒数。拿不到任何处方时回落 40 秒兜底。
  */
-const curTiles = computed(() => s.setSlots.filter((x) => x.exIdx === s.exIndex))
+const curSetSec = computed(() => {
+  const ex = s.currentEx
+  if (!ex) return 0
+  return setDurationSec(curGuide.value, ex.kind, curReps.value, ex.targetSec, ex.durationMin)
+})
 
-/** 坞内组格的无障碍标签：屏幕上只有数字与 ✓，读屏需要把状态念出来 */
-const TILE_STATE_LABEL: Record<'done' | 'current' | 'skipped' | 'pending', string> = {
-  done: '已完成',
-  current: '进行中',
-  skipped: '已跳过',
-  pending: '待完成',
-}
+/** 气泡的组序号 / 总组数：热身与正式组各用各的口径（热身不计入正式组数） */
+const bubbleSetNo = computed(() => (s.phase === 'warmup' && s.currentEx ? s.warmupDone(s.currentEx) + 1 : s.setIndex))
+const bubbleTotal = computed(() => {
+  const ex = s.currentEx
+  if (!ex) return 0
+  return s.phase === 'warmup' ? curWarmups.value.length : s.effSets(ex)
+})
+
+/** 组标识：动作 / 相位 / 组号 / 热身完成数任一变化都重开一轮节拍 */
+const bubbleToken = computed(() => {
+  const ex = s.currentEx
+  if (!ex) return 'none'
+  const warm = s.phase === 'warmup' ? `w${s.warmupDone(ex)}` : ''
+  return `${ex.id}:${s.phase}:${s.setIndex}:${warm}`
+})
 
 const nextEx = computed(() => s.plan?.exercises[s.exIndex + 1] ?? null)
 
@@ -395,10 +428,14 @@ const MORE_ACTIONS = computed<MenuItem[]>(() => {
     { label: '今日状态', value: 'readiness', icon: Gauge, children: READINESS_ACTIONS },
     // 临时更换本动作：换动作是健身房里最高频的中断之一，可它此前只藏在
     // 「顶栏 n/N → 全课抽屉 → 找到当前动作 → 更换」四步之后。这里直通同一张
-    // 选择面板（候选池仍是动作库内的同类型动作，编排沿用本课程）。
+    // 选择面板（候选池仍是动作库内的同类型动作，处方按新动作的库内默认值）。
     ...(s.canSwapExercise(s.exIndex)
       ? [{ label: '临时更换本动作', value: 'swap', icon: Repeat }]
       : []),
+    // 插入动作：这一场想再多做一个。与「加练一组」不是一件事 ——
+    // 那个是把当前动作多做一组，这个是往这一场里加一个**新动作**（课程库不变）。
+    // 结束后的总结屏不给它：会话已经收口，再插动作没有执行位。
+    ...(s.phase !== 'summary' ? [{ label: '插入一个动作', value: 'insert', icon: ListPlus }] : []),
     { label: '当前动作详解', value: 'detail', icon: Info },
   )
   return list
@@ -492,6 +529,8 @@ function onMorePick(value: string): void {
     toast('已记录今日状态 · 建议重量已同步调整')
   } else if (value === 'swap') {
     swapOpen.value = true
+  } else if (value === 'insert') {
+    insertOpen.value = true
   } else if (value === 'detail') {
     detailOpen.value = true
   } else {
@@ -506,6 +545,28 @@ function onSwapPick(src: SwapCandidate): void {
   swapOpen.value = false
   if (s.swapExercise(s.exIndex, src)) toast(`已更换为「${src.name}」`)
   else toast('该动作已经做过，不能更换')
+}
+
+/**
+ * 插入动作：往**这一场的末尾**加一个库内动作（课程库不变）。
+ * 追加位置由 store 兜（不许插到当前动作之前 —— 那会让进度游标错位），
+ * 这里只负责把「插到哪儿、药方是什么」如实回给用户：处方取库内默认值，
+ * 轮到它时今日建议会把重量接上。
+ */
+function onInsertPick(src: SwapCandidate): void {
+  insertOpen.value = false
+  const at = s.insertExercise(src.exerciseId)
+  if (at == null) {
+    toast('插入失败：这一场已结束，或动作不可用')
+    return
+  }
+  toast(`已插入「${src.name}」· 这一场第 ${at + 1} 个动作`)
+}
+
+/** 全课抽屉底部的「插入动作」：先收起抽屉再弹选择面板（两层抽屉叠着会互相遮） */
+function onDrawerInsert(): void {
+  courseOpen.value = false
+  insertOpen.value = true
 }
 
 const restProgress = computed(() =>
@@ -1233,7 +1294,12 @@ function trapFocus(e: KeyboardEvent): void {
               <MuscleMap :activation="activation" interactive />
             </div>
 
-            <div v-if="exTips" class="blockcard">
+            <!-- 要点：内置动作给结构化三段（准备 / 轨迹 / 注意），自建动作回落库里一句话 -->
+            <div v-if="curGuide" class="blockcard">
+              <h3>动作要点</h3>
+              <ExerciseGuideBlock :guide="curGuide" density="compact" />
+            </div>
+            <div v-else-if="exTips" class="blockcard">
               <h3>动作要点</h3>
               <p>{{ exTips }}</p>
             </div>
@@ -1314,7 +1380,11 @@ function trapFocus(e: KeyboardEvent): void {
               <MuscleMap :activation="activation" interactive />
             </div>
 
-            <div v-if="exTips" class="blockcard">
+            <div v-if="curGuide" class="blockcard">
+              <h3>动作要点</h3>
+              <ExerciseGuideBlock :guide="curGuide" density="compact" />
+            </div>
+            <div v-else-if="exTips" class="blockcard">
               <h3>动作要点</h3>
               <p>{{ exTips }}</p>
             </div>
@@ -1342,6 +1412,12 @@ function trapFocus(e: KeyboardEvent): void {
               <i v-if="restMeta.lead && restMeta.rest" class="rsep" aria-hidden="true" />
               <span v-if="restMeta.rest">{{ restMeta.rest }}</span>
             </p>
+
+            <!-- 组间休息正是「抬头看下一步怎么做」的时机：把刚做完那个动作的要点留在屏上 -->
+            <div v-if="curGuide" class="blockcard">
+              <h3>{{ displayName }} · 动作要点</h3>
+              <ExerciseGuideBlock :guide="curGuide" density="compact" />
+            </div>
           </div>
 
           <!-- 计时动作准备 -->
@@ -1412,49 +1488,21 @@ function trapFocus(e: KeyboardEvent): void {
         <!-- 组格轨：一块玻璃，轨内的组格是**填充**（fill），不是第二层玻璃 ——
              苹果明令禁止 glass on glass；GlassSurface 的折射因此作用在整条轨上，
              组格与缝隙里的内容从它底下滚过时才真的被折射（不是只糊一层）。 -->
-        <SessionGlassButton
-          v-if="dockMode === 'warmup' || dockMode === 'exercise'"
-          w="100%"
-          h="auto"
-          radius="var(--radius-l)"
-        >
-          <div class="tiles">
-            <template v-if="dockMode === 'warmup'">
-              <button
-                v-for="(wd, i) in curWarmups"
-                :key="i"
-                type="button"
-                class="dtile wtile num"
-                :class="{ done: i < s.warmupDone(s.currentEx!), cur: i === s.warmupDone(s.currentEx!) }"
-                :disabled="i !== s.warmupDone(s.currentEx!)"
-                @click="s.completeWarmup()"
-              >
-                <template v-if="i < s.warmupDone(s.currentEx!)">✓</template>
-                <!-- 当前组显示实时重量，调整后立刻可见 -->
-                <template v-else>{{ i === s.warmupDone(s.currentEx!) ? fmtKg(s.weight) : fmtKg(wd.weightKg) }}</template>
-              </button>
-            </template>
-            <template v-else>
-              <button
-                v-for="t in curTiles"
-                :key="t.setNo"
-                type="button"
-                class="dtile num"
-                :class="{
-                  done: t.state === 'done',
-                  skipped: t.state === 'skipped',
-                  cur: t.state === 'current',
-                }"
-                :disabled="t.state !== 'current'"
-                :aria-label="`第 ${t.setNo} 组 · ${TILE_STATE_LABEL[t.state]}`"
-                @click="s.completeSet()"
-              >
-                <template v-if="t.state === 'done'">✓</template>
-                <template v-else>{{ t.setNo }}</template>
-              </button>
-            </template>
-          </div>
-        </SessionGlassButton>
+        <!-- 灵动气泡：热身 / 做组 / 组间休息三态共用一条，颜色与闪频表达阶段。
+             逐组完成靠下方主按钮（气泡不再兼作完成控件）。 -->
+        <SessionStageBubble
+          v-if="bubbleDock"
+          :token="bubbleToken"
+          :kind="dockMode === 'rest' ? 'rest' : 'set'"
+          :set-no="bubbleSetNo"
+          :total-sets="bubbleTotal"
+          :set-sec="curSetSec"
+          :reps="curReps"
+          :rest-left="s.restLeft"
+          :warmup="dockMode === 'warmup'"
+          :active="s.phase !== 'summary'"
+          @tap="s.skipRest()"
+        />
 
         <div class="drow row">
           <template v-if="dockMode === 'warmup'">
@@ -1591,8 +1639,8 @@ function trapFocus(e: KeyboardEvent): void {
       <!-- 当前动作详解 -->
       <ExerciseDetailDrawer :open="detailOpen" :exercise="detailExercise" @close="detailOpen = false" />
 
-      <!-- 全课浏览抽屉：逐组进度 / 跳至该组 / 临时换动作 -->
-      <SessionCourseDrawer :open="courseOpen" @close="courseOpen = false" />
+      <!-- 全课浏览抽屉：逐组进度 / 跳至该组 / 临时换动作 / 末尾插入动作 -->
+      <SessionCourseDrawer :open="courseOpen" @close="courseOpen = false" @insert="onDrawerInsert" />
 
       <!-- 临时更换本动作（更多菜单直通）：候选池 = 动作库内的同类型动作 -->
       <SessionExerciseSwapSheet
@@ -1601,6 +1649,14 @@ function trapFocus(e: KeyboardEvent): void {
         :current-id="s.currentEx?.exerciseId ?? ''"
         @pick="onSwapPick"
         @close="swapOpen = false"
+      />
+
+      <!-- 插入动作（更多菜单 / 全课抽屉直通）：类型自己选，处方取库内默认值 -->
+      <SessionExerciseSwapSheet
+        :open="insertOpen"
+        mode="insert"
+        @pick="onInsertPick"
+        @close="insertOpen = false"
       />
 
       <!-- 重量建议说明抽屉：RM 单位 / 本次依据 / 四步计算过程 -->
@@ -1801,16 +1857,6 @@ function trapFocus(e: KeyboardEvent): void {
   font-size: var(--fs-micro);
   color: var(--warn-strong);
   background: var(--warn-soft);
-}
-
-/* 组格行：它坐在 SessionGlassButton 那块玻璃的 .gbody 里（那一层已经是 100%×100%
-   的居中盒），所以这里只管排布 —— 轨的材质 / 圆角 / 折射全在组件里，再写一遍必然漂。
-   内边距 6 与玻璃的圆角 22 是一对：组格 16 = 22 − 6，同心。 */
-.tiles {
-  display: flex;
-  justify-content: center;
-  gap: var(--gap-sm);
-  padding: var(--sp-6);
 }
 
 /* ---------- 内容层 ----------
@@ -2119,11 +2165,6 @@ function trapFocus(e: KeyboardEvent): void {
   color: var(--text-1);
 }
 
-/* 热身组格：重量标注，小一号 */
-.dtile.wtile {
-  font-size: var(--fs-body);
-}
-
 .hint {
   font-size: var(--fs-caption);
   color: var(--text-3);
@@ -2251,64 +2292,6 @@ function trapFocus(e: KeyboardEvent): void {
 .drow .primary {
   min-width: 0;
   padding: 0 var(--sp-26);
-}
-
-.dtile {
-  width: 58px;
-  height: 52px;
-  /* 同心：16 = 玻璃轨圆角 22 − 行内边距 6（.tiles）。热身重量格与正式组格同一档 ——
-     从前是两个值（52 与 58 两种高度、17 与无圆角两种角），同一块轨里换模式会跳一下 */
-  border-radius: var(--radius-m);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-title2);
-  font-weight: var(--fw-bold);
-  /* 待做的组：**不挂填充**本身就是「还不能点」的信号，文字因此留在能读的 --text-2，
-     而不是更淡一档 —— 它压在会滚动的玻璃上，再淡一点在亮环境 / 窄屏下就真读不出了
-     （苹果对禁用态的要求是「仍然可读」，不是「看不见」）。 */
-  color: var(--text-2);
-  cursor: default;
-  /* 不补 box-shadow 过渡：一组做完整排 tile 集体改态时会重绘投影（绘制属性不归
-     合成器），当前组那格的投影走瞬时到位即可 */
-  transition:
-    background-color var(--dur-base) var(--ease-standard),
-    color var(--dur-base) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard);
-}
-
-/* 已完成的组：全仓统一的完成态（soft 底 + 中性深色前景）。
-   组号是数值：走 --text-1，色相只留在 soft 底的色块上（色彩配额，STANDARDS §4） */
-.dtile.done {
-  background: var(--c-exercise-soft);
-  color: var(--text-1);
-}
-
-/* 跳过的组：与全课抽屉的 `.setrow.is-skipped`（`opacity: --disabled-opacity` + 组号划掉）
-   同一套语言。跳过 = 未做 = 不统计，所以它既不带完成态的 soft 底，也不是「当前组」的
-   抬起填充 —— 格上留着组号并划掉，正好说明「这一格存在、但没做」。 */
-.dtile.skipped {
-  opacity: var(--disabled-opacity);
-  text-decoration: line-through;
-  cursor: default;
-}
-
-/* 待完成（当前组）：抬起来的**中性填充**，不带色相也不带渐变 —— 与底部 Dock 的活动底
-   同一条规矩（选中/当前交给底的明度，色相留给前景）。
-   底取 --surface + --shadow-thumb，也就是卡内「一键填入」里那枚主推候选（.qseg.rec）
-   的同一套：一块白底从玻璃轨上抬起来。不用 --glass-tab-fill 是因为它压在**内容**上
-   （不是压在页面画布上）：它自己就是半透明白，叠在同样是半透明白的玻璃轨上等于没提亮，
-   组格数字压着背后滚过的东西读不清 —— 而这里恰恰是「必须读得清」的那一格。
-   从前它是黑实底：底下那颗唯一的主行动也是黑实底，两块黑互相抢，谁主谁次读不出来。 */
-.dtile.cur {
-  background: var(--surface);
-  color: var(--text-1);
-  box-shadow: var(--shadow-thumb);
-  cursor: pointer;
-}
-
-.dtile.cur:active {
-  transform: scale(0.92);
 }
 
 /* 主按钮 —— 实底是**语义选择**不是玻璃：它是这一步唯一的主行动，

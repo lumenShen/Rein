@@ -109,7 +109,7 @@
 - 现象（原始）：在总结页发现少做/错做了一组，想回去补练或撤销最后一组——界面上只有「保存训练 / 放弃不保存」。保存会把错的那份记进历史；想改只能「放弃本次训练」，而放弃会把整节课已登记的做组全部丢掉（不是只丢那一组）。
 - 证据：`restOver` 在最后一组后 `if (isLastExercise.value) { phase.value = 'summary'; return }`（`684-688`）自动落到终态；`addExtraSet` 明确 `if (!ex || phase.value === 'summary') return`（`785`）挡住加练；`redoLastSet`（`798-831`）没有 phase 门槛、逻辑上能从 summary 回退，但 `SessionSummaryPane` 整块模板（`266-340`）没有任何按钮调用它；扩展坞里的两个按钮（保存/放弃）不提供撤销。`sessionService.ts:59-60` 的注释与 Rust 侧一致：abort 不写 `workouts/workout_sets`。
 - 复核结论：**partial**。现象与机制成立（summary UI 仅保存/放弃、加练被封、`redoLastSet` 在 UI 无入口、放弃丢全课做组）。两处需收窄：
-  1. 「本环节没有任何入口／想改只能放弃／唯一路径」被**夸大**——AI 工具 `update_active_session` 的 `redo_last_set`（`src/ai/tools/session.ts:272-275`）无 phase 门槛、session 工具组常驻（`registry.ts:98`），summary 下可回退（`add_set` 除外，`session.ts:264-270` 拒绝）；因此是「缺界面入口」而非绝对无路可走。
+  1. 「本环节没有任何入口／想改只能放弃／唯一路径」被**夸大**——AI 工具 `update_active_session` 的 `redo_last_set`（现位于 `src/ai/tools/session/adjust.ts`）无 phase 门槛、session 工具组常驻（`registry.ts` 的 `GROUP_POLICY.session`），summary 下可回退（`add_set` 除外，同文件拒绝）；因此是「缺界面入口」而非绝对无路可走。
   2. **契约归因错误**：`docs/ARCHITECTURE.md:95` 的 §4 不变量 5 只约束 `workout_sessions.status='active'` 行的离开方式；进入 summary 不调用 finish/abort、会话仍 active，该不变量未受违反，不应挂在「违反不变量 5 的意图」上。
 - 复核另注：全课抽屉「跳至该组」也回不去（`session.ts:903` `targetIdx<cursorIndex→false`，summary 下 `cursorIndex=totalCount`，`:218-219`）。
 

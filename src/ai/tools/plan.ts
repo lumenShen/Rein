@@ -57,8 +57,16 @@ const EXERCISE = Type.Object({
   muscles: Type.Optional(MUSCLES),
 })
 
-/** 动作入参 → 存储结构：补 id / 动作库 id 与缺省值 */
-function normalizeExercise(e: { [k: string]: unknown }): {
+/** 动作入参 → 存储结构：补 id / 动作库 id 与缺省值。
+ *
+ * `stableId`：覆盖已有课程时沿用的动作条目 id（见 `upsert_plan`）。不传才新生成 ——
+ * 这个 id 是训练快照 `doneSets` 的键，每次重写都换新会让历史记录在详情页里
+ * 全部对不上课程动作。
+ */
+function normalizeExercise(
+  e: { [k: string]: unknown },
+  stableId?: string,
+): {
   id: string
   exerciseId: string
   name: string
@@ -75,7 +83,7 @@ function normalizeExercise(e: { [k: string]: unknown }): {
   muscles?: ActivationMap
 } {
   const out = {
-    id: crypto.randomUUID(),
+    id: stableId ?? crypto.randomUUID(),
     // 缺省空串：后端 upsert 会按动作名挂库（未命中则建自建动作），不会漏
     exerciseId: typeof e.exerciseId === 'string' ? e.exerciseId.trim() : '',
     name: String(e.name ?? '').trim() || '未命名动作',
@@ -156,36 +164,84 @@ export const planTools: AppTool[] = [
   defineTool({
     name: 'upsert_plan',
     group: 'plan',
-    label: '新建/覆盖训练课程',
+    label: '改课程库里的课程（不影响进行中的训练）',
     description:
-      '创建或整门覆盖一门训练课程。id 不传为新建；传已有 id 则整体替换（以本次 exercises 为准）。用户明确要求创建/修改课程时调用。',
+      '**改的是课程库里的模板，对正在进行的这一场没有任何影响** —— 训练中用户说「这场换个动作 / 这场深蹲改成 5 组 / 这场插一个动作」要用 edit_session_plan（改这一场的编排：换 / 插 / 删 / 改组数），现场执行用 update_active_session。' +
+      '创建或整门覆盖一门课程：不传 id = 新建；传已有 id = **整体替换**，必须给出完整的动作清单（没列出的动作会被删掉，不是在原清单上打补丁）。' +
+      '判据：用户说「以后都这么练 / 把这门课改成…」用这个；说「今天这次 / 这一场」用 update_active_session / edit_session_plan。' +
+      '改完回执里 affectsActiveSession=false，可以据此提醒用户「当前这一场不受影响」。',
     parameters: Type.Object({
-      id: Type.Optional(Type.String({ description: '课程 id；缺省 = 新建' })),
+      id: Type.Optional(
+        Type.String({
+          description:
+            '课程 id（来自 list_plans）。修改已有课程**必须**传；不传 = 新建一门课程（重名会被拒绝）',
+        }),
+      ),
       name: Type.String({ description: '课程名，如「推力日 A」' }),
       subtitle: Type.Optional(Type.String({ description: '一句话副标题' })),
       workoutType: PLAN_TYPE,
-      exercises: Type.Array(EXERCISE, { description: '动作清单，按训练顺序排列' }),
+      exercises: Type.Array(EXERCISE, { description: '完整动作清单，按训练顺序排列（覆盖式写入）' }),
     }),
     async execute(args) {
       if (args.exercises.length === 0) throw new Error('课程至少要有一个动作')
+      // 覆盖已有课程时沿用原动作条目 id：那是训练快照 `doneSets` 的键。
+      // 从前这里每个动作都重新 randomUUID()，AI 改一次课程就把这场课历史记录的键
+      // 全部作废 —— 详情页会把真实做组摊成十几条「其他动作」（见 utils/sessionDetail）。
+      // 匹配顺序：动作库 id 优先（同一动作换了处方仍算同一条），其次动作名；都没有才新生成。
+      const prev = args.id ? await planService.get(args.id) : null
+      // 传了 id 但课程不存在：绝不静默新建一条 id 由模型编的课程（那会在列表里多出一门
+      // 谁也找不到来源的课）。要么先去 list_plans 拿真 id，要么明确不传 id 新建。
+      if (args.id && !prev) {
+        throw new Error(
+          `课程 id「${args.id}」不存在。修改已有课程请先用 list_plans 取到真实 id；要新建一门课请不传 id。`,
+        )
+      }
+      // 新建时挡同名：模型漏传 id 是最常见的失误，静默建出一门同名课程会让用户
+      // 「改了但没生效」（他打开的还是原来那门）。这里直接拒绝并把已有 id 给它。
+      if (!prev) {
+        const name = args.name.trim()
+        const dup = (await planService.list()).find((p) => p.name.trim() === name)
+        if (dup) {
+          throw new Error(
+            `课程库里已有一门「${dup.name}」（id=${dup.id}）。要修改它请把 id 传进来；确实要再建一门同名的，先换个名字。`,
+          )
+        }
+      }
+      const reusable = [...(prev?.exercises ?? [])]
+      const takeId = (e: { exerciseId?: string; name?: string }): string | undefined => {
+        const exId = e.exerciseId?.trim()
+        let i = exId ? reusable.findIndex((p) => p.exerciseId && p.exerciseId === exId) : -1
+        if (i < 0) i = reusable.findIndex((p) => p.name === String(e.name ?? '').trim())
+        if (i < 0) return undefined
+        return reusable.splice(i, 1)[0]!.id
+      }
       const saved = await planService.upsert({
         id: args.id ?? crypto.randomUUID(),
         name: args.name.trim(),
         subtitle: args.subtitle?.trim() || '',
         workoutType: args.workoutType,
-        exercises: args.exercises.map(normalizeExercise),
+        exercises: args.exercises.map((e) => normalizeExercise(e, takeId(e))),
       })
-      return { ok: true, id: saved.id, name: saved.name, exerciseCount: saved.exercises.length }
+      return {
+        ok: true,
+        id: saved.id,
+        name: saved.name,
+        exerciseCount: saved.exercises.length,
+        /** 明确告诉模型：这次改的是课程库，进行中的那一场没变 */
+        affectsActiveSession: false,
+      }
     },
   }),
 
   defineTool({
     name: 'delete_plan',
     group: 'plan',
-    label: '删除训练课程',
-    description: '删除一门训练课程模板。仅限用户明确要求删除时使用。',
+    label: '删除课程库里的课程',
+    description:
+      '删除课程库里的一门课程模板。历史训练记录不受影响（逐组明细已单独落库、详情页照常可看）；' +
+      '但如果这门课**正在训练中**，那一场会话会被作废（进度不再接续）。仅限用户明确要求删除时使用。',
     dangerous: true,
-    parameters: Type.Object({ id: Type.String({ description: '课程 id' }) }),
+    parameters: Type.Object({ id: Type.String({ description: '课程 id（来自 list_plans）' }) }),
     async execute(args) {
       await planService.remove(args.id)
       return { ok: true }

@@ -18,10 +18,10 @@ import { todayStr, fmtDateCn, minToHHmm } from '@/utils/date'
 import { fmtClock, fmtKg, fmtPace } from '@/utils/format'
 import { projectTrack, trackAscentM, trackSplits } from '@/utils/geo'
 import { libraryMuscles } from '@/utils/libraryMuscles'
-import { setVolumeKg } from '@/utils/sessionSummary'
+import { buildDetailRows, detailTotals, type DetailExRow } from '@/utils/sessionDetail'
 import { ACTIVATION_WEIGHT } from '@/utils/trainingAdvice'
 import { computeTrainingScore, type GroupScore, type TrainingScoreResult } from '@/utils/trainingScore'
-import type { DoneSet, PlanExercise, RunSnapshot, Workout } from '@/types'
+import type { DoneSet, PlanExercise, RunSnapshot, SessionSetRow, Workout } from '@/types'
 
 /**
  * 运动详情抽屉：按记录来源渲染真实数据。
@@ -70,6 +70,8 @@ type Detail =
       planName: string
       startedAt: string
       doneSets: Record<string, DoneSet[]>
+      /** 逐组落库明细（workout_sets）：做组明细的权威来源，见 utils/sessionDetail */
+      sets: SessionSetRow[]
       /** null = 课程已被删除，动作退化为序号展示 */
       exercises: PlanExercise[] | null
     }
@@ -99,7 +101,8 @@ const sessionMuscles = computed<{ group: ScoreGroupKey; label: string; sets: num
   for (const row of courseRows.value) {
     if (row.kind !== 'strength' || row.done.length === 0) continue
     // 课程被删过的动作取不到肌群表，libraryMuscles 会按名称规则兜底（同一口径）
-    const map = libraryMuscles({ name: row.name, muscles: exById.get(row.key)?.muscles ?? {} })
+    const planId = row.planExerciseId ?? row.key
+    const map = libraryMuscles({ name: row.name, muscles: exById.get(planId)?.muscles ?? {} })
     const byGroup = new Map<ScoreGroupKey, Level>()
     for (const [m, lv] of Object.entries(map) as [MuscleKey, Level][]) {
       const g = SCORE_GROUP_OF[m]
@@ -209,6 +212,7 @@ async function load(w: Workout): Promise<void> {
         planName: rec.planName,
         startedAt: rec.startedAt,
         doneSets: courseState.doneSets ?? {},
+        sets: rec.sets ?? [],
         exercises,
       }
       return
@@ -375,67 +379,26 @@ const ascentM = computed(() => {
 
 /* ---------- 课程视图 ---------- */
 
-interface CourseExRow {
-  key: string
-  name: string
-  kind: 'strength' | 'timed' | 'cardio'
-  plannedSets: number
-  reps: number | null
-  /** 正式组（热身组已拆出） */
-  done: DoneSet[]
-  /** 激活热身组（不计入组数与总容量，单独展示） */
-  warmups: DoneSet[]
-  /** 热身组定义（课程存在时有，用于显示热身次数） */
-  warmupDefs?: { weightKg: number; reps: number }[]
-}
-
-const courseRows = computed<CourseExRow[]>(() => {
+/**
+ * 逐动作做组明细：由 `utils/sessionDetail` 的纯函数派生。
+ *
+ * 从前这里直接拿快照的 `doneSets` 按课程条目 id 对齐 —— 课程一旦被整体覆盖
+ * （AI 的 `upsert_plan` 早期版本每次都重建动作 id、手动编辑也可能重排），
+ * 键就对不上，于是课程动作全部「未完成」、真实数据被摊成十几条「其他动作」、
+ * 完成组数分母虚增一倍。现在以 `workout_sets` 的落库明细为准（带当时的动作名与
+ * 动作库 id），`doneSets` 只在老记录缺明细时兜底。
+ */
+const courseRows = computed<DetailExRow[]>(() => {
   if (detail.value?.source !== 'course') return []
   const d = detail.value
-  const split = (sets: DoneSet[]) => ({
-    done: sets.filter((x) => !x.warmup),
-    warmups: sets.filter((x) => x.warmup),
-  })
-  if (!d.exercises) {
-    // 课程已删除：按落盘顺序以序号展示原始做组数据
-    return Object.entries(d.doneSets).map(([key, sets], i) => ({
-      key,
-      name: `动作 ${i + 1}`,
-      kind: typeof sets[0]?.sec === 'number' ? ('timed' as const) : ('strength' as const),
-      plannedSets: sets.length,
-      reps: null,
-      ...split(sets),
-    }))
-  }
-  const rows = d.exercises.map((ex): CourseExRow => ({
-    key: ex.id,
-    name: ex.name,
-    kind: ex.kind,
-    plannedSets: ex.sets,
-    reps: ex.reps,
-    warmupDefs: ex.warmups,
-    ...split(d.doneSets[ex.id] ?? []),
-  }))
-  // 快照里有但课程里已不存在的动作 id（课程后来被编辑过）
-  for (const [key, sets] of Object.entries(d.doneSets)) {
-    if (rows.some((r) => r.key === key)) continue
-    rows.push({
-      key,
-      name: `其他动作`,
-      kind: typeof sets[0]?.sec === 'number' ? 'timed' : 'strength',
-      plannedSets: sets.length,
-      reps: null,
-      ...split(sets),
-    })
-  }
-  return rows
+  return buildDetailRows(d.exercises, d.sets, d.doneSets)
 })
 
 /**
  * 做组芯片：次数优先取该组完成瞬间登记的 reps（课程可能事后被编辑/删除，
  * 回读定义会失真）；课程定义也没有时只显示重量，绝不拼出「× ?」。
  */
-function setChip(ex: CourseExRow, d: DoneSet): string {
+function setChip(ex: DetailExRow, d: DoneSet): string {
   if (ex.kind === 'strength') {
     if (d.weight == null) return '完成'
     const reps = d.reps ?? ex.reps
@@ -445,7 +408,7 @@ function setChip(ex: CourseExRow, d: DoneSet): string {
 }
 
 /** 热身组芯片：重量 × 热身次数（次数取逐组登记，旧数据回落课程定义；都没有只显示重量） */
-function warmupChip(row: CourseExRow, d: DoneSet, i: number): string {
+function warmupChip(row: DetailExRow, d: DoneSet, i: number): string {
   const reps = d.reps ?? row.warmupDefs?.[i]?.reps
   if (d.weight == null) return '热身'
   return `热身 ${fmtWeight(d.weight)}${reps != null ? ` × ${reps}` : ''}`
@@ -455,29 +418,7 @@ function fmtWeight(w: number): string {
   return `${fmtKg(w)}kg`
 }
 
-const courseTotals = computed(() => {
-  let volume = 0
-  let timedSec = 0
-  let doneCount = 0
-  let totalCount = 0
-  for (const row of courseRows.value) {
-    totalCount += row.plannedSets
-    doneCount += Math.min(row.done.length, row.plannedSets)
-    for (const d of row.done) {
-      // 容量口径走全端唯一那份 setVolumeKg（逐组登记 → 课程处方 → 1 次兜底），
-      // 与训练中的实时容量、总结页容量同源
-      volume += setVolumeKg(d.weight, d.reps ?? null, row.reps)
-      if (d.sec != null) timedSec += d.sec
-    }
-  }
-  return {
-    volume: Math.round(volume),
-    timedSec,
-    doneCount,
-    totalCount,
-    earlyEnd: doneCount < totalCount,
-  }
-})
+const courseTotals = computed(() => detailTotals(courseRows.value))
 </script>
 
 <template>

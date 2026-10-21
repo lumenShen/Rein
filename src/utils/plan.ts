@@ -1,7 +1,36 @@
 /** 课程展示辅助：时长估算与动作摘要文案（最近卡片 / 详情页 / 编辑页共用）。 */
 
 import { WORKOUT_META } from '@/config/domain'
-import type { PlanExercise, WorkoutPlan } from '@/types'
+import type { ExerciseRecord, PlanExercise, WorkoutPlan } from '@/types'
+
+/**
+ * 用一个库内动作造一条**课程条目**（新建课程 / 会话内插入动作共用）。
+ *
+ * 处方一律取库内默认值：`defaultSets` / `defaultReps` / `defaultWeightKg` /
+ * `defaultTargetSec` / `defaultDurationMin` / `defaultRestSec`。会话内插入时若不带这些，
+ * 条目就会是一副「3 组 10 次 20kg」的空壳，智能建议与热身都失去参照。
+ *
+ * 条目 id 由调用方决定（课程编辑器与插入动作各生成一次）：它是 `doneSets` 的键，
+ * 随机值与后端预期无关，但**必须在本场会话内唯一**。
+ */
+export function planExerciseFromLib(rec: ExerciseRecord, id = crypto.randomUUID()): PlanExercise {
+  const kind = rec.kind
+  const rest = rec.defaultRestSec > 0 ? rec.defaultRestSec : kind === 'cardio' ? 0 : 60
+  return {
+    id,
+    exerciseId: rec.id,
+    name: rec.name,
+    kind,
+    sets: kind === 'cardio' ? 1 : Math.max(1, rec.defaultSets || 3),
+    reps: kind === 'strength' ? (rec.defaultReps ?? 10) : null,
+    weightKg: kind === 'strength' ? rec.defaultWeightKg : null,
+    targetSec: kind === 'timed' ? (rec.defaultTargetSec ?? 45) : null,
+    durationMin: kind === 'cardio' ? (rec.defaultDurationMin ?? 15) : null,
+    restSec: rest,
+    tips: rec.tips,
+    muscles: Object.keys(rec.muscles ?? {}).length ? { ...rec.muscles } : undefined,
+  }
+}
 
 /**
  * 粗估课程时长（分钟）：有氧按分钟数；计时组按目标秒（缺省 30s）；

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { Ellipsis, FastForward } from 'lucide-vue-next'
+import { Ellipsis, FastForward, ListPlus } from 'lucide-vue-next'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
@@ -18,14 +18,16 @@ import type { PlanExercise, SessionSetSlot, SwapCandidate } from '@/types'
  * 沉浸模式 · 全课程浏览抽屉（顶部胶囊唤起）。
  * 内容颗粒度到「每一组」：按动作分段，段内先列激活热身组（小重量，不计入组数），
  * 再列正式组，逐组标出状态（已完成 / 已跳过 / 进行中 / 未开始）。
- * 抽屉内可做的两件事：
+ * 抽屉内可做的三件事：
  *  - 某个待做正式组右侧的 ··· → 跳至该组（只能向前跳，中间的组登记为跳过）；
- *  - 一组都还没做的动作 → 更换动作（只换动作本体，编排沿用本课程）。
+ *  - 一组都还没做的动作 → 更换动作（只换动作本体与处方，进度不动）；
+ *  - 底部一行「插入动作」→ 在这一场末尾加一个动作（课程库不变），
+ *    选择面板由沉浸层统一弹（`insert` 事件），免得同一个面板在两处各写一遍。
  * 打开时内容区自动滚到当前组。
  */
 const props = defineProps<{ open: boolean }>()
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; insert: [] }>()
 
 const s = useSessionStore()
 const lib = useExerciseLibStore()
@@ -253,6 +255,14 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
       </ul>
     </section>
 
+    <!-- 插入动作：这一场想多做点什么（健身房最常见的现场决定）。
+         按钮放在流里而不是悬浮 —— 列表页的主操作悬浮必然压住最后一行。
+         选择面板由沉浸层弹（见文件头的 `insert` 事件）。 -->
+    <button type="button" class="addrow row" @click="emit('insert')">
+      <ListPlus :size="16" />
+      <span>在末尾插入动作</span>
+    </button>
+
     <!-- 单组操作菜单（只向前跳到未做的组） -->
     <AppMenu
       :open="menuOpen"
@@ -297,7 +307,6 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
   /* 动作块之间 16（区块间距），原来 18 在格点外 */
   margin-top: var(--gap-lg);
 }
-
 .exhead {
   gap: var(--gap-sm);
   padding-bottom: var(--sp-8);
@@ -345,6 +354,28 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
   content: '';
   position: absolute;
   inset: -9px -4px;
+}
+
+/* 插入动作行：与动作块同宽的二级入口（流内，不悬浮）。
+   高度与单组行对齐（--row-h），字走 --accent-strong（软底 / chip 上的主色文字档），
+   图标与文字同一行、间距走 --gap-sm。 */
+.addrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-sm);
+  width: 100%;
+  height: var(--row-h);
+  margin-top: var(--gap-lg);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+  color: var(--accent-strong);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
+}
+
+.addrow:active {
+  background: var(--accent-soft);
 }
 
 .sets {

@@ -104,8 +104,10 @@ const doneCount = computed(() => checks.value.filter((c) => c.done).length)
   align-items: center;
   /* 勾选标记与类别名之间取 4：它是同一行内最小呼吸 */
   gap: var(--gap-tight);
-  /* 胶囊内距：纵向 6 + 12 字 ≈ 28（--control-sm 档），左右 12 */
-  padding: var(--sp-6) var(--pad-inline);
+  /* 静态标签（不可点）走小胶囊档：高 24（--chip-h）、左右 12。
+     此前 6 上下撑到 28，与筛选页里「可点的 32」混成一档。 */
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
@@ -121,8 +123,15 @@ const doneCount = computed(() => checks.value.filter((c) => c.done).length)
   font-size: var(--fs-micro);
 }
 
+/* 完成态：色相只留在勾选标记上（施工单 §1「色相只出现在图标/色点/…」）。
+   此前整颗胶囊的字都用 --ok-strong，六颗绿字并排会盖过右侧 5/6 这个真正的结论；
+   现在底仍是 ok 浅井（表示「这一类已覆盖」），文字回中性、勾子保留绿色。 */
 .chip.done {
   background: var(--ok-soft);
+  color: var(--text-1);
+}
+
+.chip.done .mark {
   color: var(--ok-strong);
 }
 </style>

@@ -108,6 +108,15 @@ export interface PlanExerciseOverride {
   muscles?: ActivationMap
   /** 换成新动作时同时改写的处方重量（见 `session.ts::swapExercise`） */
   weightKg: number | null
+  /**
+   * 这一场的组数 / 每组次数 / 组间休息。缺省 = 沿用课程条目里的值。
+   *
+   * 换动作时这三个字段**必须**一起换：智能建议吃的是条目上的处方（目标组数决定
+   * 「上次是否全部做满」的判据、目标次数决定加档门槛），沿用旧动作会让建议对新动作失真。
+   */
+  sets?: number
+  reps?: number | null
+  restSec?: number
 }
 
 /**
@@ -124,6 +133,23 @@ export const FEELING_INPUT_LABEL: Record<FeelingInput, string> = {
   better: '比预期好',
   as_expected: '和预期差不多',
   worse: '比预期差',
+}
+
+/**
+ * 快照里每个课程条目的**身份快照**（id / 动作库 id / 名称）。
+ *
+ * 为什么需要：快照的 `doneSets` / `extraSets` / `skippedSets` 都以课程条目 id 为键，
+ * 而课程可以在会话进行中被整体覆盖（AI 的 `upsert_plan`、手动重排）。恢复时 plan 是
+ * 按 planId 从课程库**重建**的，键一旦失配，`alignProgressToPlan` 会把已完成的组当成
+ * 「不属于当前课程」整批丢掉 —— 那是这一场唯一的一份进度。带上身份快照，恢复时就能
+ * 按动作库 id / 名称把旧键迁到新条目上。
+ *
+ * 旧版本客户端写的快照没有这段，读取时按 undefined 处理（无法迁移，走原裁剪逻辑）。
+ */
+export interface PlanExerciseRef {
+  id: string
+  exerciseId: string
+  name: string
 }
 
 /** 落盘用的状态快照（与 Rust state_json 对应） */
@@ -159,6 +185,24 @@ export interface SessionSnapshotState {
   postFeeling?: FeelingInput | null
   /** 临时换过的动作（键 = 课程条目 id）；缺省/空 = 一次都没换过 */
   exerciseOverrides?: Record<string, PlanExerciseOverride>
+  /**
+   * **这一场的课程结构实况**（完整条目清单，含插入 / 删除 / 换动作 / 改组数之后的结果）。
+   *
+   * 为什么必须有它：中断恢复是按 `planId` 从课程库**重建** plan 的，而课程库不知道
+   * 这一场被现场改成了什么样 —— 插入的动作会凭空消失、删掉的动作又回来了、
+   * 「这场深蹲改成 5 组」退回库里的 3 组。`doneSets` 的键是条目 id，条目一旦重建，
+   * 键就失配（那是这一场唯一的一份进度）。
+   *
+   * 带上整份实况后，恢复不再依赖「课程库此刻长什么样」：结构、条目 id、处方全部照搬，
+   * 课程库在会话期间被整体覆盖（AI `upsert_plan` / 手动重排）也不会打乱这一场。
+   * 缺省 = 旧快照（走 `planRefs` 键迁移那条老路）。
+   */
+  sessionPlan?: PlanExercise[]
+  /**
+   * 课程条目的身份快照（仅用于恢复时把旧键迁到新条目）。
+   * 见 [`PlanExerciseRef`]；缺省 = 旧快照，无法迁移。
+   */
+  planRefs?: PlanExerciseRef[]
 }
 
 /** 全课扁平化后每一组的状态（抽屉与顶部进度格条的唯一数据源） */
@@ -323,6 +367,30 @@ export interface RunSnapshot {
   autoPausePaceSec?: number
 }
 
+/** 一场训练已落库的逐组明细（`workout_sets` 一行，服务端按登记顺序返回）。
+ *
+ * **为什么详情页读它而不是只读 `state.doneSets`**：`doneSets` 的键是课程条目 id
+ * （`PlanExercise.id`），课程一旦被整体覆盖（AI 重写课程、手动增删重排）键就全变，
+ * 历史记录的每一组都匹配不上课程动作 —— 详情页于是把真实数据摊成十几条「其他动作」，
+ * 而课程里的动作全部显示「未完成」，完成组数分母还虚增一倍。
+ * 这里带着**当时登记的动作名 + 动作库 id**，是详情页唯一稳定的真源。
+ */
+export interface SessionSetRow {
+  /** 当时课程条目 id（可能已不在课程里，仅作参考） */
+  exerciseKey: string
+  /** 当时登记的动作名（课程改名不追溯，与重量曲线同一口径） */
+  exerciseName: string
+  /** 动作库 id；老记录可能为空 */
+  exerciseId: string | null
+  kind: PlanExerciseKind
+  /** 正式组与热身组各从 1 计 */
+  setNo: number
+  weightKg: number | null
+  reps: number | null
+  sec: number | null
+  warmup: boolean
+}
+
 /** 服务端的进行中会话记录 */
 export interface SessionRecord {
   id: number
@@ -338,4 +406,9 @@ export interface SessionRecord {
   /** 服务端按快照间隔自动累加的真实流逝秒数 */
   elapsedSec: number
   state: SessionSnapshotState
+  /**
+   * 逐组落库明细：仅 `session_for_workout` 填充（active / finish 等路径为空数组）。
+   * 旧版本客户端与老版本后端没有此字段，读取时按空数组处理。
+   */
+  sets?: SessionSetRow[]
 }

@@ -621,7 +621,8 @@ const notes = computed(() => {
   color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: var(--sp-2) var(--sp-10);
+  /* 胶囊左右 12（--pad-inline）：与全库胶囊一档 —— 10 会让四枚并排的标签读成挤在一起 */
+  padding: var(--sp-2) var(--pad-inline);
 }
 
 /* 起止时刻：抽屉里最大的一个数字，它回答「几点到几点」 */
@@ -675,8 +676,9 @@ const notes = computed(() => {
 .where {
   display: flex;
   align-items: center;
-  gap: var(--sp-10);
-  padding: var(--sp-10) var(--sp-12);
+  gap: var(--sp-12);
+  /* 四边等距 12：它是 hero 里的一块二级面，边距不对称就只是一块色斑 */
+  padding: var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface);
 }
@@ -719,7 +721,7 @@ const notes = computed(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: var(--sp-4) var(--sp-10);
+  gap: var(--sp-4) var(--sp-8);
 }
 
 .cap-row {
@@ -896,7 +898,8 @@ const notes = computed(() => {
   flex-direction: column;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-12) var(--sp-6) var(--sp-10);
+  /* 上下 12 / 左右 8：三枚瓦片并排时左右 6 会让数字贴到边上 */
+  padding: var(--sp-12) var(--sp-8);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -936,7 +939,8 @@ const notes = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--sp-8);
-  padding: var(--sp-10) var(--sp-12);
+  /* 行内距 12：这一组是「同一张卡里的行」，四边等距 */
+  padding: var(--sp-12);
   background: var(--surface-2);
   min-width: 0;
 }
@@ -1021,7 +1025,8 @@ const notes = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-10) var(--sp-12);
+  /* 行内距 12：这一组是「同一张卡里的行」，四边等距 */
+  padding: var(--sp-12);
   background: var(--surface-2);
 }
 
@@ -1078,7 +1083,7 @@ const notes = computed(() => {
 .codes li {
   display: flex;
   align-items: baseline;
-  gap: var(--sp-10);
+  gap: var(--sp-12);
   padding: var(--sp-8) var(--sp-12);
   background: var(--surface-2);
 }
@@ -1159,7 +1164,7 @@ const notes = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-14);
+  gap: var(--sp-12);
   padding: var(--sp-40) var(--sp-20);
 }
 
@@ -1179,7 +1184,7 @@ const notes = computed(() => {
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: var(--sp-10) var(--sp-22);
+  padding: var(--sp-12) var(--sp-24);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 

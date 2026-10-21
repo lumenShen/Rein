@@ -77,7 +77,7 @@ const quickOpen = ref(false)
          类别打卡与微量元素**通栏**：微量元素卡展开后有 1300px 高，跟一张 227px 的
          打卡卡并排，右半边会空出一整屏；它们的内容本来就是「左标签 + 右数值」的
          宽行，铺满一行反而更好读。 -->
-    <MacroDetailCard />
+    <MacroDetailCard class="block-start" />
     <DietChecksCard class="d-full" />
     <MicrosCard class="d-full" />
 
@@ -101,5 +101,17 @@ const quickOpen = ref(false)
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--gap-sm);
+  /* 三格是同一个浅井里的三枚磁贴：内距收到 12（二级分组面）、圆角 12。
+     base.css 的 .card.sub 还是上一版手感（20 圆角 / 14 内距）—— 页面上只有这一处
+     用到它，就在这里按施工单的口径收口，不去动共享样式。 */
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
+}
+
+/* 分组之间 24（施工单 §1「区块之间」）：「今日状态」这一组（快捷入口 / 摄入总览 /
+   今日菜单）与下方「详解」这一组（宏量 / 打卡 / 微量元素）不是同级卡片，
+   12 会让六张卡读成一条没有段落的流水。特指度压过 base.css 的 `.card + .card`。 */
+.page .block-start {
+  margin-top: var(--gap-xl);
 }
 </style>

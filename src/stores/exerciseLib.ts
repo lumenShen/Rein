@@ -9,6 +9,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { normalizeActivation, resolveActivation, type MuscleKey } from '@/config/muscles'
+import { guideOf as guideOfId, type ExerciseGuide } from '@/config/exerciseGuide'
 import { exerciseLibService } from '@/services/exerciseLibService'
 import { libraryMuscles } from '@/utils/libraryMuscles'
 import type {
@@ -105,6 +106,17 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
     return item.tips || get(item.exerciseId)?.tips || ''
   }
 
+  /**
+   * 结构化动作详解（准备 3 条 / 开始 / 结束 / 注意）。
+   *
+   * 数据在前端常量表（`config/exerciseGuide`）而不是库表：它是**教学内容**，
+   * 不随用户改动、不参与同步，也不该为 81 个内置动作各写一列 JSON。
+   * 自建动作返回 null，界面回落 `tipsOf` 那一句话。
+   */
+  function guideOf(item: Pick<PlanExercise, 'exerciseId'> | null | undefined): ExerciseGuide | null {
+    return guideOfId(item?.exerciseId)
+  }
+
   /** 按类型取库内动作（沉浸页「更换动作」用） */
   function forKind(kind: ExerciseKind, excludeId?: string): ExerciseRecord[] {
     return list.value.filter((e) => e.kind === kind && !e.hidden && e.id !== excludeId)
@@ -172,6 +184,7 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
     resolveName,
     musclesOf,
     tipsOf,
+    guideOf,
     forKind,
     search,
   }

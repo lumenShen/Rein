@@ -336,7 +336,9 @@ const emptyCopy = computed(() => {
   /* 分类胶囊一组无边界控件：组内 8 */
   gap: var(--gap-sm);
   overflow-x: auto;
-  padding-bottom: var(--gap-text);
+  /* 上下各 6：32 的胶囊 + 6×2 = 44 的热区（::after 在滚动容器里要留出这圈余量，
+     否则会被 overflow 裁掉）。滚动行的高度因此与原来的 40 相差无几 */
+  padding: var(--sp-6) 0;
   scrollbar-width: none;
 }
 
@@ -345,21 +347,29 @@ const emptyCopy = computed(() => {
 }
 
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   /* 色点与分类名是图标 + 文字：左右 8（--gap-text-inline），不是行内最小 4 ——
      5 个字的分类名贴着一枚 8px 色点，色点会被读成字的偏旁 */
   gap: var(--gap-sm);
   flex: none;
-  /* 高 40px：分类胶囊与「全部」是筛选的主控件（实测约 30px 高），
-     40 是拇指能稳准落到的下限，横向滚动行为不变 */
-  min-height: var(--control-md);
+  /* 可点胶囊统一 32（施工单 §2「可点胶囊 32」）：与饮食库的分类/排序胶囊同一档，
+     此前 40 让分类行比上方搜索行还高 */
+  min-height: var(--sp-32);
   padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
   font-weight: var(--fw-semibold);
   color: var(--text-2);
+}
+
+/* 32 的视觉胶囊：命中区纵向补到 44（上下各 6，与 .chips 的 padding 对齐） */
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-6)) 0;
 }
 
 /* 选中态：soft 底上的文字走 --accent-strong，不拿实底档 --accent 当文字色

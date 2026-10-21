@@ -59,8 +59,25 @@ function colorOf(e: ScheduleEntry): string {
   return e.session.color ?? 'var(--cat-class)'
 }
 
+/** 主行：教室在前（去哪儿上课是打开课表最先找的答案），教师跟在后面 */
+function metaOf(e: ScheduleEntry): string {
+  return [place(e), e.session.teachers.join('、')].filter(Boolean).join(' · ')
+}
+
 function place(e: ScheduleEntry): string {
   return [e.session.building, e.session.room].filter(Boolean).join(' ')
+}
+
+/** 第三行：周次 / 学分 / 类型 —— 背景信息，压到最小一档 */
+function facts(e: ScheduleEntry): string {
+  const s = e.session
+  return [
+    s.weeksStr ? `第 ${s.weeksStr} 周` : '',
+    s.credits ? `${s.credits} 学分` : '',
+    s.courseType ?? '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 </script>
 
@@ -93,30 +110,23 @@ function place(e: ScheduleEntry): string {
         @keydown.enter.prevent="emit('select', e)"
         @keydown.space.prevent="emit('select', e)"
       >
-        <!-- 左侧时间柱：实际上课时间 + 节次 -->
+        <!-- 左侧时间柱：起止时刻 + 节次 -->
         <div class="rail">
-          <span class="t1">{{ e.session.startTime }}</span>
+          <span class="t1 num">{{ e.session.startTime }}</span>
           <span class="line" />
-          <span class="t2">{{ e.session.endTime }}</span>
+          <span class="t2 num">{{ e.session.endTime }}</span>
           <span class="unit">{{ unitLabel(e.session.startUnit, e.session.endUnit) }}</span>
         </div>
 
-        <div class="card">
+        <div class="body">
           <div class="top">
             <span v-if="e.holiday" class="hd-tag" :class="e.holiday">{{ e.holiday === 'off' ? '假' : '调' }}</span>
             <span class="name">{{ e.session.courseName }}</span>
             <span v-if="i === activeIndex" class="badge">进行中</span>
             <span v-else-if="isNext(e, i)" class="badge soft">下一节</span>
           </div>
-          <p v-if="place(e)" class="meta">{{ place(e) }}</p>
-          <p v-if="e.session.teachers.length" class="meta">
-            {{ e.session.teachers.join('、') }}
-          </p>
-          <p class="meta dim">
-            <span v-if="e.session.weeksStr">第 {{ e.session.weeksStr }} 周</span>
-            <span v-if="e.session.credits"> · {{ e.session.credits }} 学分</span>
-            <span v-if="e.session.courseType"> · {{ e.session.courseType }}</span>
-          </p>
+          <p v-if="metaOf(e)" class="meta">{{ metaOf(e) }}</p>
+          <p v-if="facts(e)" class="dim">{{ facts(e) }}</p>
         </div>
       </li>
     </ul>
@@ -157,19 +167,33 @@ function place(e: ScheduleEntry): string {
   gap: var(--gap-md);
 }
 
-/* 课程色整面 soft tint（课表三视图同一档浓度：基础 12% / 强调 20%），
-   不再靠左边框做强调条（side-tab 收编）—— 色相由整面 tint 承担，
-   与周视图 .blk、月视图 .chip 是同一套画法。 */
+/* 课程卡：**中性面 + 左侧 3px 色条**。此前整卡铺课程色的 soft tint，一天里几节课
+   就是几块彩色底，卡片之间的边界反而要靠阴影去认；色相收进色条后，
+   白卡在画布上是一张张清楚的卡，配色只承担「哪门课」这一件事。 */
 .row {
+  position: relative;
   display: flex;
-  gap: var(--gap-md);
-  background: color-mix(in srgb, var(--blk) 12%, var(--surface));
+  /* 时间柱与正文之间取有明显边界的一档（16）——它们是两种信息 */
+  gap: var(--gap-lg);
+  background: var(--surface);
   /* 卡片档 16：课程块在日视图里是一张张卡，20 会让它们读成按钮 */
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: var(--sp-12) var(--pad-card);
+  /* 左 20 = 色条 3 + 与正文的间隙；其余三边 12/16（紧凑卡的内距） */
+  padding: var(--pad-card-tight) var(--pad-card) var(--pad-card-tight) var(--sp-20);
+  overflow: hidden;
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--blk);
 }
 
 .row:focus-visible {
@@ -177,18 +201,22 @@ function place(e: ScheduleEntry): string {
   outline-offset: 2px;
 }
 
-/* 「正在进行」= tint 加浓一档（三视图共用的强调级） */
+/* 「正在进行」不再靠整卡染蓝：一道 accent 内描边就能把这一张从同级卡里抬出来，
+   而卡片本身仍是中性面（色相只走色条与这条状态描边） */
 .row.now {
-  background: color-mix(in srgb, var(--blk) 20%, var(--surface));
+  box-shadow:
+    var(--shadow-card),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .row:active {
   transform: scale(0.995);
 }
 
+/* 时间柱：开始时刻是主角，中间一条细线把起止连起来，节次垫底 */
 .rail {
   flex: none;
-  width: 52px;
+  width: var(--sp-44);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -196,8 +224,8 @@ function place(e: ScheduleEntry): string {
 }
 
 .t1 {
-  font-size: var(--fs-footnote);
-  font-weight: var(--fw-bold);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
   line-height: var(--lh-title);
@@ -207,28 +235,24 @@ function place(e: ScheduleEntry): string {
 .line {
   width: 1.5px;
   flex: 1;
-  min-height: 8px;
+  min-height: var(--sp-8);
   background: var(--blk);
-  opacity: 0.35;
+  opacity: 0.45;
   /* 1.5px 宽的竖线：满圆角让两端是圆的，与时间柱的胶囊语言一致 */
   border-radius: var(--radius-full);
 }
 
-.t2 {
-  font-size: var(--fs-caption);
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-  line-height: var(--lh-title);
-}
-
+/* 结束时刻与节次都是补充读数：同一档字号、同一档色阶，靠位置分先后 */
+.t2,
 .unit {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-top: var(--gap-text);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-title);
   white-space: nowrap;
 }
 
-.card {
+.body {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -243,11 +267,13 @@ function place(e: ScheduleEntry): string {
 }
 
 .name {
-  font-size: var(--fs-callout);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-body);
   font-weight: var(--fw-semibold);
   color: var(--text-1);
   line-height: var(--lh-title);
-  word-break: break-all;
+  word-break: break-word;
 }
 
 .badge {
@@ -284,14 +310,23 @@ function place(e: ScheduleEntry): string {
   background: var(--accent-soft);
 }
 
+/* 第二行「教室 · 教师」与第三行周次/学分：各占一行、各自省略号。
+   层级只靠字号与色阶（16 / 12 / 10 与 text-1 / 2 / 3），不再给副文加粗。 */
 .meta {
   font-size: var(--fs-caption);
   color: var(--text-2);
   line-height: var(--lh-subtitle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.meta.dim {
-  color: var(--text-3);
+.dim {
   font-size: var(--fs-micro);
+  color: var(--text-3);
+  line-height: var(--lh-display);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

@@ -114,21 +114,24 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
       <span class="li"><span class="glyph" />目标线</span>
     </div>
 
-    <div class="hr" />
-
-    <div class="macros">
-      <div v-for="m in coreMacros" :key="m.key" class="mc">
-        <span class="m-label">{{ m.label }}</span>
-        <div class="bar sm">
-          <div class="track">
-            <span class="seg" :style="{ width: `${macroPct(m)}%`, background: `var(${m.colorVar})` }" />
+    <!-- 三大宏量是卡内的二级分组：用浅井 + 12 圆角收成一组（施工单 §1「卡内分组面」），
+         不再用一条分隔线把卡片切成两半 —— 线只能表达「这里断开」，
+         井还能表达「这三项属于同一组、且比上方总览低一档」。 -->
+    <div class="well">
+      <div class="macros">
+        <div v-for="m in coreMacros" :key="m.key" class="mc">
+          <span class="m-label">{{ m.label }}</span>
+          <div class="bar sm">
+            <div class="track">
+              <span class="seg" :style="{ width: `${macroPct(m)}%`, background: `var(${m.colorVar})` }" />
+            </div>
+            <span class="ref" :style="{ left: `${LINE}%` }" />
           </div>
-          <span class="ref" :style="{ left: `${LINE}%` }" />
+          <span class="m-val">
+            <b class="m-cur num">{{ Math.round(m.current) }}</b>
+            <span class="m-tgt num">/{{ Math.round(m.target) }}<i class="m-unit">{{ m.unit }}</i></span>
+          </span>
         </div>
-        <span class="m-val">
-          <b class="m-cur num">{{ Math.round(m.current) }}</b>
-          <span class="m-tgt num">/{{ Math.round(m.target) }}{{ m.unit }}</span>
-        </span>
       </div>
     </div>
   </div>
@@ -312,11 +315,14 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   flex: none;
 }
 
-.hr {
-  height: 1px;
-  background: color-mix(in srgb, var(--text-1) 10%, transparent);
-  /* 分隔线两侧是卡内两个区块：上下各 12（--gap-md） */
-  margin: var(--gap-md) 0;
+/* 宏量分组面：内距 12（二级分组比母卡收一档）、块间 12、圆角 12。
+   底色用 --surface-inset 而不是 --surface-2：这块也会出现在没有卡片壳的首页横幅上，
+   实色灰压在页面底（#f5f5f7）上几乎不可见；混色井跟着底下那层走，两种底都成立。 */
+.well {
+  margin-top: var(--gap-md);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
+  background: var(--surface-inset);
 }
 
 /* ── 三大宏量 ── */
@@ -369,6 +375,15 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   color: var(--text-2);
 }
 
+/* 单位再降一档：目标值是数、g 只是量纲。三列里「67 /80 g」曾读成两个 20 号大字，
+   就是因为单位和目标数同字号；单位落 micro + --text-3，数字才是这行的落点。 */
+.m-unit {
+  margin-left: var(--gap-text);
+  font-style: normal;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+
 /* ── 窄卡（桌面便当 hero 格）降一档 ──
    注意选择器必须写成 `.ov.dense …`：`dense` 与 `ov` 是**同一个元素上的两个类**，
    写成 `.dense .ov` 是后代选择器，永远匹配不到（这里踩过一次）。
@@ -390,8 +405,8 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   margin-top: var(--sp-6);
 }
 
-/* 下组（分隔线 + 三大宏量）贴底：缝隙全部落在分隔线之上，只此一道 */
-.ov.dense .hr {
+/* 下组（宏量井）贴底：缝隙全部落在井的上边距里，只此一道 */
+.ov.dense .well {
   margin-top: auto;
 }
 
