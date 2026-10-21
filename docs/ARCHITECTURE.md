@@ -30,6 +30,7 @@
 | --- | --- | --- |
 | `src/styles/tokens.css` | 全部设计令牌（颜色 / 圆角 / 间隔 / 排版 / 阴影 / 动效）。几何与排版对齐 HarmonyOS 设计规范，施工依据与逐条理由见 `docs/design/huawei/ALIGNMENT.md`：间隔走 4/8 栅格（`--sp-*` 数值档 + `--gap-*`/`--pad-*` 语义档），圆角层级正相关（4/8/12/16/20/32），字号 `--fs-*`。**组件里禁止再写裸 px** | 业务选择器；裸 5/7/9/11/13 这类非栅格值
 | `src/components/common` | 与领域无关的通用组件 | 领域 store 依赖 |
+| `src/composables/*` | 跨组件复用的交互 / 动效逻辑，不认识具体领域：`useMediaQuery`（断点）、`useScrolled`（滚动容器沿父链解析）、`useDragDock`（悬浮条拖拽停靠与弹簧）、`useGrowOnOpen`（详情卡双 rAF 入场）、`useContentSwap`（**容器尺寸 spring + 内容交错模糊交换**，见 §5）、`useTwoStepConfirm`（两步确认） | 领域 store 依赖（按域收拢的那几个除外，如 `useVoiceMemos` / `useBentoLayout`）；IPC 直连 |
 | `src/system/*` | 应用级运行时单例（`workoutRuntime` 运动接管、`recorderRuntime` 录音、`voiceRuntime` 语音会话、`micBus` 麦克风互斥仲裁、`sessionImmersive` 沉浸层显隐、`globalFloat` 全局浮窗的显示时机 / 快照推送 / 浮窗动作、`perf` 掉帧判定与降级档） | 组件渲染逻辑、IPC 直连 |
 | `src/services/*` | 命令名 → 类型化函数 | 业务逻辑 |
 | `src/stores/exerciseLib.ts` | 动作库缓存与解析：`byId` / `resolveName(item)` / `musclesOf(item)` / `tipsOf(item)` / `forKind` / `search`。课程的展示名一律先查它，查不到才回落课程条目里的名称快照 | 写业务数据（增删改一律经 service）；认识页面组件 |
@@ -124,6 +125,7 @@
 ## 5. 设计系统
 
 - 一切视觉值引用 `tokens.css` 令牌；暗色模式只改 tokens 的 dark 块。
+- **「容器尺寸 + 内容一起变」只有一种做法**：`composables/useContentSwap`。容器有自己的尺寸、内容按它排版，两者同时变时若一起淡入淡出就会读成「两块字叠在一起」，所以必须走三段交错 —— `0s` 旧内容 blur+缩小+淡出 300ms → `0.3s` spring 把 width/height 送到新尺寸（约 400ms）→ spring 起跑后 200ms 新内容由 blur+缩小淡入 200ms，**旧新两层不在同一时刻都清晰**。调用方按四层约定摆 DOM（`container` 容器 / `ghost` 旧内容快照层 / `live` 当前层 / `measure` 量宽层），量宽层必须 `width: max-content` 自己撑开 —— 复用 `.layer` 的 `inset: 0` 会量到容器自己，每交换一轮把容器撑大一圈（实测 160 → 378）。同阶段内只是数字变了用 `resize()`（只 spring 尺寸、内容直接换，做模糊进出就是每秒都在闪）。时序与 spring 参数唯一源 `system/motionSpring.ts`（与 `scratch/spring-bubble` 实验室同一套数字），关动效时全部直接到位。当前使用者：运动沉浸页的灵动气泡 `SessionStageBubble`（三态色光 + 文案）。
 - **页头图标按钮统一规范**：PageHeader 通过 `:slotted(.hdr-btn)` 提供标准样式（38px 圆钮、surface 底、卡片阴影；`.accent` 变体为主操作 CTA），各页 lead/action 插槽内的图标按钮一律挂 `hdr-btn` 类，不再各自写样式。**带数值的入口用文字胶囊变体 `.hdr-btn.pill`**（宽度随内容、字号 14、tabular-nums；材质/玻璃/按压反馈仍由那一条 `hdr-btn` 规则提供）—— 38px 圆钮装不下一句话，而「空间总览 · 12.3 MB」这类入口本身就是一句话，当前唯一调用方是文件页。
 - **命令菜单一律走 `common/AppMenu.vue` 的 bind 模式（图标 + 文字）**：贴着触发元素弹出的锚定面板是默认形态 —— 页头「⋯」（健康方案）、底栏左钮长按换落点、消息长按/右键、课程组操作、休息加时与「更多」、内置课程升级三选一都走这一份（Teleport 到 body，不受父容器 overflow 裁剪）。**参数**：宽 200–300px（窄屏 `100vw−16` 兜底）、行高 ≥44、图标 19 / 图标列定宽 20（列表里只要有一项带图标，缺图标的项渲染等宽空位，标签左缘对齐）、锚点间隙 8、横向留白并上 `--safe-left/right`（手机手势返回带）、空间不足自动翻到锚点上方；桌面有 hover 反馈、键盘焦点内描边、标签不折行。**只有破坏性确认**（删除 / 放弃 / 覆盖 / 重置）继续用 `ActionSheet` / `SheetModal` 的模态弹层：确认需要遮罩压场，做成锚定菜单等于把确认降级成「菜单里点一下」。dialog 形态（`mode="dialog"` 底部操作面板）保留给「没有锚点、必须在底部出现」的场景，当前无调用方。回归：`node scripts/e2e-feature-toggles.mjs`（长按换落点）、`node scripts/e2e-cdp.mjs`（方案操作菜单）。
 - **页头固定与渐进模糊遮罩**：每个非 fullscreen 页面都必须有 PageHeader，它 `position: sticky; top: 0` 顶住**最近滚动容器**——移动端滚文档、桌面工作台滚 `.desk-main`，两种壳同一份 CSS 都成立（`fixed` 在桌面壳里会跑到导航轨与信息栏底下）。滚动状态由 `composables/useScrolled` 沿父链解析出真正的滚动容器后监听，不写死 `window`。页面滚起来后页头背后压一层遮罩：正常档是多层 `backdrop-filter` + `mask` 梯度叠出的渐进模糊（越靠上被模糊的次数越多，向下递减到零，避免硬切边），降级档换成「`--bg` → 透明」的渐变底色遮罩。遮罩向上多铺 `--safe-top` 盖住状态栏、向下多铺 `--ph-tail` 让模糊化开、左右按 `--ph-bleed`（缺省 `--page-pad-x`，页面可覆写）铺满整帧。回归：`node scripts/e2e-page-header.mjs`（sticky 归属、遮罩显隐、层数与模糊量、降级档换底色、逐页标题）。

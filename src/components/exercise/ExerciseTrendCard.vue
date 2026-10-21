@@ -268,7 +268,8 @@ const chart = computed(() => {
 }
 
 .pt.proj {
-  fill: var(--surface-1);
+  /* 空心点：填卡面底色（曾经写成不存在的 --surface-1，fill 失效成黑点） */
+  fill: var(--surface);
   stroke: var(--text-3);
   stroke-width: 1.4;
 }

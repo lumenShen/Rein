@@ -1713,8 +1713,10 @@ function trapFocus(e: KeyboardEvent): void {
 
 /* 形变进行中：控制层的玻璃退成**近材质**而不是纯透明——令牌换成实底 + 常规描边，
    这样即使折射被摘掉，顶栏/底簇仍是可读的一层，而不是空掉。形变期整个层在逐帧
-   缩放，每多一块 backdrop-filter 就多一处重采样（折射那一路尤其贵）。 */
-.session-layer.is-morphing :deep(.sgbtn) {
+   缩放，每多一块 backdrop-filter 就多一处重采样（折射那一路尤其贵）。
+   .bubble（SessionStageBubble 的玻璃胶囊）同属这一层，一并摘掉。 */
+.session-layer.is-morphing :deep(.sgbtn),
+.session-layer.is-morphing :deep(.bubble) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transition: none !important;

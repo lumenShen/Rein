@@ -1,15 +1,9 @@
 <script setup lang="ts">
-import { animate, createSpring } from 'animejs'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { useContentSwap } from '@/composables/useContentSwap'
 import { motionOn } from '@/system/motion'
-import {
-  BUBBLE_IN_DELAY_MS,
-  BUBBLE_IN_MS,
-  BUBBLE_OUT_MS,
-  BUBBLE_SPRING,
-  PREPARE_SEC,
-} from '@/system/motionSpring'
+import { PREPARE_SEC } from '@/system/motionSpring'
 
 /**
  * 灵动气泡 · 底部控栏上方的状态条。
@@ -28,6 +22,8 @@ import {
  *   0.30s spring 把气泡宽高送到新内容的尺寸（约 0.4s）
  *   0.50s 新内容由模糊缩小淡入 0.2s
  * 旧内容在新内容进场前就彻底消失，两者不在同一时刻都清晰 —— 否则会读成两行字叠在一起。
+ * 这一段时序不是本组件的私货：`composables/useContentSwap` 把它收成通用方法
+ * （容器尺寸 spring + 内容交错），别的地方要同样的手感直接用那一份，别再抄数字。
  *
  * 阶段计时全部基于墙钟（performance.now），不做逐帧累加：切到后台再回来时，
  * 秒数 / 次数仍然是准的（与 store 里休息倒计时同一个纪律）。
@@ -109,9 +105,6 @@ const ghost = ref<BubbleContent | null>(null)
 
 let timer = 0
 let startMs = 0
-let seq = 0
-/** 交换动画进行中（0.7s）：这段时间里的数字变化不要自己去动宽度 */
-let busyUntil = 0
 
 function stopTicker(): void {
   if (timer) {
@@ -122,7 +115,7 @@ function stopTicker(): void {
 
 function arm(): void {
   stopTicker()
-  seq++ // 作废还在飞行中的交换回调
+  mover.invalidate() // 作废还在飞行中的交换回调
   if (props.kind === 'rest') {
     stage.value = 'rest'
     void swap(content.value)
@@ -175,94 +168,34 @@ function tick(): void {
   }
 }
 
-/* ---------- 尺寸测量 ---------- */
+/* ---------- 尺寸测量与内容交换（通用方法，见 composables/useContentSwap） ---------- */
 
-const PAD_X = 18
+/** 气泡高度是定死的 52（量宽层只有一行文字高），宽度完全跟着内容走 —— 不设下限 */
+const mover = useContentSwap(
+  { container: bubbleEl, ghost: ghostEl, live: liveEl, measure: measureEl },
+  { minHeight: 52 },
+)
 
-function measure(): { w: number; h: number } {
-  const el = measureEl.value
-  if (!el) return { w: 140, h: 52 }
-  const r = el.getBoundingClientRect()
-  return { w: Math.ceil(r.width) + PAD_X * 2, h: Math.max(52, Math.ceil(r.height)) }
-}
-
-/* ---------- 内容交换（交错动画） ---------- */
-
+/** 换阶段：旧内容模糊淡出 → spring 宽高 → 新内容淡入（底色跟着 spring 一起换） */
 async function swap(next: BubbleContent): Promise<void> {
-  const mySeq = ++seq
-  const bubble = bubbleEl.value
-  // 关动效 / 无节点：直接到位（状态照切，只是不补间）
-  if (!motionOn.value || !bubble) {
-    shown.value = next
-    tone.value = next.tone
-    ghost.value = null
-    if (!bubble) return
-    await nextTick()
-    const { w, h } = measure()
-    bubble.style.width = `${w}px`
-    bubble.style.height = `${h}px`
-    return
-  }
-
-  busyUntil = performance.now() + BUBBLE_OUT_MS + BUBBLE_IN_DELAY_MS + BUBBLE_IN_MS
-  ghost.value = shown.value
-  await nextTick()
-  const { w, h } = measure()
-  if (liveEl.value) liveEl.value.style.opacity = '0'
-  if (ghostEl.value) {
-    animate(ghostEl.value, {
-      opacity: [1, 0],
-      scale: [1, 0.88],
-      filter: ['blur(0px)', 'blur(6px)'],
-      duration: BUBBLE_OUT_MS,
-      ease: 'outQuad',
-    })
-  }
-
-  window.setTimeout(() => {
-    if (mySeq !== seq || !bubbleEl.value) return
-    tone.value = next.tone
-    animate(bubbleEl.value, {
-      width: w,
-      height: h,
-      ease: createSpring({ ...BUBBLE_SPRING }),
-    })
-  }, BUBBLE_OUT_MS)
-
-  window.setTimeout(async () => {
-    if (mySeq !== seq) return
-    shown.value = next
-    ghost.value = null
-    await nextTick()
-    if (liveEl.value && motionOn.value) {
-      animate(liveEl.value, {
-        opacity: [0, 1],
-        scale: [0.9, 1],
-        filter: ['blur(6px)', 'blur(0px)'],
-        duration: BUBBLE_IN_MS,
-        ease: 'outQuad',
-      })
-    }
-  }, BUBBLE_OUT_MS + BUBBLE_IN_DELAY_MS)
+  await mover.swap({
+    stash: () => {
+      ghost.value = shown.value
+    },
+    tint: () => {
+      tone.value = next.tone
+    },
+    commit: () => {
+      shown.value = next
+      ghost.value = null
+    },
+  })
 }
 
-/** 同一阶段内的数字变化：宽度 spring 到位，内容直接换（不做模糊进出，否则每秒都在闪） */
+/** 同一阶段内的数字变化：只 spring 宽度，内容直接换（不做模糊进出，否则每秒都在闪） */
 async function resize(next: BubbleContent): Promise<void> {
-  if (performance.now() < busyUntil) return
-  await nextTick()
-  const { w, h } = measure()
-  shown.value = next
-  const bubble = bubbleEl.value
-  if (!bubble) return
-  if (!motionOn.value) {
-    bubble.style.width = `${w}px`
-    bubble.style.height = `${h}px`
-    return
-  }
-  animate(bubble, {
-    width: w,
-    height: h,
-    ease: createSpring({ duration: 240, bounce: 0.16 }),
+  await mover.resize(() => {
+    shown.value = next
   })
 }
 
@@ -328,12 +261,8 @@ watch([prepLeft, repIdx, actLeft], () => {
 })
 
 /** 首帧把尺寸对到真实内容（CSS 里的 width 只是防跳动的近似值） */
-onMounted(async () => {
-  await nextTick()
-  const { w, h } = measure()
-  if (!bubbleEl.value) return
-  bubbleEl.value.style.width = `${w}px`
-  bubbleEl.value.style.height = `${h}px`
+onMounted(() => {
+  void mover.sync()
 })
 
 onBeforeUnmount(() => {
@@ -344,9 +273,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="stagewrap">
+    <!-- glass-surface：与四条悬浮条 / 提示条同一份全局材质（半透明底 + 受光描边 +
+         玻璃落影，档位与「减弱透明度」的退化都由 base.css 统一接管）。
+         本组件的 scoped 样式因此**不写 background / box-shadow**——特指度会把
+         玻璃整套顶掉（AI 输入条踩过的同一个坑）。 -->
     <div
       ref="bubbleEl"
-      class="bubble"
+      class="bubble glass-surface"
       :class="{ tappable: kind === 'rest' }"
       :data-tone="tone"
       :role="kind === 'rest' ? 'button' : 'status'"
@@ -389,47 +322,37 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   height: 52px;
-  padding: 0 18px;
+  padding: 0 var(--sp-18);
   border-radius: var(--radius-full);
   overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  /* 浮起：它压在内容之上（内容从它下面滚过），没有落影就会读成卡片的一块 */
-  box-shadow: var(--shadow-float), inset 0 1px 0 var(--glass-rim-hi);
   /* 宽度 / 高度由 JS spring 驱动，初值给一个与首帧内容相近的宽度避免首帧跳动 */
   width: 160px;
   will-change: width, height;
-  transition: background-color var(--dur-base) var(--ease-standard),
-    border-color var(--dur-base) var(--ease-standard);
 }
 
-/* 三态底色：色相只做分区暗示，低比例混进中性面，文字仍压在 --text-1 */
-/* 底色浓度：13%/18% 在浅色下都读成白卡片（实测），28–30% 才一眼看出蓝 / 绿 / 橙。
-   文字始终压在 --text-1 上（黑字压 30% 橙底仍有 15:1），色相只做分区暗示 */
+/* 三态底色：只换 --glass-fill 这一个变量，玻璃的受光描边 / 落影 / 光学内层
+   全部由 .glass-surface 那一份统一供给（与 HistoryDrawer / ToastHost 的
+   「就地顶 fill」同一手法）。色相只做分区暗示，文字仍压在 --text-1。
+   底色浓度：13%/18% 在浅色下都读成白卡片（实测），28–30% 才一眼看出蓝 / 绿 / 橙；
+   黑字压 30% 橙底仍有 15:1。混色基底是 --surface（卡面）—— 曾经写成
+   var(--surface-1)，而令牌表里根本没有这一档：整条 color-mix 失效被当无效丢弃，
+   三态底色实际从来没画出来过（气泡一直是白玻璃）。 */
 .bubble[data-tone='prepare'] {
-  background: color-mix(in srgb, var(--accent) 28%, var(--surface-1));
-  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  --glass-fill: color-mix(in srgb, var(--accent) 28%, var(--surface));
 }
 
 .bubble[data-tone='act'] {
-  background: color-mix(in srgb, var(--c-exercise) 30%, var(--surface-1));
-  border-color: color-mix(in srgb, var(--c-exercise) 50%, transparent);
+  --glass-fill: color-mix(in srgb, var(--c-exercise) 30%, var(--surface));
 }
 
 .bubble[data-tone='due'] {
   /* 用 --warn（实底档橙）而不是 --warn-strong（文字档深棕）：后者混出来是米黄，
      在浅色屏上读成「脏白」，看不出它在提醒你结束 */
-  background: color-mix(in srgb, var(--warn) 28%, var(--surface-1));
-  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+  --glass-fill: color-mix(in srgb, var(--warn) 28%, var(--surface));
 }
 
-.bubble[data-tone='rest'] {
-  /* 休息态是中性面：比另外三态更实一档，否则浅色主题下它就是一块白底 + 白边，
-     看不出这里有一条可点的控件（副文案「点此跳过」） */
-  background: var(--surface);
-  border-color: var(--line);
-  box-shadow: var(--shadow-thumb);
-}
+/* rest 态不再单独配材质：默认玻璃 + 玻璃落影已经是「一条可点的浮起控件」
+   （与四条悬浮条同一读法），副文案「点此跳过」负责把可点性说完整 */
 
 .bubble.tappable {
   cursor: pointer;
@@ -460,7 +383,10 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: baseline;
+  /* ⚠️ 必须是 center，不能是 baseline：定高单行 flex 里 baseline 对齐把整行
+     钉在 cross-start（顶部）—— 实测上边距 1px / 下边距 30px，文字全程贴顶。
+     main 与 sub 差一档字号，center 后 sub 相对基线对齐只低 1.5px，无感。 */
+  align-items: center;
   justify-content: center;
   gap: var(--gap-sm);
   white-space: nowrap;
