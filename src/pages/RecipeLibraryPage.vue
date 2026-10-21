@@ -147,9 +147,9 @@ const aiTotal = computed(() =>
 
     <!-- AI 定制入口（桌面上这条横幅通栏，理由见样式里的桌面段） -->
     <section class="card d-full ai-card">
-      <div class="row" style="gap: 10px">
+      <div class="row" style="gap: var(--gap-md)">
         <i class="ai-ic center"><Sparkles :size="18" /></i>
-        <div class="col flex-1" style="gap: 2px">
+        <div class="col flex-1" style="gap: var(--gap-text)">
           <div class="ai-head">
             <b>AI 定制一日菜单</b>
             <InfoHint
@@ -171,7 +171,7 @@ const aiTotal = computed(() =>
     <!-- 食谱列表（d-grid：桌面上按 2 栏摊开，栏数缺省就是 2） -->
     <ul class="rlist d-grid">
       <li v-for="r in visible" :key="r.id" class="row rrow" :class="{ off: isRestrictedFor(r) }">
-        <div class="col flex-1" style="gap: 3px; min-width: 0">
+        <div class="col flex-1" style="gap: var(--gap-tight); min-width: 0">
           <p class="rname">
             {{ r.name }}<em class="slot">{{ MEAL_TYPE_LABEL[r.mealType] }}</em>
             <span v-if="isRestrictedFor(r)" class="badge">忌口</span>
@@ -262,7 +262,7 @@ const aiTotal = computed(() =>
             </li>
           </ul>
           <p v-for="w in aiWarnings" :key="w" class="t-3 ai-warn">{{ w }}</p>
-          <div class="row" style="gap: 10px">
+          <div class="row" style="gap: var(--gap-md)">
             <button class="ai-go wide pressable" style="flex: 1" @click="generateAi">换一批</button>
             <button class="ai-done pressable" style="flex: 1" @click="aiOpen = false">完成</button>
           </div>
@@ -275,7 +275,8 @@ const aiTotal = computed(() =>
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .ai-card {
@@ -286,7 +287,9 @@ const aiTotal = computed(() =>
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: var(--radius-m);
+  /* 图标容器是**小容器**档 8：《圆角参数》16 给内容容器，卡片里再套一张同级圆角
+     会读成「又一张卡」而不是一枚图标底板 */
+  border-radius: var(--radius-s);
   background: var(--accent);
   color: var(--on-accent);
 }
@@ -299,7 +302,8 @@ const aiTotal = computed(() =>
 .ai-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 标题与说明入口：4·8 表里的一格 6 */
+  gap: var(--sp-6);
 }
 
 .ai-sub {
@@ -307,43 +311,55 @@ const aiTotal = computed(() =>
 }
 
 .ai-go {
+  position: relative;
   flex: none;
-  padding: 7px 15px;
+  /* 胶囊按钮：上下 6 + 14 字 ≈ 32（小号档），左右 12 */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+}
+
+/* 32 的胶囊「生成」键：命中区纵向补到 44（横向由按钮宽度承担） */
+.ai-go::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
 }
 
 .ai-go.wide {
-  padding: 12px 0;
-  border-radius: var(--radius-s);
+  /* 通栏按钮高 40 档（12 上下 + 14 字），圆角取按钮档 20 */
+  padding: var(--sp-12) 0;
+  border-radius: var(--radius-l);
 }
 
 .ai-done {
-  padding: 12px 0;
-  border-radius: var(--radius-s);
+  padding: var(--sp-12) 0;
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .seg {
-  margin-top: 14px;
+  margin-top: var(--gap-md);
 }
 
 .rlist {
-  margin-top: 12px;
+  /* 分段控件与列表之间 12；食谱卡之间 12（卡间距） */
+  margin-top: var(--gap-md);
   display: grid;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .rrow {
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-l);
+  /* 列间 12；卡片内距 16、圆角取卡片档 16（20 是按钮/入口那一档） */
+  gap: var(--gap-md);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -355,30 +371,33 @@ const aiTotal = computed(() =>
 
 .rname {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  /* 名称与「早/午/晚」小标、忌口角标：无边界 6 */
+  gap: var(--sp-6);
 }
 
 .rname .slot {
   font-style: normal;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--fs-micro);
   color: var(--text-3);
-  padding: 1px 7px;
+  /* 迷你角标：上下 2、左右 8 */
+  padding: var(--sp-2) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
 
 .badge {
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 7px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--danger-soft);
-  color: var(--danger);
+  /* soft 底上的文字走 strong 档（--danger 压 soft 底不够 AA，STANDARDS §4） */
+  color: var(--danger-strong);
 }
 
 /* 营养行：热量是主数值（19px + 等宽），三项宏量降为次要项 ——
@@ -387,21 +406,22 @@ const aiTotal = computed(() =>
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 3px 10px;
+  /* 行内 4、换行后 10：热量与三项宏量是四项并列读数 */
+  gap: var(--gap-tight) var(--sp-10);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .rmeta .rkcal {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .rmeta .rkcal span {
-  margin-left: 3px;
+  margin-left: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-2);
 }
 
@@ -412,23 +432,27 @@ const aiTotal = computed(() =>
 .tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 1px;
+  /* 过敏原标签一组：组内 4，与营养行之间 4 */
+  gap: var(--gap-tight);
+  margin-top: var(--gap-tight);
 }
 
 .tag {
   font-size: var(--fs-micro);
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
 
 .prefs {
   flex: none;
-  gap: 8px;
+  /* 两颗圆形图标钮各自带底，属「有明确边界」的控件：组内 16。
+     这 16 同时是热区余量 —— 每颗 32 + 6×2 = 44，两个热区刚好相接、不互相吃掉。 */
+  gap: var(--gap-lg);
 }
 
 .pf {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -438,6 +462,13 @@ const aiTotal = computed(() =>
   place-items: center;
 }
 
+/* 32 的圆形图标钮命中区撑到 44：视觉不变，热区补到规范下限 */
+.pf::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
 .pf.on[aria-label*='喜欢'] {
   background: var(--ok-soft);
   color: var(--ok-strong);
@@ -445,14 +476,16 @@ const aiTotal = computed(() =>
 
 .pf.on[aria-label*='不喜欢'] {
   background: var(--danger-soft);
-  color: var(--danger);
+  /* soft 底上的文字走 strong 档（STANDARDS §4） */
+  color: var(--danger-strong);
 }
 
 /* AI 弹层 */
 .ai-panel {
   display: grid;
-  gap: 14px;
-  padding-bottom: 20px;
+  /* 弹层里的六块内容：区块之间 16，底部留 20 的收尾呼吸 */
+  gap: var(--gap-lg);
+  padding-bottom: var(--sp-20);
 }
 
 .seg-sm {
@@ -460,7 +493,8 @@ const aiTotal = computed(() =>
 }
 
 .ai-wait {
-  padding: 30px 0;
+  /* 等待态上下 32（吸附到令牌档） */
+  padding: var(--sp-32) 0;
 }
 
 /* 流式过程：人话状态行（工具细节是开发者日志，已不上屏）+ 打字光标 */
@@ -468,33 +502,21 @@ const aiTotal = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .spin {
-  animation: spin 1.1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 1.1s linear infinite;
 }
 
 .caret {
   display: inline-block;
   width: 2px;
   height: 1em;
-  margin-left: 2px;
+  margin-left: var(--gap-text);
   vertical-align: -0.12em;
   background: var(--text-2);
-  animation: caret-blink 1s steps(2, start) infinite;
-}
-
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
-  }
+  animation: rein-caret-blink 1s steps(2, start) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -516,7 +538,8 @@ const aiTotal = computed(() =>
 }
 
 .ai-err {
-  color: var(--danger);
+  /* 错误是必须读出来的状态词：走文字档 --danger-strong（实底档当文字不够 AA） */
+  color: var(--danger-strong);
   font-size: var(--fs-subhead);
 }
 
@@ -525,7 +548,7 @@ const aiTotal = computed(() =>
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: var(--sp-6) var(--sp-10);
 }
 
 .ai-total {
@@ -534,13 +557,13 @@ const aiTotal = computed(() =>
 }
 
 .ai-total .ai-total-lab {
-  margin-right: 4px;
+  margin-right: var(--gap-tight);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .ai-total b {
-  margin-right: 2px;
+  margin-right: var(--gap-text);
   font-size: var(--fs-title3);
   color: var(--text-1);
 }
@@ -552,41 +575,46 @@ const aiTotal = computed(() =>
 
 .ai-meals {
   display: grid;
-  gap: 10px;
+  /* 餐次卡之间 12（卡间距） */
+  gap: var(--gap-md);
 }
 
 .ai-meals li {
-  padding: 12px 14px;
-  border-radius: var(--radius-m);
+  padding: var(--sp-12) var(--pad-card);
+  /* 弹层里的二级分组面：收一档 12（母层是面板，不是卡片） */
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .ai-mhead {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ai-mhead em {
   font-style: normal;
-  margin-right: 7px;
-  padding: 1px 8px;
+  /* 餐次胶囊与菜名 8；胶囊上下 2、左右 8 */
+  margin-right: var(--gap-sm);
+  padding: var(--sp-2) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
-  color: var(--accent);
+  /* soft 底上的文字蓝走 --accent-strong（实底档 --accent 压 soft 底不够 AA） */
+  color: var(--accent-strong);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ai-mhead b {
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 .ai-items {
-  margin-top: 3px;
+  /* 餐次名与下方菜名：4 */
+  margin-top: var(--gap-tight);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .ai-warn {

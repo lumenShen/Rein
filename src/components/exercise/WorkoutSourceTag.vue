@@ -31,13 +31,13 @@ const LABEL: Record<WorkoutSource, string> = {
 <style scoped>
 .tag {
   flex: none;
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
   font-size: var(--fs-micro);
-  font-weight: 600;
-  line-height: 1.5;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-body);
   white-space: nowrap;
 }
 

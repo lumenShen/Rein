@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
 import { Play, Trash2 } from 'lucide-vue-next'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import TimeSpine from './TimeSpine.vue'
+import { memoSpine, useVoiceMemos } from '@/composables/useVoiceMemos'
 import { voiceService } from '@/services/voiceService'
 import { useToast } from '@/composables/useToast'
+import { fmtMmSs, fmtMonthDayTime } from '@/utils/format'
 import type { VoiceMemo } from '@/types'
 
 /** 全部纪要抽屉：历史语音纪要列表。
@@ -14,18 +15,12 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; pick: [memo: VoiceMemo] }>()
 
 const toast = useToast()
-const loading = ref(false)
-const memos = ref<VoiceMemo[]>([])
-const keyword = ref('')
+const { loading, keyword, filtered, remove } = useVoiceMemos(() => props.open, {
+  onError: () => toast.toast('纪要列表加载失败'),
+})
 
 /** 纪要 → 缩略脊的段落 */
-const spineOf = (m: VoiceMemo) =>
-  m.sentences.map((s) => ({
-    t: s.startMs,
-    durMs: s.endMs > s.startMs ? s.endMs - s.startMs : undefined,
-    who: '我',
-    text: s.text,
-  }))
+const spineOf = memoSpine
 
 /** 纪要点挂在句 idx 上，脊按数组位置索引，映射一次 */
 const pinsOf = (m: VoiceMemo) => {
@@ -39,50 +34,20 @@ const pinsOf = (m: VoiceMemo) => {
   })
 }
 
-watch(
-  () => props.open,
-  (v) => {
-    if (v) void load()
-  },
-)
-
-async function load(): Promise<void> {
-  loading.value = true
-  try {
-    memos.value = await voiceService.memoList()
-  } catch {
-    toast.toast('纪要列表加载失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const filtered = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return memos.value
-  return memos.value.filter(
-    (m) =>
-      m.title.toLowerCase().includes(kw) ||
-      m.sentences.some((s) => s.text.toLowerCase().includes(kw)),
-  )
-})
-
 /** 时长写法与 AI 页语音气泡（fmtVoiceDur）统一成 mm:ss：'" 分秒记号在中文界面里
     容易被读成装饰符号，且与其他地方的计时写法不一致 */
 function fmtMs(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms)
 }
 
 function fmtWhen(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return fmtMonthDayTime(iso)
 }
 
 async function onDelete(m: VoiceMemo): Promise<void> {
   try {
     await voiceService.memoDelete(m.id)
-    memos.value = memos.value.filter((x) => x.id !== m.id)
+    remove(m.id)
     toast.toast('已删除纪要')
   } catch {
     toast.toast('删除失败')
@@ -128,22 +93,23 @@ async function onDelete(m: VoiceMemo): Promise<void> {
 
 <style scoped>
 .search {
-  padding: 0 2px 8px;
+  padding: 0 var(--sp-2) var(--gap-sm);
 }
 
 .search input {
   width: 100%;
-  padding: 9px 12px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
 }
 
 .empty {
-  padding: 26px 8px;
+  padding: var(--sp-24) var(--sp-8);
   text-align: center;
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .list {
@@ -154,8 +120,9 @@ async function onDelete(m: VoiceMemo): Promise<void> {
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 13px 2px;
+  gap: var(--gap-md);
+  min-height: var(--row-h-double);
+  padding: 0 var(--sp-2);
   border-radius: var(--radius-s);
   cursor: pointer;
 }
@@ -176,13 +143,13 @@ async function onDelete(m: VoiceMemo): Promise<void> {
 /* 每行一缕缩略脊：这是列表的主体视觉，标题只是它的注脚 */
 .rowspine {
   display: block;
-  margin-top: 7px;
+  margin-top: var(--gap-sm);
 }
 
 .mt b {
   display: block;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -193,7 +160,7 @@ async function onDelete(m: VoiceMemo): Promise<void> {
   font-style: normal;
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-8);
   min-width: 0;
   margin-top: 1px;
 }
@@ -202,7 +169,7 @@ async function onDelete(m: VoiceMemo): Promise<void> {
 .mt .mdur {
   flex: none;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 

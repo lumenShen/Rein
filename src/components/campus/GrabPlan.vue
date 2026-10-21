@@ -455,21 +455,23 @@ async function onReparse(i: GrabIntent): Promise<void> {
 <style scoped>
 .card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 卡片档 16：这几张是页面级的内容容器，32 是半模态的层级；
+     用 32 会让一屏卡片看起来比弹出的抽屉还高一层 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 .head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--sp-8);
+  margin-bottom: var(--sp-10);
 }
 
 .title {
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-callout);
   color: var(--text-1);
 }
@@ -490,13 +492,13 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .entry {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   min-height: 44px;
-  padding: 2px 8px 2px 12px;
+  padding: var(--sp-2) var(--sp-8) var(--sp-2) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-3);
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
 }
 
 .entry input {
@@ -512,9 +514,9 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .entry-go {
   flex: none;
   align-self: stretch;
-  padding: 0 10px;
+  padding: 0 var(--sp-10);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
 }
 
@@ -527,21 +529,21 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
-  margin: 6px 0;
+  line-height: var(--lh-body);
+  margin: var(--sp-6) 0;
 }
 
 .hint svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .preview {
-  margin: 8px 0;
-  padding: 10px 12px;
+  margin: var(--sp-8) 0;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--accent-soft);
 }
@@ -549,15 +551,15 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .p-head {
   font-size: var(--fs-micro);
   color: var(--text-2);
-  line-height: 1.5;
-  margin-bottom: 6px;
+  line-height: var(--lh-body);
+  margin-bottom: var(--sp-6);
 }
 
 .err {
   font-size: var(--fs-micro);
   color: var(--warn-strong);
-  line-height: 1.5;
-  margin: 8px 0;
+  line-height: var(--lh-body);
+  margin: var(--sp-8) 0;
 }
 
 /* 教师命中的两种解释：指定（按你说的办）/ 近似（我猜的）。
@@ -565,8 +567,8 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .note {
   font-size: var(--fs-micro);
   color: var(--text-2);
-  line-height: 1.5;
-  margin: 6px 0 0;
+  line-height: var(--lh-body);
+  margin: var(--sp-6) 0 0;
 }
 
 .note.warn {
@@ -576,7 +578,7 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .matches {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -585,7 +587,7 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .matches li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .matches .col {
@@ -596,7 +598,7 @@ async function onReparse(i: GrabIntent): Promise<void> {
 
 .matches b {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   white-space: nowrap;
@@ -606,7 +608,7 @@ async function onReparse(i: GrabIntent): Promise<void> {
 .matches em {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 10px;
+  gap: 0 var(--sp-10);
   font-style: normal;
   font-size: var(--fs-micro);
   /* 教师与余量：确认「这条命中的到底是不是我想抢的那个班」，得读得出来 */
@@ -627,22 +629,22 @@ async function onReparse(i: GrabIntent): Promise<void> {
   width: 18px;
   text-align: center;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
   background: var(--surface);
   border-radius: var(--radius-full);
-  padding: 1px 0;
+  padding: var(--sp-2) 0;
 }
 
 .matches.tight {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .chip {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   /* 中性档（任务已清理）也是状态词，不该是最淡的一档 */
@@ -678,15 +680,15 @@ async function onReparse(i: GrabIntent): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
   width: 100%;
-  margin-top: 4px;
-  padding: 12px;
+  margin-top: var(--sp-4);
+  padding: var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -700,25 +702,25 @@ async function onReparse(i: GrabIntent): Promise<void> {
 
 .plans {
   list-style: none;
-  margin: 12px 0 0;
-  padding: 12px 0 0;
+  margin: var(--sp-12) 0 0;
+  padding: var(--sp-12) 0 0;
   border-top: 0.5px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .plan-row .line1 {
   /* 16px：两个 28px 圆钮的命中区各自外扩 8px 后正好相接（见 .op::after），
      再窄一点，「移除计划」就会压住「重新解析」的边缘 */
-  gap: 16px;
+  gap: var(--sp-16);
 }
 
 .q {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   white-space: nowrap;
@@ -756,10 +758,10 @@ async function onReparse(i: GrabIntent): Promise<void> {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
-  line-height: 1.45;
-  margin-top: 3px;
+  line-height: var(--lh-caption);
+  margin-top: var(--sp-4);
   color: var(--text-3);
 }
 
@@ -778,15 +780,15 @@ async function onReparse(i: GrabIntent): Promise<void> {
 /* 「下次唤醒」这一格：把「它还会自己再动一次」提成计划行的主值
    （时间压力下它比状态标签重要，所以是胶囊而不是和背景同一档的字） */
 .next {
-  margin-left: 6px;
+  margin-left: var(--sp-6);
   font-variant-numeric: tabular-nums;
 }
 
 /* 引擎最近说的话：另起一行，比背景事实高一档，但不去抢主值的位子 */
 .said {
   font-size: var(--fs-caption);
-  line-height: 1.45;
-  margin-top: 2px;
+  line-height: var(--lh-caption);
+  margin-top: var(--sp-2);
   color: var(--text-2);
 }
 </style>

@@ -101,15 +101,17 @@ function reset(): void {
 </template>
 
 <style scoped>
+/* 标签与输入框之间 8（表单行配方） */
 .url {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--gap-sm);
 }
 
 .box {
-  gap: 8px;
-  padding: 4px 10px 4px 14px;
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: var(--sp-4) var(--sp-12) var(--sp-4) var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -120,13 +122,14 @@ function reset(): void {
 
 .ic {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .box input {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--control-md);
+  padding: 0;
   font-size: var(--fs-subhead);
 }
 
@@ -134,19 +137,20 @@ function reset(): void {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 5px 9px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-3);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 
 .hint {
   font-size: var(--fs-caption);
-  line-height: 1.5;
-  padding: 0 2px;
+  line-height: var(--lh-body);
+  padding: 0 var(--sp-2);
 }
 
 .hint.warn {

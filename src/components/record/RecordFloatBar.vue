@@ -1,38 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Expand, Square } from 'lucide-vue-next'
 
-import GlassFilter from '@/components/common/GlassFilter.vue'
+import FloatDock from '@/components/common/FloatDock.vue'
 import { fmtDur, recorder, stopRecording } from '@/system/recorderRuntime'
-import { liquidGlass } from '@/system/perf'
-import { useDragDock } from '@/composables/useDragDock'
 
 /**
  * 录音悬浮条：录音进行中常驻（App.vue 挂载，沉浸形态隐藏）。
- * 与 ActiveWorkoutBar 同一套拖拽停靠（useDragDock），但用独立的
- * 持久化 key——两条各停各位，互不挤占。条形态：呼吸红点 + 计时 +
+ * 外壳走 common/FloatDock（四条浮条共用的停靠 / 材质 / 进出场），本文件只留录音域内容，
+ * 并用独立持久化 key——两条各停各位，互不挤占。条形态：呼吸红点 + 计时 +
  * 停止 / 打开录音页；轻点信息区进 /record 录音页，拖到左右边缘
  * 收成 64px 方块泊车，轻点展开回条。录音是全局 runtime：从编辑
  * 抽屉或录音页发起的录音，切页后都由本条接管。
  */
 const router = useRouter()
-
-const posEl = ref<HTMLElement | null>(null)
-const { slot, form, pressing, dragging, onPointerDown, expandFromBlob } = useDragDock(posEl, {
-  storageKey: 'rein.rbar.dock.v1',
-})
-
-/* 材质：超高 / 极致档换**真折射**，与悬浮运动条同一套做法（为什么这么做、以及三条边界
-   见 ActiveWorkoutBar.vue 的那段注释）：把元素自己的 backdrop-filter 从 blur() 换成
-   `url(#…)`，底 / 受光边 / 光学层继续由 `.glass-surface` 那套令牌给。滤镜定义在
-   common/GlassFilter.vue，量尺默认是父元素（这条浮条的 .dock-body 自己）。 */
-const glassFilterId = `glass-filter-${Math.random().toString(36).slice(2, 10)}`
-const glassStyle = computed<Record<string, string> | undefined>(() => {
-  if (!liquidGlass.value) return undefined
-  const filter = `url(#${glassFilterId}) saturate(var(--glass-sat))`
-  return { backdropFilter: filter, WebkitBackdropFilter: filter }
-})
 
 function openPage(): void {
   void router.push('/record')
@@ -40,165 +21,42 @@ function openPage(): void {
 </script>
 
 <template>
-  <Transition name="rdock">
-    <section
-      v-if="recorder.status === 'recording'"
-      class="rdock-root"
-      :class="[`dock-${slot}`, { dragging }]"
-    >
-      <div ref="posEl" class="dock-pos">
-        <div
-          class="dock-body glass-surface"
-          :class="[form === 'blob' ? 'is-blob' : 'is-bar', { pressing, dragging }]"
-          :style="glassStyle"
-          role="region"
-          aria-label="正在录音"
-          @pointerdown="onPointerDown"
-        >
-          <!-- 折射滤镜定义（不参与绘制，绝对定位）：只在超高档挂，量尺是这个 .dock-body -->
-          <GlassFilter :id="glassFilterId" :enabled="liquidGlass" />
-
-          <!-- 全宽条形态 -->
-          <div class="layer layer-bar" :class="{ off: form !== 'bar' }">
-            <button class="info row" type="button" @click="openPage">
-              <span class="dot live" />
-              <b class="t">录音中</b>
-              <span class="s num">{{ fmtDur(recorder.elapsedSec) }}</span>
-            </button>
-            <div class="acts row">
-              <button class="abtn end" type="button" @click="stopRecording">
-                <Square :size="13" :stroke-width="2.5" /> 停止
-              </button>
-              <button class="abtn ico" type="button" aria-label="打开录音页" @click="openPage">
-                <Expand :size="15" :stroke-width="2.5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- 方块泊车形态：轻点展开回全宽条 -->
-          <button
-            class="layer layer-blob"
-            :class="{ off: form !== 'blob' }"
-            type="button"
-            aria-label="展开录音控制"
-            @click="expandFromBlob"
-          >
-            <span class="dot live" />
-            <b class="bt num">{{ fmtDur(recorder.elapsedSec) }}</b>
-          </button>
-        </div>
+  <FloatDock
+    :open="recorder.status === 'recording'"
+    storage-key="rein.rbar.dock.v1"
+    region-label="正在录音"
+    blob-label="展开录音控制"
+    root-class="rdock-root"
+  >
+    <template #bar>
+      <button class="info row" type="button" @click="openPage">
+        <span class="dot live" />
+        <b class="t">录音中</b>
+        <span class="s num">{{ fmtDur(recorder.elapsedSec) }}</span>
+      </button>
+      <div class="acts row">
+        <button class="abtn end" type="button" @click="stopRecording">
+          <Square :size="13" :stroke-width="2.5" /> 停止
+        </button>
+        <button class="abtn ico" type="button" aria-label="打开录音页" @click="openPage">
+          <Expand :size="15" :stroke-width="2.5" />
+        </button>
       </div>
-    </section>
-  </Transition>
+    </template>
+
+    <template #blob>
+      <span class="dot live" />
+      <b class="bt num">{{ fmtDur(recorder.elapsedSec) }}</b>
+    </template>
+  </FloatDock>
 </template>
 
 <style scoped>
-/* 与 ActiveWorkoutBar 同构：root 只管 fixed 与 z 序，位移在 .dock-pos */
-.rdock-root {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  z-index: 59;
-  pointer-events: none;
-}
-
-.rdock-root.dragging {
-  z-index: 70;
-}
-
-.dock-pos {
-  position: absolute;
-  left: 0;
-  top: 0;
-  will-change: transform;
-}
-
-/* 材质走全局 .glass-surface（与底部 Dock 同一份定义），这里只留几何与手感 */
-.dock-body {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-l);
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  transition:
-    transform var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
-}
-
-.dock-body.is-blob {
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  border-radius: var(--radius-l);
-}
-
-.dock-body.pressing {
-  transform: scale(0.97);
-}
-
-.dock-body.is-bar {
-  width: calc(100vw - 24px);
-  max-width: calc(var(--frame-max) - 24px);
-}
-
-.dock-body.dragging {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-float-lift);
-}
-
-.layer {
-  visibility: visible;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s;
-}
-
-.layer.off {
-  opacity: 0;
-  transform: scale(0.92);
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s linear var(--dur-fast);
-}
-
-.layer-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.layer-blob {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
 .bt {
   max-width: 100%;
-  padding: 0 4px;
+  padding: 0 var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.2px;
   color: var(--text-1);
   white-space: nowrap;
@@ -206,48 +64,27 @@ function openPage(): void {
   text-overflow: ellipsis;
 }
 
-/* 出入不对称：入场 250、退场 150（同向量同向，见下方 .rdock-*-from/to 的位移） */
-.rdock-enter-active {
-  transition: opacity var(--dur-base) var(--ease-sheet), transform var(--dur-base) var(--ease-sheet);
-}
-
-.rdock-leave-active {
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-
-.rdock-enter-from,
-.rdock-leave-to {
-  opacity: 0;
-}
-
-.dock-bottom.rdock-enter-from,
-.dock-bottom.rdock-leave-to {
-  transform: translateY(18px);
-}
-
-.dock-top.rdock-enter-from,
-.dock-top.rdock-leave-to {
-  transform: translateY(-18px);
-}
-
-.dock-left.rdock-enter-from,
-.dock-left.rdock-leave-to {
-  transform: translateX(-14px);
-}
-
-.dock-right.rdock-enter-from,
-.dock-right.rdock-leave-to {
-  transform: translateX(14px);
-}
-
 .info {
+  position: relative;
   flex: 1;
   min-width: 0;
-  gap: 9px;
+  gap: var(--gap-sm);
   text-align: left;
   border-radius: var(--radius-m);
-  padding: 2px;
+  padding: var(--sp-2);
   transition: background var(--dur-fast) var(--ease-standard);
+}
+
+/* 信息区是拖拽手柄 + 打开录音页的入口：视觉只有一行 19，命中区撑到 44 */
+.info::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+  border-radius: inherit;
 }
 
 .info:active {
@@ -264,50 +101,53 @@ function openPage(): void {
 .dot.live {
   background: var(--danger);
   box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 65%, transparent);
-  animation: rbreathe 1.4s infinite;
-}
-
-@keyframes rbreathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
+  animation: rein-breathe var(--dur-pulse) infinite;
 }
 
 .t {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.2px;
   color: var(--text-1);
 }
 
 .s {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .acts {
   flex: none;
-  gap: 7px;
+  /* 浮条里两枚按钮之间 8（无边界控件间距） */
+  gap: var(--gap-sm);
 }
 
 .abtn {
+  position: relative;
   flex: none;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: var(--radius-m);
+  /* 图标/小按钮的视觉直径走 --control-icon（34），不再写裸 34 */
+  height: var(--control-icon);
+  padding: 0 var(--sp-12);
+  /* 按钮圆角 20（HarmonyOS 圆角规范 · 按钮档）；原先 16 是卡片档 */
+  border-radius: var(--radius-l);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 34 高的浮条按钮命中区撑到 44：与语音浮条同一套（视觉不放大，只扩热区） */
+.abtn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
 }
 
 .abtn:active {
@@ -315,8 +155,10 @@ function openPage(): void {
 }
 
 .abtn.end {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  /* soft 底 + strong 字（与语音浮条同款令牌对）：原先手搓 14% danger 底配实底 danger 字，
+     两层都偏离令牌，且实底档当文字用对比度不够 */
+  color: var(--danger-strong);
+  background: var(--danger-soft);
 }
 
 .abtn.ico {
@@ -330,26 +172,6 @@ function openPage(): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rdock-enter-from,
-  .rdock-leave-to {
-    transform: none;
-  }
-
-  .rdock-enter-active,
-  .rdock-leave-active {
-    transition-duration: 150ms;
-  }
-
-  .layer,
-  .layer.off {
-    transform: none;
-    transition-duration: 120ms;
-  }
-
-  .dock-body {
-    transition: none;
-  }
-
   .dot.live {
     animation: none;
   }

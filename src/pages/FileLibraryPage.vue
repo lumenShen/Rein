@@ -935,7 +935,9 @@ onMounted(async () => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 
@@ -946,23 +948,25 @@ onMounted(async () => {
 
 
 /* 列表卡片：行式布局，压掉全局卡片的大内边距 */
+/* 列表卡片：行式布局，压掉全局卡片的大内边距（左右仍与页边距同档 16） */
 .card.list {
-  margin-top: 14px;
-  padding: 6px 20px;
+  margin-top: var(--gap-md);
+  padding: var(--sp-6) var(--pad-card);
 }
 
 .sec {
-  padding: 12px 0 4px;
+  padding: var(--sp-12) 0 var(--sp-4);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .item {
   width: 100%;
   text-align: left;
-  gap: 10px;
-  padding: 13px 0;
+  gap: var(--gap-md);
+  min-height: var(--row-h-double);
+  padding: 0;
 }
 
 .item + .item,
@@ -973,14 +977,14 @@ li + li .item {
 .item b {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .item small {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -994,7 +998,7 @@ li + li .item {
 }
 
 .fic.dim {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .date {
@@ -1006,7 +1010,7 @@ li + li .item {
 
 
 .rhead {
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* 标题行右侧的帮助入口：InfoHint 是多根组件，类要落在包裹元素上 */
@@ -1018,7 +1022,7 @@ li + li .item {
 .back {
   position: relative;
   flex: none;
-  padding: 6px;
+  padding: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -1034,30 +1038,31 @@ li + li .item {
 
 .rtitle {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  line-height: 1.3;
+  line-height: var(--lh-title);
 }
 
 .rpath {
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-family: ui-monospace, monospace;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   word-break: break-all;
 }
 
 .meta {
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   flex-wrap: wrap;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -1067,35 +1072,38 @@ li + li .item {
 /* 日期与大小是次要读数：不进胶囊，降一档字色，两项之间竖线隔开 */
 .mtext {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .mtext + .mtext {
-  padding-left: 7px;
+  padding-left: var(--sp-12);
   border-left: 0.5px solid var(--line);
 }
 
 .tags {
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   flex-wrap: wrap;
 }
 
 .tag {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   border: 1px solid var(--line);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .summary {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
@@ -1108,15 +1116,15 @@ li + li .item {
 /* 压缩包面板 */
 .archive {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 .arc-list {
   display: grid;
-  gap: 3px;
+  gap: var(--gap-tight);
   max-height: 260px;
   overflow-y: auto;
   list-style: none;
@@ -1125,7 +1133,7 @@ li + li .item {
 .arc-list li {
   display: grid;
   grid-template-columns: 18px 1fr auto auto;
-  gap: 6px;
+  gap: var(--gap-sm);
   align-items: center;
   color: var(--text-1);
 }
@@ -1140,36 +1148,38 @@ li + li .item {
   font-size: var(--fs-caption);
 }
 .arc-size {
-  color: var(--text-3);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .arc-skip {
-  color: var(--danger);
+  color: var(--danger-strong);
   font-size: var(--fs-caption);
 }
 .arc-extract {
   display: grid;
-  gap: 6px;
-  padding-top: 8px;
+  gap: var(--gap-sm);
+  padding-top: var(--gap-sm);
   border-top: 1px dashed var(--line);
 }
 .arc-field {
   display: grid;
-  gap: 3px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 .arc-field input {
-  padding: 7px 9px;
-  border-radius: var(--radius-m);
+  /* 表单输入走常规控件档 40（--control-md），与页面里的其它输入框同高 */
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-subhead);
 }
 .arc-report {
   display: grid;
-  gap: 4px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
 }
 .arc-ok {
@@ -1177,24 +1187,25 @@ li + li .item {
 }
 .arc-report ul {
   display: grid;
-  gap: 3px;
+  gap: var(--sp-4);
   list-style: none;
 }
 .arc-report li {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .modals {
-  gap: 6px;
-  margin-top: 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   flex-wrap: wrap;
 }
 
 .chip,
 .chip-busy {
-  padding: 5px 11px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -1208,13 +1219,14 @@ li + li .item {
 
 .chip.cur {
   background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
+  /* 选中态文字走 --accent-strong：soft 底上的实底档主色不够读 */
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
 }
 
 .chips {
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   flex-wrap: wrap;
 }
 
@@ -1222,37 +1234,38 @@ li + li .item {
 .preview-img,
 .preview-video {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .preview-audio {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 
 .degrade {
-  margin-top: 12px;
-  padding: 8px 12px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--accent-soft);
-  color: var(--accent);
+  /* accent-soft 底上的文字走 --accent-strong（实底档 --accent 在该底上不足 4.5:1） */
+  color: var(--accent-strong);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .doc {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-footnote);
-  line-height: 1.8;
+  line-height: var(--lh-body);
   color: var(--text-1);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .doc p + p {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* 「这条记录没有更多正文」：派生文档只带标题与结构化字段，而那些字段已经在
@@ -1260,34 +1273,35 @@ li + li .item {
    「文件坏了」；现在卡面只留结论 + 回真身的按钮，完整原因在标题行右侧的
    帮助入口里（投影口径一次说清）。 */
 .thin {
-  margin-top: 12px;
-  padding: 14px 16px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-16);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   text-align: center;
 }
 
 .thin-t {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .thin .btn {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 
 /* 兜底正文块：强调改走整面 soft tint（中性色的对应档就是 --surface-2），
    不再靠左边框（side-tab 收编） */
 .fallback {
-  padding: 10px 12px;
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   color: var(--text-2);
 }
 
 .more-row {
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-12);
 }
 
 .more-row .btn {
@@ -1296,58 +1310,59 @@ li + li .item {
 
 /* 读到底：状态词与字数各占其位，字数是这一行的主数值 */
 .finrow {
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-12);
   justify-content: center;
 }
 
 .finnum {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 /* 文件过大：提示 + 真实导出入口同行 */
 .toobig {
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-12);
   flex-wrap: wrap;
   font-size: var(--fs-caption);
 }
 
 .fin {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   text-align: center;
   font-size: var(--fs-caption);
 }
 
 /* 归类面板 */
 .movebox {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .moveq {
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .moveq input {
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-subhead);
 }
 
 .editbox {
   width: 100%;
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-1);
@@ -1358,22 +1373,27 @@ li + li .item {
 }
 
 .actions {
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-12);
   flex-wrap: wrap;
 }
 
+/* 阅读器动作按钮：走常规按钮档 40（--control-md），左右 16，胶囊。
+   此前是 28 的小按钮档 —— 这些是「保存 / 编辑 / 钉住 / 归类 / 删除」这类主操作，
+   又不是行尾小胶囊；40 同时把命中区直接做够 44 的触控底线（不再靠伪元素外扩，
+   窄屏上动作行会换行，外扩会与下一行叠在一起）。 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 8px 14px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-tight);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
 }
 
 .btn.ghost {
@@ -1381,8 +1401,9 @@ li + li .item {
   color: var(--text-1);
 }
 
+/* surface-2 上的危险动作文字：实底档 --danger 对比度不够，走文字档 */
 .btn.ghost.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .btn:disabled {

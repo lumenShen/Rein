@@ -85,8 +85,10 @@ function pick(r: StrengthExerciseRef): void {
 
 <style scoped>
 .finder {
-  gap: 8px;
-  padding: 10px 13px;
+  /* 搜索框与 ExercisePickerSheet 同档：高 40（--control-md）。 */
+  min-height: var(--control-md);
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -99,27 +101,30 @@ function pick(r: StrengthExerciseRef): void {
 
 .clear {
   flex: none;
-  padding: 3px;
+  padding: var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text-3);
 }
 
 .count {
-  margin-top: 10px;
+  /* 计数行与搜索框 8（无边界控件间距）。 */
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
 }
 
 .plist {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   display: flex;
   flex-direction: column;
 }
 
 .prow {
   width: 100%;
-  gap: 10px;
-  padding: 13px 2px;
+  /* 与 ExercisePickerSheet 的 .rowitem 同一档：双行行高 64。 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-sm);
+  padding: var(--sp-12) var(--sp-2);
   text-align: left;
 }
 
@@ -129,7 +134,7 @@ li + li .prow {
 
 .pname {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -152,7 +157,7 @@ li + li .prow {
 }
 
 .empty {
-  padding: 20px 0;
+  padding: var(--sp-20) 0;
   text-align: center;
   font-size: var(--fs-footnote);
 }

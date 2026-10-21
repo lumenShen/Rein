@@ -186,17 +186,18 @@ async function doDelete(): Promise<void> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* 课程结论：时长单独一行作主角（一屏只有一个主数值），类别 / 动作数走胶囊 */
 .sum {
-  margin: 2px 2px 14px;
+  /* 结论块与下方卡片之间 12（卡片间距），左右 2 是字体左侧留白的光学补偿。 */
+  margin: var(--sp-2) var(--sp-2) var(--gap-md);
 }
 
 .sum-main {
   font-size: var(--fs-title3);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   color: var(--text-1);
 }
@@ -204,9 +205,10 @@ async function doDelete(): Promise<void> {
 .sum-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 副标题与两枚胶囊是主次文本左右的关系：8（--gap-text-inline） */
+  gap: var(--gap-text-inline);
   flex-wrap: wrap;
-  margin-top: 5px;
+  margin-top: var(--sp-4);
 }
 
 .sum-sub {
@@ -225,16 +227,19 @@ async function doDelete(): Promise<void> {
 
 .item-row {
   width: 100%;
+  /* 动作条目是双行行（名称 + 处方）：行高 64（--row-h-double），
+     整套动作读下来行距一致；左右内距收到 0，卡片的 16 已经是行内距。 */
+  min-height: var(--row-h-double);
   text-align: left;
-  gap: 12px;
-  padding: 12px 4px;
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
 }
 
 /* 纯序号：圆点只装得下 1-2 位数字，宽内容（超级组 A1）走下面的 .grp 胶囊 */
 .idx {
   min-width: 34px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -242,7 +247,7 @@ async function doDelete(): Promise<void> {
   align-items: center;
   justify-content: center;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   flex: none;
 }
 
@@ -250,7 +255,7 @@ async function doDelete(): Promise<void> {
 .grp {
   min-width: 34px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -258,22 +263,22 @@ async function doDelete(): Promise<void> {
   align-items: center;
   justify-content: center;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   flex: none;
 }
 
 .nm {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .sub {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 /* 动作类型签（「计时 / 有氧」）。与 ExerciseDetailDrawer 标题行那枚同款，但这里
@@ -282,8 +287,8 @@ async function doDelete(): Promise<void> {
 .badge {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 3px 9px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--c-balance) 14%, transparent);
   color: var(--text-1);
@@ -295,14 +300,16 @@ async function doDelete(): Promise<void> {
 
 .start {
   width: 100%;
-  margin-top: 14px;
-  gap: 7px;
+  /* 卡内区块之间 12（规范：卡内区块 12），开始钮不再比列表多挤 2px。 */
+  margin-top: var(--gap-md);
+  gap: var(--sp-6);
   height: 52px;
-  border-radius: var(--radius-xl);
+  /* 高 52 的主行动走胶囊，与沉浸层那颗主按钮同一形态 */
+  border-radius: var(--radius-full);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
 }
 
@@ -335,16 +342,19 @@ async function doDelete(): Promise<void> {
   }
 }
 
+/* 删除是低频但危险的动作：与开始钮同一套按钮层级（圆角 20），
+   文字走 --danger-strong —— 实底档 --danger 压浅底 3.55:1，14px 读不清。 */
 .del {
   width: 100%;
-  margin-top: 12px;
-  gap: 6px;
-  padding: 13px 0;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  margin-top: var(--sp-12);
+  gap: var(--sp-6);
+  padding: var(--sp-12) 0;
+  border-radius: var(--radius-l);
   background: var(--surface-2);
-  color: var(--danger);
+  color: var(--danger-strong);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ============================================================

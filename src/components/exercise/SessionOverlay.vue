@@ -1713,7 +1713,7 @@ function trapFocus(e: KeyboardEvent): void {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .ctrl-top > :first-child {
@@ -1742,26 +1742,26 @@ function trapFocus(e: KeyboardEvent): void {
 }
 
 .ctrl-top .min {
-  gap: 2px;
-  padding: 0 14px 0 10px;
-  font-weight: 600;
+  gap: var(--gap-text);
+  padding: 0 var(--sp-14) 0 var(--sp-10);
+  font-weight: var(--fw-semibold);
 }
 
 /* 组数状态：点开全课抽屉。它是这条栏里唯一的「读数」，所以数字给最重的字重、
    「组」与箭头退到次级色 —— 层级靠前景，不靠再叠一层底。 */
 .ctrl-top .pcapsule {
-  gap: 1px;
-  padding: 0 10px 0 14px;
+  gap: var(--gap-text);
+  padding: 0 var(--sp-10) 0 var(--sp-14);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 /* 结束是这条栏唯一的「主行动」：苹果的规矩是它单独着色（tinted）当焦点 ——
    色落在字上（不把整颗胶囊染红），按压时才给一层 soft 反馈。 */
 .ctrl-top .end {
-  padding: 0 14px;
-  font-weight: 700;
+  padding: 0 var(--sp-14);
+  font-weight: var(--fw-bold);
   color: var(--danger-strong);
 }
 
@@ -1777,7 +1777,7 @@ function trapFocus(e: KeyboardEvent): void {
 }
 
 .punit {
-  margin-right: 1px;
+  margin-right: var(--sp-2);
 }
 
 .pcapsule .chev {
@@ -1793,8 +1793,9 @@ function trapFocus(e: KeyboardEvent): void {
    原先散落在各组件里），字走 --warn-strong —— 实底档 --warn 不当文字用。 */
 .warn {
   flex: none;
-  margin: 0 26px;
-  padding: 6px 10px;
+  /* 警示条与内容区同宽（左右 16），不然只在出错的这一屏突然内缩一圈。 */
+  margin: 0 var(--pad-sheet);
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-s);
   text-align: center;
   font-size: var(--fs-micro);
@@ -1808,8 +1809,8 @@ function trapFocus(e: KeyboardEvent): void {
 .tiles {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 6px;
+  gap: var(--gap-sm);
+  padding: var(--sp-6);
 }
 
 /* ---------- 内容层 ----------
@@ -1833,7 +1834,7 @@ function trapFocus(e: KeyboardEvent): void {
   overflow-y: auto;
   padding-top: var(--top-h);
   /* 与下面的渐隐同值：正文的终点 = 完全不透明的那条线 */
-  padding-bottom: calc(var(--dock-h) + 26px);
+  padding-bottom: calc(var(--dock-h) + var(--sp-26));
   --edge-fade-top: 34px;
   --edge-fade-bottom: calc(var(--dock-h) + 26px);
   mask-image: linear-gradient(
@@ -1864,8 +1865,10 @@ function trapFocus(e: KeyboardEvent): void {
   /* 原来是 min-height:100%（百分比落在 auto 高的包裹层上会失效），改用 flex:1：
      在包裹层里等价地撑满，且内容超一屏时按内容撑高 */
   flex: 1;
-  gap: 12px;
-  padding: 24px 26px;
+  /* 内容区左右收成 16（--pad-sheet），与顶簇胶囊、底簇按钮同一条竖线；
+     原来 26 比同一屏的控制层还宽，正文边缘与按钮边缘对不齐。 */
+  gap: var(--gap-md);
+  padding: var(--sp-24) var(--pad-sheet);
   /* 与丰富档 CONTENT_ENTER_MS=260 同档：组间切换每天数十次，420ms 跟不上手速 */
   animation: fadeUp var(--dur-base) var(--ease-standard);
 }
@@ -1879,7 +1882,7 @@ function trapFocus(e: KeyboardEvent): void {
 
 .eyebrow {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.6px;
   color: var(--text-3);
 }
@@ -1887,7 +1890,7 @@ function trapFocus(e: KeyboardEvent): void {
 .actname {
   /* 40px 就是 --fs-display-m 这一档：阶梯外禁止裸字号，且桌面壳调字号阶梯时这处要跟随 */
   font-size: var(--fs-display-m);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1px;
   line-height: 1.1;
   text-align: center;
@@ -1898,7 +1901,7 @@ function trapFocus(e: KeyboardEvent): void {
   text-align: center;
   font-size: var(--fs-subhead);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* 下一组分支：主数值「第 N 组」与次要说明（次数 · 重量）同行分层。
@@ -1909,12 +1912,12 @@ function trapFocus(e: KeyboardEvent): void {
   align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .rlead {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -1947,11 +1950,13 @@ function trapFocus(e: KeyboardEvent): void {
    就成了玻璃叠玻璃。所以内容层用的是「实底 + 轻投影」这套全仓通用的 .card 语汇。 */
 .setcard {
   width: min(360px, 100%);
-  border-radius: var(--radius-l);
-  padding: 14px 16px;
+  /* 走 .card 那一档几何（半径 16 / 内距 16）：注释里就说它是「全仓通用的 .card 语汇」，
+     而 20 / 14 让它比页面上的卡片大一号、内距少一号。 */
+  border-radius: var(--radius-m);
+  padding: var(--pad-card);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-md);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -1959,7 +1964,7 @@ function trapFocus(e: KeyboardEvent): void {
 .field {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 /* 标签定宽：两行的 ± 与数值因此落在同一条竖线上 */
@@ -1967,7 +1972,7 @@ function trapFocus(e: KeyboardEvent): void {
   flex: none;
   width: 32px;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -1988,13 +1993,13 @@ function trapFocus(e: KeyboardEvent): void {
 .whint-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .whint {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -2007,8 +2012,9 @@ function trapFocus(e: KeyboardEvent): void {
 /* 一键填入：建议 / 上次 / 计划 等宽并列（同一个重量的三个出处） */
 .qfill {
   display: flex;
-  gap: 6px;
-  padding: 3px;
+  /* 分段控件的段间 4（规范：段间 2–4），原来 6 让三格像三颗独立胶囊 */
+  gap: var(--gap-tight);
+  padding: var(--sp-4);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -2016,12 +2022,13 @@ function trapFocus(e: KeyboardEvent): void {
 .qseg {
   flex: 1;
   min-width: 0;
-  padding: 7px 4px;
-  border-radius: calc(var(--radius-m) - 3px);
+  padding: var(--sp-6) var(--sp-4);
+  /* 同心：外轨 16 − 轨道内距 4 = 12（原来减 3 的裸值，格子与轨道角差 1px 会露边） */
+  border-radius: calc(var(--radius-m) - var(--sp-4));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: var(--gap-text);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -2031,14 +2038,14 @@ function trapFocus(e: KeyboardEvent): void {
 
 .qcap {
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
   white-space: nowrap;
 }
 
 .qval {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -2061,10 +2068,10 @@ function trapFocus(e: KeyboardEvent): void {
   width: 100%;
   /* 命中区撑到 44：这是建议抽屉的唯一入口，而 caption 字号让整行只有约 18 高 ——
      全屏里点得最多的入口配最小的热区。整行本来就是通栏，加高不像其它胶囊那样动观感。 */
-  min-height: 44px;
+  min-height: var(--hit-min);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   color: var(--text-3);
   font-size: var(--fs-caption);
   text-align: left;
@@ -2087,15 +2094,15 @@ function trapFocus(e: KeyboardEvent): void {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .wstep {
-  padding: 7px 14px;
+  padding: var(--sp-6) var(--sp-14);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -2120,24 +2127,26 @@ function trapFocus(e: KeyboardEvent): void {
 .hint {
   font-size: var(--fs-caption);
   color: var(--text-3);
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* 要点 / 接下来 卡片 —— 与 .setcard 同材质（内容层实底），只补几何 */
 .blockcard {
   width: min(360px, 100%);
-  border-radius: var(--radius-l);
-  padding: 16px 18px;
+  /* 与 .setcard 同一档：半径 16、四边内距 16（原来左右 18 比上下多 2） */
+  border-radius: var(--radius-m);
+  padding: var(--pad-card);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  /* 标题与内容之间 8（卡内标题与内容 8），原来 6 比规范紧一档 */
+  gap: var(--gap-sm);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
 .blockcard h3 {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   letter-spacing: 0.4px;
 }
@@ -2145,13 +2154,13 @@ function trapFocus(e: KeyboardEvent): void {
 .blockcard p {
   font-size: var(--fs-subhead);
   color: var(--text-1);
-  line-height: 1.65;
+  line-height: var(--lh-body);
 }
 
 .nextrow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
   color: var(--text-2);
 }
 
@@ -2168,7 +2177,9 @@ function trapFocus(e: KeyboardEvent): void {
 /* 休息 */
 .restnum {
   font-size: var(--fs-readout-lg);
-  font-weight: 200;
+  /* 字重阶梯只到 300（--fw-light）：200 不在阶梯里，是历史遗留的裸值。
+     76px 上 300 与 200 的笔画差不到半像素，读数观感不变。 */
+  font-weight: var(--fw-light);
   letter-spacing: -3px;
   line-height: 1;
 }
@@ -2176,13 +2187,14 @@ function trapFocus(e: KeyboardEvent): void {
 .restsec {
   font-size: var(--fs-callout);
   color: var(--text-2);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 /* 计时中 */
 .timernum {
   font-size: var(--fs-readout-md);
-  font-weight: 200;
+  /* 同上：沉浸读数统一取阶梯最轻一档 --fw-light（300），不再写裸 200。 */
+  font-weight: var(--fw-light);
   letter-spacing: -2.5px;
   line-height: 1;
 }
@@ -2196,13 +2208,13 @@ function trapFocus(e: KeyboardEvent): void {
    而不是一大块玻璃里塞满小玻璃。 */
 .ctrl-dock {
   position: absolute;
-  /* 同顶簇：安全区要在这里自己加（包含块是 padding box） */
-  bottom: calc(var(--safe-bottom) + 14px);
+  /* 页脚操作区离底 16（规范：底部操作区 16），原来 14 与内容末段的 26 也不同源。 */
+  bottom: calc(var(--safe-bottom) + var(--sp-16));
   inset-inline: calc(var(--safe-left) + 6px);
   z-index: 2;
   max-width: var(--frame-max);
   margin-inline: auto;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 /* 滚起来之后加一层更沉的外投影：苹果的玻璃会**随背后内容自适应影子深浅** ——
@@ -2230,7 +2242,7 @@ function trapFocus(e: KeyboardEvent): void {
 }
 
 .drow {
-  gap: 12px;
+  gap: var(--gap-md);
   width: 100%;
 }
 
@@ -2238,7 +2250,7 @@ function trapFocus(e: KeyboardEvent): void {
    热身态三键并排（图标 + 跳过 + 完成），收窄内边距避免 390px 挤爆 */
 .drow .primary {
   min-width: 0;
-  padding: 0 26px;
+  padding: 0 var(--sp-26);
 }
 
 .dtile {
@@ -2251,7 +2263,7 @@ function trapFocus(e: KeyboardEvent): void {
   align-items: center;
   justify-content: center;
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   /* 待做的组：**不挂填充**本身就是「还不能点」的信号，文字因此留在能读的 --text-2，
      而不是更淡一档 —— 它压在会滚动的玻璃上，再淡一点在亮环境 / 窄屏下就真读不出了
      （苹果对禁用态的要求是「仍然可读」，不是「看不见」）。 */
@@ -2307,12 +2319,14 @@ function trapFocus(e: KeyboardEvent): void {
 .primary {
   min-width: 240px;
   height: 54px;
-  padding: 0 38px;
-  border-radius: var(--radius-xl);
+  padding: 0 var(--sp-36);
+  /* 高 ≥ 48 的单屏唯一主行动走**胶囊**（--radius-full）：这一档在 HarmonyOS 里就是
+     「胶囊按钮」，和卡片（16）、容器（32）都不同层 —— 32 夹在中间会读成第三层圆角 */
+  border-radius: var(--radius-full);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-headline);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   box-shadow: var(--shadow-float);
   transition:
     transform var(--dur-slow) var(--ease-spring),
@@ -2332,10 +2346,10 @@ function trapFocus(e: KeyboardEvent): void {
 .ghost {
   width: 100%;
   height: 100%;
-  padding: 0 22px;
+  padding: 0 var(--sp-22);
   border-radius: var(--radius-full);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   transition:
     transform var(--dur-slow) var(--ease-spring),

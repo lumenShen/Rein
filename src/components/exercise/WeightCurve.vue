@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { fmtShortDate } from '@/utils/format'
 import { fmtKg, type StrengthDay } from '@/utils/strength'
 
 /**
@@ -73,8 +74,7 @@ const delta = computed(() => {
 })
 
 function shortDate(date: string): string {
-  const [, m, d] = date.split('-')
-  return `${Number(m)}/${Number(d)}`
+  return fmtShortDate(date)
 }
 </script>
 
@@ -166,14 +166,14 @@ function shortDate(date: string): string {
 }
 
 .legend {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .legend b {
-  margin-left: 6px;
-  font-weight: 700;
+  margin-left: var(--sp-6);
+  font-weight: var(--fw-bold);
 }
 
 /* 图例是图表的附属品（不是正文/标签文字）：涨跌两支色相随曲线保留，

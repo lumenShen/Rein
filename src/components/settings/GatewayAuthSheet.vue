@@ -145,13 +145,13 @@ function scopeLabel(s: string): string {
 .who {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 10px;
+  gap: var(--gap-text);
+  margin-bottom: var(--gap-md);
 }
 
 .cname {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 来源是与客户端名同档的事实：subhead 胶囊（surface-2 底 + text-2 字）。
@@ -161,32 +161,33 @@ function scopeLabel(s: string): string {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 4px 12px;
+  min-height: var(--chip-h);
+  padding: var(--sp-2) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   overflow-wrap: anywhere;
 }
 
 /* 默认勾选口径做成一行结论胶囊：卡面上只留这一句，解释全在标题行的 InfoHint 里 */
 .lead-chip {
   align-self: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: var(--gap-md);
 }
 
 /* InfoHint 插槽：五条授权要点走列表 */
 .hint-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--sp-18);
 }
 
 .hint-list li {
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 /* 行间细线，首行不留线（与设置页 .rows 同一条分组规则） */
@@ -194,13 +195,15 @@ function scopeLabel(s: string): string {
   border-top: 0.5px solid var(--line);
 }
 
+/* 权限行：48 的单行列表档，行间边界由 1px 分隔线画 */
 .scope {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 9px 0;
+  min-height: var(--row-h);
+  padding: 0;
   background: none;
   border: 0;
   text-align: left;
@@ -217,12 +220,12 @@ function scopeLabel(s: string): string {
   width: 1.2em;
   text-align: right;
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .sname {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 .scode {
@@ -233,26 +236,28 @@ function scopeLabel(s: string): string {
 /* 超时时限是用户必须看到的一句：单独一枚 warn 胶囊，不混进灰字段落里 */
 .timeout-chip {
   align-self: flex-start;
-  margin-top: 12px;
+  margin-top: var(--gap-md);
 }
 
 /* 四态按钮：两行两列，语义同类相邻（上排「不放行」，下排「放行」） */
+/* 底栏按钮组：四颗同层按钮之间 8（无边界），高 40（--control-md） */
 .acts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 

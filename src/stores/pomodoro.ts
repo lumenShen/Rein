@@ -31,6 +31,7 @@ import { todoService } from '@/services/todoService'
 import { gatewayService } from '@/services/gatewayService'
 import { notifyFocusPhase } from '@/services/notifyService'
 import { compatActive } from '@/compat/layers'
+import { fmtClockHms, fmtClockSec } from '@/utils/clock'
 import { addDays, localDateOf, todayStr } from '@/utils/date'
 import { playPhaseChime } from '@/utils/notifyTone'
 import type {
@@ -949,28 +950,15 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
 
   /* ---------- 派生显示 ---------- */
 
-  /** 秒 → `mm:ss`（浮条 / 右栏这类窄面用） */
-  function fmtMs(total: number): string {
-    const m = Math.floor(total / 60)
-    const s = total % 60
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-
-  /** 秒 → `HH:MM:SS`（卡片 / 沉浸层的大读数用，与参考设计的三段式一致） */
-  function fmtHms(total: number): string {
-    const h = Math.floor(total / 3600)
-    const m = Math.floor((total % 3600) / 60)
-    const s = total % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-
+  /* 读数格式化统一走 utils/clock —— 全局浮窗（独立 webview）与这里共用同一份
+     mm:ss / HH:MM:SS 实现，两处读数才可能逐字节一致。 */
   /** 本条真源读数：down = 剩余秒数；up = 已累计秒数。 */
   const readSec = computed(() => (mode() === 'up' ? upElapsedSec.value : remainingSec.value))
 
-  const displayTime = computed(() => fmtMs(readSec.value))
+  const displayTime = computed(() => fmtClockSec(readSec.value))
 
   /** 大读数（三段式）：沉浸层与卡片头部用。 */
-  const clockTime = computed(() => fmtHms(readSec.value))
+  const clockTime = computed(() => fmtClockHms(readSec.value))
 
   /** 进度 0..1：down 分母是本相位冻结的 `phaseTotalSec`；up 分母是一个番茄周期（每满一圈得一颗）。 */
   const progress = computed(() => {

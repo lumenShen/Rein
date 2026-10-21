@@ -687,20 +687,22 @@ onMounted(async () => {
 
 <style scoped>
 .page {
-  padding: 0 var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .sec-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  /* 区块标题与内容是主从关系：8，与卡内其它「标题→内容」间距一致 */
+  margin-bottom: var(--gap-sm);
   color: var(--text-2);
 }
 
 .sec-head h2 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -708,22 +710,33 @@ onMounted(async () => {
 .audit-lead {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 /* 记录区的「刷新」「导出脚本」：次级按钮，不跟页面的主操作抢注意力 */
 .mini {
+  position: relative;
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: var(--gap-tight);
+  /* 小号按钮一档：高 28（--control-sm），左右 12 */
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--pad-inline);
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--accent);
+  font-weight: var(--fw-semibold);
+  /* 文字压在 accent-soft 上走 strong 档（--accent 只有 4.27:1） */
+  color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
+}
+
+/* 视觉 28，命中区撑到 44（纵向各外扩 8，横向不动 —— 旁边就是别的控件） */
+.mini::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .mini:disabled {
@@ -733,23 +746,23 @@ onMounted(async () => {
 .mini.wide {
   width: 100%;
   margin-left: 0;
-  margin-bottom: 10px;
+  margin-bottom: var(--gap-sm);
 }
 
 .audit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-tight);
 }
 
 /* 记录要逐条读、并与摘要对上：正文从 11px 抬到 caption，时刻不再压 --text-3 */
 .audit li {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .audit .at {
@@ -759,9 +772,9 @@ onMounted(async () => {
 
 .audit .kind {
   flex: none;
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   background: var(--surface-2);
 }
@@ -772,7 +785,8 @@ onMounted(async () => {
 }
 
 .audit .what.bad {
-  color: var(--warn);
+  /* 出错摘要是一句话，不是图标：实底档 --warn 压白底只有约 2.2:1 */
+  color: var(--warn-strong);
 }
 
 .ok {
@@ -787,17 +801,19 @@ onMounted(async () => {
 .sys-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 4px;
+  /* 组内是各自带底的选项行（不是分隔线列表），行间取无边界控件的一档 */
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
 }
 
 .sys {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--pad-inline);
+  /* 卡片内的二级分组面收一档（12），与母卡 16 拉开层级 */
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   text-align: left;
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -816,13 +832,13 @@ onMounted(async () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 /* 学校名带「（正式）」这类长后缀，窄卡里折行：balance 掉「式）」这类孤字尾行 */
 .sys-name {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   text-wrap: balance;
 }
@@ -841,9 +857,10 @@ onMounted(async () => {
 /* ---------- 表单 ---------- */
 .flabel {
   display: block;
-  margin: 12px 0 5px;
+  /* 标签与输入框之间 8（原来是 5，框贴着标签，像同一行断开的字） */
+  margin: var(--gap-md) 0 var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -851,7 +868,8 @@ input[type='text'],
 input[type='password'],
 input[type='url'] {
   width: 100%;
-  padding: 10px 12px;
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-1);
@@ -866,15 +884,15 @@ input:focus {
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: var(--fs-caption);
 }
 
 .tip {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-micro);
   color: var(--text-3);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 /* 同步时间戳：用户点进这张卡就是确认「课表新不新」，三级灰读不出新鲜度 */
@@ -891,16 +909,16 @@ input:focus {
 }
 
 .holiday-list {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .holiday-list li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .h-date {
@@ -910,7 +928,9 @@ input:focus {
 
 .h-sel {
   margin-left: auto;
-  padding: 7px 10px;
+  /* 表单控件至少给到触控下限 44，28 高在拇指下太窄 */
+  min-height: var(--hit-min);
+  padding: var(--sp-4) var(--sp-12);
   border: none;
   border-radius: var(--radius-m);
   background: var(--surface-2);
@@ -921,14 +941,15 @@ input:focus {
 .holiday-add {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .h-date-input {
   flex: 1;
   min-width: 0;
-  padding: 7px 10px;
+  min-height: var(--hit-min);
+  padding: var(--sp-4) var(--sp-12);
   border: none;
   border-radius: var(--radius-m);
   background: var(--surface-2);
@@ -948,27 +969,37 @@ input:focus {
 .check {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .cap-row {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 正方的「人工取验证码」入口：做得像一个可点的提示，而不是主操作按钮 */
 .cap-link {
-  margin-top: 8px;
-  padding: 6px 12px;
+  position: relative;
+  margin-top: var(--gap-sm);
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
-  font-size: var(--fs-micro);
-  font-weight: 600;
+  /* 交互文字不小于 12px：10px 的入口在手机上读不出是一颗按钮 */
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 小按钮视觉 28，命中区补到 44 */
+.cap-link::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .cap-link:active {
@@ -983,7 +1014,8 @@ input:focus {
 .cap-img {
   flex: none;
   width: 96px;
-  height: 42px;
+  /* 验证码图是按钮：高给到 44 的触控下限（宽高由图片自然铺满） */
+  height: var(--hit-min);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   display: flex;
@@ -1002,13 +1034,15 @@ input:focus {
 /* ---------- 按钮 ---------- */
 .primary {
   width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-lg);
+  /* 表单主按钮：高 40、圆角 20（按钮档），与 .ghost / .danger 同一档 */
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-card);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1025,31 +1059,32 @@ input:focus {
 .banner {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-bottom: 10px;
-  padding: 9px 11px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--warn-soft);
   color: var(--warn-strong);
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .form-err {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 10px;
-  color: var(--danger);
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
+  /* 正文级错误提示：--danger 压白底不够 4.5:1，走 strong 档 */
+  color: var(--danger-strong);
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .form-hint {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   color: var(--text-3);
   font-size: var(--fs-micro);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .form-hint a {
@@ -1060,13 +1095,14 @@ input:focus {
 .banner svg,
 .form-err svg {
   flex: none;
-  margin-top: 1px;
+  /* 图标对首行基线：主次文本上下 2 */
+  margin-top: var(--gap-text);
 }
 
 .acts {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
 }
 
 .ghost {
@@ -1074,13 +1110,14 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 11px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-card);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1094,13 +1131,15 @@ input:focus {
 
 .danger {
   width: 100%;
-  margin-top: 12px;
-  padding: 11px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-card);
+  border-radius: var(--radius-l);
   background: var(--danger-soft);
-  color: var(--danger);
+  /* danger-soft 上的文字走 strong 档 */
+  color: var(--danger-strong);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1138,32 +1177,33 @@ input:focus {
 .desk-main .danger-card > .danger {
   width: auto;
   margin-top: 0;
-  padding: 11px 22px;
+  padding: var(--sp-10) var(--sp-24);
 }
 
 /* ---------- 账号信息 ---------- */
 .who {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-text);
+  padding: var(--sp-12) var(--pad-inline);
+  /* 卡内的二级面：12 圆角，比母卡收一档 */
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
-  margin-bottom: 4px;
+  margin-bottom: var(--gap-sm);
 }
 
 .who-name {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .who-code {
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -1171,19 +1211,19 @@ input:focus {
 .who-line {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* 账号身分行的主次：行政班号是关键值（加重 + 等宽），年级降一档、竖线分隔 ——
    不再三项同字号用「·」并排。学分已不在这一行（见「培养方案与选课」入口行） */
 .who-line b.num {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .wsep {
-  margin: 0 7px;
+  margin: 0 var(--gap-sm);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -1204,9 +1244,10 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-md);
+  /* 双行入口行：纵 12 / 横 12，高度收到双行 64 附近 */
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-callout);
@@ -1224,7 +1265,7 @@ input:focus {
 
 .link-row em {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);
@@ -1237,8 +1278,8 @@ input:focus {
 .pick {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 0 0 10px;
+  gap: var(--gap-sm);
+  margin: 0 0 var(--gap-sm);
   padding: 0;
   list-style: none;
 }
@@ -1247,9 +1288,9 @@ input:focus {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   text-align: left;
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -1272,9 +1313,9 @@ input:focus {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -1283,7 +1324,7 @@ input:focus {
 .pick-main em {
   font-style: normal;
   font-size: var(--fs-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
 }
 

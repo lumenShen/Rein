@@ -9,6 +9,7 @@ import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import { idOf, teacherText, useCourseSelectStore } from '@/stores/courseSelect'
+import { groupGrabSquads } from '@/utils/grab'
 import type { CourseSelectLesson, GrabTask } from '@/types'
 
 /**
@@ -75,18 +76,7 @@ function uuid(): string {
 }
 
 /** 任务单里已有的志愿组（结束/取消的不算），供「加入某一组」用 */
-const squads = computed(() => {
-  const byKey = new Map<string, { key: string; name: string; members: GrabTask[] }>()
-  for (const t of store.grabTasks) {
-    const k = t.groupKey?.trim()
-    if (!k || t.status === 'cancelled') continue
-    const g = byKey.get(k) ?? { key: k, name: t.groupName?.trim() || '志愿组', members: [] }
-    g.members.push(t)
-    byKey.set(k, g)
-  }
-  for (const g of byKey.values()) g.members.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-  return [...byKey.values()]
-})
+const squads = computed(() => groupGrabSquads(store.grabTasks))
 
 const pickedSquad = computed(() => squads.value.find((g) => g.key === squadPick.value) ?? null)
 
@@ -374,10 +364,10 @@ const squadName = computed(() => {
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: var(--sp-4) var(--sp-10);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-10);
 }
 
 .num {
@@ -387,12 +377,12 @@ const squadName = computed(() => {
 .banner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
-  padding: 9px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
-  margin-bottom: 12px;
-  line-height: 1.45;
+  margin-bottom: var(--sp-12);
+  line-height: var(--lh-caption);
 }
 
 .banner.warn {
@@ -406,21 +396,21 @@ const squadName = computed(() => {
 }
 
 .block {
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-16);
 }
 
 .block h3 {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  margin-bottom: 7px;
+  margin-bottom: var(--sp-8);
 }
 
 /* 标题行带帮助入口的：让 ? 按钮贴到行右端，与标题同行居中 */
 .block h3.row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .block h3.row .info-hint {
@@ -429,8 +419,8 @@ const squadName = computed(() => {
 
 /* 分段控件下的一行结论：把选中档的取舍压成一句，完整解释在标题行右侧的说明里 */
 .concl {
-  margin-top: 8px;
-  line-height: 1.5;
+  margin-top: var(--sp-8);
+  line-height: var(--lh-body);
   white-space: normal;
 }
 
@@ -439,11 +429,11 @@ const squadName = computed(() => {
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
-  margin-top: 6px;
+  line-height: var(--lh-body);
+  margin-top: var(--sp-6);
 }
 
 .hint.center {
@@ -453,17 +443,17 @@ const squadName = computed(() => {
 
 .hint svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .opt {
   width: 100%;
   text-align: left;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: var(--sp-10);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-6);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-standard);
 }
@@ -474,13 +464,13 @@ const squadName = computed(() => {
 
 .opt b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .opt em {
   font-size: var(--fs-micro);
   font-style: normal;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
   /* 选项的说明（容量多少 / 已有几个志愿 / 这个组是干什么的）——
      它们是决定选哪个的依据，不是脚注 */
   color: var(--text-2);
@@ -490,7 +480,7 @@ const squadName = computed(() => {
   flex: none;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 1.5px solid var(--line-strong);
   position: relative;
 }
@@ -503,30 +493,30 @@ const squadName = computed(() => {
   content: '';
   position: absolute;
   inset: 3.5px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--accent);
 }
 
 .acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* 组内次序：一眼看出「谁在等谁」 */
 .queue {
-  margin: 8px 0 0;
+  margin: var(--sp-8) 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 
 .queue li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -538,8 +528,8 @@ const squadName = computed(() => {
 .tag-mini {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 7px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -549,13 +539,14 @@ const squadName = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 13px;
-  border-radius: var(--radius-m);
+  gap: var(--sp-6);
+  padding: var(--sp-14);
+  /* 按钮档 20：与卡片（16）拉开一层，抽屉底部的主操作不再读成一张卡 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -564,21 +555,22 @@ const squadName = computed(() => {
 }
 
 .ghost {
-  padding: 11px;
+  padding: var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 明细级的次要动作：看起来就不像「主按钮」，不会被当成第二个「加入抢课」 */
 .once {
   align-self: center;
-  min-height: 44px;
-  padding: 0 12px;
+  /* 触控下限走令牌：44（视觉仍是文字链接，靠 min-height 撑开命中区） */
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-12);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   text-decoration: underline;
   text-decoration-style: dotted;

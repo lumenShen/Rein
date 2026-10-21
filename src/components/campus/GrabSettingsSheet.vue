@@ -345,8 +345,8 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
 <style scoped>
 .lead {
   font-size: var(--fs-caption);
-  line-height: 1.55;
-  margin-bottom: 14px;
+  line-height: var(--lh-body);
+  margin-bottom: var(--gap-lg);
 }
 
 /* 「你连的是正式教务」这条警告原先直接拿 --warn 当文字色（#ff9500 压在白底上
@@ -355,37 +355,38 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
    soft 底 + strong 文字 */
 .note.warn {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-sm);
   align-items: flex-start;
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--warn-strong);
   background: var(--warn-soft);
   border-radius: var(--radius-m);
-  padding: 9px 11px;
-  margin-bottom: 12px;
+  padding: var(--sp-8) var(--pad-inline);
+  margin-bottom: var(--gap-md);
 }
 
 .block {
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  /* 参数分组面：内距 12（二级面的紧凑档），圆角收一档；组间 12 */
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
-  margin-bottom: 10px;
+  margin-bottom: var(--gap-md);
 }
 
 /* 节奏档位：一次点击把三个数字一起调好，省得点几十下加号 */
 .presets {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
 }
 
 .preset {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 6px;
+  gap: var(--gap-text);
+  padding: var(--sp-8) var(--sp-6);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -399,7 +400,7 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
 
 .preset b {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -408,7 +409,7 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
   font-style: normal;
   /* 每一档的**代价**（「默认节奏，最不容易被风控盯上」）—— 那正是选档时要读的 */
   color: var(--text-2);
-  line-height: 1.3;
+  line-height: var(--lh-title);
 }
 
 /* 待确认的压测档：一眼看出这一下点下去代价不一样 */
@@ -426,33 +427,33 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 4px 10px;
+  gap: var(--gap-tight) var(--gap-md);
 }
 
 .toggle-row .col {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
 }
 
 .toggle-row b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .toggle-row em {
   font-size: var(--fs-micro);
   font-style: normal;
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 /* 参数行：步进器占满一行，说明入口贴在右端（与步进钮同一行、垂直居中） */
 .p-head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 /* 步进器撑满剩余宽度：否则它收缩成内容宽，「? 」会掉到行中间 */
@@ -464,8 +465,8 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
    一行结论也要读得出来（--text-2），不能是最淡的那档 */
 .concl {
   font-size: var(--fs-caption);
-  line-height: 1.5;
-  margin-top: 2px;
+  line-height: var(--lh-body);
+  margin-top: var(--gap-text);
   color: var(--text-2);
 }
 
@@ -476,30 +477,32 @@ function applyPreset(p: (typeof PRESETS)[number]): void {
 .acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
 }
 
 .primary {
-  padding: 13px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ghost {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 11px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .primary:disabled {

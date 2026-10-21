@@ -459,17 +459,22 @@ pub fn update_todo(state: State<AppState>, todo: Todo) -> Result<Todo> {
 /// `update_todo` 的本体（见 [`list_todos_on`]）。仍是**全量覆盖**语义：
 /// 调用方给的 `Todo` 缺哪些非暴露列，就把那些列写成空 —— 需要保值的调用方自己先补齐
 /// （对外网关照 contract §10 在 handler 层拒绝带附件的待办并保留原 rec_rule/subtasks）。
+///
+/// **`rec_key` 不在这里推导**。它是重复实例的**身份**，不是可写字段：
+/// 从前这里按「这一行有没有 rec_rule」决定 rec_key，而实例本来就没有规则 ⇒ 任何一次
+/// 整对象回写（勾选、改标题、改日期）都会把身份写成 NULL ⇒ `sync_recurrences` 认不出它、
+/// 当场再补一条 ⇒ 用户看到「勾一下多出一条」。那条链路已出现过多次。
+///
+/// 现在的口径（三层护栏，缺一不可）：
+/// 1. 这里**永远不写 `rec_key`**（SQL 里根本没有这一列）；
+/// 2. 模板行改日期时，身份要跟着走 —— 那一句由迁移 0047 的触发器**显式放行**的
+///    唯一情形（`rec_key = id || ':' || date`）覆盖，所以这里补一次独立的 UPDATE；
+/// 3. 其它任何想改 / 清空身份的写法都会被触发器挡下，不管来自哪个模块。
 pub(crate) fn update_todo_on(conn: &rusqlite::Connection, todo: &Todo) -> Result<Todo> {
-    // 模板改动后 rec_key 跟随自身日期，保持"模板 = 首日实例"不变式
-    let rec_key: Option<String> = if todo.rec_rule.is_some() {
-        todo.date.as_ref().map(|d| format!("{}:{}", todo.id, d))
-    } else {
-        None
-    };
     conn.execute(
         "UPDATE todos SET title = ?1, notes = ?2, date = ?3, start_min = ?4, duration_min = ?5, \
-         category = ?6, priority = ?7, status = ?8, completed_at = ?9, rec_rule = ?10, rec_key = ?11, subtasks = ?12, attachments = ?13 \
-         WHERE id = ?14",
+         category = ?6, priority = ?7, status = ?8, completed_at = ?9, rec_rule = ?10, subtasks = ?11, attachments = ?12 \
+         WHERE id = ?13",
         rusqlite::params![
             todo.title,
             todo.notes,
@@ -481,12 +486,23 @@ pub(crate) fn update_todo_on(conn: &rusqlite::Connection, todo: &Todo) -> Result
             todo.status,
             todo.completed_at,
             json_str(&todo.rec_rule)?,
-            rec_key,
             json_str(&todo.subtasks)?,
             json_str(&todo.attachments)?,
             todo.id
         ],
     )?;
+
+    // 模板行改日期 → 首日身份跟着走（「模板 = 首日实例」）。只在**确实是模板**时才动，
+    // 且必须与触发器放行的形状逐字一致，否则会被护栏拦下 —— 那说明调用方在试图改实例的身份。
+    if todo.rec_rule.is_some() {
+        if let Some(d) = &todo.date {
+            conn.execute(
+                "UPDATE todos SET rec_key = ?1 WHERE id = ?2 AND (rec_key IS NULL OR rec_key <> ?1)",
+                rusqlite::params![format!("{}:{}", todo.id, d), todo.id],
+            )?;
+        }
+    }
+
     let sql = format!("SELECT {COLS} FROM todos WHERE id = ?1");
     Ok(conn.query_row(&sql, [todo.id], from_row)?)
 }
@@ -820,13 +836,30 @@ mod tests {
             [rule_json],
         )
         .unwrap();
-        conn.last_insert_rowid()
+        let id = conn.last_insert_rowid();
+        // 「模板 = 首日实例」：走与生产同一条路径（create_todo_on 在这里补 rec_key）。
+        // 夹具若只裸插而不补，模板在物化眼里就没有身份 —— 那是夹具失真，不是被测行为。
+        conn.execute(
+            "UPDATE todos SET rec_key = ?1 WHERE id = ?2 AND rec_key IS NULL",
+            rusqlite::params![format!("{id}:2026-09-21"), id],
+        )
+        .unwrap();
+        id
     }
 
     /// 现存的重复实例（日期, 是否完成），按日期升序。
+    ///
+    /// **只算模板的子行**（rec_key 里的父 id ≠ 这一行自己的 id）：模板自身也带
+    /// `rec_key = "id:自己的日期"`（「模板 = 首日实例」），把它算进「实例数」会让
+    /// 每个断言都多一条 —— 那个歧义正是这些断言以前容易误报的原因。
     fn instances(conn: &Connection) -> Vec<(String, bool)> {
         let mut stmt = conn
-            .prepare("SELECT date, status FROM todos WHERE rec_key IS NOT NULL ORDER BY date")
+            .prepare(
+                "SELECT date, status FROM todos \
+                 WHERE rec_key IS NOT NULL \
+                   AND substr(rec_key, 1, instr(rec_key, ':') - 1) <> CAST(id AS TEXT) \
+                 ORDER BY date",
+            )
             .unwrap();
         let rows = stmt
             .query_map([], |r| {
@@ -852,7 +885,11 @@ mod tests {
         assert_eq!(sync_recurrences_on(&conn, "2026-09-23").unwrap(), 0);
 
         let mut stmt = conn
-            .prepare("SELECT rec_key FROM todos WHERE rec_key IS NOT NULL")
+            .prepare(
+                "SELECT rec_key FROM todos \
+                 WHERE rec_key IS NOT NULL \
+                   AND substr(rec_key, 1, instr(rec_key, ':') - 1) <> CAST(id AS TEXT)",
+            )
             .unwrap();
         let keys = stmt
             .query_map([], |r| r.get::<_, String>(0))
@@ -864,6 +901,12 @@ mod tests {
             keys.iter().all(|k| k.starts_with(&format!("{tid}:"))),
             "实例键必须是「模板id:日期」：{keys:?}"
         );
+
+        // 模板自身也有首日身份（「模板 = 首日实例」）—— 那是身份，不是「多出来的实例」
+        let template_key: String = conn
+            .query_row("SELECT rec_key FROM todos WHERE id = ?1", [tid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(template_key, format!("{tid}:2026-09-21"));
 
         // 把 09-25 标成完成，再把规则改成「每周三」——
         // 未来不再匹配的未完成实例应被删除，已完成的照旧留住（历史行永不追溯）
@@ -965,6 +1008,111 @@ mod tests {
             .unwrap();
         delete_todo_on_as_of(&conn, orphan, "2026-09-23").unwrap();
         assert_eq!(instances(&conn).len(), 1);
+    }
+
+    // ---- 回归：勾选实例不得多出一条（迁移 0047 的结构护栏）----
+    //
+    // 这个缺陷在真实使用里出现过多次，每次都是同一形状：勾一条重复待办的实例 →
+    // 前端整对象回写 → 身份被写成 NULL → 物化把它当成缺失、再补一条。
+    // 下面三条把「身份是身份、不是可写字段」钉死；全量回写那条是原样复现事故路径。
+
+    /// 勾选一条实例（走前端真实路径：取整对象 → 改状态 → `update_todo_on` 回写）
+    /// 之后，物化**不得**再补出第二条，且身份原封不动。
+    #[test]
+    fn toggling_instance_does_not_duplicate_it() {
+        let conn = fresh();
+        let tid = insert_template(&conn, r#"{"freq":"daily","weekdays":[],"intervalDays":1}"#);
+        sync_recurrences_on(&conn, "2026-09-23").unwrap();
+        let before = instances(&conn);
+        assert!(!before.is_empty(), "先得有实例");
+
+        let iid: i64 = conn
+            .query_row(
+                "SELECT id FROM todos WHERE rec_key = ?1",
+                [format!("{tid}:2026-09-24")],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let key_before: String = conn
+            .query_row("SELECT rec_key FROM todos WHERE id = ?1", [iid], |r| r.get(0))
+            .unwrap();
+
+        // 前端勾选的等价动作：整对象回写（status 变更）
+        let mut inst = get_todo_on(&conn, iid).unwrap().unwrap();
+        inst.status = "done".into();
+        inst.completed_at = Some("2026-09-24T10:00:00Z".into());
+        update_todo_on(&conn, &inst).unwrap();
+
+        // 身份必须原样保留 —— 这是本缺陷的根因所在
+        let key_after: String = conn
+            .query_row("SELECT rec_key FROM todos WHERE id = ?1", [iid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(key_after, key_before, "整对象回写不得改写重复实例的身份");
+
+        // 物化仍幂等：一条都不补
+        assert_eq!(
+            sync_recurrences_on(&conn, "2026-09-23").unwrap(),
+            0,
+            "勾选之后物化不得补出任何实例"
+        );
+        assert_eq!(instances(&conn).len(), before.len(), "总条数保持不变");
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM todos WHERE title = '晨跑' AND date = '2026-09-24'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1,
+            "同一天同一条待办只能有一行"
+        );
+    }
+
+    /// 身份**不可变**：任何试图清空 / 改写 `rec_key` 的写法都要被数据库拒绝，
+    /// 不管它来自哪个模块（这是防「下一个模块再踩一遍」的唯一位置）。
+    #[test]
+    fn instance_identity_is_immutable_at_the_database() {
+        let conn = fresh();
+        let tid = insert_template(&conn, r#"{"freq":"daily","weekdays":[],"intervalDays":1}"#);
+        sync_recurrences_on(&conn, "2026-09-23").unwrap();
+        let iid: i64 = conn
+            .query_row(
+                "SELECT id FROM todos WHERE rec_key = ?1",
+                [format!("{tid}:2026-09-24")],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        let cleared = conn.execute("UPDATE todos SET rec_key = NULL WHERE id = ?1", [iid]);
+        assert!(cleared.is_err(), "清空实例身份必须被拒绝");
+
+        let rewritten =
+            conn.execute("UPDATE todos SET rec_key = '999:2026-09-24' WHERE id = ?1", [iid]);
+        assert!(rewritten.is_err(), "改写实例身份必须被拒绝");
+
+        // 身份仍在，未被半途改坏
+        let key: String = conn
+            .query_row("SELECT rec_key FROM todos WHERE id = ?1", [iid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(key, format!("{tid}:2026-09-24"));
+    }
+
+    /// 模板改日期时，首日身份**跟着走**（「模板 = 首日实例」）——
+    /// 这是身份不可变的唯一例外，漏了它模板就永远停在旧日期上。
+    #[test]
+    fn template_identity_follows_its_own_date() {
+        let conn = fresh();
+        let tid = insert_template(&conn, r#"{"freq":"daily","weekdays":[],"intervalDays":1}"#);
+        let mut tpl = get_todo_on(&conn, tid).unwrap().unwrap();
+        assert_eq!(tpl.rec_key.as_deref(), Some(format!("{tid}:2026-09-21").as_str()));
+
+        tpl.date = Some("2026-09-22".into());
+        update_todo_on(&conn, &tpl).unwrap();
+
+        let key: String = conn
+            .query_row("SELECT rec_key FROM todos WHERE id = ?1", [tid], |r| r.get(0))
+            .unwrap();
+        assert_eq!(key, format!("{tid}:2026-09-22"), "模板身份必须跟随自己的日期");
     }
 
     /// `rec_exdates` 是**内部列**：前端的全量更新（`update_todo_on` 只写它认识的列）

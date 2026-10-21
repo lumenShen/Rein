@@ -117,12 +117,13 @@ onBeforeUnmount(() => {
 <style scoped>
 .dock-hint {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + var(--gap-sm));
   z-index: 1;
   box-sizing: border-box;
   width: max-content;
-  max-width: min(300px, calc(100vw - 32px));
-  padding: 12px 14px;
+  max-width: min(300px, calc(100vw - var(--sp-32)));
+  padding: var(--sp-12) var(--sp-14);
+  /* 气泡浮在底栏之上：--radius-l 20，与「功能入口 / 按钮」同层 */
   border-radius: var(--radius-l);
   border: 0.5px solid var(--line);
   background: var(--surface);
@@ -134,21 +135,23 @@ onBeforeUnmount(() => {
 .dock-hint::after {
   content: '';
   position: absolute;
-  left: var(--arrow-x, 26px);
+  left: var(--arrow-x, var(--sp-26));
   bottom: -6px;
   width: 12px;
   height: 12px;
   background: var(--surface);
   border-right: 0.5px solid var(--line);
   border-bottom: 0.5px solid var(--line);
-  border-bottom-right-radius: 2px;
+  /* 尾巴尖上的圆角：2 吸附到最小一档 4（--radius-xs） */
+  border-bottom-right-radius: var(--radius-xs);
   transform: translateX(-50%) rotate(45deg);
 }
 
 .dock-hint__head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  /* 图标与标题 8（--gap-sm，吸附自 7） */
+  gap: var(--gap-sm);
 }
 
 .dock-hint__icon {
@@ -165,32 +168,34 @@ onBeforeUnmount(() => {
 
 .dock-hint__title {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
+/* 标题与正文上下 6（--sp-6）：主次文本那一档在这条气泡里要读得开 */
 .dock-hint__body {
-  margin: 6px 0 0;
+  margin: var(--sp-6) 0 0;
   font-size: var(--fs-footnote);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
+/* 正文与按钮组上下 12（--gap-md），组内两颗文字钮无边界 → 4 */
 .dock-hint__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
-  margin-top: 10px;
+  gap: var(--gap-tight);
+  margin-top: var(--gap-md);
 }
 
 .dock-hint__btn {
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--accent-strong);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   cursor: pointer;
 }
 

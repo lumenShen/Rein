@@ -1,7 +1,7 @@
 {
   "name": "rein",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Rein · 全能生活助理（Tauri + Vue + Rust）",
   "type": "module",
   "scripts": {

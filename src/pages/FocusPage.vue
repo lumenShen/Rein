@@ -125,7 +125,8 @@ onMounted(() => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ============================================================
@@ -146,8 +147,8 @@ onMounted(() => {
    ============================================================ */
 @media (orientation: landscape) and (max-width: 899px) {
   .page {
-    /* 横向留白收窄一档（18 → 12）：480 的窄栏一分为二之后，每一像素都是卡片里的行长 */
-    --page-pad-x: 12px;
+    /* 横向留白收窄一档：480 的窄栏一分为二之后，每一像素都是卡片里的行长 */
+    --page-pad-x: var(--sp-12);
     /* 页面盒 = 视口：安全区走内边距，不从宽高里扣（与 AIPage 同一条约定）。
        .app-frame 给整页让出的 --safe-top 由负外边距抵掉，再由这里铺成内边距 ——
        盒子的尺寸只由视口决定，安全区不再参与高度计算。 */
@@ -164,7 +165,8 @@ onMounted(() => {
     /* 待办栏宽一档：行里有勾选框 + 标题 + 元信息 + 两颗次操作钮，
        比「一个圆环 + 一排圆钮」的计时栏更需要横向余量 */
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-    gap: 0 12px;
+    /* 两栏之间 12：与卡间距同档（它们是两列内容，不是两张卡） */
+    gap: 0 var(--sp-12);
   }
 
   /* 页头与内容层各占整行：页头留在栏外（超伸时不动），真正的两栏由层内部承担 */
@@ -190,20 +192,22 @@ onMounted(() => {
     overflow-y: auto;
     /* 滚到底不要把手势递给另一栏：滚动链到此截断（超伸回弹仍归这一栏自己） */
     overscroll-behavior: contain;
-    padding-bottom: calc(var(--dock-top) + 8px + var(--wbar-reserve, 0px));
+    /* 底部让位量 = Dock 上缘 + 一格 8 + 运动条预留：--wbar-reserve 保持透传，
+       悬浮运动条停靠时这一栏仍能滚出它盖住的区域 */
+    padding-bottom: calc(var(--dock-top) + var(--gap-sm) + var(--wbar-reserve, 0px));
   }
 
   /* 待办栏的小标题：与卡头同族但低一档，读作「这一栏是什么」 */
   .pane-title {
-    padding-bottom: 8px;
+    padding-bottom: var(--gap-sm);
     font-size: var(--fs-subhead);
-    font-weight: 700;
+    font-weight: var(--fw-bold);
     color: var(--text-2);
   }
 
-  /* 计时栏里的今日日程：与竖屏的卡片间隔同值（那边由 .card + .card 的 14px 承担） */
+  /* 计时栏里的今日日程：与竖屏的卡片间隔同值（那边由 .card + .card 的 12px 承担） */
   .sched {
-    margin-top: 14px;
+    margin-top: var(--gap-md);
   }
 
   /* ---------- 窄栏里的卡内排版修正（:deep，只在这一条媒体查询里生效） ----------
@@ -220,7 +224,7 @@ onMounted(() => {
      · `.meta`：待办行的「时间 · 分类 · 优先级」同理会把「运动」压成一字一行。 */
   .pane-timer :deep(.head) {
     flex-wrap: wrap;
-    row-gap: 8px;
+    row-gap: var(--gap-sm);
   }
 
   .pane-timer :deep(.head-right) {
@@ -228,13 +232,13 @@ onMounted(() => {
   }
 
   .pane-timer :deep(.acts) {
-    gap: 4px;
-    padding: 6px 4px;
+    gap: var(--gap-tight);
+    padding: var(--sp-6) var(--gap-tight);
   }
 
   .pane-todos :deep(.meta) {
     flex-wrap: wrap;
-    row-gap: 4px;
+    row-gap: var(--gap-tight);
   }
 }
 </style>

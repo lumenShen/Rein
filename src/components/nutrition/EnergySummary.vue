@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 import IntakeOverview from './IntakeOverview.vue'
 import { useNutritionStore } from '@/stores/nutrition'
-import { parseDate } from '@/utils/date'
+import { fmtMonthDayDate } from '@/utils/format'
 
 /**
  * 营养总览卡（桌面便当的 hero 格、营养全览页的首页卡）。
@@ -20,8 +20,7 @@ const n = useNutritionStore()
 const router = useRouter()
 
 function shortDate(s: string): string {
-  const d = parseDate(s)
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+  return fmtMonthDayDate(s)
 }
 
 function goDetail(): void {
@@ -49,13 +48,15 @@ function goDetail(): void {
 
 .more {
   position: relative;
-  gap: 1px;
-  /* 「详情」是进入下一层的唯一入口，纵向补到 44（原来 5px 内边距只有约 26px 高） */
-  padding: 12px 10px;
+  /* 字形与箭头之间只留最小呼吸 2：箭头是「>」的形状语义，不占一行内距 */
+  gap: var(--gap-text);
+  /* 「详情」是进入下一层的唯一入口，纵向补到 44（原来 5px 内边距只有约 26px 高）；
+     左右取胶囊内距 12 —— 与页面上其它胶囊按钮同档 */
+  padding: var(--sp-12) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   flex: none;
 }

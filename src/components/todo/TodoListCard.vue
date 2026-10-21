@@ -116,7 +116,7 @@ onMounted(() => {
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -126,13 +126,15 @@ onMounted(() => {
 
 /* 添加按钮 */
 .adder {
-  gap: 8px;
-  margin-top: 12px;
-  padding: 11px 14px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  /* 添加入口是一行可点的整宽行：左右 16、高度走单行 48 */
+  min-height: var(--row-h);
+  padding: var(--sp-12) var(--pad-card);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition: background var(--dur-fast) var(--ease-standard);
 }
@@ -142,17 +144,18 @@ onMounted(() => {
 }
 
 .list {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 .all {
   width: 100%;
-  gap: 4px;
-  margin-top: 6px;
-  padding: 9px 0;
+  gap: var(--gap-tight);
+  margin-top: var(--gap-sm);
+  min-height: var(--row-h);
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-s);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
   transition: background var(--dur-fast) var(--ease-standard);
 }

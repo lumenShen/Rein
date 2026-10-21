@@ -73,7 +73,8 @@ function set<K extends keyof DailyTargets>(key: K, value: number): void {
 
 <style scoped>
 .grid {
-  margin-top: 8px;
+  /* 与上方说明之间 8（标题与内容一档） */
+  margin-top: var(--gap-sm);
   display: grid;
   grid-template-columns: 1fr;
 }

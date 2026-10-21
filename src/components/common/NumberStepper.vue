@@ -73,7 +73,7 @@ function commit(): void {
         :disabled="modelValue <= min"
         @click="bump(-step)"
       >
-        <Minus :size="15" />
+        <Minus :size="16" />
       </button>
       <input
         v-if="editing"
@@ -96,7 +96,7 @@ function commit(): void {
         :disabled="modelValue >= max"
         @click="bump(step)"
       >
-        <Plus :size="15" />
+        <Plus :size="16" />
       </button>
     </div>
   </div>
@@ -104,24 +104,33 @@ function commit(): void {
 
 <style scoped>
 .stepper {
-  padding: 7px 0;
+  /* 行内上下 8（--sp-8）：吸附自 7，让设置行的节奏落在 4/8 体系上 */
+  padding: var(--sp-8) 0;
 }
 
 .label {
+  flex: none;
+  white-space: nowrap;
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .ctrl {
-  gap: 2px;
+  /* 行内元素之间最小 4（HarmonyOS 间隔规范）：2 只够画「紧贴」，两颗 44 热区
+     之间只剩 2px 会让「按减号却点到数值」的概率变高 */
+  gap: var(--gap-tight);
 }
 
-/* + / − 的**命中区是 44×44**，视觉那个 30px 的圆画在 ::before 上。
+/* + / − 的**命中区是 44×44**，视觉那个 34px 的圆画在 ::before 上。
    这两颗钮在一屏里成对出现七次，是该按 44px 标准来的地方 —— 但把圆放大到 44
    会挤掉数值的位置，所以撑命中区而不是撑视觉。
+   圆的底用 --surface-3 而不是 --surface-2：步进器多数坐在 .card.sub 的
+   --surface-inset 浅井上（#f6f6f6），--surface-2 的 #f2f2f4 与它只差 4 级，
+   按钮在真机上几乎看不见；--surface-3 让「这里可以按」有一块明确的背板，
+   亮暗两档都保持一档可辨的差。
    **数值钮必须排除在外**（:not(.val-btn)）：它和这两颗钮同在一个 .ctrl 里，
-   曾经被同一条规则盖上了一个 30px 的圆底 —— 圆正好落在数字上（颜色还与两侧
-   步进钮一致），把值挡得看不见。 */
+   曾经被同一条规则盖上了一个圆底 —— 圆正好落在数字上（颜色还与两侧步进钮一致），
+   把值挡得看不见。 */
 .ctrl button {
   position: relative;
   display: flex;
@@ -139,10 +148,11 @@ function commit(): void {
 .ctrl button:not(.val-btn)::before {
   content: '';
   position: absolute;
-  width: 30px;
-  height: 30px;
+  width: var(--control-icon);
+  height: var(--control-icon);
   border-radius: 50%;
-  background: var(--surface-2);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 0.5px var(--line);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -159,18 +169,21 @@ function commit(): void {
 }
 
 .val {
-  min-width: 74px;
+  /* 64 是「4 轮」「180 秒」这类读数在 14px 下仍能居中且不换行的最小宽度；
+     74 在 320 宽下会把「长休间隔」挤到第二行。 */
+  min-width: 64px;
   text-align: center;
   font-size: var(--fs-subhead);
 }
 
 .val b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
+/* 数值与单位左右 2（主次文本上下那一档的横向版本） */
 .val small {
   color: var(--text-3);
-  margin-left: 2px;
+  margin-left: var(--gap-text);
 }
 
 /* 数值钮：点一下就地输入。命中区与两侧步进钮同高（44），但没有圆底 —— 它只在自己
@@ -180,7 +193,7 @@ function commit(): void {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  padding: 2px 0;
+  padding: var(--sp-2) 0;
   border-radius: var(--radius-s);
   color: inherit;
 }
@@ -191,11 +204,11 @@ function commit(): void {
 
 /* 直接输入态：宽度与 .val 对齐，避免切进来时整行跳动 */
 .edit {
-  width: 74px;
-  padding: 2px 0;
+  width: 64px;
+  padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--accent);
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   background: none;
   -moz-appearance: textfield;

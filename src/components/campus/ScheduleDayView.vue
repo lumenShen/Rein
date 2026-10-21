@@ -127,32 +127,34 @@ function place(e: ScheduleEntry): string {
 .day {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .date-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  padding: 0 2px;
+  padding: 0 var(--sp-2);
 }
 
 .today-tag {
   font-size: var(--fs-micro);
-  font-weight: 600;
-  color: var(--accent);
+  font-weight: var(--fw-semibold);
+  /* soft 底上的文字蓝用 strong 档（--accent 压 accent-soft 达不到 AA） */
+  color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: 1px 8px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 每节课在日视图里是一张卡：卡间距取 12 */
+  gap: var(--gap-md);
 }
 
 /* 课程色整面 soft tint（课表三视图同一档浓度：基础 12% / 强调 20%），
@@ -160,11 +162,12 @@ function place(e: ScheduleEntry): string {
    与周视图 .blk、月视图 .chip 是同一套画法。 */
 .row {
   display: flex;
-  gap: 10px;
+  gap: var(--gap-md);
   background: color-mix(in srgb, var(--blk) 12%, var(--surface));
-  border-radius: var(--radius-l);
+  /* 卡片档 16：课程块在日视图里是一张张卡，20 会让它们读成按钮 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 12px 14px;
+  padding: var(--sp-12) var(--pad-card);
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease-standard);
 }
@@ -189,15 +192,15 @@ function place(e: ScheduleEntry): string {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 .t1 {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: var(--lh-title);
 }
 
 /* 时间柱中间那条竖线，把起止时刻连起来 */
@@ -207,20 +210,21 @@ function place(e: ScheduleEntry): string {
   min-height: 8px;
   background: var(--blk);
   opacity: 0.35;
-  border-radius: 1px;
+  /* 1.5px 宽的竖线：满圆角让两端是圆的，与时间柱的胶囊语言一致 */
+  border-radius: var(--radius-full);
 }
 
 .t2 {
   font-size: var(--fs-caption);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: var(--lh-title);
 }
 
 .unit {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   white-space: nowrap;
 }
 
@@ -229,35 +233,35 @@ function place(e: ScheduleEntry): string {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--gap-text);
 }
 
 .top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .name {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
-  line-height: 1.25;
+  line-height: var(--lh-title);
   word-break: break-all;
 }
 
 .badge {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 .badge.soft {
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
@@ -265,25 +269,25 @@ function place(e: ScheduleEntry): string {
 .hd-tag {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   border-radius: var(--radius-full);
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 .hd-tag.off {
-  color: var(--warn);
+  color: var(--warn-strong);
   background: color-mix(in srgb, var(--warn) 16%, var(--surface));
 }
 
 .hd-tag.makeup {
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
 .meta {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.35;
+  line-height: var(--lh-subtitle);
 }
 
 .meta.dim {

@@ -293,14 +293,14 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 <style scoped>
 .review {
   display: grid;
-  gap: 12px;
-  padding-bottom: 20px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-20);
 }
 
 /* 阶段容器沿用原 .review 的间距：卡片与文案之间的间距由它接管 */
 .rbody {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 /* 三阶段切换的进出场：内容整体更换，只走不透明度且进出同向 */
@@ -315,17 +315,18 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 }
 
 .wait {
-  padding: 26px 0;
+  padding: var(--sp-26) 0;
 }
 
 .err {
   color: var(--danger);
   font-size: var(--fs-subhead);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .card {
-  padding: 13px 15px;
+  /* 与 ProgramEvidenceSheet 的 .card 同一档：四边 12 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -338,20 +339,20 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 9px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-8);
 }
 
 /* 标题行右端：说明入口 + 计数，与标题同一行 */
 .card-head .head-side {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .card-head b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .card-head b.accent {
@@ -359,17 +360,17 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 }
 
 .tag {
-  padding: 2px 9px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 超出安全范围：soft 底 + strong 字配套令牌（实底档 --warn 不当文字用） */
 .tag.clamp {
-  margin-left: 6px;
+  margin-left: var(--sp-6);
   background: var(--warn-soft);
   color: var(--warn-strong);
 }
@@ -377,15 +378,16 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 /* 数据先行条 */
 .bars {
   display: grid;
-  gap: 10px;
+  /* 诊断条之间 8（同组信息） */
+  gap: var(--gap-sm);
 }
 
 .bar-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -421,7 +423,7 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 
 .diag {
   font-size: var(--fs-callout);
-  line-height: 1.55;
+  line-height: var(--lh-body);
 }
 
 /* 流式诊断的打字光标 */
@@ -429,42 +431,40 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
   display: inline-block;
   width: 2px;
   height: 1em;
-  margin-left: 2px;
+  margin-left: var(--sp-2);
   vertical-align: -0.12em;
   background: var(--text-2);
-  animation: caret-blink 1s steps(2, start) infinite;
-}
-
-@keyframes caret-blink {
-  50% {
-    opacity: 0;
-  }
+  animation: rein-caret-blink 1s steps(2, start) infinite;
 }
 
 /* 建议卡片 */
 .sug {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
+  gap: var(--gap-sm);
+  /* 建议条目是双行行：上下 12、组内 8 */
+  padding: var(--sp-12) 0;
   border-top: 0.5px solid var(--line);
 }
 
 .sug:first-of-type {
   border-top: none;
-  padding-top: 2px;
+  padding-top: var(--sp-2);
 }
 
 .check {
+  position: relative;
   flex: none;
-  width: 19px;
-  height: 19px;
-  margin-top: 1px;
-  border-radius: 50%;
+  /* 勾选框视觉仍小（22），命中区由 ::after 补到 44（--hit-min）；
+     建议行本身约 70 高，热区上下不会盖到相邻条目 */
+  width: 22px;
+  height: 22px;
+  margin-top: var(--sp-2);
+  border-radius: var(--radius-full);
   border: 1.5px solid var(--line-strong);
   background: var(--surface);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: var(--fs-caption);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -473,6 +473,13 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
     background var(--dur-fast) var(--ease-standard),
     border-color var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);
+}
+
+.check::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+  border-radius: var(--radius-full);
 }
 
 .check.on {
@@ -487,7 +494,7 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 
 .sug-title {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   transition: color var(--dur-fast) var(--ease-standard);
 }
 
@@ -497,14 +504,14 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 
 /* 采纳理由是要读的判断依据：三级灰是「补充」档，提到 --text-2 */
 .sug-reason {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .sug-body .tag {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   display: inline-block;
   background: var(--surface);
 }
@@ -514,8 +521,8 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
   border-top: 0.5px solid var(--line);
   font-size: var(--fs-caption);
 }
@@ -536,31 +543,32 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
 .advice-title {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .advice {
   display: grid;
-  gap: 5px;
-  margin-top: 5px;
-  padding-left: 17px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-4);
+  padding-left: var(--sp-16);
   list-style: disc;
 }
 
 .advice li {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .primary {
   width: 100%;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  padding: var(--sp-12) 0;
+  /* 页脚主按钮走按钮档 20 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .foot {

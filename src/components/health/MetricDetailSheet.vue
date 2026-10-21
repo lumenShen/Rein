@@ -11,6 +11,7 @@ import {
   lastLocalDays,
   type HealthMetricMeta,
 } from '@/config/healthMetrics'
+import { trendGeometry } from '@/utils/chart'
 import type { HealthMetricSeries } from '@/types'
 
 /**
@@ -53,21 +54,13 @@ const PAD_Y = 14
 
 const trendGeom = computed(() => {
   const pts = props.series?.points ?? []
-  if (pts.length < 2) return null
-  const vs = pts.map((p) => p.value)
-  const min = Math.min(...vs)
-  const max = Math.max(...vs)
-  const span = Math.max(max - min, Math.abs(max) * 0.02, 0.8)
-  const lo = min - span * 0.12
-  const hi = max + span * 0.12
-  const x = (i: number) => PAD_X + (i * (CHART_W - PAD_X * 2)) / (pts.length - 1)
-  const y = (v: number) => PAD_Y + ((hi - v) / (hi - lo)) * (CHART_H - PAD_Y * 2)
+  const geom = trendGeometry(
+    pts.map((p) => p.value),
+    { width: CHART_W, height: CHART_H, padX: PAD_X, padY: PAD_Y },
+  )
+  if (!geom) return null
   return {
-    points: pts.map((p, i) => `${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' '),
-    area: `M${x(0).toFixed(1)},${y(vs[0]!).toFixed(1)} ${pts
-      .map((p, i) => `L${x(i).toFixed(1)},${y(p.value).toFixed(1)}`)
-      .join(' ')} L${x(pts.length - 1).toFixed(1)},${CHART_H} L${x(0).toFixed(1)},${CHART_H} Z`,
-    last: { x: x(pts.length - 1), y: y(vs[vs.length - 1]!) },
+    ...geom,
     from: formatMetricDay(pts[0]!.day),
     to: formatMetricDay(pts[pts.length - 1]!.day),
   }
@@ -190,11 +183,11 @@ const rawRows = computed<RawRow[]>(() => {
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .stats li {
-  padding: 9px 10px;
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   min-width: 0;
@@ -224,9 +217,9 @@ const rawRows = computed<RawRow[]>(() => {
 
 .stats b {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   white-space: nowrap;
   overflow: hidden;
@@ -239,22 +232,23 @@ const rawRows = computed<RawRow[]>(() => {
 
 .stats b i {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   /* 大数后的单位后缀，装饰性微字 */
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-left: 2px;
+  margin-left: var(--sp-2);
 }
 
 /* 趋势图 */
 .trend {
-  margin: 14px 0 0;
+  /* 趋势图与上方四格 12（卡内区块间距），图表区上下留白一致 */
+  margin: var(--gap-md) 0 0;
 }
 
 .trend figcaption {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
   /* 「近 N 次 · 最低/最高」是趋势摘要，是要读的数 */
   font-size: var(--fs-caption);
   color: var(--text-3);
@@ -264,7 +258,8 @@ const rawRows = computed<RawRow[]>(() => {
   display: block;
   width: 100%;
   height: 96px;
-  margin-top: 6px;
+  /* 图例与图之间 8（标题与内容），原来 6 比同一抽屉里其它组更紧 */
+  margin-top: var(--gap-sm);
 }
 
 .axis {
@@ -280,21 +275,21 @@ const rawRows = computed<RawRow[]>(() => {
 }
 
 .trend-note {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   color: var(--text-3);
   font-size: var(--fs-caption);
 }
 
 /* raw 数据列表（BodyTrackerCard 历史列表同款语言） */
 .rtitle {
-  margin-top: 16px;
+  margin-top: var(--sp-16);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .raw {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .raw > * + * {
@@ -305,31 +300,33 @@ const rawRows = computed<RawRow[]>(() => {
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 14px;
-  padding: 9px 0;
+  /* 指标行是单行行：高度 48（--row-h），行间用分隔线连成一组 */
+  min-height: var(--row-h);
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
 }
 
 .raw .date {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .raw .date i {
   font-style: normal;
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: var(--sp-6);
+  padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   /* 段首状态词（「已记录」），必须读得出 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .raw .delta {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
   justify-self: end;
@@ -337,7 +334,7 @@ const rawRows = computed<RawRow[]>(() => {
 
 .raw .val {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   min-width: 72px;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -345,14 +342,14 @@ const rawRows = computed<RawRow[]>(() => {
 
 .raw .val i {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   /* 数值后的单位后缀，装饰性微字 */
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
 .fnote {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   text-align: center;
   font-size: var(--fs-caption);
   color: var(--text-3);

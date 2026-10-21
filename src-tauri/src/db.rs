@@ -1561,6 +1561,129 @@ WHERE course_session_id IS NULL
   );
 "#;
 
+/// 0047 · 重复实例的 `rec_key` 改成**身份列**（结构性护栏，治一类反复出现的缺陷）。
+///
+/// 事故形状（2026-10，已出现多次、每次都以「勾一下多出一条」收场）：
+/// 勾选一条重复待办的实例 → 前端把**整个对象**回写 → `update_todo_on` 当时按
+/// 「这一行有没有 rec_rule」决定 rec_key，而实例没有规则 ⇒ 写成 NULL ⇒ 下一次
+/// `sync_recurrences` 再也认不出它 ⇒ 按模板补建一条 ⇒ 屏幕上多出一条一模一样的待办。
+///
+/// 为什么不在 `update_todo_on` 里加个 if 了事：那是治这一次。写 `todos` 的原生 SQL
+/// 有三十多处（方案、课表派生、同步引擎、网关、KB 索引、测试夹具），任何一个模块
+/// 只要「整对象覆盖」就会再踩一遍。把**身份**立成数据库不变量，是唯一能覆盖全部写入方的位置。
+///
+/// 两条动作：
+/// 1. **一次性修复**历史脏数据：按「内容 + 日期」分组，组内只有一个真实身份（rec_key）
+///    却有多行时，只留一行（优先留已完成的 —— 那是用户真的点过的那条），并把身份认回去。
+///    组里出现两个不同身份说明那是两条合法实例，一律不动。
+/// 2. **立触发器**：`rec_key` 一旦非空就不许改、不许清空。唯一例外是模板行随自己的
+///    日期一起移动（「模板 = 首日实例」这条不变量要跟着日期走）。
+const MIGRATION_0047: &str = r#"
+-- ── 1) 历史修复：合并「身份被写成 NULL 的实例」与它的孪生行 ─────────────────────
+-- 分组键 = 列表里看起来一模一样的那几列（同 0046 的口径，NULL 当相等）。
+CREATE TEMP TABLE _rec_twin AS
+SELECT g.title AS title, g.date AS date, g.start_min AS start_min,
+       g.category AS category, g.priority AS priority, g.notes AS notes,
+       MIN(g.rec_key) AS rk
+FROM todos g
+WHERE g.course_session_id IS NULL
+  AND g.program_id IS NULL
+  AND g.date IS NOT NULL
+GROUP BY g.title, g.date, g.start_min, g.category, g.priority, g.notes
+HAVING COUNT(DISTINCT g.rec_key) = 1 AND COUNT(*) > 1;
+
+-- 保留策略与 0046 一致：优先留已完成（用户打过卡的那条），否则留最早一条。
+CREATE TEMP TABLE _rec_drop AS
+SELECT id FROM (
+  SELECT t.id,
+         ROW_NUMBER() OVER (
+           PARTITION BY w.title, w.date, w.start_min, w.category, w.priority, w.notes
+           ORDER BY (t.status = 'done') DESC, t.id ASC
+         ) AS rn
+  FROM todos t
+  JOIN _rec_twin w
+    ON w.title      IS t.title
+   AND w.date       IS t.date
+   AND w.start_min  IS t.start_min
+   AND w.category   IS t.category
+   AND w.priority   IS t.priority
+   AND w.notes      IS t.notes
+) WHERE rn > 1;
+
+DELETE FROM todos WHERE id IN (SELECT id FROM _rec_drop);
+
+-- 幸存行的身份认回来（此刻孪生行已删，不会撞 0011 的唯一索引）
+UPDATE todos
+SET rec_key = (
+  SELECT w.rk FROM _rec_twin w
+  WHERE w.title     IS todos.title
+    AND w.date      IS todos.date
+    AND w.start_min IS todos.start_min
+    AND w.category  IS todos.category
+    AND w.priority  IS todos.priority
+    AND w.notes     IS todos.notes
+)
+WHERE rec_key IS NULL
+  AND EXISTS (
+    SELECT 1 FROM _rec_twin w
+    WHERE w.title     IS todos.title
+      AND w.date      IS todos.date
+      AND w.start_min IS todos.start_min
+      AND w.category  IS todos.category
+      AND w.priority  IS todos.priority
+      AND w.notes     IS todos.notes
+  );
+
+DROP TABLE _rec_drop;
+DROP TABLE _rec_twin;
+
+-- 1b) 历史模板补首日身份：老版本里「模板 = 首日实例」只在 `create_todo_on` 里补，
+--     经其它入口写进来的模板会缺这一行身份。缺身份的模板在物化眼里永远「缺失」，
+--     正是「每次加载都多一条」的另一半来源。这里一次性补齐（实测真实库有 1 条）。
+UPDATE todos
+SET rec_key = id || ':' || date
+WHERE rec_rule IS NOT NULL
+  AND date IS NOT NULL
+  AND (rec_key IS NULL OR rec_key = '');
+
+-- ── 2) 结构护栏：身份不可变 ────────────────────────────────────────────────────
+-- 这是本次缺陷的真正根因：实例没有 rec_rule，旧的全量更新于是把 rec_key 写成 NULL，
+-- 物化逻辑随即把它当成「这一天还没生成」再补一条。触发器让这件事在数据库层就不可能发生，
+-- 无论调用方是 Tauri 命令、同步引擎、网关还是裸 SQL。
+--
+-- 例外分支必须显式写上 `NEW.rec_key IS NOT NULL`：SQL 里 `NULL = '…'` 求值仍是 NULL，
+-- `NOT (NULL)` 也是 NULL（按假处理），于是「把模板身份清空」会从这条例外里溜过去 ——
+-- 实测在真实库上确实漏掉了一行。少了这个判空，护栏等于开了个后门。
+CREATE TRIGGER IF NOT EXISTS todos_rec_key_immutable
+BEFORE UPDATE OF rec_key ON todos
+FOR EACH ROW
+WHEN OLD.rec_key IS NOT NULL
+  AND NEW.rec_key IS NOT OLD.rec_key
+  -- 唯一例外：模板行随自己的日期移动（「模板 = 首日实例」必须跟着日期走）
+  AND NOT (NEW.rec_key IS NOT NULL
+           AND NEW.rec_rule IS NOT NULL
+           AND NEW.date IS NOT NULL
+           AND NEW.rec_key = NEW.id || ':' || NEW.date)
+BEGIN
+  SELECT RAISE(ABORT, 'rec_key 是重复实例的身份，不可修改或清空（要换身份请先删后建）');
+END;
+
+-- ── 3) 模板必须有首日身份：让「模板 = 首日实例」不再依赖某个调用方记得补 ──────────
+-- 从前这条不变量只写在 `create_todo_on` 里的一句 UPDATE 上：任何别的入口（测试夹具、
+-- 同步引擎、导入、裸 SQL）插一条带 rec_rule 的行就会留下**没有身份**的模板 ——
+-- 它在物化眼里永远「缺失」，于是每次同步都补一条，重演同一类缺陷。
+-- 挂成 AFTER INSERT 触发器后，这条不变量由数据库保证。
+CREATE TRIGGER IF NOT EXISTS todos_template_first_instance
+AFTER INSERT ON todos
+FOR EACH ROW
+WHEN NEW.rec_rule IS NOT NULL
+  AND NEW.date IS NOT NULL
+  AND (NEW.rec_key IS NULL OR NEW.rec_key = '')
+BEGIN
+  UPDATE todos SET rec_key = NEW.id || ':' || NEW.date WHERE id = NEW.id;
+END;
+"#;
+
 const MIGRATIONS: &[&str] = &[
     MIGRATION_0001,
     MIGRATION_0002,
@@ -1608,6 +1731,7 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_0044,
     MIGRATION_0045,
     MIGRATION_0046,
+    MIGRATION_0047,
 ];
 
 /// 通用键值元数据（`app_meta`）读写 —— 全应用**唯一一份**这条 SQL。

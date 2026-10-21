@@ -160,11 +160,11 @@ const mealChips = computed(() =>
 
         <!-- AI 入口 -->
         <section v-else-if="c.id === 'ai'" class="card b-surf b-ai">
-          <div class="row" style="gap: 10px">
+          <div class="row" style="gap: var(--sp-10)">
             <i class="qic" style="background: color-mix(in srgb, var(--cat-study) 14%, transparent); color: var(--cat-study)"><Sparkles :size="19" /></i>
             <div class="col">
               <b style="font-size: var(--fs-headline)">AI 助手</b>
-              <span class="t-3" style="font-size: var(--fs-caption); font-weight: 600">提问 · 拍照记饮食 · 生成周计划</span>
+              <span class="t-3" style="font-size: var(--fs-caption); font-weight: var(--fw-semibold)">提问 · 拍照记饮食 · 生成周计划</span>
             </div>
           </div>
           <button class="ask pressable" @click="router.push({ name: 'ai' })">
@@ -226,16 +226,16 @@ const mealChips = computed(() =>
             @keydown.space.prevent="router.push({ name: 'ledger' })"
           >
             <i class="qic"><Wallet :size="21" /></i>
-            <div class="col" style="gap: 2px; min-width: 0">
+            <div class="col" style="gap: var(--gap-text); min-width: 0">
               <b>记账</b>
               <!-- 支出与预算各占一行（各自 nowrap）：挤在一行时「预算」会被右栏类目拦腰折断 -->
               <span class="num t-2" style="white-space: nowrap">本月支出 ¥{{ fmtCents(ledger.monthExpenseCents) }}</span>
               <span class="num t-2" style="white-space: nowrap">预算已用 {{ budgetPct }}%</span>
-              <div class="mtrack" style="margin-top: 8px; max-width: 300px">
+              <div class="mtrack" style="margin-top: var(--gap-sm); max-width: 300px">
                 <i :style="{ width: budgetPct + '%', background: 'var(--accent)' }" />
               </div>
             </div>
-            <div class="col" style="margin-left: auto; align-items: flex-end; gap: 4px; flex: none">
+            <div class="col" style="margin-left: auto; align-items: flex-end; gap: var(--gap-tight); flex: none">
               <span
                 v-for="cc in topCats"
                 :key="cc[0]"
@@ -261,7 +261,7 @@ const mealChips = computed(() =>
             @keydown.space.prevent="router.push({ name: 'sports' })"
           >
             <i class="qic" style="background: var(--c-exercise-soft); color: var(--c-exercise-deep)"><Dumbbell :size="21" /></i>
-            <div class="col" style="gap: 2px; min-width: 0">
+            <div class="col" style="gap: var(--gap-text); min-width: 0">
               <b class="nowrap">本周运动</b>
               <span class="t-2 nowrap">已练 <span class="num">{{ weekWorkoutCount }}</span> 次 · <span class="num">{{ exercise.weekMinutes }}</span> 分钟</span>
             </div>
@@ -291,7 +291,7 @@ const mealChips = computed(() =>
             @keydown.space.prevent="historyOpen = true"
           >
             <i class="qic"><Utensils :size="21" /></i>
-            <div class="col" style="gap: 6px; min-width: 0">
+            <div class="col" style="gap: var(--sp-6); min-width: 0">
               <b>今日饮食</b>
               <span class="num t-2">
                 已记 {{ diet.meals.length }} 笔 · {{ todayIntake }}{{ kcalTarget ? ` / ${kcalTarget}` : '' }} kcal
@@ -329,20 +329,31 @@ const mealChips = computed(() =>
 .b-head {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 10px;
+  /* 布局入口与便当之间 12（--gap-md） */
+  margin-bottom: var(--gap-md);
 }
 
 .b-layout {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 13px;
+  gap: var(--sp-6);
+  /* 入口是一枚胶囊：左右 12（--pad-inline），原来 13 落在两档之间 */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--text-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+/* 视觉仍是一枚 29px 的小胶囊，命中区用伪元素补到 44（--hit-min）。 */
+.b-layout::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+  border-radius: var(--radius-full);
 }
 
 .b-layout:active {
@@ -361,7 +372,9 @@ const mealChips = computed(() =>
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: minmax(150px, auto);
   grid-auto-flow: row dense;
-  gap: 14px;
+  /* 便当格之间 12（--gap-md）：与卡片间距同档。原来 14 与页面那圈 --desk-gap
+     比起来少 4、与卡片规范比又多 2，是第三种节奏 */
+  gap: var(--gap-md);
   align-items: stretch;
   container-type: inline-size;
   min-width: 0;
@@ -373,7 +386,8 @@ const mealChips = computed(() =>
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-radius: var(--radius-xl);
+  /* 格子是卡片的占位盒，圆角必须与卡面（16）一致，拖拽时边缘才不会露馅 */
+  border-radius: var(--radius-m);
 }
 
 /* 卡面填满格子：否则矮一截的卡下面会漏出一块灰底画布，整行读成「没画完」 */
@@ -417,7 +431,7 @@ const mealChips = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--surface);
   border: 0.5px solid var(--line-strong);
   box-shadow: var(--shadow-thumb);
@@ -465,7 +479,7 @@ const mealChips = computed(() =>
   content: '';
   position: absolute;
   inset: -4px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
 /* ---------- 拖动进行中 ---------- */
@@ -501,7 +515,7 @@ const mealChips = computed(() =>
 /* 填满之后把汇总脚注锚到卡底：列表贴上、汇总贴下，中间留白是结构而不是洞 */
 .t-todo > .b-surf :deep(.foot) {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: var(--sp-12);
 }
 
 /* 快捷磁贴：格子是 150px 一档的行高，磁贴自己撑不满就会读成「上下多出两条缝」；
@@ -514,7 +528,7 @@ const mealChips = computed(() =>
 .b-ai {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-md);
   background: linear-gradient(135deg, var(--accent-soft), transparent 60%), var(--surface);
 }
 
@@ -523,26 +537,31 @@ const mealChips = computed(() =>
   display: flex;
   align-items: center;
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 整条就是一张卡：与其它卡片同档 16 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
 }
 
 .chips {
   display: flex;
-  gap: 8px;
+  /* 餐次胶囊之间无边界 → 8（--gap-sm） */
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  /* 圆点与文字 4（--gap-tight）；胶囊高 24（--chip-h）、左右 10 ——
+     便当卡里比全站胶囊窄一档，一排四颗才塞得进行内 */
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-3);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
 }
 
 .chip.on {
@@ -553,40 +572,48 @@ const mealChips = computed(() =>
   width: 7px;
   height: 7px;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 
 .acts {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin-left: auto;
   flex: none;
 }
 
+/* 卡头两颗按钮：同一组、同一几何（8×16 内距 / 全圆），只换底与前景。
+   常规按钮高 40（--control-md）：从前只有内距撑出来的 ~36，两枚并排时高度也不齐。 */
 .ghost {
-  padding: 8px 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 .inner {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 12px;
+  gap: var(--gap-md);
   min-width: 0;
-  padding: 20px;
+  /* 整条就是一张卡：内距走 --pad-card 16（原来 20 比卡片规范多 4，
+     这条通栏卡与同屏其它卡的内缘会对不齐） */
+  padding: var(--pad-card);
 }
 
 .qic {
   width: 44px;
   height: 44px;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   display: flex;
@@ -598,13 +625,15 @@ const mealChips = computed(() =>
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
+  gap: var(--gap-sm);
+  /* 形似输入框的入口：与常规按钮同高 40，不再靠 8px 内距撑出 33 的小条 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-14);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -613,8 +642,8 @@ const mealChips = computed(() =>
   display: inline-block;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  margin-right: 5px;
+  border-radius: var(--radius-full);
+  margin-right: var(--sp-4);
   vertical-align: 1px;
 }
 
@@ -638,21 +667,35 @@ const mealChips = computed(() =>
 }
 
 .go {
-  padding: 8px 15px;
+  /* 与 .ghost 同一几何：两颗按钮并排，只有底与前景不同 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 /* 图标档（「记运动」）：与文字档同高，去掉左右内边距、图标居中 */
 .go.icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
+}
+
+/* 40 的圆形图标钮把命中区补到 44，视觉直径不动 */
+.go.icon::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-full);
 }
 </style>

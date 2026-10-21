@@ -7561,6 +7561,25 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'tracking_open_pending':
       return delay('' as unknown as T)
 
+    // 全局沉浸浮窗（桌面第二窗口 / Android 系统浮层）：浏览器里没有系统浮窗，
+    // 一律如实回「不支持」，上层据此降级为仅程序内浮条 —— 与 docs/GLOBAL-FLOAT.md §2 一致。
+    case 'global_float_status':
+      return delay({ supported: false, permitted: false, visible: false } as T)
+    case 'global_float_open':
+      return delay({ supported: false, permitted: false, visible: false } as T)
+    case 'global_float_close':
+      return delay(undefined as T)
+    case 'global_float_push':
+      return delay(undefined as T)
+    case 'global_float_latest':
+      return delay('' as unknown as T)
+    case 'global_float_set_form':
+      return delay(undefined as T)
+    case 'global_float_request_permission':
+      return delay({ supported: false, permitted: false, visible: false } as T)
+    case 'global_float_take_action':
+      return delay('' as unknown as T)
+
     /* ---------- 多设备同步（浏览器开发用的空实现：形状与 Rust 一致，流程可走通） ---------- */
     case 'sync_status':
       return delay(syncMockStatus() as T)

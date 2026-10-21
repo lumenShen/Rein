@@ -132,12 +132,12 @@ function openSheet(): void {
 /* 卡头：左标题、右「说明 ›」。用 between 把胶囊顶到最右 ——
    「说明」是这张卡唯一的可发现入口（卡片上没有别的地方提示图能点）。 */
 .head {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -145,15 +145,25 @@ function openSheet(): void {
    色取 --accent-strong 而不是 --accent —— 后者压在 --surface-2 上实测只有
    4.27:1（亮）/ 3.82:1（暗），够不着 4.5；换成 strong 后是 5.54 / 5.31（量出来的）。 */
 .detail {
-  gap: 1px;
+  position: relative;
+  gap: var(--gap-text);
   flex: none;
-  padding: 5px 10px 5px 12px;
+  /* 胶囊左右同距 12（--pad-inline），原来左右不等 */
+  padding: var(--sp-4) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--accent-strong);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: opacity var(--dur-fast) var(--ease-standard);
+}
+
+/* 「说明 ›」视觉 ~22 高不动，热区撑到 44+（规则 5）：
+   上下各 12px 落在卡头与结论行之间，横向 8px 只压到不可点的标题。 */
+.detail::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-12)) calc(-1 * var(--sp-8));
 }
 
 .detail:active {
@@ -161,13 +171,13 @@ function openSheet(): void {
 }
 
 .concl {
-  margin-top: 8px;
-  gap: 10px;
+  margin-top: var(--sp-8);
+  gap: var(--sp-10);
 }
 
 .headline {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   min-width: 0;
 }
@@ -182,14 +192,14 @@ function openSheet(): void {
 
 .avg b {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   letter-spacing: -0.3px;
 }
 
 .avgsrc {
   font-style: normal;
-  margin-left: 5px;
+  margin-left: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -197,25 +207,30 @@ function openSheet(): void {
 /* 热力图：三视图并排，给足宽度（84px 是 MuscleMap 里定死的单视图宽，
    3 视图 + 间距 ≈ 300px，430 视口下卡片内正好放得下） */
 .bodymap {
-  margin-top: 6px;
+  /* 结论行与肌群图 8（标题与内容） */
+  margin-top: var(--gap-sm);
 }
 
 .catchup {
-  gap: 6px;
+  /* 图标与文字 8，入口与上方肌群图 12（卡内区块） */
+  gap: var(--gap-sm);
   width: 100%;
-  margin-top: 14px;
-  padding: 11px 16px;
+  /* 视觉原本 ~40 高（10px 内距 + 14px 正文），补到 44 的热区下限；
+     它是这张卡唯一的加练入口，整行可点，不该比卡头的小胶囊更难按。 */
+  min-height: var(--hit-min);
+  margin-top: var(--gap-md);
+  padding: var(--sp-10) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 按钮内两段字：主标签 700、计数 500 —— 层级靠字重与间距（gap）分，不靠 opacity。
    不用 --text-2 / --text-3：它们压在 --accent 实底上对比不足（见 doc「统一改法」）。 */
 .catchup small {
-  font-weight: 500;
-  margin-left: 2px;
+  font-weight: var(--fw-medium);
+  margin-left: var(--sp-2);
 }
 </style>

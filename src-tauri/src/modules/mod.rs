@@ -6,6 +6,7 @@ pub mod campus;
 pub mod diet;
 pub mod exercise;
 pub mod exercise_lib;
+pub mod float;
 pub mod gateway;
 pub mod healthsync;
 pub mod kb;

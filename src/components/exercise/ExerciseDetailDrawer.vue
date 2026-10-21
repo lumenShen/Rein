@@ -179,21 +179,22 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 
 <style scoped>
 .titlerow {
-  gap: 10px;
+  /* 标题 + 类型字章：左右 8（--gap-sm），标题行不该比正文块更松。 */
+  gap: var(--gap-sm);
   align-items: center;
 }
 
 .name {
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .badge {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 3px 9px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-xs);
   /* 类型字章（「计时 / 有氧」＝这是哪一类）：色相保留的少数例外之一，
      但仅限 ≤ --fs-caption 且整屏只出现一枚 —— 本抽屉标题行正是如此。
@@ -205,11 +206,12 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 
 /* 小节标题行：右侧留帮助入口位（sec-hint 用 margin-left:auto 顶到行尾） */
 .sec {
-  margin: 18px 0 10px;
+  /* 小节与上一段 16、与本节内容 8：这是「标题 ↔ 内容」的固定关系 */
+  margin: var(--sp-16) 0 var(--gap-sm);
   display: flex;
   align-items: center;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
   color: var(--text-3);
 }
@@ -222,7 +224,7 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 .steps {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
   padding-left: 0;
   list-style: none;
   counter-reset: step;
@@ -230,9 +232,10 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 
 .steps li {
   position: relative;
-  padding-left: 26px;
+  /* 序号圆点 18 + 间距 → 24（4/8 体系），原来 26 落在格点外 */
+  padding-left: var(--sp-24);
   font-size: var(--fs-footnote);
-  line-height: 1.65;
+  line-height: var(--lh-body);
   color: var(--text-1);
   counter-increment: step;
 }
@@ -249,37 +252,40 @@ const stats = computed<{ k: string; v: string }[]>(() => {
   background: var(--c-exercise-soft);
   color: var(--text-1);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 18px;
   text-align: center;
 }
 
 .curvebox {
-  border-radius: var(--radius-l);
+  /* 抽屉内的分组面统一「圆角 16 / 内距 12」（--radius-m + --pad-card-tight）：
+     图表四周留白一致，坐标轴不再一边 14 一边 10。 */
+  border-radius: var(--radius-m);
   background: var(--surface-2);
-  padding: 14px 12px 10px;
+  padding: var(--pad-card-tight);
 }
 
 .lastline {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 /* 最近一次的日期：结论的注脚，压到三级灰 */
 .ldate {
-  margin-left: 6px;
+  margin-left: var(--sp-6);
 }
 
 .mapcard {
-  border-radius: var(--radius-l);
+  /* 与 .curvebox 同一档：两张图在同一个抽屉里，外框与内距必须一样。 */
+  border-radius: var(--radius-m);
   background: var(--surface-2);
-  padding: 14px 10px 10px;
+  padding: var(--pad-card-tight);
 }
 
 .unknown {
-  margin: 14px 0 0;
-  padding: 12px 14px;
+  margin: var(--sp-14) 0 0;
+  padding: var(--sp-12) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
@@ -289,18 +295,20 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 .stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  /* 参数格之间 12（卡片间距），与曲线框的外距一致 */
+  gap: var(--gap-md);
 }
 
 .cell {
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 12px 14px;
+  /* 四边同距 12（二级分组面 --pad-card-tight），原来左右比上下多 2。 */
+  padding: var(--pad-card-tight);
 }
 
 .cell .v {
   font-size: var(--fs-title2);
-  font-weight: 300;
+  font-weight: var(--fw-light);
   letter-spacing: -0.5px;
 }
 
@@ -309,13 +317,13 @@ const stats = computed<{ k: string; v: string }[]>(() => {
 .cell .k {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .tips {
   font-size: var(--fs-callout);
   color: var(--text-1);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   white-space: pre-line;
 }
 </style>

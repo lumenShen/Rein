@@ -64,8 +64,11 @@ const metaLine = computed(() => {
 
 <style scoped>
 .item {
-  gap: 12px;
-  padding: 12px 0;
+  /* 双行行（名称 / 时长 · 热量）统一 64 高（--row-h-double）：
+     原来纯靠内距撑，记录一多、名称长短不一，行高就跟着跳。 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-standard);
 }
@@ -93,10 +96,12 @@ const metaLine = computed(() => {
   width: 40px;
   height: 40px;
   flex: none;
-  border-radius: var(--radius-m);
+  /* 列表内的 40px 图标底走「小尺寸容器」那一档 8（--radius-s），
+     与卡片（16）拉开层级 —— 原来 16 让这枚方块看起来像卡片。 */
+  border-radius: var(--radius-s);
   background: var(--c-exercise-soft);
   color: var(--c-exercise-deep);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
 }
 
@@ -105,9 +110,10 @@ const metaLine = computed(() => {
 .name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 名字与来源标签是「主文本 + 标签」：左右 8（--gap-text-inline）。 */
+  gap: var(--gap-text-inline);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .nm {
@@ -117,7 +123,7 @@ const metaLine = computed(() => {
 }
 
 .meta {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -130,7 +136,7 @@ const metaLine = computed(() => {
 .kcal {
   /* 热量是数值：中性色（色彩配额，STANDARDS §4）。运动域的色相留给左侧字首头像的色底 */
   color: var(--text-1);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
 }
 
@@ -139,8 +145,8 @@ const metaLine = computed(() => {
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 600;
-  margin-left: 3px;
+  font-weight: var(--fw-semibold);
+  margin-left: var(--sp-4);
 }
 
 /* 时长是本行要读的数值：必须读出来的时长不吃 11px 水印档
@@ -162,7 +168,7 @@ const metaLine = computed(() => {
   justify-content: center;
   width: 22px;
   height: 22px;
-  margin: -3px;
+  margin: calc(-1 * var(--sp-4));
   color: var(--text-3);
   opacity: 0;
   transition:

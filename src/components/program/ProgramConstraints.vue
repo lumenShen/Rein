@@ -371,8 +371,10 @@ async function applyAndGenerate(): Promise<void> {
 
 <style scoped>
 .pod {
-  padding: 15px 16px;
-  border-radius: var(--radius-l);
+  /* 卡内距 16（--pad-card）、半径 16（卡片档）：这是「一组条件」的容器，
+     不是按钮，层级低于所在面板的 32。 */
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 
@@ -380,13 +382,14 @@ async function applyAndGenerate(): Promise<void> {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--gap-sm);
+  /* 标题行与下面那组内容之间 8（卡内标题与内容 8） */
+  margin-bottom: var(--gap-sm);
 }
 
 .pod-head b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -395,13 +398,15 @@ async function applyAndGenerate(): Promise<void> {
 }
 
 .group + .group {
-  margin-top: 13px;
+  /* 条件分组之间 16（有明显的边界）：同组内部 8、组与组 16，层级才读得出 */
+  margin-top: var(--gap-lg);
 }
 
 .glabel {
-  margin-bottom: 7px;
+  /* 组标签与组内胶囊 8（标题与内容） */
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -409,7 +414,7 @@ async function applyAndGenerate(): Promise<void> {
 .glabel.row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .glabel.row .info-hint {
@@ -419,16 +424,17 @@ async function applyAndGenerate(): Promise<void> {
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  /* 条件胶囊之间 8（无边界控件间距），原来 6 与同页其它组不一致 */
+  gap: var(--gap-sm);
 }
 
 .chip {
-  padding: 7px 13px;
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -445,7 +451,7 @@ async function applyAndGenerate(): Promise<void> {
   background: var(--text-1);
   border-color: var(--text-1);
   color: var(--bg);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 可见按压态：选中未选中都走同一份缩放反馈（全局只给了 button 的过渡） */
@@ -454,15 +460,15 @@ async function applyAndGenerate(): Promise<void> {
 }
 
 .custom-add {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .cinput {
   flex: 1;
-  padding: 8px 11px;
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-s);
   border: none;
   background: var(--surface-2);
@@ -473,13 +479,14 @@ async function applyAndGenerate(): Promise<void> {
 .link {
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 即时结果预览：方案输入参数的直接反馈（主数值提档，其余条件降为次要行） */
 .preview {
-  margin-top: 14px;
-  padding: 11px 13px;
+  margin-top: var(--gap-md);
+  /* 预览块四边同距 12（二级分组面），原来上下 10。 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--accent-soft);
   display: block;
@@ -487,9 +494,10 @@ async function applyAndGenerate(): Promise<void> {
 
 .pv-label {
   display: block;
-  margin-bottom: 3px;
+  /* 小标签与预览数值 8（标题与内容） */
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
 }
 
@@ -498,46 +506,47 @@ async function applyAndGenerate(): Promise<void> {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 2px 8px;
+  gap: var(--gap-text) var(--gap-sm);
 }
 
 .pv-main {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .pv-rest {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 /* 两条必须读出来的提示：实底档 --warn 当字对比度约 2:1，走 --warn-strong */
 .warn-note {
-  margin-top: 9px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--warn-strong);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .stale-note {
-  margin-top: 9px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--warn-strong);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .primary {
   width: 100%;
-  margin-top: 13px;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  margin-top: var(--sp-12);
+  padding: var(--sp-12) 0;
+  /* 页脚主按钮走按钮档 20（原来 8，看起来像卡内的小标签） */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition:
     opacity var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);

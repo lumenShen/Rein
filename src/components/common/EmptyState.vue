@@ -26,15 +26,17 @@ defineProps<{
    读不出来等于没写。--text-3 白底实测只有 3.6:1，抬到 --text-2（4.9:1）；
    图标尺寸大、本身不带信息，仍留在母级的 --text-3。 */
 .empty {
-  gap: 6px;
-  padding: 26px 12px;
+  gap: var(--sp-6);
+  /* 空状态是「一块占位区」：上下 28（--sp-28，吸附自 26）撑起呼吸，
+     左右 12 与卡片内距同档，不贴卡片边 */
+  padding: var(--sp-28) var(--sp-12);
   text-align: center;
   color: var(--text-3);
 }
 
 .title {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -47,6 +49,7 @@ defineProps<{
 }
 
 .act {
-  margin-top: 10px;
+  /* 说明文字与操作按钮是两组：间隔 12（--gap-md） */
+  margin-top: var(--gap-md);
 }
 </style>

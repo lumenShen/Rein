@@ -104,12 +104,12 @@ function goDetail(): void {
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .head-right {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .sum {
@@ -119,29 +119,44 @@ function goDetail(): void {
 
 .sum b {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
-/* 「详情」角标：与 EnergySummary 的 more 胶囊同款 */
+/* 「详情」角标：与 EnergySummary 的 more 胶囊同款。
+   26px 的视觉高度保持不动，热区用 ::after 撑到 44（落在卡头空白里）。 */
 .more {
-  gap: 1px;
-  padding: 5px 10px;
+  position: relative;
+  gap: var(--gap-text);
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
+.more::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 12px);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
+}
+
 .chart {
-  margin-top: 16px;
+  /* 卡内区块之间 12（规范），与 .foot 的 padding-top 同一档 */
+  margin-top: var(--gap-md);
 }
 
 .foot {
-  gap: 6px;
-  margin-top: 14px;
-  padding-top: 12px;
+  /* 卡内两组之间 12、组内图标与文字 8：原来 6/14 两处都不在一档上 */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  padding-top: var(--sp-12);
   border-top: 0.5px solid var(--line);
   font-size: var(--fs-caption);
   color: var(--text-2);
@@ -155,9 +170,10 @@ function goDetail(): void {
    同一张卡里两条等重的分隔线会把这块切得像两个独立区域，
    而它是挂在概览下面的补充信息。 */
 .latest {
-  gap: 9px;
-  margin-top: 11px;
-  padding-top: 11px;
+  gap: var(--gap-sm);
+  /* 分隔线两侧各留 12，与卡内其它区块同一条节奏（原来 10）。 */
+  margin-top: var(--gap-md);
+  padding-top: var(--gap-md);
   border-top: 0.5px solid var(--line);
   min-width: 0;
 }
@@ -170,20 +186,20 @@ function goDetail(): void {
   background: var(--c-exercise-soft);
   color: var(--c-exercise-deep);
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 .l-txt {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--sp-6);
   min-width: 0;
   flex: 1;
 }
 
 .l-txt b {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -200,7 +216,7 @@ function goDetail(): void {
 .l-num {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
-import { MICROS } from '@/config/dri'
+import NutritionMicroList from '@/components/diet/NutritionMicroList.vue'
+import { useGrowOnOpen } from '@/composables/useGrowOnOpen'
+import { fmtNutrient } from '@/utils/format'
+import { buildMicroRows, macroEnergyShare } from '@/utils/nutritionCalc'
 import type { Food } from '@/types'
 
 /** 食品详情抽屉：每 100g 全营养表 + 宏量供能占比 + 份量换算 + 微量对照 DRI；「记录」交由父层打开 FoodPickerSheet。 */
@@ -18,53 +21,18 @@ const emit = defineEmits<{
   record: []
 }>()
 
-/* 宏量供能占比（蛋白/碳水 4 kcal、脂肪 9 kcal） */
+/* 宏量供能占比（口径在 utils/nutritionCalc） */
 const share = computed(() => {
   const f = props.food
   if (!f) return []
-  const parts = [
-    { label: '蛋白质', grams: f.protein, colorVar: '--c-protein' },
-    { label: '碳水', grams: f.carb, colorVar: '--c-carb' },
-    { label: '脂肪', grams: f.fat, colorVar: '--c-fat' },
-  ]
-  const total = parts.reduce((s, x) => s + x.grams * (x.label === '脂肪' ? 9 : 4), 0)
-  if (total <= 0) return []
-  return parts
-    .map((x) => ({ ...x, pct: ((x.grams * (x.label === '脂肪' ? 9 : 4)) / total) * 100 }))
-    .filter((x) => x.pct > 0.5)
+  return macroEnergyShare(f.protein, f.carb, f.fat)
 })
 
 /** 微量营养素：每 100g 含量 + 占每日推荐（或上限）摄入的百分比 */
-const microRows = computed(() => {
-  const f = props.food
-  if (!f) return []
-  return MICROS.map((m) => {
-    const value = Number(f[m.key]) || 0
-    return { ...m, value, pct: m.dri > 0 ? Math.round((value / m.dri) * 100) : 0 }
-  }).filter((r) => r.value > 0)
-})
+const microRows = computed(() => buildMicroRows(props.food, { onlyPositive: true }))
 
-function fmt(n: number): string {
-  if (!n) return '0'
-  return n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10)
-}
-
-/* 数据入场：抽屉展开后供能条/微量条从零生长（双 rAF 确保初始态先上屏） */
-const grown = ref(false)
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) {
-      grown.value = false
-      return
-    }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        grown.value = true
-      })
-    })
-  },
-)
+/* 数据入场：抽屉展开后供能条/微量条从零生长 */
+const grown = useGrowOnOpen(() => props.open)
 </script>
 
 <template>
@@ -75,14 +43,14 @@ watch(
       <section class="card hero">
       <div class="row between top">
         <div>
-          <p class="kcal num"><b>{{ fmt(food.kcal) }}</b><em> 大卡</em></p>
+          <p class="kcal num"><b>{{ fmtNutrient(food.kcal) }}</b><em> 大卡</em></p>
           <p class="per t-3">/ 100 g</p>
         </div>
         <ul class="macros row">
           <li v-for="m in share" :key="m.label">
             <i class="dot" :style="{ background: `var(${m.colorVar})` }" />
             <span class="ml">{{ m.label }}</span>
-            <b class="num">{{ fmt(m.grams) }}g</b>
+            <b class="num">{{ fmtNutrient(m.grams) }}g</b>
           </li>
         </ul>
       </div>
@@ -128,22 +96,7 @@ watch(
           content="每 100g 含量占《中国居民膳食营养素参考摄入量》成人每日推荐摄入的比例；标记「上限」的项目（如添加糖、钠）对照的是每日建议上限。"
         />
       </header>
-      <ul class="micros">
-        <li v-for="m in microRows" :key="m.key">
-          <div class="row between mrow">
-            <span class="mlabel">
-              {{ m.label }}<em v-if="m.isLimit" class="lim">上限</em>
-            </span>
-            <span class="mright">
-              <span class="num mval">{{ fmt(m.value) }}<em class="munit"> {{ m.unit }}</em></span>
-              <b class="num mpct">{{ m.pct }}%</b>
-            </span>
-          </div>
-          <div class="bar">
-            <div class="fill" :class="{ limit: m.isLimit }" :style="{ '--p': `${Math.min(m.pct, 100)}%` }" />
-          </div>
-        </li>
-      </ul>
+      <NutritionMicroList :rows="microRows" :grown="grown" />
     </section>
 
     <!-- 记录：交给父层打开 FoodPickerSheet（同页单一弹层）；悬浮吸附在抽屉底部，内容从下方滚过 -->
@@ -161,25 +114,26 @@ watch(
 <style scoped>
 .missing {
   text-align: center;
-  padding: 40px 0;
+  padding: var(--sp-40) 0;
   font-size: var(--fs-subhead);
   color: var(--text-3);
 }
 
 .card {
-  margin-top: 12px;
-  padding: 16px;
-  border-radius: var(--radius-l);
+  /* 抽屉里的分组面：卡间距 12、内距 16、圆角取卡片档 16（20 是按钮档） */
+  margin-top: var(--gap-md);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .card:first-child {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -187,7 +141,7 @@ watch(
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head .hint {
@@ -200,24 +154,25 @@ watch(
 
 .kcal b {
   font-size: var(--fs-display-m);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1px;
 }
 
 .kcal em {
   font-style: normal;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .per {
-  margin-top: -2px;
+  /* 负值是「把单位行拉回大数字基线」的补偿，必须与 --gap-text 同步 */
+  margin-top: calc(-1 * var(--gap-text));
   font-size: var(--fs-footnote);
 }
 
 .macros {
-  gap: 14px;
+  gap: var(--gap-md);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -225,7 +180,7 @@ watch(
 .macros li {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
 }
 
@@ -241,14 +196,15 @@ watch(
 }
 
 .macros b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .share {
   display: flex;
-  gap: 3px;
+  /* 三段之间有 2 的缝：再大就断成三根条而不是一条占比 */
+  gap: var(--gap-text);
   height: 10px;
-  margin-top: 16px;
+  margin-top: var(--gap-lg);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
@@ -273,11 +229,12 @@ watch(
 }
 
 .share-label {
-  margin-top: 7px;
+  margin-top: var(--gap-sm);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  /* 行首标签与三枚占比胶囊是一组无边界元素：组内 8 */
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -291,128 +248,58 @@ watch(
 .spill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
+  gap: var(--gap-tight);
+  /* 迷你占比胶囊：上下 2、左右 8 */
+  padding: var(--gap-text) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text-2);
 }
 
 .spill b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .units {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
 }
 
 .urow {
-  padding: 12px 0;
+  /* 换算行：12 上下 + 一行 18 ≈ 42；行间用发丝线分隔，不再另加间距 */
+  padding: var(--sp-12) 0;
 }
 
 .urow + .urow {
   border-top: 0.5px solid var(--line);
 }
 
-.micros {
-  margin-top: 6px;
-}
-
-.micros li + li {
-  margin-top: 15px;
-}
-
-.mrow {
-  margin-bottom: 6px;
-}
-
-/* 实际含量 + 结论占比同一行右端：含量是详情，占比是结论 */
-.mright {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.mval em {
-  font-style: normal;
-  font-weight: 400;
-  color: var(--text-3);
-}
-
-.mpct {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-2);
-}
-
-.mlabel {
-  font-size: var(--fs-subhead);
-  font-weight: 600;
-}
-
-.lim {
-  font-style: normal;
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  background: var(--danger-soft);
-  /* 「高钠」是健康状态词，读不出来等于没标。soft 底上的文字走 strong 档
-     （--c-sodium 是 danger 实底档，压 soft 底只有 3.5:1，STANDARDS §4） */
-  color: var(--danger-strong);
-  font-size: var(--fs-caption);
-  font-weight: 700;
-}
-
-.mval {
-  font-weight: 600;
-}
-
-.bar {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.fill {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--radius-full);
-  background: var(--accent);
-  clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round var(--radius-full));
-  transition: clip-path var(--dur-base) var(--ease-standard);
-}
-
-.anim:not(.grown) .fill {
-  clip-path: inset(0 100% 0 0 round var(--radius-full));
-}
-
-.fill.limit {
-  background: var(--c-sodium);
-}
-
 /* 悬浮记录按钮：sticky 吸附在抽屉底部；负 margin 抵消 .body 的内边距贴到边缘，
-   渐变遮罩保证内容滚过时按钮可读；遮罩区不拦截触摸（pointer-events），滚动手势可穿透 */
+   渐变遮罩保证内容滚过时按钮可读；遮罩区不拦截触摸（pointer-events），滚动手势可穿透。
+   出血量与侧内距都取 --pad-sheet（SheetModal 内容区的左右内距）—— 写死 18 是 SheetModal
+   还没收编成 16 时的旧值，硬编码会在抽屉内距改档时悄悄错位 2px。 */
 .record-dock {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  margin: 16px -18px calc(-20px - var(--safe-bottom));
-  padding: 12px 18px calc(16px + var(--safe-bottom));
+  margin: var(--sp-16) calc(-1 * var(--pad-sheet)) calc(-1 * var(--pad-sheet) - var(--safe-bottom));
+  padding: var(--sp-12) var(--pad-sheet) calc(var(--sp-16) + var(--safe-bottom));
   background: linear-gradient(to top, var(--surface) 55%, transparent);
   pointer-events: none;
 }
 
 .record {
   width: 100%;
-  gap: 7px;
-  height: 52px;
-  border-radius: var(--radius-xl);
+  /* 图标与文字 8；高度取底部操作区同档的 48（--row-h）：
+     与「删除这条记录」等抽屉底部按钮同高，52 高出这一档 4px */
+  gap: var(--gap-sm);
+  height: var(--row-h);
+  /* 按钮圆角档 20：32 是半模态自己的圆角，按钮套用会读成第二层浮层 */
+  border-radius: var(--radius-l);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
   pointer-events: auto;
 }

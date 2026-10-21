@@ -66,8 +66,10 @@ function timeOf(w: HealthSyncWorkout): string {
 }
 
 .item {
-  gap: 12px;
-  padding: 12px 0;
+  /* 双行行高 64（与 WorkoutRow 同款）：健康页与记录页的同一份记录读起来必须一样高 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
 }
 
 /* 分隔线用 :not(:first-child)：跨组件实例的同级 li 依然成立（与 WorkoutRow 同款） */
@@ -79,19 +81,21 @@ function timeOf(w: HealthSyncWorkout): string {
   width: 40px;
   height: 40px;
   flex: none;
-  border-radius: var(--radius-m);
+  /* 列表内的小尺寸图标底走 8（--radius-s）：与 WorkoutRow 的 .ic 同一档 */
+  border-radius: var(--radius-s);
   background: var(--c-exercise-soft);
   color: var(--c-exercise-deep);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
 }
 
 .name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 名字 + 来源标签：左右 8（--gap-text-inline） */
+  gap: var(--gap-text-inline);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .nm {
@@ -103,11 +107,12 @@ function timeOf(w: HealthSyncWorkout): string {
 /* 来源标签的样式在 WorkoutSourceTag 里（全站同一份实现，别在这里再抄一遍） */
 
 .meta {
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  /* 行内的时刻 / 时长 / 类型胶囊：4（--gap-tight），比原来的 6 更贴一档 */
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -116,14 +121,14 @@ function timeOf(w: HealthSyncWorkout): string {
 .when {
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .note {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-3);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .right {
@@ -132,9 +137,12 @@ function timeOf(w: HealthSyncWorkout): string {
 }
 
 .kcal {
-  /* 热量是数值：中性色（色彩配额，STANDARDS §4）。运动域的色相留给左侧字首头像的色底 */
+  /* 热量是数值：中性色（色彩配额，STANDARDS §4）。运动域的色相留给左侧字首头像的色底。
+     右列数值统一等宽（tabular-nums），多行之间小数点才对得齐。 */
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   color: var(--text-1);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
 }
 
@@ -143,8 +151,8 @@ function timeOf(w: HealthSyncWorkout): string {
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 600;
-  margin-left: 3px;
+  font-weight: var(--fw-semibold);
+  margin-left: var(--sp-4);
 }
 
 /* 时长是本行要读的数值：不吃 11px 水印档 */

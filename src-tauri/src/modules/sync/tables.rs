@@ -139,6 +139,12 @@ pub const TABLES: &[TableSpec] = &[
         None,
     ),
     // 待办：course_session_id 指向不同步的校园课次 → 丢弃
+    //
+    // `rec_key` 也**不进同步对象**（迁移 0047）：它是 `"模板id:日期"`，而模板 id 是
+    // **本机自增 id** —— 跨设备没有意义，写成对端的 id 会让本机的
+    // `sync_recurrences` 认不出这条实例，当场再补一条（就是「勾一下多出一条」的另一条来路）。
+    // 而且 0047 的触发器禁止改身份，硬写会连整批应用一起失败、永不收敛。
+    // 重复实例由两端各自按模板物化（模板的 `rec_rule` 是同步的），身份在本地重建。
     t(
         "todos",
         Pk::Local,
@@ -155,7 +161,7 @@ pub const TABLES: &[TableSpec] = &[
         ],
         None,
         &[("attachments", Media::Json)],
-        &[],
+        &["rec_key"],
         None,
     ),
     // ---- 依赖上一层的 ----

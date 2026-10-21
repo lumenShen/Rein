@@ -351,35 +351,43 @@ const aerobicOnlyHint = computed(() => {
    一张白卡上把正文压住；材质与档位覆盖全在令牌里（tokens.css 的 --sheet-card-*），
    组件只负责用：档位升级这里一行都不用改，也不会挂上 svg 折射。 */
 .scard {
-  padding: 16px;
-  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
+  /* 白卡是**卡片层级**，取 16（--radius-m）；32 是半模态容器自己的圆角，
+     卡片套用会把「抽屉」与「抽屉里的卡」读成同一层 */
+  border-radius: var(--radius-m);
   background: var(--sheet-card-fill);
   box-shadow: var(--sheet-card-shadow);
 }
 
 .scard + .scard {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 
-/* 首张卡与抽屉标题之间留一点呼吸（body 自身只有 4px 顶内边距） */
+/* 首张卡与抽屉标题之间留一点呼吸（body 自身只有 4px 顶内边距）。
+   取 8 而不是 6：标题与内容之间就是 8（规范），6 会让首卡比别人更贴标题。 */
 .scard:first-child {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
 }
 
 /* ---------- 1. 分数 ---------- */
 .hero-name {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 /* 置信度：高/中/低三档只换中性深浅不换形 —— 它是"这个分有多可信"的注脚，
    不该抢主分，也不给注脚上色相（色彩配额，STANDARDS §4） */
 .conf {
-  padding: 3px 9px;
+  /* 状态胶囊统一成规范那一档：高 24（--chip-h）、左右 12（--pad-inline）、文字 12。
+     原来 4/8 内距 + 10px 字让这枚「置信度」比旁边的分数带小一圈，读起来像脚注。 */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
-  font-size: var(--fs-micro);
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   background: var(--surface-2);
 }
@@ -393,14 +401,14 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .hero-score {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .big {
   font-size: var(--fs-display-l);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1.5px;
   color: var(--text-1);
   line-height: 1.05;
@@ -408,30 +416,34 @@ const aerobicOnlyHint = computed(() => {
 
 .unit {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .band {
-  margin-left: 2px;
-  padding: 4px 11px;
+  /* 同上：分数带也是状态胶囊，与 .conf 同一档高度与左右内距。 */
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--sp-2);
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   background: var(--surface-2);
 }
 
 .hero-hint {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-footnote);
   color: var(--text-2);
 }
 
 .conf-hint {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--warn-strong);
 }
 
@@ -440,7 +452,7 @@ const aerobicOnlyHint = computed(() => {
 
 .bhead h3 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -455,7 +467,7 @@ const aerobicOnlyHint = computed(() => {
 .comp {
   position: relative;
   height: 16px;
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   border-radius: var(--radius-full);
   overflow: hidden;
   background: var(--surface-2);
@@ -499,12 +511,13 @@ const aerobicOnlyHint = computed(() => {
    三个维度各是一个彩色节点，点色 = 构成条的段色，图与链同色呼应；末尾合计节点
    把构成条挂上去当结论。 */
 .chain {
-  margin-top: 14px;
+  /* 构成条与节点链是一组内容，之间 12（卡内区块 12）。 */
+  margin-top: var(--gap-md);
 }
 
 .cnode {
   position: relative;
-  padding: 0 0 18px 34px;
+  padding: 0 0 var(--sp-18) var(--sp-32);
 }
 
 /* 节点间连线：最后一个节点不画 */
@@ -515,12 +528,12 @@ const aerobicOnlyHint = computed(() => {
   top: 24px;
   bottom: 2px;
   width: 2px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--line);
 }
 
 .cnode:last-child {
-  padding-bottom: 2px;
+  padding-bottom: var(--sp-2);
 }
 
 .cnode:last-child::before {
@@ -538,7 +551,7 @@ const aerobicOnlyHint = computed(() => {
   border-radius: 50%;
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -553,25 +566,25 @@ const aerobicOnlyHint = computed(() => {
   display: inline-block;
   width: 8px;
   height: 8px;
-  margin-right: 6px;
+  margin-right: var(--sp-6);
   border-radius: 50%;
   vertical-align: 1px;
 }
 
 .ntop {
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .ntit {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .nval {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   white-space: nowrap;
 }
@@ -583,15 +596,15 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .ncap {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   /* 算式（原始分 × 权重）读得清，证据说明再退一档 */
   color: var(--text-2);
 }
 
 .nsep {
-  margin: 0 6px;
+  margin: 0 var(--sp-6);
   font-style: normal;
   color: var(--line-strong);
 }
@@ -603,15 +616,15 @@ const aerobicOnlyHint = computed(() => {
 /* 强度子项：与重量建议抽屉的因子条同款 —— 行内标签+右侧「拿到/满额」，下面一条细条，
    条长就是该项原始分的完成度，不再用左框线列表 */
 .subs {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .subtop {
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .sub .sname {
@@ -621,14 +634,14 @@ const aerobicOnlyHint = computed(() => {
 
 .sub .scal {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .subtrack {
   display: block;
   height: 4px;
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   overflow: hidden;
@@ -645,16 +658,17 @@ const aerobicOnlyHint = computed(() => {
 
 /* ---------- 3. 建议 ---------- */
 .advice {
-  margin-top: 10px;
+  /* 建议列表紧接标题：8（卡内标题与内容），不是 10。 */
+  margin-top: var(--gap-sm);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .adv {
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
@@ -671,15 +685,15 @@ const aerobicOnlyHint = computed(() => {
 
 /* ---------- 4. 各肌群 ---------- */
 .groups {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   display: flex;
   flex-direction: column;
 }
 
 .grow {
   width: 100%;
-  gap: 10px;
-  padding: 11px 8px;
+  gap: var(--sp-10);
+  padding: var(--sp-10) var(--sp-8);
   text-align: left;
   border-radius: var(--radius-m);
   transition: background var(--dur-fast) var(--ease-standard);
@@ -698,12 +712,12 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .gline {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .gname {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -716,7 +730,7 @@ const aerobicOnlyHint = computed(() => {
 .gtrack {
   display: block;
   height: 6px;
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   overflow: hidden;
@@ -735,7 +749,7 @@ const aerobicOnlyHint = computed(() => {
   width: 12px;
   height: 12px;
   flex: none;
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   border-radius: 50%;
 }
 
@@ -744,7 +758,7 @@ const aerobicOnlyHint = computed(() => {
   width: 30px;
   text-align: right;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -772,17 +786,17 @@ const aerobicOnlyHint = computed(() => {
 /* ---------- 5. 计算体系 ---------- */
 .mhead {
   width: 100%;
-  padding: 2px 2px 6px;
+  padding: var(--sp-2) var(--sp-2) var(--sp-6);
   text-align: left;
 }
 
 .mtit {
-  gap: 7px;
+  gap: var(--sp-6);
 }
 
 .mhead h3 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -806,58 +820,58 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .method {
-  padding-top: 4px;
+  padding-top: var(--sp-4);
 }
 
 .mtext {
   font-size: var(--fs-footnote);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .wtable {
   width: 100%;
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   border-collapse: collapse;
   font-size: var(--fs-caption);
 }
 
 .wtable th,
 .wtable td {
-  padding: 6px 8px;
+  padding: var(--sp-6) var(--sp-8);
   text-align: left;
   border-bottom: 0.5px solid var(--line);
   color: var(--text-2);
 }
 
 .wtable th {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 /* 当前目标那一行加重：权重表是"我该看哪一行"的问题，不是两张都要读 */
 .wtable tr.on td {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   background: var(--surface-2);
 }
 
 .mnote {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-micro);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
 .msub {
-  margin-top: 16px;
+  margin-top: var(--sp-16);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .bands {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   display: flex;
   flex-direction: column;
 }
@@ -866,8 +880,8 @@ const aerobicOnlyHint = computed(() => {
   display: grid;
   grid-template-columns: 42px 62px 1fr;
   align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--gap-sm);
+  padding: var(--sp-6) var(--sp-8);
   border-radius: var(--radius-s);
   font-size: var(--fs-caption);
 }
@@ -877,12 +891,12 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .bmin {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .blabel {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -891,23 +905,23 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .msrc {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 /* 折算规则：一行结论 + 右端帮助入口（逐条理由在 InfoHint 抽屉里） */
 .adaptline {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .msrc-hint {
   flex: none;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
 }
 
 .msrc b {
@@ -915,14 +929,15 @@ const aerobicOnlyHint = computed(() => {
 }
 
 .mdisclaim {
-  margin-top: 14px;
+  /* 免责声明是卡内最后一段：12，与其它区块一致。 */
+  margin-top: var(--gap-md);
   font-size: var(--fs-micro);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
 .empty {
-  padding: 24px 2px;
+  padding: var(--sp-24) var(--sp-2);
   text-align: center;
   font-size: var(--fs-footnote);
   color: var(--text-3);

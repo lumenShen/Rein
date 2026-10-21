@@ -45,12 +45,13 @@ const TOAST_FILL = 'color-mix(in srgb, var(--surface) 86%, transparent)'
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--dock-top) + 26px + var(--wbar-reserve, 0px));
+  /* 提示条与底栏之间 24（--sp-24，吸附自 26）：写死的 26 进不了 4/8 体系 */
+  bottom: calc(var(--dock-top) + var(--sp-24) + var(--wbar-reserve, 0px));
   z-index: 120;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   pointer-events: none;
 }
 
@@ -58,12 +59,14 @@ const TOAST_FILL = 'color-mix(in srgb, var(--surface) 86%, transparent)'
    这里再写一遍 background 或 box-shadow 就会与它抢同一条声明，而胜负取决于样式表顺序 */
 .toast {
   pointer-events: auto;
-  gap: 4px;
+  gap: var(--gap-tight);
   max-width: min(78vw, 420px);
-  padding: 10px 20px;
+  /* 一条悬在底栏上的胶囊：上下 10 / 左右 20 —— 与胶囊（12）拉开一档，
+     因为它承载的是一句完整的话，不是标签 */
+  padding: var(--sp-10) var(--sp-20);
   color: var(--text-1);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
 
@@ -77,8 +80,9 @@ const TOAST_FILL = 'color-mix(in srgb, var(--surface) 86%, transparent)'
   flex: none;
   color: var(--accent);
   font-size: var(--fs-footnote);
-  font-weight: 800;
-  padding: 2px 0 2px 10px;
+  /* 800 不在字重阶梯上（只有 300–700 五档）：提到 Bold，观感不变 */
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) 0 var(--sp-2) var(--sp-10);
 }
 
 /* 出入同方向同向量：进来从下方 10px 升起、出去落回同一处，读作「同一条通道的

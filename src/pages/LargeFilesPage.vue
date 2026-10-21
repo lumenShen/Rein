@@ -118,7 +118,9 @@ function openFile(f: KbUsageFile): void {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ---------- 骨架（首屏） ---------- */
@@ -133,43 +135,44 @@ function openFile(f: KbUsageFile): void {
 }
 .sk-m {
   width: 72%;
-  margin-top: 14px;
+  margin-top: var(--sp-14);
 }
 .sk-s {
   width: 32%;
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
+/* 统计卡卡头：与容量总览页同一套内距与间距（两页是同一族的读数页） */
 .card-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-md);
 }
 /* 标题行：标题与帮助入口同一行居中（落点：卡头图标按钮放标题行右端） */
 .head-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 .card-head h2 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 .card-head .sub {
   text-align: right;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .foot {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  color: var(--text-3);
-  line-height: 1.5;
+  color: var(--text-2);
+  line-height: var(--lh-body);
 }
 
 /* 空态吃掉剩余高度（桌面栅格会把卡拉到与同行一样高；移动端无影响） */
@@ -182,30 +185,28 @@ function openFile(f: KbUsageFile): void {
   justify-content: center;
 }
 
+/* 空态里的「重试」是这一屏唯一的主操作：走常规按钮档 40（--control-md），
+   不再借用行尾小按钮的 28。 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   flex: none;
-  padding: 8px 14px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
 }
 .btn:disabled {
   opacity: var(--disabled-opacity);
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .spin {

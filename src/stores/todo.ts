@@ -24,15 +24,33 @@ export const useTodoStore = defineStore('todo', () => {
     dayTodos.value = await todoService.listTodos(date, date)
   }
 
-  /** 拉取全部待办（过期手动清理无需调用，写操作会自动刷新）。
-   *  先物化重复实例（幂等；旧后端无此命令时静默跳过）。 */
+  /**
+   * 拉取全部待办（过期手动清理无需调用，写操作会自动刷新）。
+   *
+   * 先物化重复实例（幂等），但**同一进程里对同一天只跑一次**：物化是「查模板 → 查存在 →
+   * 可能插入」的写事务，每次勾选/改名都跑一遍既没必要，也会把任何一条「身份写丢」的行
+   * 当场补成孪生行（历史上「勾一下多出一条」正是这么被放大的）。身份不可变已由迁移 0047
+   * 的触发器在数据库层兜住，这里再收一道调用频次：只在「这一天还没物化过」时才真的去物化。
+   */
+  const materializedFor = ref<string | null>(null)
+
   async function loadAll(): Promise<void> {
-    try {
-      await todoService.syncRecurrences(todayStr())
-    } catch {
-      /* 旧后端 / mock 未升级时不阻塞列表 */
+    const today = todayStr()
+    if (materializedFor.value !== today) {
+      try {
+        await todoService.syncRecurrences(today)
+        materializedFor.value = today
+      } catch {
+        /* 旧后端 / mock 未升级时不阻塞列表；不记标记，下次还会再试 */
+      }
     }
     allTodos.value = await todoService.listAllTodos()
+  }
+
+  /** 强制重新物化（跨天、或用户刚改了重复规则时调用） */
+  async function rematerialize(): Promise<void> {
+    materializedFor.value = null
+    await loadAll()
   }
 
   /** 拉取区间并合并进统计缓存；返回该区间的映射 */
@@ -98,6 +116,7 @@ export const useTodoStore = defineStore('todo', () => {
     today: todayStr(),
     loadDay,
     loadAll,
+    rematerialize,
     loadStats,
     create,
     update,

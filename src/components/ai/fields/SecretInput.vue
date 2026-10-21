@@ -131,28 +131,31 @@ function checkPrefix(): void {
 </template>
 
 <style scoped>
+/* 标签与输入框之间 8（表单行配方） */
 .sec {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--gap-sm);
 }
 
 .box {
-  gap: 6px;
-  padding: 4px 10px 4px 14px;
+  gap: var(--gap-tight);
+  min-height: var(--control-md);
+  padding: var(--sp-4) var(--sp-12) var(--sp-4) var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .ic {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .box input {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--control-md);
+  padding: 0;
   font-size: var(--fs-subhead);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -187,14 +190,14 @@ function checkPrefix(): void {
 .hint,
 .note {
   font-size: var(--fs-caption);
-  line-height: 1.5;
-  padding: 0 2px;
+  line-height: var(--lh-body);
+  padding: 0 var(--sp-2);
 }
 
 .note {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   color: var(--ok-strong);
 }
 
@@ -211,6 +214,6 @@ function checkPrefix(): void {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: var(--surface-2);
   border-radius: var(--radius-xs);
-  padding: 1px 4px;
+  padding: var(--sp-2) var(--sp-4);
 }
 </style>

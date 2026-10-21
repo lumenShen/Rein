@@ -277,15 +277,16 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 <style scoped>
 .pname {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .pmeta {
-  margin-top: 3px;
+  /* 课程名与副信息 2（主次文本上下） */
+  margin-top: var(--gap-text);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
   /* 「已完成 n/N 组」是这份抽屉的第一条结论读数，与顶栏那枚同义的胶囊同档：
      它落到 --text-3（3.6:1）就比顶栏的同一句话淡一档，同义读数不该在两个位置两个浓度 */
@@ -293,27 +294,28 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 }
 
 .exblock {
-  margin-top: 18px;
+  /* 动作块之间 16（区块间距），原来 18 在格点外 */
+  margin-top: var(--gap-lg);
 }
 
 .exhead {
-  gap: 10px;
-  padding-bottom: 8px;
+  gap: var(--gap-sm);
+  padding-bottom: var(--sp-8);
 }
 
 .ord {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
 .exid {
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .exname {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .exsub {
@@ -328,13 +330,13 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 .swapbtn {
   flex: none;
   position: relative;
-  padding: 5px 11px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   /* soft 底上的字走 strong 档（tokens.css:163-168）：实底档 --accent 压在上面读不清 */
   color: var(--accent-strong);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 视觉约 27px 高，命中区撑到 44（视觉不动）。竖向 -9px 落进 .exblock 的 18px margin-top
@@ -352,9 +354,10 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 }
 
 .setrow {
-  gap: 10px;
-  height: 46px;
-  padding: 0 12px;
+  gap: var(--sp-10);
+  /* 单行组记录统一 48（--row-h），原来 46 不在行高档上 */
+  height: var(--row-h);
+  padding: 0 var(--sp-12);
 }
 
 .setrow + .setrow {
@@ -363,24 +366,24 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 
 .setno {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 热身组行：与正式组区分，轻量展示（不计入完成组数） */
 .wtag {
   flex: none;
-  padding: 2px 8px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line-strong, var(--line));
   color: var(--text-3);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .setrow.is-warm .setno {
   color: var(--text-3);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .setrow.is-warm .setmeta {
@@ -398,7 +401,7 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
   position: relative;
   width: 32px;
   height: 32px;
-  margin-right: -4px;
+  margin-right: calc(-1 * var(--sp-4));
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -422,7 +425,7 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
    跳过：整行压暗表示不计入统计 */
 .setrow.is-done .setmeta {
   color: var(--text-1);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 跳过：整行压暗表示不计入统计。浓度走令牌（tokens.css:37-40 收编的禁用档）——
@@ -440,16 +443,16 @@ const STATE_CLASS: Record<SessionSetSlot['state'], string> = {
 }
 
 .setrow.is-current .setno {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .setrow.is-current .setmeta {
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .setrow.is-pending .setno {
   color: var(--text-2);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 </style>

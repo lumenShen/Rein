@@ -384,14 +384,14 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
 <style scoped>
 .ev {
   display: grid;
-  gap: 12px;
-  padding-bottom: 20px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-20);
 }
 
 /* tab 内容组沿用 .ev 的间距：曲线卡 / 表格卡 / 结论文本之间由它接管 */
 .ev-body {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 /* 切 tab 的进出场：内容整体更换，只走不透明度且进出同向 */
@@ -406,7 +406,8 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
 }
 
 .card {
-  padding: 13px 14px;
+  /* 证据卡四边同距 12（二级分组面 --pad-card-tight），原来左右多 2 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -415,20 +416,20 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-8);
 }
 
 /* 标题行右端：轴标 + 说明入口 */
 .card-head .head-side {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .card-head b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .unit {
@@ -443,16 +444,17 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
 }
 
 .legend {
-  margin-top: 6px;
+  /* 图与图例 8（标题与内容），原来 6 */
+  margin-top: var(--gap-sm);
   display: flex;
   flex-wrap: wrap;
-  gap: 3px 11px;
+  gap: var(--gap-tight) var(--sp-10);
 }
 
 .legend li {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -460,21 +462,22 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
 .sw {
   width: 9px;
   height: 9px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   flex: none;
 }
 
 .rows {
   display: grid;
-  gap: 7px;
+  /* 证据行之间 8：同一组信息内部保持一档，不与卡间 12 混 */
+  gap: var(--gap-sm);
 }
 
 .rows li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-s);
   background: var(--surface);
   font-size: var(--fs-caption);
@@ -485,7 +488,7 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
 }
 
 .rl {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -498,39 +501,40 @@ const strengthAt = (x: number): number => sampleCurve(curve.value, x).strength
    直接当文字对比度只有 2:1 上下 */
 .rows li.best .rv {
   color: var(--accent-strong);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .rows li.risk .rv {
   color: var(--danger-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .rows li.warn .rv {
   color: var(--warn-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .note {
   font-size: var(--fs-footnote);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* 睡眠数据未接入的一行结论：比 .note 重一档，不再是 11px 三级灰 */
 .note.concl {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .primary {
   width: 100%;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  padding: var(--sp-12) 0;
+  /* 页脚主按钮走按钮档 20 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 </style>

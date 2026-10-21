@@ -114,32 +114,41 @@ function goConflict(): void {
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .all {
+  position: relative;
   gap: 0;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
-/* 桌面壳：「全部课程 ›」实测 63×17，低于指针精度的 22 下限。
-   padding-block 把盒撑到 24；`.head` 是 .row 居中，且卡头高度由 h2(27.5) 决定，
-   所以这一行不会被它顶高（实测 .head 仍是 27.5）。
-   手机端维持原档（22 是指针精度的规则）。 */
-.desk-main .all {
-  padding-block: 4px;
+/* 「全部课程 ›」视觉只有 17px 高。整行热区用 ::after 撑到 44，
+   视觉与卡头高度都不动；外扩只落在卡头周围的空白里。 */
+.all::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 20px);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
 }
 
 .list {
-  margin-top: 4px;
+  /* 卡头与列表之间 8（卡内标题与内容 8），原来 4 让列表像贴着标题长出来的。 */
+  margin-top: var(--gap-sm);
 }
 
 .item {
-  gap: 10px;
-  padding: 11px 0;
+  /* 课程行是双行行：高度统一 64（--row-h-double），行间分隔线间距才稳定 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
 }
 
 .item + .item {
@@ -147,7 +156,8 @@ function goConflict(): void {
 }
 
 .body {
-  gap: 10px;
+  /* 名字 / 说明 / 胶囊三行同组：行间 8，与 .pills 的 4 一起构成「主次 2、组内 8」 */
+  gap: var(--gap-sm);
   text-align: left;
   min-width: 0;
 }
@@ -155,7 +165,7 @@ function goConflict(): void {
 .name {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -163,7 +173,7 @@ function goConflict(): void {
 
 .meta {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-3);
   white-space: nowrap;
@@ -177,19 +187,21 @@ function goConflict(): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  margin-top: 5px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-4);
   min-width: 0;
 }
 
+/* 课程主操作：44×44 是拇指下限。40 的圆在手机上偏小，且它是这张卡唯一
+   通往训练的主入口，不该比旁边的行尾图标更难按。 */
 .play {
-  width: 40px;
-  height: 40px;
+  width: var(--hit-min);
+  height: var(--hit-min);
   flex: none;
   border-radius: 50%;
   background: var(--text-1);
   color: var(--bg);
-  padding-left: 2px;
+  padding-left: var(--sp-2);
 }
 
 .play:disabled {
@@ -199,22 +211,22 @@ function goConflict(): void {
 .new,
 .more {
   width: 100%;
-  gap: 6px;
+  gap: var(--sp-6);
   border-radius: var(--radius-m);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .new {
-  margin-top: 6px;
-  padding: 22px 0;
+  margin-top: var(--sp-6);
+  padding: var(--sp-22) 0;
   background: var(--surface-2);
   color: var(--text-2);
 }
 
 .more {
-  margin-top: 10px;
-  padding: 12px 0;
+  margin-top: var(--sp-10);
+  padding: var(--sp-12) 0;
   background: var(--surface-2);
   color: var(--text-2);
 }

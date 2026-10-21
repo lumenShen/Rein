@@ -36,6 +36,19 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
   transition: background-color var(--dur-base) var(--ease-standard);
 }
 
+/* 视觉 51×31 是 iOS 规格，不为了触控放大；热区向上下各撑到 44。
+   开关在行尾，外扩的两条横带落在行内空白里，不会压到相邻控件。 */
+.sw::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
+}
+
 .sw.on {
   background: var(--ok);
 }
@@ -47,18 +60,37 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 .knob {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  /* 滑块与轨道之间的缝：2（--sp-2），与左右对称 */
+  top: var(--sp-2);
+  left: var(--sp-2);
   width: 27px;
   height: 27px;
   border-radius: 50%;
   background: var(--switch-knob);
   box-shadow: var(--shadow-thumb);
-  transition: transform var(--dur-base) var(--ease-spring);
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    width var(--dur-fast) var(--ease-standard);
 }
 
 .sw.on .knob {
   transform: translateX(20px);
+}
+
+/* 按压缩放的是滑块而不是整条轨道（与 iOS 一致）：轨道不动，滑块在按下时
+   横向拉伸 4px，松手回弹。全局 button:active 的 scale(.96) 在这里摘掉 ——
+   整条开关一起缩会读成「整行被按了一下」，而不是「手柄被捏住」。
+   开启态右移量同步收 4px，拉伸后才不会顶出轨道右缘。 */
+.sw:active {
+  transform: none;
+}
+
+.sw:active .knob {
+  width: 31px;
+}
+
+.sw.on:active .knob {
+  transform: translateX(16px);
 }
 
 @media (prefers-reduced-motion: reduce) {

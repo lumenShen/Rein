@@ -356,27 +356,27 @@ async function onDelete(value: string): Promise<void> {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-bottom: 10px;
+  gap: var(--gap-lg);
+  padding-bottom: var(--sp-10);
 }
 
 .l {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .label {
-  gap: 12px;
+  gap: var(--gap-md);
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 4px 14px;
+  padding: 0 var(--sp-16);
 }
 
 .label .l {
@@ -387,29 +387,30 @@ async function onDelete(value: string): Promise<void> {
 .label input {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--control-md);
+  padding: 0;
   font-size: var(--fs-subhead);
 }
 
 .adapters {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 组头：比字段标签再降一档（小号 + --text-3），把 5 张卡片拆成「内置 / 自定义」两步，
    而不是靠卡片本身的边框或缩进去扮演分组（那会改变卡片自己的视觉重量） */
 .grp {
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .ad {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 11px 13px;
+  gap: var(--gap-tight);
+  padding: var(--sp-12) var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   text-align: left;
@@ -417,13 +418,13 @@ async function onDelete(value: string): Promise<void> {
 
 .ad b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .ad small {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .ad.on {
@@ -432,20 +433,23 @@ async function onDelete(value: string): Promise<void> {
 }
 
 .ad.locked:not(.on) {
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
 
 .kinds {
   display: flex;
-  gap: 5px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
 .kinds i {
+  display: inline-flex;
+  align-items: center;
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 2px 7px;
+  font-weight: var(--fw-medium);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-3);
   color: var(--text-2);
@@ -454,28 +458,28 @@ async function onDelete(value: string): Promise<void> {
 .styles {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .st {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 13px;
+  gap: var(--gap-tight);
+  padding: var(--sp-12) var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   text-align: left;
 }
 
 .st b {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
 }
 
 .st small {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .st.on {
@@ -488,7 +492,7 @@ async function onDelete(value: string): Promise<void> {
 }
 
 .btns {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .btn {
@@ -496,13 +500,14 @@ async function onDelete(value: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 13px 0;
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .btn.primary {
@@ -519,20 +524,21 @@ async function onDelete(value: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 11px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   color: var(--danger);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .note {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--ok-strong);
   word-break: break-all;
 }
@@ -543,7 +549,7 @@ async function onDelete(value: string): Promise<void> {
 
 .hint {
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .hint code {
@@ -551,7 +557,7 @@ async function onDelete(value: string): Promise<void> {
   font-size: var(--fs-caption);
   background: var(--surface-2);
   border-radius: var(--radius-xs);
-  padding: 1px 4px;
+  padding: var(--sp-2) var(--sp-4);
   word-break: break-all;
 }
 </style>

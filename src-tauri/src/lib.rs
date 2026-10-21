@@ -217,6 +217,23 @@ pub fn run() {
             modules::tracking::commands::tracking_track_take,
             modules::tracking::commands::tracking_notify,
             modules::tracking::commands::tracking_open_pending,
+            // float（全局沉浸浮窗：桌面第二窗口 / Android 原生浮层，契约 docs/GLOBAL-FLOAT.md）
+            // 三条同步纪律：
+            // 1. **命令清单三处同步**：这里 ↔ src/services/floatService.ts ↔ src/mock/server.ts
+            //    （`npm run contract` 机器比对；漏一条 = 不可合并）。
+            // 2. **全部同步 fn，不许加 async**：Tauri 的同步命令跑在主线程，建窗 / 改尺寸 /
+            //    挪位置才安全；改成 async 会被丢到线程池，Win32 窗口操作在非主线程直接 panic。
+            // 3. **载荷是字符串，不是 Rust 结构体**：push 原样转发前端拼好的快照 JSON
+            //    （桌面 emit_to 事件 / Android JNI update），Rust 不解析业务字段 ——
+            //    加一种沉浸会话时这里零改动。
+            modules::float::commands::global_float_status,
+            modules::float::commands::global_float_open,
+            modules::float::commands::global_float_close,
+            modules::float::commands::global_float_push,
+            modules::float::commands::global_float_latest,
+            modules::float::commands::global_float_set_form,
+            modules::float::commands::global_float_request_permission,
+            modules::float::commands::global_float_take_action,
             // ai
             modules::ai::commands::ai_parse_food_text,
             modules::ai::commands::ai_parse_target_adjust,

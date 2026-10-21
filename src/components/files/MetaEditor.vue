@@ -164,32 +164,32 @@ function saveNote(): void {
 <style scoped>
 .meta {
   display: grid;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  padding-top: var(--gap-md);
   border-top: 0.5px solid var(--line);
 }
 
 .line {
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .k {
   flex: none;
   width: 42px;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .stars {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .star {
-  padding: 2px;
+  padding: var(--sp-2);
   color: var(--line-strong);
 }
 
@@ -198,22 +198,23 @@ function saveNote(): void {
 }
 
 .val {
-  margin-left: 6px;
+  margin-left: var(--sp-8);
   font-size: var(--fs-caption);
 }
 
 .tags {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
   flex-wrap: wrap;
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px 2px 8px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8) 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -222,7 +223,7 @@ function saveNote(): void {
 
 .x {
   display: inline-flex;
-  padding: 1px;
+  padding: var(--sp-2);
   border-radius: var(--radius-full);
   color: inherit;
   opacity: 0.7;
@@ -231,8 +232,8 @@ function saveNote(): void {
 .adder {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -250,7 +251,7 @@ function saveNote(): void {
 .note textarea {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   color: var(--text-1);
@@ -263,7 +264,7 @@ function saveNote(): void {
 .savelink {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--sp-4);
   color: var(--accent);
   font-size: var(--fs-caption);
 }

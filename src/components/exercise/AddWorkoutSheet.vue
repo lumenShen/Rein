@@ -231,13 +231,15 @@ function reset(): void {
     </div>
 
     <!-- 开始时刻（可选）：Health Connect 的运动记录必须有起止时刻，
-         想把这条回写出去就得有它；不填则只在本机记账，其他一切照旧 -->
+         想把这条回写出去就得有它；不填则只在本机记账，其他一切照旧。
+         外壳用 <label>：整行（时钟图标 + 输入）都可点，原生 time 输入的
+         实际可点区只有 ~21px 高，不该要求用户正好戳中那一条。 -->
     <div class="sec">
       <span class="seclabel">开始时刻（可选）</span>
-      <span class="namefield">
+      <label class="namefield">
         <Clock :size="14" class="t-3" />
         <input v-model="startTime" type="time" aria-label="开始时刻，可选" />
-      </span>
+      </label>
     </div>
 
     <!-- 体感强度：替代原来的低/中/高强度 -->
@@ -316,23 +318,25 @@ function reset(): void {
 <style scoped>
 .sec {
   display: block;
-  margin-bottom: 15px;
+  /* 表单项之间按间隔规范的 16（有明显边界的控件组间距），
+     原来 14 会让表单的纵向节奏与抽屉内其它 16 的段落对不齐。 */
+  margin-bottom: var(--gap-lg);
 }
 
 .seclabel {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-8);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 /* 「强度按体感折算」这类注解：占一行太占地方，与标签同排右对齐 */
 .sechint {
   font-size: var(--fs-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-style: normal;
   color: var(--text-3);
 }
@@ -350,9 +354,10 @@ function reset(): void {
 .groups {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
-  margin: 0 -18px 10px;
-  padding: 0 18px;
+  gap: var(--sp-6);
+  /* 溢出侧顶到抽屉内容边：负 margin 与侧内距同取 --pad-sheet，与 SheetModal 同源 */
+  margin: 0 calc(-1 * var(--pad-sheet)) var(--sp-10);
+  padding: 0 var(--pad-sheet);
   list-style: none;
   overflow-x: auto;
   scrollbar-width: none;
@@ -375,12 +380,12 @@ function reset(): void {
   position: relative;
   flex: none;
   white-space: nowrap;
-  padding: 6px 11px;
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
@@ -405,7 +410,7 @@ function reset(): void {
 .types {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -414,11 +419,11 @@ function reset(): void {
 .chip {
   position: relative;
   width: 100%;
-  padding: 10px 2px;
+  padding: var(--sp-10) var(--sp-2);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
@@ -449,7 +454,7 @@ function reset(): void {
 
 /* 步进器自带 7px 上下内边距，这里不额外加框：它自己就是一个可点的数值钮 */
 .stepline {
-  padding: 0 2px;
+  padding: 0 var(--sp-2);
 }
 
 /* ---------- 体感 ---------- */
@@ -475,7 +480,9 @@ function reset(): void {
 /* 它是「推算出来的结果」而不是「要填的一栏」，所以给它自己的底与圆角，
    从表单里跳出来 —— 视觉上告诉用户：上面三项是输入，这是它们算出来的东西。 */
 .result {
-  padding: 12px 14px 11px;
+  /* 结果卡内距走卡片一档（16）：原来 12/14/10 三边不等，
+     左右比上下多 2px，里面的下划线读数看着偏右。 */
+  padding: var(--pad-card);
   border-radius: var(--radius-l);
   background: var(--surface-2);
 }
@@ -486,7 +493,8 @@ function reset(): void {
 }
 
 .result .seclabel {
-  margin-bottom: 6px;
+  /* 标题与内容之间 8（规范：卡内标题与内容 8），比其它区块再紧一档 —— 它和读数是一组。 */
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-footnote);
 }
 
@@ -494,15 +502,26 @@ function reset(): void {
 .reset {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
-/* 用回估算：小字低调，只在「用户改过」时出现 */
+/* 用回估算：小字低调，只在「用户改过」时出现。
+   它是可点文字，字号下限 12（规则 3，--fs-caption），不再用 10 的微字档；
+   视觉只占 ~17px 高，热区上下各扩 16px、横向 8px —— 落点右对齐，
+   下方 .rrow 的输入在左侧，不会与读数抢点击。 */
 .reset {
+  position: relative;
+  font-size: var(--fs-caption);
   color: var(--accent-strong);
+}
+
+.reset::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-16)) calc(-1 * var(--sp-8));
 }
 
 /* 数字与单位成一组，**下划线画在整组下面**而不是画在输入框上。
@@ -512,9 +531,9 @@ function reset(): void {
 .rrow {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--sp-6);
   width: fit-content;
-  padding-bottom: 3px;
+  padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--line-strong);
 }
 
@@ -531,7 +550,7 @@ function reset(): void {
   border: 0;
   background: none;
   font-size: var(--fs-display-s);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1px;
   color: var(--text-1);
   text-align: left;
@@ -547,13 +566,13 @@ function reset(): void {
 .kcalunit {
   flex: none;
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 /* 估算依据：不摊开讲，那个大数字就是个黑箱 —— 用户凭什么信它 */
 .rbasis {
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-micro);
 }
 
@@ -562,8 +581,8 @@ function reset(): void {
 .namefield {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--gap-sm);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -589,21 +608,21 @@ function reset(): void {
 }
 
 .hint {
-  margin: 0 0 4px;
+  margin: 0 0 var(--sp-4);
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-body);
 }
 
 /* ---------- 保存 ---------- */
 
 .save {
   width: 100%;
-  padding: 14px 0;
+  padding: var(--sp-14) 0;
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .save:disabled {

@@ -120,7 +120,7 @@ const weightAlert = computed(() =>
             <div class="warn-inner">
               <section class="card warn-card">
                 <p class="t-2 warn-txt">{{ weightAlert.reason }}</p>
-                <div class="row" style="gap: 10px; margin-top: 12px">
+                <div class="row" style="gap: var(--gap-sm); margin-top: var(--gap-md)">
                   <button class="warn-go pressable" @click="router.push('/program')">去复盘</button>
                   <button class="warn-later pressable" @click="weightDismissed = true">知道了</button>
                 </div>
@@ -142,7 +142,9 @@ const weightAlert = computed(() =>
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部 10 是「页头自带内距 + 页头粘顶」这套全站节奏的一格（--page-pad-top 36 目前
+     全库没有页面在用，单改这一页会让主页页头顶得比别人高）。左右与底部走页面令牌。 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* 桌面工作台列：便当总览与一日脊柱共用同一条 1240px 列（居中）。
@@ -153,7 +155,8 @@ const weightAlert = computed(() =>
 .page.desk-home {
   max-width: var(--frame-max-wide);
   margin-inline: auto;
-  padding: 26px var(--desk-gutter) 48px;
+  /* 桌面：顶部与卡片流页同档（--page-pad-top），底部留大区块一格。 */
+  padding: var(--page-pad-top) var(--desk-gutter) var(--sp-48);
   --ph-bleed: var(--desk-gutter);
 }
 
@@ -162,7 +165,8 @@ const weightAlert = computed(() =>
    「便当总览一日脊柱」一串。给两侧各留一格呼吸：控件长到 ~156px，页头右侧
    还有 500px 余量，不会挤到标题。只作用于主页这一处调用点。 */
 .page.desk-home :deep(.seg-item) {
-  padding: 6px 12px;
+  /* 分段项左右补一格 12（--pad-inline），让「便当总览」四个字不贴选中胶囊的边 */
+  padding: var(--sp-6) var(--pad-inline);
 }
 
 /* 摄入总览：整条是按钮、壳交给 .card（内边距 20px 与全站卡片一致，别在这里再叠一层），
@@ -181,26 +185,42 @@ const weightAlert = computed(() =>
 
 .warn-txt {
   font-size: var(--fs-subhead);
-  line-height: 1.5;
+  line-height: var(--lh-body);
+}
+
+/* 提醒卡里的两枚动作：常规按钮 40（--control-md）+ 伪元素补到 44 命中区。
+   从前只有 8px 上下内距、实际高约 37px，拇指在卡边点不稳。 */
+.warn-go,
+.warn-later {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-md);
+  padding: var(--gap-sm) var(--gap-lg);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-subhead);
+}
+
+.warn-go::after,
+.warn-later::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
+  border-radius: var(--radius-full);
 }
 
 /* 白字压 --danger(#ff3b30) 实测只有 3.55:1 —— 14px 粗体够不着 4.5:1 的门槛。
    --danger-strong 是「危险色的文字/实底档」，压白字 5.87:1，肉眼仍是同一支红。 */
 .warn-go {
-  padding: 8px 16px;
-  border-radius: var(--radius-full);
   background: var(--danger-strong);
   color: var(--on-accent);
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .warn-later {
-  padding: 8px 16px;
-  border-radius: var(--radius-full);
   background: var(--surface);
-  font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -223,7 +243,8 @@ const weightAlert = computed(() =>
 .warn-wrap {
   display: grid;
   grid-template-rows: 1fr;
-  margin-top: 14px;
+  /* 与上方卡片同档卡间距（.card + .card 的 12），过渡也要的是同一个值 */
+  margin-top: var(--gap-md);
 }
 
 .warn-inner {

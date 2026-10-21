@@ -8,7 +8,9 @@ import NumberStepper from '@/components/common/NumberStepper.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useToast } from '@/composables/useToast'
-import { parseDate, todayStr } from '@/utils/date'
+import { trendGeometry } from '@/utils/chart'
+import { todayStr } from '@/utils/date'
+import { fmtShortDate } from '@/utils/format'
 import type { BodyMetric } from '@/types'
 
 /** 体重 · 身高追踪：按天记录、趋势与历史；非空值自动同步进身体资料。 */
@@ -74,31 +76,20 @@ const trend = computed(() =>
 
 const trendGeom = computed(() => {
   const pts = trend.value
-  if (pts.length < 2) return null
-  const vs = pts.map((p) => p.v)
-  const min = Math.min(...vs)
-  const max = Math.max(...vs)
-  const span = Math.max(max - min, 0.8)
-  const lo = min - span * 0.12
-  const hi = max + span * 0.12
-  const x = (i: number) => PAD_X + (i * (CHART_W - PAD_X * 2)) / (pts.length - 1)
-  const y = (v: number) => PAD_Y + ((hi - v) / (hi - lo)) * (CHART_H - PAD_Y * 2)
+  const geom = trendGeometry(
+    pts.map((p) => p.v),
+    { width: CHART_W, height: CHART_H, padX: PAD_X, padY: PAD_Y },
+  )
+  if (!geom) return null
   return {
-    points: pts.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' '),
-    area: `M${x(0).toFixed(1)},${y(vs[0]!).toFixed(1)} ${pts
-      .map((p, i) => `L${x(i).toFixed(1)},${y(p.v).toFixed(1)}`)
-      .join(' ')} L${x(pts.length - 1).toFixed(1)},${CHART_H} L${x(0).toFixed(1)},${CHART_H} Z`,
-    last: { x: x(pts.length - 1), y: y(vs[vs.length - 1]!) },
-    min,
-    max,
+    ...geom,
     from: pts[0]!.date,
     to: pts[pts.length - 1]!.date,
   }
 })
 
 function fmtShort(s: string): string {
-  const d = parseDate(s)
-  return `${d.getMonth() + 1}/${d.getDate()}`
+  return fmtShortDate(s)
 }
 
 /* ---- 记录弹层 ---- */
@@ -308,75 +299,80 @@ async function onEntrySelect(value: string): Promise<void> {
 <style scoped>
 h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 header > div > p {
   font-size: var(--fs-caption);
-  margin-top: 1px;
+  /* 标题与副标题：主次文本上下 2 */
+  margin-top: var(--gap-text);
 }
 
 /* soft 底上的文字一律走对应 --*-strong：实底档（--accent / --ok / --warn / --danger）
    直接当字用只有 1.95~3.74:1（tokens.css:163-168），分档结论词会糊 */
 .rec {
-  padding: 6px 14px;
+  /* 状态胶囊：与全站胶囊同一档（纵向 6 + 14 字 ≈ 32，左右 12） */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   flex: none;
 }
 
 /* 当前状态 */
 .stats {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  /* 三格等分，格间 8：它们是同一组读数，不该读成三张卡 */
+  gap: var(--gap-sm);
 }
 
 .stats li {
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  padding: var(--sp-10) var(--pad-inline);
+  /* 它是卡片**内**的二级分组面：比母卡 16 收一档（12），才读得出「里面这一层」 */
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .stats em {
   display: block;
   font-style: normal;
-  /* 「体重」是字段小帽，与相邻的单位后缀（11px）不同 —— 要读 */
+  /* 「体重」是字段小帽，与相邻的单位后缀不同 —— 要读，所以不落 --text-3 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   white-space: nowrap;
 }
 
 .stats b {
   display: block;
-  margin-top: 2px;
+  /* 标签与数值：主次文本上下 2 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .stats b i {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   /* 大数后的单位后缀（kg / cm），装饰性微字 */
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-left: 2px;
+  margin-left: var(--gap-text);
 }
 
 .delta {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  margin-top: 2px;
+  gap: var(--gap-text);
+  margin-top: var(--gap-text);
   /* 「↓0.4」这类变化是体重趋势的结论，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 涨跌不再借宏量营养素域色（--c-protein / --c-carb 是给蛋白质/碳水准备的）：
@@ -391,22 +387,23 @@ header > div > p {
 
 .dunit {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   /* 变化量的小帽单位（kg），装饰性微字 */
   font-size: var(--fs-micro);
-  margin-left: 1px;
+  margin-left: var(--gap-text);
 }
 
 .bmi-tag {
   display: inline-block;
-  margin-top: 2px;
-  padding: 1px 7px;
+  margin-top: var(--gap-text);
+  /* 迷你状态角标：纵向 2 保住单行高度，左右 8 让两字不贴边 */
+  padding: var(--gap-text) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   /* BMI 分档是健康结论词，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .bmi-tag.ok {
@@ -426,13 +423,13 @@ header > div > p {
 
 /* 趋势图 */
 .trend {
-  margin: 14px 0 0;
+  margin: var(--gap-md) 0 0;
 }
 
 .trend figcaption {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
   /* 「近 10 次体重 · 最低/最高」是趋势摘要，是要读的数 */
   font-size: var(--fs-caption);
 }
@@ -441,7 +438,7 @@ header > div > p {
   display: block;
   width: 100%;
   height: 84px;
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .axis {
@@ -457,7 +454,7 @@ header > div > p {
 
 /* 历史 */
 .hist {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
 }
 
 .hist > * + * {
@@ -468,26 +465,29 @@ header > div > p {
   display: grid;
   grid-template-columns: 1fr auto auto 56px;
   align-items: center;
-  gap: 14px;
-  padding: 9px 0;
+  /* 四列（日期 / 体重 / 变化 / 操作）之间 12：列间要读得清归属 */
+  gap: var(--gap-md);
+  /* 单行行：12 上下 + 20 文本 ≈ 44~48 档 */
+  padding: var(--sp-12) 0;
   cursor: pointer;
 }
 
 .hist .date {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .hist .date i {
   font-style: normal;
-  margin-left: 6px;
-  padding: 1px 6px;
+  /* 日期与状态胶囊之间 8（文字与胶囊的左右间距） */
+  margin-left: var(--gap-sm);
+  padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   /* 段首的状态词（「已记录」），必须读得出 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .hist .val {
@@ -502,8 +502,8 @@ header > div > p {
 }
 
 .more {
-  margin-top: 10px;
-  padding-top: 8px;
+  margin-top: var(--gap-md);
+  padding-top: var(--gap-sm);
   border-top: 0.5px solid var(--line);
   text-align: center;
   font-size: var(--fs-footnote);
@@ -512,31 +512,33 @@ header > div > p {
 /* 「查看全部 / 仅显示最近 5 条」：计数要点开看得见，配一枚文字按钮 */
 .morebtn {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
-  padding: 4px 8px;
+  padding: var(--gap-tight) var(--gap-sm);
 }
 
 /* 记录弹层表单 */
 .fsheet {
-  padding-bottom: 6px;
+  padding-bottom: var(--sp-6);
 }
 
 .fdate {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 0;
+  /* 表单行：8 上下 + 输入框 40 ≈ 56，比列表行略松（有输入焦点要容纳） */
+  padding: var(--sp-8) 0;
 }
 
 .fdate span {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .fdate input {
-  padding: 7px 12px;
-  border-radius: var(--radius-m);
+  /* 输入框规范：高 40（10 上下 + 14 字），左右 16，圆角与按钮同档 20 */
+  padding: var(--sp-10) var(--pad-row);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
   color: var(--text-1);
@@ -544,13 +546,14 @@ header > div > p {
 
 .save {
   width: 100%;
-  margin-top: 16px;
-  padding: 13px 0;
+  margin-top: var(--gap-lg);
+  /* 主按钮高度 40：12 上下 + 16 字（13 落在 12/14 两档之间，取小避开虚高） */
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .save:disabled {
@@ -558,7 +561,7 @@ header > div > p {
 }
 
 .fnote {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   text-align: center;
   font-size: var(--fs-caption);
 }

@@ -73,17 +73,17 @@ const groups = computed<{ date: string | null; label: string; items: Todo[] }[]>
 
 <style scoped>
 .group {
-  margin-bottom: 12px;
-  padding-bottom: 4px;
+  margin-bottom: var(--gap-md);
+  padding-bottom: var(--sp-4);
 }
 
 .ghead {
-  padding-bottom: 4px;
+  padding-bottom: var(--sp-4);
 }
 
 .glabel {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -94,6 +94,6 @@ const groups = computed<{ date: string | null; label: string; items: Todo[] }[]>
 
 .foot {
   text-align: center;
-  padding: 14px 0 4px;
+  padding: var(--sp-16) 0 var(--sp-4);
 }
 </style>

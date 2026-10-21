@@ -258,19 +258,20 @@ async function nextPhase(): Promise<void> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .empty {
-  padding: 40px 0;
+  padding: var(--sp-40) 0;
   display: grid;
-  gap: 14px;
+  gap: var(--sp-14);
 }
 
 .pod {
-  margin-bottom: 12px;
-  padding: 15px 16px;
-  border-radius: var(--radius-l);
+  margin-bottom: var(--gap-md);
+  /* 成绩单的分段容器按卡片几何：内距 16、半径 16（原来 14 / 20 让它比同页卡片大一号） */
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 
@@ -278,13 +279,14 @@ async function nextPhase(): Promise<void> {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  /* 标题行与内容 8（卡内标题与内容 8） */
+  margin-bottom: var(--gap-sm);
 }
 
 /* 卡头右侧一组：版本注 + 帮助入口 */
 .head-side {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .hint-slot {
@@ -298,70 +300,75 @@ async function nextPhase(): Promise<void> {
 
 .pod-head b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 /* 完成度英雄区 */
 .hero {
   text-align: center;
-  padding: 22px 16px;
+  /* 英雄区内距取 24（区块级），与下方四条数字的分组拉开一档 */
+  padding: var(--sp-24) var(--sp-16);
 }
 
 .eyebrow {
   font-size: var(--fs-micro);
   letter-spacing: 0.1em;
   color: var(--text-3);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .hero-title {
-  margin: 6px 0 16px;
+  /* 眉标与标题是一组（8），标题与完成环之间 16 */
+  margin: var(--gap-sm) 0 var(--sp-16);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.4px;
 }
 
 .ring-num {
   display: block;
   font-size: var(--fs-title1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ring-cap {
   display: block;
-  margin-top: 1px;
-  font-size: var(--fs-micro);
+  margin-top: var(--gap-text);
+  /* 环下说明按摘要卡口径 12：10px 只在真正的角标上出现 */
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .statgrid {
-  margin-top: 18px;
+  /* 完成环与四格之间 16（区块间距），原来 18 在格点外 */
+  margin-top: var(--gap-lg);
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .statgrid em {
   display: block;
   font-style: normal;
-  font-size: var(--fs-micro);
+  /* 四格的字段标签是读数的必要部分：按摘要卡口径统一 12（原来 10 踩在字号下限） */
+  font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .statgrid b {
   display: block;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .statgrid i {
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 400;
-  margin-left: 1px;
+  font-weight: var(--fw-regular);
+  margin-left: var(--sp-2);
 }
 
 /* 对照行 */
@@ -369,8 +376,10 @@ async function nextPhase(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 0;
+  /* 对照行是单行行：高 48（--row-h），左右两端对齐 */
+  min-height: var(--row-h);
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
   border-top: 0.5px solid var(--line);
   font-size: var(--fs-subhead);
 }
@@ -384,7 +393,7 @@ async function nextPhase(): Promise<void> {
 }
 
 .val b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .val b.good {
@@ -399,20 +408,21 @@ async function nextPhase(): Promise<void> {
 .val i {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
 }
 
 /* 区间五件事实：天数做主读数，日期区间单独一行，次数/时长/消耗各走胶囊 */
 .span-main {
-  margin-top: 10px;
+  /* 标题与主读数 8 */
+  margin-top: var(--gap-sm);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .span-range {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -420,20 +430,23 @@ async function nextPhase(): Promise<void> {
 .span-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  /* 五枚事实胶囊是一组：组内 4（--gap-tight），与标题行 8 */
+  gap: var(--gap-tight);
+  margin-top: var(--gap-sm);
 }
 
 /* 徽章 */
 .badges {
   display: grid;
-  gap: 10px;
+  /* 徽章之间 12（卡片间距档），与 .badges li 的行内间距分开 */
+  gap: var(--gap-md);
 }
 
 .badges li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 徽章图标与文字：左右 8（--gap-text-inline） */
+  gap: var(--gap-text-inline);
 }
 
 .bemoji {
@@ -451,22 +464,23 @@ async function nextPhase(): Promise<void> {
 
 .btitle {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .bsub {
-  margin-top: 1px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
 }
 
 .callout {
-  margin-bottom: 12px;
-  padding: 12px 14px;
+  margin-bottom: var(--gap-md);
+  /* 提示块四边同距 12，正文行高走 --lh-body */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .callout b {
@@ -475,13 +489,15 @@ async function nextPhase(): Promise<void> {
 
 .primary {
   width: 100%;
-  margin-bottom: 12px;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  margin-bottom: var(--gap-md);
+  /* 页脚主按钮高 40（--control-md 一档）走按钮圆角 20 */
+  min-height: var(--control-md);
+  padding: var(--sp-12) 0;
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .primary:disabled {
@@ -492,11 +508,12 @@ async function nextPhase(): Promise<void> {
 .rstats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  /* 完整报告的两栏格之间 12（卡片间距） */
+  gap: var(--gap-md);
 }
 
 .rstats li {
-  padding: 12px 14px;
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -510,14 +527,15 @@ async function nextPhase(): Promise<void> {
 
 .rstats b {
   display: block;
-  margin-top: 3px;
+  /* 标签与数值 2（主次文本上下），原来 4 读起来像两段 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .rstats i {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);

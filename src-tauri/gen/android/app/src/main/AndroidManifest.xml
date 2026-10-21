@@ -18,6 +18,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- 训练课常驻通知：课程不取定位，用 specialUse 型（Android 14+ 才有该型） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- 全局浮窗：「在其他应用上显示」是特殊权限，不弹运行时授权框，只能由用户在系统设置页
+         逐应用授予（判定走 Settings.canDrawOverlays，见 GlobalFloatBridge.kt）。
+         未授权时全局浮窗降级为仅程序内浮条，不阻塞任何既有功能。 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 通知触感：常驻通知本身 IMPORTANCE_LOW 不震，留着给课程相位提醒等后续用途 -->
@@ -131,6 +135,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="strength_training" />
+        </service>
+
+        <!-- 全局沉浸浮窗（见 GlobalFloatBridge.kt / GlobalFloatService.kt）：
+             原生 WindowManager 浮层要在应用退到后台后继续显示，只能挂在一种系统不随手回收的
+             宿主上 —— 前台服务就是那个宿主；通知则是进程被回收后用户唯一的重启入口。
+             specialUse：浮层不是定位也不是媒体播放，Android 14+ 归到「特殊用途」并要求声明子类。 -->
+        <service
+            android:name=".GlobalFloatService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="global_float_overlay" />
         </service>
 
         <!-- 健康数据用途说明（见 HealthRationaleActivity.kt）。

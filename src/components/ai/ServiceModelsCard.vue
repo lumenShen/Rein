@@ -73,16 +73,16 @@ const ICONS = {
 
 <style scoped>
 .sm {
-  padding: 13px 14px;
+  padding: var(--pad-card-tight) var(--pad-card);
 }
 
 .head {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .head .sub {
@@ -90,13 +90,14 @@ const ICONS = {
 }
 
 ul {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
 }
 
 .slot {
-  gap: 11px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 11px 0;
+  min-height: var(--row-h-double);
+  padding: 0;
   text-align: left;
 }
 
@@ -139,14 +140,14 @@ li + li .slot {
 }
 
 .t1 {
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .label {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-3);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
 }
 
 .dot {
@@ -166,28 +167,28 @@ li + li .slot {
 
 .txt b {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   word-break: break-all;
 }
 
 .txt small {
   display: block;
-  margin-top: 2px;
-  color: var(--text-3);
+  margin-top: var(--gap-text);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
   word-break: break-all;
 }
 
 .warn-line,
 .lock-line {
   display: block;
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-style: normal;
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .warn-line {
@@ -195,12 +196,12 @@ li + li .slot {
 }
 
 .lock-line {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .go {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-headline);
 }
 </style>

@@ -235,7 +235,7 @@ watch(
 
 <style scoped>
 /* 遮罩与卡片沿用更新提示那一套（全应用只有一种"居中对话框"长相）：
-   遮罩 --scrim、卡片 --surface + --radius-l + --shadow-float、随内容自适应高度 */
+   遮罩 --scrim、卡片 --surface + --radius-xl + --shadow-float、随内容自适应高度 */
 .rd-backdrop {
   position: fixed;
   inset: 0;
@@ -253,8 +253,8 @@ watch(
   max-height: min(82dvh, 640px);
   display: flex;
   flex-direction: column;
-  padding: 16px 18px calc(14px + var(--safe-bottom, 0px));
-  border-radius: var(--radius-l);
+  padding: var(--sp-16) var(--page-pad-x) calc(var(--sp-14) + var(--safe-bottom, 0));
+  border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow-float);
   outline: none;
@@ -263,7 +263,7 @@ watch(
 .rd-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   flex: none;
   color: var(--accent);
 }
@@ -273,7 +273,7 @@ watch(
   min-width: 0;
   color: var(--text-1);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .rd-x {
@@ -307,23 +307,23 @@ watch(
 
 /* 面上结论：一行胶囊（参与本次建议重量与本周练够分），口径全文收进标题栏 InfoHint */
 .rd-tags {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   display: flex;
 }
 
 .rd-opts {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .rd-opt {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 10px 12px;
+  gap: var(--gap-sm);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   border: 1px solid transparent;
@@ -364,7 +364,7 @@ watch(
 
 .rd-label {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -377,8 +377,8 @@ watch(
 
 /* ---------- 影响预览 ---------- */
 .rd-preview {
-  margin-top: 14px;
-  padding: 12px 13px;
+  margin-top: var(--sp-14);
+  padding: var(--sp-12) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -387,12 +387,12 @@ watch(
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .rd-pt {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -402,14 +402,14 @@ watch(
 }
 
 .rd-prow + .rd-prow {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 
 .rd-pline {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .rd-pk {
@@ -419,7 +419,7 @@ watch(
 
 .rd-pv {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -428,7 +428,7 @@ watch(
   position: relative;
   display: block;
   height: 8px;
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface);
   overflow: hidden;
@@ -470,7 +470,7 @@ watch(
 .rd-strack {
   display: block;
   height: 8px;
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface);
   overflow: hidden;
@@ -498,22 +498,22 @@ watch(
 }
 
 .rd-psub {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
 .rd-pnote {
-  margin-top: 11px;
+  margin-top: var(--sp-10);
   font-size: var(--fs-micro);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
 .rd-pempty {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
@@ -522,22 +522,22 @@ watch(
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 14px;
+  gap: var(--gap-sm);
+  margin-top: var(--sp-14);
 }
 
 .rd-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   /* 命中区抬到 44：这两颗是弹窗的主操作，而 caption 档字号让盒子只有 38 高。
      这里不用 `.rd-x` 那种伪元素外扩 —— 两颗钮并排、下面紧着下一段，外扩会互相抢点击。 */
   min-height: 44px;
-  padding: 10px 14px;
+  padding: var(--sp-10) var(--sp-14);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 

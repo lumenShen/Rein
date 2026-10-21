@@ -79,9 +79,17 @@ function onKey(e: KeyboardEvent, i: number): void {
 .seg {
   position: relative;
   display: flex;
+  /* 分段按钮整体必须正好 32（HarmonyOS 规格）。此前用 min-height 只给下限：
+     段内按钮的行盒（normal 行高）加上下各 6 内距把轨道撑到 35（无头 Chrome
+     按本仓字体栈实测；段高 31 也与 AddWorkoutSheet 里那句注释对得上）。
+     现在锁死高度，段内行高收到副标题档（1.4）并把上下内距收到 4：
+     4+19.6+4=27.6，落在 32−2×2 的可用高度里。 */
+  height: var(--sp-32);
   background: var(--surface-2);
+  /* 轨道圆角 8（--radius-s）：与滑块同档，滑块才是「轨道里的一格」而不是贴纸 */
   border-radius: var(--radius-s);
-  padding: 2px;
+  /* 轨道内缩 2：滑块四周留出等量的缝，段与段之间不互相挤 */
+  padding: var(--sp-2);
   /* 裁掉 goo 的模糊外溢：融合滤镜的模糊半径是"容器高度的 14%"，外溢会有几个像素，
      不裁的话丰富档下滑块边上会多一圈淡淡的光晕（像画糊了）。 */
   overflow: hidden;
@@ -100,13 +108,14 @@ function onKey(e: KeyboardEvent, i: number): void {
 
 .thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: calc((100% - 4px) / var(--n));
-  height: calc(100% - 4px);
+  top: var(--sp-2);
+  left: var(--sp-2);
+  /* 4 = 两侧各 2 的内缩，写成 --sp-4 保持与上面 padding 同源 */
+  width: calc((100% - var(--sp-4)) / var(--n));
+  height: calc(100% - var(--sp-4));
   background: var(--surface);
-  /* 滑块圆角 = 轨道 --radius-s 减 2px 内缩，跟着令牌走（别写死 8px） */
-  border-radius: calc(var(--radius-s) - 2px);
+  /* 滑块圆角 = 轨道 --radius-s 减一圈内缩，跟着令牌走（别写死 8px） */
+  border-radius: calc(var(--radius-s) - var(--sp-2));
   box-shadow: var(--shadow-thumb);
   transition: transform var(--dur-base) var(--ease-standard);
 }
@@ -116,9 +125,12 @@ function onKey(e: KeyboardEvent, i: number): void {
   z-index: 1;
   flex: 1;
   min-width: 0;
-  padding: 6px 0;
+  /* 上下 4 而不是 6：32 高的轨道里，14px 字按 --lh-subtitle（1.4）排出的行盒
+     19.6 再加 2×4 正好落在 28 的内容盒内，不会被轨道裁掉或把控件撑高 */
+  padding: var(--sp-4) 0;
   font-size: var(--seg-fs, var(--fs-subhead));
-  font-weight: 600;
+  line-height: var(--lh-subtitle);
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   color: var(--text-2);
   transition: color var(--dur-fast) var(--ease-standard);
@@ -126,5 +138,13 @@ function onKey(e: KeyboardEvent, i: number): void {
 
 .seg-item.on {
   color: var(--text-1);
+}
+
+/* 轨道上的 overflow:hidden 是为丰富档的融合模糊留的，它同时会裁掉默认的
+   外扩焦点环（outline-offset: 2px）。键盘用户在这个控件上因此看不到焦点。
+   改成向内收 3px：仍落在选中滑块的内侧，环完整可见，也不会被裁。 */
+.seg-item:focus-visible {
+  outline-offset: -3px;
+  border-radius: calc(var(--radius-s) - var(--sp-2));
 }
 </style>

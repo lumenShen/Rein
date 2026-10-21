@@ -72,13 +72,13 @@ function statusText(op: FileOp): string {
 <style scoped>
 .ops {
   display: grid;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .op {
-  padding: 8px 10px;
-  border-radius: var(--radius-m);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
@@ -89,13 +89,13 @@ function statusText(op: FileOp): string {
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .label {
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-subhead);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -105,13 +105,13 @@ function statusText(op: FileOp): string {
 .stat {
   flex: none;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .mini {
   position: relative;
   flex: none;
-  padding: 2px 8px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--accent);
@@ -132,14 +132,14 @@ function statusText(op: FileOp): string {
 }
 
 .mini.icon {
-  padding: 3px;
-  color: var(--text-3);
+  padding: var(--sp-4);
+  color: var(--text-2);
 }
 
 .track {
   display: block;
   height: 3px;
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--line);
   overflow: hidden;
@@ -158,13 +158,13 @@ function statusText(op: FileOp): string {
 .fail {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 4px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--danger-strong);
 }
 
 .fail.more {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 </style>

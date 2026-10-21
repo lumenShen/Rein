@@ -21,7 +21,9 @@ import InfoHint from '@/components/common/InfoHint.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import { useToast } from '@/composables/useToast'
-import { grabStatusMeta, idOf, useCourseSelectStore } from '@/stores/courseSelect'
+import { useTwoStepConfirm } from '@/composables/useTwoStepConfirm'
+import { grabStatusMeta, useCourseSelectStore } from '@/stores/courseSelect'
+import { grabTaskTitle } from '@/utils/grab'
 import type { CourseSelectLesson, GrabTask } from '@/types'
 
 /**
@@ -74,19 +76,8 @@ const summary = computed(() => {
   return `共 ${tasks.value.length} 条`
 })
 
-/**
- * 行的标题 —— 与任务行/结果行同一条规矩。
- *
- * `lessonName` 里存的是「这个班怎么和同门课其他班区分」（项目名优先）：
- * 体育课 8 个项目的课程名全都叫「大学体育1」，只写课程名，用户认不出哪条是羽毛球。
- */
-function title(t: GrabTask): string {
-  const course = t.courseName?.trim()
-  const label = t.lessonName?.trim()
-  if (!course) return label || `教学班 ${idOf(t.lessonId)}`
-  if (!label || label === course || label.startsWith(course)) return course
-  return `${course} · ${label}`
-}
+/** 行标题：命名规矩在 utils/grab（任务行 / 结果行 / 志愿组共用一份） */
+const title = grabTaskTitle
 
 /** 这一秒为什么没在动 / 到底怎么了 —— 引擎的 `lastMessage` 是教务的原话，优先说它 */
 function why(t: GrabTask): string {
@@ -137,18 +128,9 @@ async function act(id: number, action: 'pause' | 'cancel' | 'retry' | 'remove'):
 }
 
 /** 移除是两步的：这些行是「抢到了什么」的唯一本地记录，一次误触就删掉不值 */
-const pendingRemove = ref<number | null>(null)
-let removeTimer: number | null = null
-
+const { pending: pendingRemove, ask } = useTwoStepConfirm()
 function askRemove(id: number): void {
-  if (removeTimer != null) window.clearTimeout(removeTimer)
-  if (pendingRemove.value === id) {
-    pendingRemove.value = null
-    void act(id, 'remove')
-    return
-  }
-  pendingRemove.value = id
-  removeTimer = window.setTimeout(() => (pendingRemove.value = null), 4000)
+  ask(id, () => void act(id, 'remove'))
 }
 
 /* ---------------- 改设置并重排 ----------------
@@ -419,25 +401,30 @@ async function onSaveEdit(payload: {
 
 <style scoped>
 .page {
-  padding: 0 var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 卡片档 16：这一页的三张卡是同级的内容容器，原先用 32（半模态档）
+     把它们抬到了比抽屉还高的层级 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 图标 / 标题 / 计数同一行：无边界控件之间取 8 */
+  gap: var(--gap-sm);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  margin-bottom: 6px;
+  /* 卡内标题与列表之间 8 */
+  margin-bottom: var(--gap-sm);
 }
 
 .head svg {
@@ -447,7 +434,7 @@ async function onSaveEdit(payload: {
 .cnt {
   margin-left: auto;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -462,8 +449,9 @@ async function onSaveEdit(payload: {
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
+  /* 正文区与右侧操作钮之间 12：三颗钮是实心圆，需要比普通间距多一档 */
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
 }
 
 .row + .row {
@@ -473,20 +461,21 @@ async function onSaveEdit(payload: {
 .body {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  /* 课名 / 事实 / 原因三级文本，行间距 2 —— 3 会让三行各自浮开、读不成一段 */
+  gap: var(--gap-text);
   min-width: 0;
 }
 
 .line1 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .name {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow-wrap: anywhere;
 }
@@ -500,7 +489,7 @@ async function onSaveEdit(payload: {
 
 .meta {
   font-size: var(--fs-micro);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
@@ -514,8 +503,9 @@ async function onSaveEdit(payload: {
 .chip {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+  /* 角标上下留出 2，不再贴到字形的边界上；左右 8 与间距令牌同档 */
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -550,8 +540,9 @@ async function onSaveEdit(payload: {
   flex: none;
   display: flex;
   align-items: center;
-  /* 14px：每颗按钮命中区外扩 7px 后正好相接，谁也不偷谁的边缘 */
-  gap: 14px;
+  /* 14 档：每颗按钮命中区外扩 7px 后正好相接，谁也不偷谁的边缘
+     （改成 12 会让两个 44 命中区重叠 2px，改大则整组右移） */
+  gap: var(--sp-14);
 }
 
 .op {
@@ -584,39 +575,39 @@ async function onSaveEdit(payload: {
 }
 
 .foot-hint {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-micro);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .fault {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--warn-strong);
   background: var(--warn-soft);
   border-radius: var(--radius-m);
-  padding: 9px 11px;
-  margin-bottom: 14px;
-  line-height: 1.45;
+  padding: var(--sp-8) var(--pad-inline);
+  margin-bottom: var(--gap-md);
+  line-height: var(--lh-caption);
 }
 
 .bulk {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 4px 2px 0;
+  gap: var(--gap-md);
+  padding: var(--sp-4) var(--sp-2) 0;
 }
 
 .link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
@@ -628,33 +619,37 @@ async function onSaveEdit(payload: {
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-sm);
   font-size: var(--fs-micro);
   color: var(--text-2);
-  line-height: 1.5;
-  margin-top: 12px;
+  line-height: var(--lh-body);
+  margin-top: var(--gap-md);
 }
 
 .hint svg {
   flex: none;
-  margin-top: 2px;
+  /* 图标对齐正文首行的基线，2 是主次文本上下那一档 */
+  margin-top: var(--gap-text);
 }
 
 .inline-link {
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: var(--gap-sm);
+  /* 与课表页 / 选课页的空态出口同一形状：高 40、左右 24、胶囊 */
+  min-height: var(--control-md);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: 9px 22px;
+  padding: var(--sp-8) var(--sp-24);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 

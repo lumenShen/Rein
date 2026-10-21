@@ -954,7 +954,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .page {
-  padding: 0 var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ---------- 桌面（本页是 wide 路由：壳层不套栅格，内容宽度自己负责） ----------
@@ -972,33 +973,38 @@ onBeforeUnmount(() => {
 
 .card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 卡片档 16：这一页的批次卡是内容容器，32 是半模态的圆角，用在这里
+     会让「卡」看起来比抽屉还高一层 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 16px;
-  margin-bottom: 14px;
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 /* ---------- 批次 ---------- */
 .turn-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
 }
 
 .turn-head h2 {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .tag {
   flex: none;
+  /* 状态胶囊统一 24 高（--chip-h）：2px 上下内距配 10 号字只有 18，
+     和同一行的标题不在一条水平线上 */
+  min-height: var(--chip-h);
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 2px 9px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
@@ -1012,37 +1018,39 @@ onBeforeUnmount(() => {
 .line {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .reasons {
-  margin: 8px 0 0;
-  padding-left: 18px;
+  margin: var(--gap-sm) 0 0;
+  padding-left: var(--sp-18);
   font-size: var(--fs-micro);
   color: var(--warn-strong);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 /* 批次公告：教务的原话，里面常有「只能选 X 门」「先到先得」这类硬约束 ——
    它不该比课程名更看不见 */
 .bulletin {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-micro);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .primary {
   width: 100%;
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-lg);
+  /* 表单主按钮：高 40、圆角 20（按钮档），与卡片 16 拉开一档 */
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-card);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1058,13 +1066,16 @@ onBeforeUnmount(() => {
 .cta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: var(--gap-sm);
+  /* 与课表页 / 抢课页的空态出口同一形状：高 40、左右 24、胶囊 */
+  min-height: var(--control-md);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: 9px 22px;
+  padding: var(--sp-8) var(--sp-24);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1081,28 +1092,28 @@ onBeforeUnmount(() => {
 .back-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   /* 44 而不是 40：这是手机上返回上一层的唯一入口，指头比像素大 */
-  min-height: 44px;
+  min-height: var(--hit-min);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
-  padding: 2px 0;
+  padding: var(--sp-2) 0;
 }
 
 .search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   /* 44px 是手机上的下限：这一行里点的是「查询」，而它是 21px 高的文字按钮 ——
      行高撑起来、按钮纵向拉伸之后才有像个样的命中区 */
-  min-height: 44px;
-  padding: 2px 8px 2px 12px;
+  min-height: var(--hit-min);
+  padding: var(--sp-2) var(--sp-8) var(--sp-2) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--text-3);
-  margin-bottom: 10px;
+  margin-bottom: var(--gap-sm);
 }
 
 .search input {
@@ -1120,10 +1131,10 @@ onBeforeUnmount(() => {
 .fresh {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   font-size: var(--fs-micro);
   color: var(--text-2);
-  margin: -4px 0 8px 2px;
+  margin: calc(-1 * var(--sp-4)) 0 var(--gap-sm) var(--sp-2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1131,9 +1142,9 @@ onBeforeUnmount(() => {
   flex: none;
   align-self: stretch;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
-  padding: 0 10px;
+  padding: 0 var(--sp-12);
 }
 
 .go:disabled {
@@ -1143,21 +1154,23 @@ onBeforeUnmount(() => {
 .progress {
   font-size: var(--fs-micro);
   color: var(--accent-strong);
-  margin-bottom: 8px;
+  margin-bottom: var(--gap-sm);
 }
 
 .lessons {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 每个教学班是一张独立卡片，卡间距取 12 —— 原来 8 让两张卡糊成一片名单 */
+  gap: var(--gap-md);
 }
 
 .lesson {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: var(--radius-l);
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--pad-card);
+  /* 卡片档 16（原来 20 把列表行抬到了按钮层级） */
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -1167,7 +1180,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  /* 课名行与副信息之间是主次文本关系，取 2 */
+  gap: var(--gap-text);
   text-align: left;
 }
 
@@ -1175,7 +1189,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 /* 余量：紧挨课名的数字。它是这一行里最该被比出来的量（60 / 60 与 118 / 120
@@ -1184,32 +1198,32 @@ onBeforeUnmount(() => {
   flex: none;
   display: inline-flex;
   align-items: baseline;
-  gap: 3px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   margin-left: auto;
-  padding-left: 8px;
+  padding-left: var(--gap-sm);
 }
 
 /* 「已选」是标签、「人」是单位：都比数字本身小一档，不再是没单位的裸数字对 */
 .seats-cap {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
 .seats-unit {
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 .l-name {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
-  line-height: 1.3;
+  line-height: var(--lh-title);
   word-break: break-all;
 }
 
@@ -1217,20 +1231,21 @@ onBeforeUnmount(() => {
    模板里仍带 class="chip"（+ grab）只是 e2e 选择器的钩子，样式不再手写 */
 
 /* 副信息分两档：主依据（谁在教、什么时候上）与核对用的事实（代码 / 学分 / 小组）。
-   两档都是 --text-2 —— 11px 的 --text-3 在亮色下只有 2.5:1，那是把要做决定的信息藏起来 */
+   整行是一个按钮，行内文字不低于 12px：10px 在 320 宽的手机上已经读不出
+   「哪个班 / 还差几学分」这类要做决定的信息，字号下限优先于行高紧凑。 */
 .l-meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: var(--fs-micro);
+  gap: var(--gap-text);
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
-/* 主依据：选班时真正在比较的东西，比事实行大一档 */
+/* 主依据：选班时真正在比较的东西（谁在教 / 什么时候上），可换行 */
 .l-key {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
+  gap: var(--gap-text) var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -1238,8 +1253,8 @@ onBeforeUnmount(() => {
 .l-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  font-size: var(--fs-micro);
+  gap: var(--gap-text) var(--gap-md);
+  font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
@@ -1264,13 +1279,15 @@ onBeforeUnmount(() => {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 8px 15px;
+  gap: var(--gap-tight);
+  /* 小号按钮一档：高 28 起、左右 16 */
+  min-height: var(--control-sm);
+  padding: var(--sp-6) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -1297,15 +1314,16 @@ onBeforeUnmount(() => {
   flex: none;
   display: flex;
   align-items: center;
-  /* 14px：两颗各把命中区外扩 7px 之后正好相接，谁也不偷谁的边缘 */
-  gap: 14px;
+  /* 14 档：两颗各把命中区外扩 7px 之后正好相接，谁也不偷谁的边缘
+     （收到 12 会让两个 44 命中区重叠 2px） */
+  gap: var(--sp-14);
 }
 
 .ord-op {
   position: relative;
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1331,27 +1349,29 @@ onBeforeUnmount(() => {
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
+  animation: rein-spin 0.9s linear infinite;
 }
 
 /* ---------- 多选预定 ---------- */
 .pick-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-sm);
 }
 
 .mini {
   position: relative;
   flex: none;
-  padding: 6px 13px;
+  /* 小号按钮一档：高 28、左右 12（与设置页的 .mini 同规格） */
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 命中区撑到 44 高（横向不动：同一行的两颗只隔 8px）。
@@ -1386,12 +1406,12 @@ onBeforeUnmount(() => {
   right: -3px;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--danger);
   color: var(--on-accent);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 18px;
   text-align: center;
   box-shadow: 0 0 0 2px var(--surface);
@@ -1405,14 +1425,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   height: 38px;
-  padding: 0 14px;
-  margin-bottom: 3px;
+  padding: 0 var(--sp-16);
+  /* 与页头 38px 圆钮的 3px 底线对齐：差 1px 比「差一档令牌」更显眼 */
+  margin-bottom: var(--sp-2);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   color: var(--accent-strong);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   transition: transform var(--dur-fast) var(--ease-standard);
 }
@@ -1431,7 +1452,7 @@ onBeforeUnmount(() => {
   flex: none;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 1.5px solid var(--line-strong);
 }
 
@@ -1444,20 +1465,20 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 3.5px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--accent);
 }
 
 .l-meta .ord {
   color: var(--accent-strong);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* ---------- 批量预定抽屉 ---------- */
 .lead {
   font-size: var(--fs-caption);
-  line-height: 1.55;
-  margin-bottom: 12px;
+  line-height: var(--lh-body);
+  margin-bottom: var(--gap-md);
 }
 
 /* 说明文字：它是「怎么用」的唯一解释，却曾经是全页最淡的一档。
@@ -1465,31 +1486,31 @@ onBeforeUnmount(() => {
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
-  margin: 8px 0;
+  line-height: var(--lh-body);
+  margin: var(--gap-sm) 0;
 }
 
 .hint svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
 }
 
 .batch-list {
-  margin: 8px 0 0;
+  margin: var(--gap-sm) 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .batch-list li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-1);
 }
@@ -1497,8 +1518,8 @@ onBeforeUnmount(() => {
 .tag-mini {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 7px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -1512,22 +1533,16 @@ onBeforeUnmount(() => {
 .acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
 }
 
 .acts .primary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   margin-top: 0;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ============================================================

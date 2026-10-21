@@ -6,6 +6,8 @@ import TabBar from '@/components/layout/TabBar.vue'
 import CommandPalette from '@/components/layout/CommandPalette.vue'
 import DesktopRail from '@/components/layout/DesktopRail.vue'
 import DesktopInspector from '@/components/layout/DesktopInspector.vue'
+import AppTitleBar from '@/components/layout/AppTitleBar.vue'
+import WindowResizeHandles from '@/components/layout/WindowResizeHandles.vue'
 import ActiveWorkoutBar from '@/components/exercise/ActiveWorkoutBar.vue'
 import FocusFloatBar from '@/components/pomodoro/FocusFloatBar.vue'
 import FocusImmersive from '@/components/pomodoro/FocusImmersive.vue'
@@ -25,6 +27,7 @@ import { gatewayService } from '@/services/gatewayService'
 import { recorder, stopRecording } from '@/system/recorderRuntime'
 import { finishSpeaking, isLive as voiceIsLive } from '@/system/voiceRuntime'
 import { inspectorOpen, rememberRoute, toggleInspector } from '@/system/deskShell'
+import { isTauriDesktopWindow } from '@/system/windowChrome'
 import { useFeaturesStore } from '@/stores/features'
 import { useUpdateStore } from '@/stores/update'
 import { useCourseSelectStore } from '@/stores/courseSelect'
@@ -34,6 +37,18 @@ const route = useRoute()
 const router = useRouter()
 /** 桌面工作台：视口 ≥ DESKTOP_MIN 时以三窗格壳（导航轨 + 主人区 + 右侧信息栏）替代底部 TabBar */
 const isDesktop = useMediaQuery(`(min-width: ${DESKTOP_MIN}px)`)
+
+/**
+ * 桌面 Tauri 的两种窗口壳（浏览器 / Android 两个都不挂，DOM 与布局维持原样）：
+ *  · 宽窗（≥ DESK_MIN）→ .win-shell--desk：整窗竖排，内容滚在 .desk-main 里；
+ *  · 窄窗（无边框窗口的默认 430 宽）→ .win-shell--narrow：**文档滚动模型不变**，
+ *    只把标题栏 sticky 在顶上。
+ * 为什么要分开：rubberScroll / useScrolled / ActiveWorkoutBar 都是按「文档滚动」写的
+ * （document.scrollingElement / window 的 scroll 事件）。无边框只该去掉系统标题栏，
+ * 不该顺手把窄窗的滚动容器从 document 换成某个内层 div —— 那会静默打断超范围回弹、
+ * 页头的滚动态与运动条跟滚。 */
+const deskChrome = computed(() => isTauriDesktopWindow && isDesktop.value)
+const narrowChrome = computed(() => isTauriDesktopWindow && !isDesktop.value)
 
 /**
  * 桌面内容形态，由路由 meta.desk 声明（缺省 'grid'）：
@@ -271,47 +286,63 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 桌面三窗格壳：沉浸页（运动模式）同样隐藏导航轨 -->
-  <div v-if="isDesktop" class="desk-frame">
-    <DesktopRail
-      v-show="shellVisible"
-      data-immersive-shell
-      :inspector-open="inspectorOpen"
-      @toggle-inspector="toggleInspector"
-      @open-palette="paletteOpen = true"
+  <!-- 桌面 Tauri：无边框窗口的整窗壳（自绘标题栏 + 内容区；宽窗竖排、窄窗标题栏 sticky）。
+       浏览器 / Android 上这一层只是一个没有样式的普通 div —— .desk-frame / .app-frame
+       仍按原来的规则决定布局，既有 e2e 的布局断言（430 手机壳 / 宽屏桌面壳）不受影响。 -->
+  <div class="win-shell" :class="{ 'win-shell--desk': deskChrome, 'win-shell--narrow': narrowChrome }">
+    <!-- 窄窗里标题栏是一条玻璃带（内容从它底下滚过，与导航层同一套材质；低画质档
+         会自动退化成实底，不用另写）。宽窗不画底，让环境光一直透到窗口顶边。 -->
+    <AppTitleBar
+      v-if="isTauriDesktopWindow"
+      :class="{ 'glass-surface': narrowChrome, 'glass-edge-b': narrowChrome }"
     />
-    <main class="desk-main" :class="{ wide: deskWide }">
-      <!-- 整页包装：平时只是路由出口的壳。页面自己挂了内容层（.page > .rubber-layer）
-           时超伸平移落在那一层上（system/rubberScroll 的 layerFor 会下钻找到它）；
-           只有没挂内容层的页面才回退到整页平移（那时标题栏会跟着动）。 -->
-      <div data-rubber-shell>
-        <RouterView v-slot="{ Component }">
-          <Transition name="page">
-            <component :is="Component" />
-          </Transition>
-        </RouterView>
+    <div class="win-body">
+      <!-- 桌面三窗格壳：沉浸页（运动模式）同样隐藏导航轨 -->
+      <div v-if="isDesktop" class="desk-frame">
+        <DesktopRail
+          v-show="shellVisible"
+          data-immersive-shell
+          :inspector-open="inspectorOpen"
+          @toggle-inspector="toggleInspector"
+          @open-palette="paletteOpen = true"
+        />
+        <main class="desk-main" :class="{ wide: deskWide }">
+          <!-- 整页包装：平时只是路由出口的壳。页面自己挂了内容层（.page > .rubber-layer）
+               时超伸平移落在那一层上（system/rubberScroll 的 layerFor 会下钻找到它）；
+               只有没挂内容层的页面才回退到整页平移（那时标题栏会跟着动）。 -->
+          <div data-rubber-shell>
+            <RouterView v-slot="{ Component }">
+              <Transition name="page">
+                <component :is="Component" />
+              </Transition>
+            </RouterView>
+          </div>
+        </main>
+        <!-- 第三窗格 · 路由上下文信息栏：全页面常驻（沉浸页除外、可 ⌘I 收起），
+             保证桌面构图平衡；窄桌面下用户也可以把它让给主内容 -->
+        <DesktopInspector v-show="shellVisible && inspectorOpen" data-immersive-shell />
       </div>
-    </main>
-    <!-- 第三窗格 · 路由上下文信息栏：全页面常驻（沉浸页除外、可 ⌘I 收起），
-         保证桌面构图平衡；窄桌面下用户也可以把它让给主内容 -->
-    <DesktopInspector v-show="shellVisible && inspectorOpen" data-immersive-shell />
-  </div>
 
-  <!-- 移动端（原结构）：内容居中窄栏 + 底部标签导航 -->
-  <div v-else class="app-frame">
-    <!-- 整页包装（= 页面级超伸的兜底层）：页面自己挂了内容层时只动内容层，
-         标题栏留在层外不动；没挂内容层的旧页面才整页平移 -->
-    <div data-rubber-shell>
-      <RouterView v-slot="{ Component }">
-        <Transition name="page">
-          <component :is="Component" />
-        </Transition>
-      </RouterView>
+      <!-- 移动端（原结构）：内容居中窄栏 + 底部标签导航 -->
+      <div v-else class="app-frame">
+        <!-- 整页包装（= 页面级超伸的兜底层）：页面自己挂了内容层时只动内容层，
+             标题栏留在层外不动；没挂内容层的旧页面才整页平移 -->
+        <div data-rubber-shell>
+          <RouterView v-slot="{ Component }">
+            <Transition name="page">
+              <component :is="Component" />
+            </Transition>
+          </RouterView>
+        </div>
+        <TabBar
+          v-show="shellVisible"
+          data-immersive-shell
+        />
+      </div>
     </div>
-    <TabBar
-      v-show="shellVisible"
-      data-immersive-shell
-    />
+    <!-- 无边框窗口的八向缩放热区（只在桌面 Tauri）：原生边框随 decorations:false 一起
+         消失，不补这一层窗口就再也改不了大小；最大化时组件自己隐藏。 -->
+    <WindowResizeHandles v-if="isTauriDesktopWindow" />
   </div>
   <!-- 悬浮运动条：收起完成后才恢复，自身按停靠方向渐入 -->
   <ActiveWorkoutBar />
@@ -366,13 +397,57 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* ---------- 桌面 Tauri · 两种窗口壳 ----------
+   宽窗（≥ DESK_MIN）：整窗竖排，标题栏占顶部一条、.win-body 吃剩余高度。桌面三窗格
+   本来就滚在 .desk-main 内部，整窗不产生文档滚动，标题栏天然在滚动容器之外。
+
+   窄窗（无边框窗口的默认 430 宽）：**保持文档滚动不变** —— .app-frame 仍是普通流内块、
+   滚的仍是 document。只让标题栏 position: sticky 粘在视口顶，内容从它底下穿过。
+   （试过把 .win-body 当滚动容器：rubberScroll 的 document.scrollingElement 判定、
+   useScrolled 的滚动目标、ActiveWorkoutBar 的 activeScroller() 全都按文档滚动写，
+   换容器等于静默关掉超范围回弹、页头滚动态与运动条跟滚 —— 无边框不该动滚动模型。） */
+.win-shell--desk {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.win-shell--desk > .win-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.win-shell--desk .desk-frame {
+  height: 100%;
+}
+
+.win-shell--narrow {
+  display: block;
+}
+
+/* 标题栏粘在视口顶：z-index 50 —— 低于底部 Dock / TabBar（60），高于页面里那层
+   吸顶页头（30），于是内容滚过去时永远被标题栏压住。 */
+.win-shell--narrow :deep(.titlebar) {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* 40px 的标题栏要从内容高度里还回去：.app-frame 继续用 100dvh 会凭空多出一条 40px
+   的文档滚动（滚到底时底部 Dock 上方多出一截空白）。 */
+.win-shell--narrow .app-frame {
+  min-height: calc(100dvh - var(--titlebar-h));
+}
+
 .desk-main {
   flex: 1;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
   /* 桌面下的横向留白与页头遮罩宽度：页面里那句 var(--page-pad-x) 会自己跟上，
-     所以各页不必为桌面再写一遍 padding。 */
+     所以各页不必为桌面再写一遍 padding。
+     取 --desk-gutter（PC 档 40）：从前这个令牌是 34 的手感值，整条桌面的内容
+     左右边距都比规范少 6，页头标题与卡片左缘也一起偏出去半格。 */
   --page-pad-x: var(--desk-gutter);
   --ph-bleed: var(--desk-gutter);
 }
@@ -394,7 +469,9 @@ onMounted(() => {
 .desk-main:not(.wide) :deep(.page) {
   max-width: var(--desk-content);
   margin: 0 auto;
-  padding-top: 26px;
+  /* 32 + 页头自己的 8 = 40：PC 档的页面顶部留白（--page-pad-top 的桌面档）。
+     从前两处一个 26 一个 8，加起来 34 比规范少 6，桌面页头整体偏上。 */
+  padding-top: var(--sp-32);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: var(--desk-gap);

@@ -128,7 +128,7 @@ watch(
   align-items: center;
   justify-content: center;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.5px;
   color: var(--danger-strong);
   pointer-events: none; /* 命中区归轨道，文字不参与指针测试 */

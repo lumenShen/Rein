@@ -269,12 +269,12 @@ function onPick(key: string): void {
 .head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -284,11 +284,12 @@ function onPick(key: string): void {
 }
 
 .switcher {
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--sp-12);
 }
 
 .arrow {
+  position: relative;
   width: 34px;
   height: 34px;
   flex: none;
@@ -300,6 +301,18 @@ function onPick(key: string): void {
   justify-content: center;
 }
 
+/* 左右翻动作：视觉 34 不动，热区补到 44（落在 .switcher 的 8px 行距里） */
+.arrow::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .arrow:active {
   opacity: 0.6;
 }
@@ -308,8 +321,9 @@ function onPick(key: string): void {
 .pickbtn {
   flex: 1;
   min-width: 0;
-  gap: 5px;
-  padding: 8px 10px;
+  min-height: var(--hit-min);
+  gap: var(--gap-tight);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-1);
@@ -321,7 +335,7 @@ function onPick(key: string): void {
 
 .pname {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -333,16 +347,18 @@ function onPick(key: string): void {
 }
 
 .rotate {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 11px;
+  gap: var(--gap-tight);
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   transition: color var(--dur-fast) var(--ease-standard);
 }
 
@@ -354,22 +370,23 @@ function onPick(key: string): void {
 }
 
 .cmeta {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
 }
 
 .curvewrap {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 .lastsets {
-  margin-top: 6px;
+  /* 曲线与最近一组 8（标题与内容） */
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .hint {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   font-size: var(--fs-footnote);
   color: var(--text-3);
 }

@@ -131,22 +131,23 @@ function openSchedule(): void {
 .course {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 抽屉内容区里各块之间 16（有明显边界的一档） */
+  gap: var(--gap-lg);
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head h3 {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  line-height: 1.3;
+  line-height: var(--lh-title);
 }
 
 .dot {
@@ -159,8 +160,8 @@ function openSchedule(): void {
 .chip {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 2px 9px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
 }
 
@@ -174,23 +175,24 @@ function openSchedule(): void {
 .facts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: var(--radius-l);
+  gap: var(--gap-sm);
+  /* 卡内的二级分组面：内距 12、圆角收一档（12），比母卡低一层 */
+  padding: var(--pad-card-tight) var(--pad-card);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .facts > div {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .facts dt {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   width: 62px;
   font-size: var(--fs-micro);
   color: var(--text-3);
@@ -201,7 +203,7 @@ function openSchedule(): void {
   min-width: 0;
   font-size: var(--fs-caption);
   color: var(--text-1);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
   word-break: break-all;
 }
 
@@ -212,18 +214,20 @@ function openSchedule(): void {
 .acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .acts button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  /* 抽屉底部操作钮：高 40、圆角 20（按钮档） */
+  min-height: var(--control-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -241,13 +245,14 @@ function openSchedule(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--ok-soft);
   color: var(--ok-strong);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ghost {

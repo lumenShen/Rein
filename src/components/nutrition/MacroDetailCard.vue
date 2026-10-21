@@ -69,7 +69,7 @@ const rows = computed(() =>
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head .hint {
@@ -78,7 +78,7 @@ const rows = computed(() =>
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -86,25 +86,28 @@ const rows = computed(() =>
 .hint-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin: 0;
-  padding-left: 18px;
+  /* 列表符号缩进：18 是 4/8 栅格外的排版值，取同值令牌（不是间距语义） */
+  padding-left: var(--sp-18);
 }
 
 .hint-list li {
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .hint-list b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .list {
-  margin-top: 6px;
+  /* 标题与内容之间 8 */
+  margin-top: var(--gap-sm);
 }
 
 .item {
-  padding: 12px 0;
+  /* 单行数值行按 48 档：12 上下 + 16 字（行高 24）= 48 */
+  padding: var(--sp-12) 0;
 }
 
 .item + .item {
@@ -112,13 +115,16 @@ const rows = computed(() =>
 }
 
 .top {
-  margin-bottom: 4px;
+  /* 这张卡的行只有「名称 / 当前·目标」一行，下面不挂进度条：留一格 4 即可 */
+  margin-bottom: var(--gap-tight);
 }
 
 .name {
-  gap: 7px;
+  /* 色点 + 名称：图标与文字左右 8 */
+  gap: var(--gap-text-inline);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  /* 名称是标签不是读数：降一档到 semibold，把 bold 留给右侧的当前值 */
+  font-weight: var(--fw-semibold);
 }
 
 .dot {
@@ -129,15 +135,19 @@ const rows = computed(() =>
 }
 
 .val {
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  /* 当前 / 目标是这张卡的读数：16 bold，与名称（14 semibold）拉开一档；
+     --fs-headline 在桌面档仍是 16（--fs-body 会降到 14，与名称同号就只剩字重差）。
+     行高随之到 48（12×2 + 24），落在列表行规范的单行档上 */
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-bold);
 }
 
 .val em {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
   font-size: var(--fs-caption);
-  margin-left: 2px;
+  /* 数值与「/ 目标 单位」是同一行内的最小一对：4（--gap-tight），不用裸值 2 */
+  margin-left: var(--gap-tight);
 }
 </style>

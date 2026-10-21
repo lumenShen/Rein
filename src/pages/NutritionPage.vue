@@ -89,15 +89,17 @@ const quickOpen = ref(false)
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格（--page-pad-top 36 目前全库没有页面在用） */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
-/* 快捷三格：外框是 .card.sub（base.css），这里只管「三列等宽 + 10px 间距」。
-   与下方卡片的间距交给全局 `.card + .card`（14px）—— 它现在也是 .card 了，
-   原来的 margin-bottom 收掉，否则会叠成 28px */
+/* 快捷三格：外框是 .card.sub（base.css），这里只管「三列等宽 + 间隙」。
+   三格是同一组无边界磁贴：组内取 8（--gap-sm），比卡片间距小一档才读得成「一组」。
+   与下方卡片的间距交给全局 `.card + .card`（12px）—— 它现在也是 .card 了，
+   原来的 margin-bottom 收掉，否则会叠成两倍卡间距 */
 .quick {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: var(--gap-sm);
 }
 </style>

@@ -51,15 +51,17 @@ const emit = defineEmits<{ close: [] }>()
 <style scoped>
 /* ---------- 白卡：抽屉每一段内容的载体（与 TrainingScoreSheet / WeightAdviceSheet 同一份做法） ---------- */
 .scard {
-  padding: 16px;
-  border-radius: var(--radius-xl);
+  /* 卡片内距 16；圆角取卡片档 16 —— 32 是半模态自己的圆角，里面再套一张 32 的卡
+     会读成「两层同级的浮层」 */
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--sheet-card-fill);
   box-shadow: var(--sheet-card-shadow);
 }
 
 /* 首张卡与抽屉标题之间留一点呼吸（body 自身只有 4px 顶内边距） */
 .scard:first-child {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
 }
 
 /* ---------- 两张页面级卡片（宏量 / 微量元素）搬进抽屉 ----------
@@ -67,17 +69,17 @@ const emit = defineEmits<{ close: [] }>()
    选择器带上 .cards 这一层：:deep 编译成「[本组件 scope] .card」，而子组件根才是那个
    带 scope 的元素，必须有本组件自己的祖先才匹配得上。 */
 .cards {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
 }
 
 .cards :deep(.card) {
-  padding: 16px;
-  border-radius: var(--radius-xl);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--sheet-card-fill);
   box-shadow: var(--sheet-card-shadow);
 }
 
 .cards :deep(.card + .card) {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
 }
 </style>

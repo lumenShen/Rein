@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Expand } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
-import GlassFilter from '@/components/common/GlassFilter.vue'
+import FloatDock from '@/components/common/FloatDock.vue'
+import WorkoutFloatBlob from '@/components/float/WorkoutFloatBlob.vue'
+import WorkoutFloatContent from '@/components/float/WorkoutFloatContent.vue'
+import { buildWorkoutSnapshot, workoutEndSheet } from '@/components/float/snapshot'
 import { workoutRuntime } from '@/system/workoutRuntime'
 import { immersiveClosing, immersiveOpen, immersiveReturning, openImmersive, setImmersiveOriginProvider } from '@/system/sessionImmersive'
-import { liquidGlass } from '@/system/perf'
-import { useDragDock } from '@/composables/useDragDock'
 import { useToast } from '@/composables/useToast'
 
 /**
@@ -20,11 +20,10 @@ import { useToast } from '@/composables/useToast'
  * 当前组数 · 完成本组。原有各页「检测到未完成的训练」恢复提示
  * 由本条接管——运行时启动即恢复会话，无运动时整条不显示。
  *
- * 可拖拽停靠（useDragDock）：整条可拖，松手按速度方向吸附到
- * 顶 / 底（全宽条）或左右边缘（64px 方块泊车态，轻点展开回条）。
- * 结构三层各司其职：root 只管 fixed 定位与 z 序、pos 只被弹簧写
- * transform、body 承载视觉与两层内容交叉淡变。停靠在 bottom 时
- * 通过 --wbar-reserve 给页面内容追加底部空间（tokens.css 的
+ * 外壳走 common/FloatDock（四条浮条共用的停靠 / 材质 / 进出场）。条 / 方块里的内容
+ * 与样式在 components/float/WorkoutFloatContent、WorkoutFloatBlob —— 与全局浮窗
+ * （另一个 webview）复用同一份；本文件只留运动域的壳与动作。
+ * 停靠在 bottom 时通过 --wbar-reserve 给页面内容追加底部空间（tokens.css 的
  * --page-pad-bottom 计入），页面已滚到底则自动跟随滚到新位置，
  * 让被本条盖住的末尾内容滑出来。
  */
@@ -33,34 +32,22 @@ const router = useRouter()
 const { toast } = useToast()
 
 const view = rt.view
+/** 本条渲染的全部内容：状态点语义 / 标题 / 统计行 / 主动作 / 结束文案都由它派生，
+ *  与推给系统浮窗的快照是**同一个函数**（buildWorkoutSnapshot），不是两份文案。
+ *  插槽只在 FloatDock 打开时渲染，这里给模板一个非空快照，免去逐字段判空。 */
+const barSnapshot = computed(() => buildWorkoutSnapshot(rt)!)
 const endOpen = ref(false)
-const rootEl = ref<HTMLElement | null>(null)
+/** FloatDock 暴露的定位层：停靠 / 形变锚点都从它量 */
+const dock = ref<InstanceType<typeof FloatDock> | null>(null)
 
-/* ---------- 拖拽停靠 ---------- */
-const posEl = ref<HTMLElement | null>(null)
-const { slot, form, pressing, dragging, onPointerDown, expandFromBlob } = useDragDock(posEl)
-
-/* ---------- 材质：超高档起换**真折射**（与 Dock / 沉浸层控制层同一条管线）----------
- * `.glass-surface` 那份是「模糊 + 令牌」的毛玻璃：档位升级只换令牌，超高下它仍然只是
- * 一层糊，拿不到折射。而这一条是**悬浮件**（浮在页面内容之上、底下真的有东西会动），
- * 正是苹果那条「折射给控制层的离散件」的适用对象。
- *
- * 做法与 GlassSurface 的折射分支一致：把元素自己的 `backdrop-filter` 从 blur() 换成
- * `url(#filters)`，底 / 受光边 / 光学层继续由 `.glass-surface` 那套令牌给（同一块材质，
- * 只换"怎么采样背后"这一步）。滤镜定义来自 common/GlassFilter.vue，量尺默认是父元素 ——
- * 也就是本条浮条的 .dock-body 自己，条形态与 64px 方块形态的尺寸变化由它自己重烘贴图。
- *
- * 三条边界：① 只在 liquidGlass（超高 / 极致 + 内核画得出来）时才挂，其余档位走原来的
- * 毛玻璃；② 减弱透明度时由 base.css 的媒体查询带 !important 压掉（内联样式它压不过）；
- * ③ 拖拽的 transform 不碍事 —— 实测 Chromium 下元素自身与祖先的 transform /
- * will-change 都不影响背景采样，只有 opacity<1 的祖先会（进入动画那 400ms 内就是这种
- * 情况：与从前挂 blur 时同一段退化，动画结束即恢复）。 */
-const glassFilterId = `glass-filter-${Math.random().toString(36).slice(2, 10)}`
-const glassStyle = computed<Record<string, string> | undefined>(() => {
-  if (!liquidGlass.value) return undefined
-  const filter = `url(#${glassFilterId}) saturate(var(--glass-sat))`
-  return { backdropFilter: filter, WebkitBackdropFilter: filter }
-})
+/** 沉浸态的两条根类改由 prop 声明，不再命令式碰子组件 DOM */
+const dockClass = computed(() => ({
+  'wdock-root': true,
+  'immersive-hidden': immersiveOpen.value && !immersiveClosing.value,
+  // closing 期浮条保持**可见**（被不透明的形变壳盖住，仅作收起锚点与落位底）：
+  // 形变壳贴到它的 rect 上后由落位溶解露出，不再另播滑入动画。
+  'immersive-measuring': immersiveClosing.value,
+}))
 
 // 注册形变锚点供给：沉浸层展开快照 / 收起实时量取都从 body 取
 // （getter 形式——收起时浮窗已恢复显示且可能刚被重新停靠，须现取现量）。
@@ -69,7 +56,7 @@ const glassStyle = computed<Record<string, string> | undefined>(() => {
 // view 渲染）时返回 null——量到的 (0,0) 会让形变从屏幕左上角长出。
 onMounted(() => {
   setImmersiveOriginProvider(() => {
-    const pos = posEl.value
+    const pos = dock.value?.posEl ?? null
     if (!pos || getComputedStyle(pos).transform === 'none') return null
     return (pos.firstElementChild as HTMLElement | null) ?? pos
   })
@@ -86,17 +73,13 @@ function activeScroller(): HTMLElement | null {
 }
 
 watch([immersiveOpen, immersiveClosing, immersiveReturning], ([open, closing, returning]) => {
-  const root = rootEl.value
   document.documentElement.dataset.immersive = returning ? 'returning' : closing ? 'closing' : open ? 'open' : 'ready'
-  if (!root) return
-  root.classList.toggle('immersive-hidden', open && !closing)
-  // closing 期浮条保持**可见**（被不透明的形变壳盖住，仅作收起锚点与落位底）：
-  // 形变壳贴到它的 rect 上后由落位溶解露出，不再另播滑入动画。
-  root.classList.toggle('immersive-measuring', closing)
 }, { immediate: true })
 
+const dockSlot = computed(() => dock.value?.slot ?? 'bottom')
+
 watch(
-  [slot, view],
+  [dockSlot, view],
   async ([s, v]) => {
     const rootStyle = document.documentElement.style
     if (!v || s !== 'bottom') {
@@ -107,7 +90,7 @@ watch(
     // 读到的是切换后形态的真实高度，而 padding 此刻尚未变化
     const sc = activeScroller()
     const atEnd = sc ? sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2 : false
-    const h = posEl.value?.getBoundingClientRect().height || 58
+    const h = dock.value?.posEl?.getBoundingClientRect().height || 58
     rootStyle.setProperty('--wbar-reserve', `${Math.round(h + 14)}px`)
     await nextTick()
     // 已在底部还往下补了空间：跟着滚到底，把被悬浮条盖住的内容露出来
@@ -121,24 +104,25 @@ onBeforeUnmount(() => {
 })
 
 /* ---------- 原有动作语义不变 ---------- */
-/* 标题说后果不说规定：写清「结束」拿走什么、「放弃」丢什么（文案即代价） */
-const endTitle = computed(() =>
-  view.value?.kind === 'run'
-    ? '现在结束会进入总结页，核对距离与时长后再保存；放弃则这次跑步不会留下记录'
-    : '现在结束会保存这次训练已完成的组数；放弃则一条记录都不留',
+/* 结束确认的标题与动作取自 components/float/snapshot 的同一份构造器：
+   标题说后果不说规定（文案即代价），与系统浮窗的内联确认逐字一致。 */
+const endSheet = computed(() => {
+  const v = view.value
+  return v ? workoutEndSheet(v) : null
+})
+const endTitle = computed(() => endSheet.value?.title ?? '')
+const endActions = computed(() =>
+  (endSheet.value?.actions ?? []).map((a) => ({ label: a.label, value: a.id, danger: a.danger })),
 )
 
-const endActions = computed(() =>
-  view.value?.kind === 'run'
-    ? [
-        { label: '结束并保存', value: 'finish' },
-        { label: '放弃本次跑步（不保存）', value: 'discard', danger: true },
-      ]
-    : [
-        { label: '结束并保存', value: 'finish' },
-        { label: '放弃本次训练（不保存）', value: 'discard', danger: true },
-      ],
-)
+/** 主动作：暂停 / 继续 / 完成本组 —— 与快照里的 primary 同源，不在模板里再判一遍相位 */
+function onPrimary(): void {
+  const p = barSnapshot.value?.primary
+  if (!p) return
+  if (p.id === 'pause') rt.pauseActive()
+  else if (p.id === 'resume') rt.resumeActive()
+  else rt.completeCurrentSet()
+}
 
 function goImmersive(): void {
   // 训练课：从浮窗当前位置形变展开为沉浸层（不走路由，任意吸附位同理）；
@@ -174,158 +158,45 @@ async function onEndPick(value: string): Promise<void> {
     }
   }
 }
+
 </script>
 
 <template>
-  <section
-    v-if="view"
-    ref="rootEl"
-    class="wdock-root"
-    :class="[`dock-${slot}`, { dragging }]"
+  <FloatDock
+    ref="dock"
+    :open="!!view"
+    storage-key="rein.wbar.dock.v1"
+    region-label="进行中的运动"
+    blob-label="展开运动控制"
+    :root-class="dockClass"
+    :padding-y="10"
   >
-      <div ref="posEl" class="dock-pos">
-        <div
-          class="dock-body glass-surface"
-          :class="[form === 'blob' ? 'is-blob' : 'is-bar', { pressing, dragging }]"
-          :style="glassStyle"
-          role="region"
-          aria-label="进行中的运动"
-          @pointerdown="onPointerDown"
-        >
-          <!-- 折射滤镜定义（不参与绘制，绝对定位）：只在超高档挂，量尺是这个 .dock-body -->
-          <GlassFilter :id="glassFilterId" :enabled="liquidGlass" />
-
-          <!-- 全宽条形态 -->
-          <div class="layer layer-bar" :class="{ off: form !== 'bar' }">
-            <button class="info row" type="button" @click="goImmersive">
-              <span class="dot" :class="{ live: view.running, pause: view.paused, done: view.summary }" />
-              <span class="lines col">
-                <b class="t">{{ view.title }}</b>
-                <span class="s num">{{ view.stat }}</span>
-              </span>
-            </button>
-
-            <div class="acts row">
-              <button
-                v-if="view.kind === 'run' && view.running"
-                class="abtn main"
-                type="button"
-                @click="rt.pauseActive()"
-              >
-                暂停
-              </button>
-              <button
-                v-else-if="view.kind === 'run' && view.paused"
-                class="abtn main"
-                type="button"
-                @click="rt.resumeActive()"
-              >
-                继续
-              </button>
-              <button
-                v-else-if="view.completeLabel"
-                class="abtn main"
-                type="button"
-                @click="rt.completeCurrentSet()"
-              >
-                {{ view.completeLabel }}
-              </button>
-              <button v-if="view.summary" class="abtn main" type="button" @click="goImmersive">
-                去保存
-              </button>
-              <button v-if="view.canEnd" class="abtn end" type="button" @click="endOpen = true">
-                结束
-              </button>
-              <button class="abtn ico" type="button" aria-label="恢复沉浸模式" @click="goImmersive">
-                <Expand :size="15" :stroke-width="2.5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- 方块泊车形态：轻点展开回全宽条 -->
-          <button
-            class="layer layer-blob"
-            :class="{ off: form !== 'blob' }"
-            type="button"
-            aria-label="展开运动控制"
-            @click="expandFromBlob"
-          >
-            <span class="dot" :class="{ live: view.running, pause: view.paused, done: view.summary }" />
-            <b class="bt num">{{ view.blob }}</b>
-          </button>
-        </div>
-      </div>
-
-      <!-- 结束（二级确认）：与沉浸页同一条结束语义 -->
-      <ActionSheet
-        :open="endOpen"
-        :title="endTitle"
-        :actions="endActions"
-        @select="void onEndPick($event)"
-        @close="endOpen = false"
+    <template #bar>
+      <WorkoutFloatContent
+        :snapshot="barSnapshot"
+        @primary="onPrimary"
+        @end="endOpen = true"
+        @open="goImmersive"
+        @immerse="goImmersive"
       />
-  </section>
+    </template>
+
+    <template #blob>
+      <WorkoutFloatBlob :snapshot="barSnapshot" />
+    </template>
+
+    <!-- 结束（二级确认）：与沉浸页同一条结束语义 -->
+    <ActionSheet
+      :open="endOpen"
+      :title="endTitle"
+      :actions="endActions"
+      @select="void onEndPick($event)"
+      @close="endOpen = false"
+    />
+  </FloatDock>
 </template>
 
 <style scoped>
-/* root：只管 fixed 定位与 z 序（零尺寸、不接事件），位移全在 .dock-pos */
-.wdock-root {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  z-index: 59; /* 页面内容之上、TabBar(60) 之下 */
-  pointer-events: none;
-}
-
-.wdock-root.dragging {
-  z-index: 70; /* 拖拽 / 飞行中盖过 TabBar，落位即回 */
-}
-
-.dock-pos {
-  position: absolute;
-  left: 0;
-  top: 0;
-  will-change: transform;
-}
-
-/* body：共享视觉外壳；条形态尺寸由内层内容撑开，方块形态定死 64。
-   材质（玻璃底 / 受光边 / 内顶高光 / blur / 投影 / 退化）走全局 .glass-surface ——
-   与底部 Dock 同一份定义，悬浮的这一族看起来才是同一种材料 */
-.dock-body {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-l);
-  pointer-events: auto;
-  /* 整体是拖拽把手：手势期内不让浏览器接管滚动 / 选中 / 长按菜单 */
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  transition:
-    transform var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
-}
-
-.dock-body.is-blob {
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  border-radius: var(--radius-l);
-}
-
-/* 抓取反馈：按下轻收、抓住抬升 */
-.dock-body.pressing {
-  transform: scale(0.97);
-}
-
 .wdock-root.immersive-hidden {
   opacity: 0;
   pointer-events: none;
@@ -337,9 +208,16 @@ async function onEndPick(value: string): Promise<void> {
    浮条从未离开过自己的位置，任何位移都会让形变落点对不上。 */
 .wdock-root.immersive-measuring {
   pointer-events: none;
+  /* 收起（closing）时本浮条是形变壳的**落位底**：壳贴落瞬间露出的必须是 100% 可见的浮条。
+     而「开课 → 立刻收起」这个时序里，浮条的入场过渡（FloatDock 的 0→1，250ms）可能还没走完，
+     收起又会把这条过渡 retarget 回去 —— 采样与肉眼都会看到一块半透明浮条（既有 e2e
+     e2e-immerse-toggle 的「Dock 就位可见」断言正是这一条）。这里直接摘掉过渡并钉死
+     opacity: 1：落位底不该有第二种透明度。正常入场（未收起时）不受影响。 */
+  opacity: 1 !important;
+  transition: none !important;
 }
 
-.wdock-root.immersive-measuring .dock-body {
+.wdock-root.immersive-measuring :deep(.dock-body) {
   /* `!important` 是必须的：`.dock-body` 的 backdrop-filter 是**内联样式**
      （`glassStyle` 在 liquidGlass 档生成 `url(#…) saturate(…)`，绑在 :style 上），
      而内联的普通声明胜过作者的普通声明 —— 不带它这条规则恒不生效，收起那 400ms 里
@@ -348,204 +226,5 @@ async function onEndPick(value: string): Promise<void> {
      那里也是压 GlassSurface 的内联 url()，同样带了 !important。 */
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-}
-
-/* 条形态：宽度沿用旧悬浮条的视口窄栏（居中由弹簧坐标负责，不靠 margin） */
-.dock-body.is-bar {
-  width: calc(100vw - 24px);
-  max-width: calc(var(--frame-max) - 24px);
-}
-
-.dock-body.dragging {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-float-lift);
-}
-
-/* 两层内容同位交叉淡变；隐藏层延迟到淡出结束后才真正不可见 */
-.layer {
-  visibility: visible;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s;
-}
-
-.layer.off {
-  opacity: 0;
-  transform: scale(0.92);
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s linear var(--dur-fast);
-}
-
-.layer-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.layer-blob {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
-.bt {
-  max-width: 100%;
-  padding: 0 4px;
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: var(--text-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 两种显形都由状态类直接驱动 */
-
-/* 左侧信息区：整块可点，等价「恢复沉浸」 */
-.info {
-  flex: 1;
-  min-width: 0;
-  gap: 10px;
-  text-align: left;
-  border-radius: var(--radius-m);
-  padding: 2px;
-  transition: background var(--dur-fast) var(--ease-standard);
-}
-
-.info:active {
-  background: var(--surface-2);
-}
-
-.dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--text-3);
-}
-
-.dot.live {
-  background: var(--c-exercise);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--c-exercise) 65%, transparent);
-  animation: wbreathe 1.8s infinite;
-}
-
-.dot.pause {
-  background: var(--warn);
-}
-
-@keyframes wbreathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
-}
-
-.lines {
-  min-width: 0;
-  gap: 2px;
-}
-
-.t {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: var(--text-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.s {
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 右侧动作区 */
-.acts {
-  flex: none;
-  gap: 7px;
-}
-
-.abtn {
-  flex: none;
-  position: relative;
-  height: 38px;
-  padding: 0 15px;
-  border-radius: var(--radius-l);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  transition: transform var(--dur-fast) var(--ease-standard);
-}
-
-/* 视觉高度留 38（浮条的总高不能因为热区而涨），命中区上下各撑 3px 到 44：
-   收起状态下这里是「继续 / 完成本组」的唯一入口，练到力竭时更需要容错。 */
-.abtn::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-}
-
-.abtn:active {
-  transform: scale(0.94);
-}
-
-.abtn.main {
-  background: var(--text-1);
-  color: var(--bg);
-}
-
-/* soft 底 + strong 字（tokens.css:163-168）：结束是危险动作，底与字都走令牌 */
-.abtn.end {
-  color: var(--danger-strong);
-  background: var(--danger-soft);
-}
-
-.abtn.ico {
-  width: 38px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  color: var(--text-2);
-}
-
-/* 减弱动效：保留透明度确认，去掉一切位移动画与呼吸点 */
-@media (prefers-reduced-motion: reduce) {
-  .layer,
-  .layer.off {
-    transform: none;
-    transition-duration: 120ms;
-  }
-
-  .dock-body {
-    transition: none;
-  }
-
-  .dot.live {
-    animation: none;
-  }
 }
 </style>

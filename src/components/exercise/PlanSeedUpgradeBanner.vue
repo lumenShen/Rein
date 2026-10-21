@@ -92,9 +92,9 @@ const ACTIONS = [
 .banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 14px;
+  gap: var(--gap-md);
+  margin-bottom: var(--sp-14);
+  padding: var(--sp-14);
   border-radius: var(--radius-l);
   /* 底色走令牌（运动域 soft + 主色 soft）：写死 rgba 的那版会跟换档分叉 */
   background: linear-gradient(135deg, var(--c-exercise-soft), var(--accent-soft));
@@ -111,14 +111,14 @@ const ACTIONS = [
 }
 
 .text {
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
 }
 
 .title {
   font-size: var(--fs-callout);
-  font-weight: 700;
-  gap: 4px;
+  font-weight: var(--fw-bold);
+  gap: var(--gap-tight);
 }
 
 .seedhint {
@@ -132,11 +132,11 @@ const ACTIONS = [
 
 .opt {
   flex: none;
-  padding: 8px 16px;
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 </style>

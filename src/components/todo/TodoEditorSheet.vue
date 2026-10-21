@@ -11,6 +11,7 @@ import { useFeaturesStore } from '@/stores/features'
 import { useTodoStore } from '@/stores/todo'
 import { recorder, startRecording, stopRecording } from '@/system/recorderRuntime'
 import { minToHHmm, todayStr } from '@/utils/date'
+import { humanBytes } from '@/utils/format'
 import { fileToJpegBase64, IMAGE_ACCEPT } from '@/utils/image'
 import { TODO_CATEGORIES } from '@/types'
 import type {
@@ -370,10 +371,7 @@ function atchIcon(kind: TodoAttachmentKind) {
 }
 
 function fmtSize(n?: number): string {
-  if (n == null) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return n == null ? '' : humanBytes(n)
 }
 
 function removeAtch(i: number): void {
@@ -684,47 +682,53 @@ onBeforeUnmount(() => {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 表单项之间 16（有明显边界的一档） */
+  gap: var(--gap-lg);
 }
 
 .field {
-  gap: 8px;
+  /* 标签与控件 8 */
+  gap: var(--gap-sm);
 }
 
 .field > span,
 .fb {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .title {
-  padding: 12px 14px;
+  /* 标题是抽屉里最大的一行输入：整行浅井（radius 16、左右 16、高 48） */
+  min-height: var(--row-h);
+  padding: var(--sp-10) var(--pad-card);
   border-radius: var(--radius-m);
-  background: var(--surface-2);
+  /* 浅井底（--surface-inset）：压在抽屉的玻璃面上仍读得出一层「可输入」的凹陷 */
+  background: var(--surface-inset);
   font-size: var(--fs-headline);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .time-row {
   display: flex;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .tcell {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .date {
-  padding: 8px 12px;
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-inline);
   border-radius: var(--radius-m);
-  background: var(--surface-2);
+  background: var(--surface-inset);
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
   width: 100%;
   box-sizing: border-box;
@@ -733,15 +737,18 @@ onBeforeUnmount(() => {
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  /* 同一组胶囊内 4、组与组之间由 .form 的 16 拉开 —— 参照里的「胶囊分组」配方 */
+  gap: var(--gap-tight);
 }
 
 .chip {
-  padding: 8px 14px;
+  /* 胶囊：高 28（--control-sm）、左右 16，与其它胶囊同一档 */
+  min-height: var(--control-sm);
+  padding: var(--sp-6) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
@@ -749,21 +756,26 @@ onBeforeUnmount(() => {
 }
 
 .chip.on {
+  /* soft 底 + strong 字（STANDARDS §4）：实底 accent 压在 accent-soft 上读不清 */
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 /* ---------- 时长步进器 ---------- */
 
 .dstepper {
-  padding: 6px 8px;
+  /* 步进器：圆钮与中间数字之间 12（参照的「圆形 −/+ + 数字」配方） */
+  gap: var(--gap-md);
+  padding: var(--sp-6) var(--sp-8);
   border-radius: var(--radius-l);
   background: var(--surface-2);
 }
 
 .dstep-btn {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  /* 步进器圆钮的视觉直径 34（--control-icon），命中区补到 44 */
+  width: var(--control-icon);
+  height: var(--control-icon);
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow-thumb);
@@ -773,6 +785,17 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
+.dstep-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .dstep-btn:disabled {
   /* 禁用浓度走令牌（tokens.css:37-40）：与本文件其余禁用态同一档，不另写裸值 */
   opacity: var(--disabled-opacity);
@@ -780,10 +803,10 @@ onBeforeUnmount(() => {
 
 .dval {
   min-width: 96px;
-  padding: 5px 10px;
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-m);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   text-align: center;
   transition: background-color var(--dur-fast) var(--ease-standard);
@@ -794,25 +817,25 @@ onBeforeUnmount(() => {
 }
 
 .dval.unset {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .dedit {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .dinput {
   width: 84px;
-  padding: 5px 6px;
+  padding: var(--sp-4) var(--sp-6);
   border-radius: var(--radius-m);
   border: 1px solid var(--accent);
   background: var(--surface);
   text-align: center;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -832,9 +855,9 @@ onBeforeUnmount(() => {
 }
 
 .notes {
-  padding: 10px 14px;
+  padding: var(--sp-12) var(--pad-card);
   border-radius: var(--radius-m);
-  background: var(--surface-2);
+  background: var(--surface-inset);
   font-size: var(--fs-subhead);
   resize: none;
   width: 100%;
@@ -842,12 +865,14 @@ onBeforeUnmount(() => {
 }
 
 .actions {
-  margin-top: 16px;
+  margin-top: var(--gap-lg);
 }
 
 .danger {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  /* 常规按钮 40（--control-md）：原先 38 与主按钮不等高 */
+  width: var(--control-md);
+  height: var(--control-md);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -857,13 +882,26 @@ onBeforeUnmount(() => {
   color: var(--danger-strong);
 }
 
+/* 删除是破坏性操作：40 的视觉钮命中区撑到 44，避免点偏 */
+.danger::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .save {
-  padding: 11px 34px;
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--sp-32);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
@@ -873,7 +911,7 @@ onBeforeUnmount(() => {
 
 .cnt {
   color: var(--accent);
-  margin-left: 4px;
+  margin-left: var(--gap-tight);
 }
 
 /* ---------- 附件与标记 ---------- */
@@ -881,18 +919,19 @@ onBeforeUnmount(() => {
 .atch-add {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .abtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 13px;
+  gap: var(--gap-tight);
+  min-height: var(--control-sm);
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
@@ -910,19 +949,20 @@ onBeforeUnmount(() => {
 }
 
 .atch-text {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 .tacts {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
 }
 
 .mini {
-  padding: 6px 14px;
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -937,17 +977,17 @@ onBeforeUnmount(() => {
 
 .atch-list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: var(--sp-4) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 .arow {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   border-radius: var(--radius-s);
 }
 
@@ -962,8 +1002,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
+  gap: var(--gap-sm);
+  padding: var(--sp-6) var(--sp-8);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -987,7 +1027,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .asize {
@@ -1001,8 +1041,8 @@ onBeforeUnmount(() => {
 .adel {
   position: relative;
   flex: none;
-  /* 补齐到 44（图标 13px + 6px 内边距 ≈ 25px 见方） */
-  padding: 15px;
+  /* 补齐到 44 命中区（图标 13px + 16px 内边距） */
+  padding: var(--sp-16);
   color: var(--text-3);
 }
 
@@ -1013,7 +1053,8 @@ onBeforeUnmount(() => {
 }
 
 .aprev {
-  padding: 2px 8px 8px 40px;
+  /* 左侧 40 与附件行的图标列对齐，缩略图落在文件名下面 */
+  padding: var(--sp-2) var(--sp-8) var(--sp-8) var(--sp-40);
 }
 
 .aimg {
@@ -1038,11 +1079,11 @@ onBeforeUnmount(() => {
 .sect {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 2px;
+  gap: var(--gap-md);
+  margin-top: var(--gap-text);
   color: var(--text-3);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .sect::before,
@@ -1058,7 +1099,7 @@ onBeforeUnmount(() => {
 .quad {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .quad > i {
@@ -1072,7 +1113,7 @@ onBeforeUnmount(() => {
   /* 四象限表头（「重要」「紧急」）是坐标轴名，要吃 11px 以上 */
   font-size: var(--fs-caption);
   color: var(--text-3);
-  padding-bottom: 1px;
+  padding-bottom: var(--sp-2);
 }
 
 .q-side {
@@ -1080,15 +1121,15 @@ onBeforeUnmount(() => {
   /* 四象限侧栏坐标名（「紧急」「不紧急」） */
   font-size: var(--fs-caption);
   color: var(--text-3);
-  padding-right: 3px;
+  padding-right: var(--sp-4);
 }
 
 .q-cell {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 9px 11px;
+  gap: var(--gap-text);
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-m);
   border: 1px solid transparent;
   background: var(--surface-2);
@@ -1104,7 +1145,7 @@ onBeforeUnmount(() => {
 
 .q-cell b {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -1123,16 +1164,18 @@ onBeforeUnmount(() => {
 
 .fold-head {
   width: 100%;
-  padding: 12px 0 4px;
+  /* 可展开行是一条标准设置行：高 48 */
+  min-height: var(--row-h);
+  padding: var(--sp-8) 0;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   text-align: left;
 }
 
 .fold-sub {
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
@@ -1148,8 +1191,10 @@ onBeforeUnmount(() => {
 .fold-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 8px 0 2px;
+  gap: var(--gap-lg);
+  /* 展开内容左缩进 16：这条展开行左侧没有图标列（只有文字 + chevron），
+     参照里 32 的缩进量是「与图标列同宽」，这里减半才不会读成孤立的一块 */
+  padding: var(--sp-8) 0 var(--sp-2) var(--sp-16);
 }
 
 .subs {
@@ -1159,13 +1204,13 @@ onBeforeUnmount(() => {
 
 .sub {
   justify-content: space-between;
-  gap: 8px;
-  padding: 7px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) 0;
   border-bottom: 0.5px solid var(--line);
 }
 
 .submain {
-  gap: 9px;
+  gap: var(--gap-sm);
   font-size: var(--fs-body);
   min-width: 0;
 }
@@ -1190,19 +1235,20 @@ onBeforeUnmount(() => {
 
 .subdel {
   color: var(--text-3);
-  padding: 2px;
+  padding: var(--sp-2);
 }
 
 .subadd {
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .subinput {
   flex: 1;
-  padding: 9px 12px;
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-inline);
   border-radius: var(--radius-m);
-  background: var(--surface-2);
+  background: var(--surface-inset);
   font-size: var(--fs-subhead);
 }
 
@@ -1222,12 +1268,12 @@ onBeforeUnmount(() => {
 }
 
 .wd {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 .itv {
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--gap-md);
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--text-2);
   align-items: center;
@@ -1239,9 +1285,9 @@ onBeforeUnmount(() => {
 }
 
 .recnote {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-3);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 </style>

@@ -109,10 +109,12 @@ function flipSub(i: number): void {
   background: var(--surface);
   border: 0.5px solid var(--line);
   border-radius: var(--radius-m);
-  padding: 16px;
+  padding: var(--pad-card);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  /* 卡内区块之间 12：原来是 9，分类引导 / 标题 / 时间 / 胶囊 / 子任务各差 3px，
+     读起来没有节奏 */
+  gap: var(--gap-md);
   min-height: 200px;
 }
 
@@ -134,9 +136,9 @@ html[data-perf]:not([data-perf='low']) .panel {
 }
 
 .kick {
-  gap: 7px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -147,14 +149,14 @@ html[data-perf]:not([data-perf='low']) .panel {
 }
 
 .prio {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .tt {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.01em;
-  line-height: 1.3;
+  line-height: var(--lh-title);
 }
 
 .tt.done {
@@ -170,35 +172,48 @@ html[data-perf]:not([data-perf='low']) .panel {
 /* 起止区间是详情面板的时间主读数（原先同行还挂一句「· 60 分钟」把同一事实说两遍） */
 .meta.time {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  line-height: 1.3;
+  line-height: var(--lh-title);
 }
 
 .chip-row {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3.5px 10px;
+  gap: var(--gap-tight);
+  /* 3.5px 的半像素内距 + 10 的横向，落在细节上会显得比同屏胶囊矮一档；
+     收进 4/12 与 24 最小高，三枚胶囊（循环 / 附件 / 来源）等高 */
+  min-height: var(--chip-h);
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .chip.src {
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  color: var(--ok);
+  /* soft 底上的文字走 strong 档（STANDARDS §4）：实底 --ok 压在同源淡底上只有 1.95:1 */
+  background: var(--ok-soft);
+  color: var(--ok-strong);
 }
 
 .chip.atch {
+  position: relative;
   cursor: pointer;
+}
+
+/* 24 高的胶囊是排版规格，命中区补到 44（纵向各外扩 10，小于相邻区块的 12 间距） */
+.chip.atch::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-10)) calc(-1 * var(--gap-tight));
+  border-radius: inherit;
 }
 
 .notes {
@@ -206,14 +221,14 @@ html[data-perf]:not([data-perf='low']) .panel {
   color: var(--text-2);
   background: var(--surface-2);
   border-radius: var(--radius-s);
-  padding: 8px 11px;
-  line-height: 1.55;
+  padding: var(--sp-8) var(--pad-inline);
+  line-height: var(--lh-body);
 }
 
 .sec {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -224,7 +239,11 @@ html[data-perf]:not([data-perf='low']) .panel {
 .sub {
   display: flex;
   align-items: center;
-  gap: 9px;
+  /* 复选框与文字之间 8（全库勾选项同一档） */
+  gap: var(--gap-sm);
+  /* 子任务行整行可点（label 包住复选框与文字）：行高取命中区下限 44，
+     原先只有一行文字的 23px，触屏上很难点中 */
+  min-height: var(--hit-min);
   font-size: var(--fs-body);
   cursor: pointer;
 }
@@ -241,8 +260,8 @@ html[data-perf]:not([data-perf='low']) .panel {
 }
 
 .acts {
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .primary {
@@ -250,18 +269,22 @@ html[data-perf]:not([data-perf='low']) .panel {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 9px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  /* 常规按钮：高 40、圆角 20，与行尾两颗方钮同高 */
+  min-height: var(--control-md);
+  padding: var(--sp-10) 0;
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ghost {
-  width: 38px;
-  height: 38px;
+  position: relative;
+  /* 常规按钮 40（--control-md）：原先 38 比主按钮矮一截，两颗次操作也不等高 */
+  width: var(--control-md);
+  height: var(--control-md);
   flex: none;
   border-radius: var(--radius-m);
   border: 0.5px solid var(--line-strong);
@@ -269,6 +292,18 @@ html[data-perf]:not([data-perf='low']) .panel {
   align-items: center;
   justify-content: center;
   color: var(--text-2);
+}
+
+/* 40 的视觉钮命中区补到 44：两颗相隔 8，44 热区之间仍留 4 的空隙 */
+.ghost::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-m);
 }
 
 .ghost.danger {
@@ -279,18 +314,19 @@ html[data-perf]:not([data-perf='low']) .panel {
 .tip {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  color: var(--accent);
+  /* soft 底上的文字走 strong 档（STANDARDS §4），实底 --accent 对比度不够 */
+  color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-s);
-  padding: 8px 11px;
+  padding: var(--sp-8) var(--pad-inline);
 }
 
 .place {
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--accent);
+  font-weight: var(--fw-bold);
+  color: var(--accent-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -301,12 +337,12 @@ html[data-perf]:not([data-perf='low']) .panel {
 }
 
 .e1 {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .e2 {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }

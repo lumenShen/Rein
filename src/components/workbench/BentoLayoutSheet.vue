@@ -94,8 +94,9 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
 .brow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  /* 名称列与右侧两组按钮 12（--gap-md）；行内上下 8 —— 抽屉里的设置行节奏 */
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
   border-bottom: 0.5px solid var(--line);
 }
 
@@ -108,12 +109,13 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* 主次文本上下 2（--gap-text） */
+  gap: var(--gap-text);
 }
 
 .brow-name {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -125,7 +127,7 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
 
 .brow-move {
   display: flex;
-  gap: 6px;
+  gap: var(--sp-6);
   flex: none;
 }
 
@@ -148,7 +150,7 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
 .brow-size {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   flex: none;
 }
 
@@ -164,7 +166,7 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,13 +182,14 @@ const { cells, isDefault, move, resize, reset } = useBentoLayout()
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  padding: var(--sp-12);
+  /* 抽屉底部的主操作是按钮：圆角 20（--radius-l），与 .commit 同档 */
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 .reset:disabled {

@@ -185,7 +185,7 @@ onMounted(async () => {
             :key="r.key"
             class="crow"
             :class="{ l1: r.depth === 0, l2: r.depth >= 1 }"
-            :style="{ paddingLeft: `${10 + r.depth * 14}px` }"
+            :style="{ '--crow-depth': r.depth }"
           >
             <span class="cname">{{ r.name }}</span>
             <span v-if="statText(r.stats)" class="cstat">{{ statText(r.stats) }}</span>
@@ -217,22 +217,24 @@ onMounted(async () => {
 
 <style scoped>
 .page {
-  padding: 0 var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .sec {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  margin-bottom: 10px;
+  /* 区块标题与内容是主从关系，取 8 档（原来是 10，与卡片内其它 8 对不齐） */
+  margin-bottom: var(--gap-sm);
 }
 
 .sec em {
   font-style: normal;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -241,13 +243,14 @@ onMounted(async () => {
 .meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
+  /* 档案格：行间 12（卡内区块档）、列间 16（有明显边界的列） */
+  gap: var(--gap-md) var(--gap-lg);
 }
 
 .meta-grid > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
 }
 
@@ -258,7 +261,7 @@ onMounted(async () => {
 
 .v {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -270,19 +273,19 @@ onMounted(async () => {
 }
 
 .prog {
-  margin-top: 16px;
+  margin-top: var(--gap-lg);
 }
 
 .prog-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--gap-sm);
 }
 
 .prog-label {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -290,15 +293,16 @@ onMounted(async () => {
 .prog-label em {
   font-style: normal;
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
-  margin-left: 6px;
+  margin-left: var(--gap-sm);
 }
 
 .prog-fig {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  /* 数字 / 单位 / 说明图标同属一档读数，横向取 8（主次文本左右） */
+  gap: var(--gap-sm);
   margin-left: auto;
 }
 
@@ -309,14 +313,15 @@ onMounted(async () => {
 
 .prog-unit {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .prog-num {
   font-size: var(--fs-callout);
-  font-weight: 700;
-  color: var(--accent);
+  font-weight: var(--fw-bold);
+  /* 数值不使用色相（色彩配额）：强调交给字号与字重 */
+  color: var(--text-1);
 }
 
 .bar {
@@ -344,8 +349,11 @@ onMounted(async () => {
 .crow {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 7px 0;
+  gap: var(--gap-sm);
+  /* 列表行上下 8：原 7 不在栅格上，且与相邻行的分隔线对不齐 */
+  padding: var(--sp-8) 0;
+  /* 层级缩进也走令牌：基础 10 + 每级 14（与原来 10 + depth×14 的像素值一致） */
+  padding-left: calc(var(--sp-10) + var(--crow-depth, 0) * var(--sp-14));
   border-bottom: 0.5px solid var(--line);
 }
 
@@ -358,24 +366,25 @@ onMounted(async () => {
   min-width: 0;
   font-size: var(--fs-caption);
   color: var(--text-1);
-  line-height: 1.35;
+  line-height: var(--lh-subtitle);
 }
 
 .crow.l1 .cname {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
 }
 
 .crow.l2 .cname {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
 .cstat {
   flex: none;
   font-size: var(--fs-micro);
-  color: var(--accent);
-  font-weight: 600;
+  /* 「必修 30 学分」是文字信息，不是图表：走次级文本色，不借用强调色 */
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -383,17 +392,22 @@ onMounted(async () => {
 .search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: var(--gap-sm);
+  /* 输入条：左右 12（小控件左右档）、纵 8；与下方清单隔 8。
+     高度补到 44：这一条在手机上就是搜索框本体，32 高不好点 */
+  min-height: var(--hit-min);
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-3);
-  margin-bottom: 8px;
+  margin-bottom: var(--gap-sm);
 }
 
 .search input {
   flex: 1;
   min-width: 0;
+  /* 输入框撑满整行 44 高：整行看着可点，就不该只有那条 17px 的文字线真的可点 */
+  align-self: stretch;
   font-size: var(--fs-caption);
   color: var(--text-1);
   background: none;
@@ -432,8 +446,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 0;
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
   border-bottom: 0.5px solid var(--line);
 }
 
@@ -447,39 +461,48 @@ onMounted(async () => {
   color: var(--text-3);
 }
 
+/* 页脚说明合成一条声明：原先同一个 .foot 写了两遍（第二遍只补对齐与内距），
+   拆开读容易漏掉其中一半，合并后上下内距一并收进栅格 */
 .foot {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
+  padding: var(--sp-8) 0 var(--sp-4);
+  text-align: center;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  line-height: 1.45;
-}
-
-.foot {
-  text-align: center;
-  padding: 6px 0 4px;
+  line-height: var(--lh-subtitle);
 }
 
 /* 「去重新登录」：与选课页同一个样式，两个空状态的出口看起来要是一回事 */
 .cta {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 22px;
+  justify-content: center;
+  gap: var(--gap-sm);
+  /* 与选课页 / 课表页的空态出口同一形状：高 40、左右 24、胶囊 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-24);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* RouterLink 不继承 button 的按压反馈，这里补上；命中区同时补到 44 */
+.cta::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
+}
+
+.cta:active {
+  transform: scale(0.96);
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

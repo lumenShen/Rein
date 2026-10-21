@@ -236,22 +236,26 @@ const isManual = (row: Row): boolean => {
 .cat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 10px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-10);
 }
 
 .kinds {
-  gap: 6px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
+/* 筛选项也是要读的（这一组有哪些类型）：高 24、左右 12、12 Medium */
 .kchip {
-  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 
 .kchip.on {
@@ -267,13 +271,14 @@ const isManual = (row: Row): boolean => {
 
 .none {
   text-align: center;
-  padding: 24px 0;
+  padding: var(--sp-24) 0;
   font-size: var(--fs-footnote);
 }
 
 .item {
-  gap: 8px;
-  padding: 10px 2px;
+  gap: var(--gap-sm);
+  min-height: var(--row-h-double);
+  padding: 0 var(--sp-2);
 }
 
 .item + .item {
@@ -286,27 +291,28 @@ const isManual = (row: Row): boolean => {
 
 .main b {
   display: block;
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
   word-break: break-all;
 }
 
 .main small {
   display: block;
-  margin-top: 2px;
-  color: var(--text-3);
+  margin-top: var(--gap-text);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .use {
   flex: none;
-  padding: 6px 12px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-medium);
 }
 
 .use:disabled {
@@ -316,14 +322,15 @@ const isManual = (row: Row): boolean => {
 .on-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-tight);
   flex: none;
-  padding: 5px 9px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--ok-soft);
   color: var(--ok-strong);
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-medium);
 }
 
 .rm {
@@ -335,7 +342,7 @@ const isManual = (row: Row): boolean => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 28 的移除钮命中区撑到 44：它在行尾，横向只管往左扩到条目自身宽度内 */
@@ -348,30 +355,32 @@ const isManual = (row: Row): boolean => {
 .manual {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 13px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  padding: var(--pad-card-tight) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .l {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
 .mid {
   flex: 1;
   min-width: 0;
-  padding: 10px 12px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface);
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-subhead);
 }
 
 .mkind {
   flex: none;
-  padding: 10px 8px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-s);
   background: var(--surface);
   font-size: var(--fs-caption);
@@ -395,6 +404,6 @@ const isManual = (row: Row): boolean => {
 
 .hint {
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 </style>

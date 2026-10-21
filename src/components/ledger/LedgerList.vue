@@ -74,22 +74,27 @@ const groups = computed<DayGroup[]>(() => {
 .list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 日期分组是一级区块：组与组之间 16（比行间距大一档，才读得成「另起一天」） */
+  gap: var(--gap-lg);
 }
 
 .dhead {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 0 4px 6px;
+  /* 组头与它下面的行之间 6，左右与行内文字对齐（行左右 0：列表不在卡里，
+     它和上方的筛选条共用 --page-pad-x 那条竖线） */
+  padding: 0 0 var(--sp-6);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .dmeta {
-  font-weight: 500;
-  color: var(--text-3);
+  font-weight: var(--fw-medium);
+  /* 当日支出 / 收入是这条流水的日汇总，要读 → --text-2（--text-3 是「补充，不是正文」，
+     而这行数字在本页没有第二处出处） */
+  color: var(--text-2);
   font-size: var(--fs-caption);
 }
 
@@ -104,8 +109,13 @@ const groups = computed<DayGroup[]>(() => {
 
 .item {
   width: 100%;
-  gap: 10px;
-  padding: 10px 6px;
+  /* 彩章 / 分类名 / 金额三列：12（列间要读得清归属），
+     也是列表规范里「右侧元素与中间内容 12vp」那一条 */
+  gap: var(--gap-md);
+  /* 双行流水平（分类名 + 备注）：行高走 64 档（--row-h-double，列表规范 48/56/64/72/96）。
+     原来靠 12+12+34 彩章撑到 58 —— 不在任何一档上，且换行/无备注时高度会跟着抖。 */
+  min-height: var(--row-h-double);
+  padding: var(--sp-8) 0;
   text-align: left;
 }
 
@@ -114,7 +124,8 @@ const groups = computed<DayGroup[]>(() => {
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 50%;
+  /* 正圆走 --radius-full，不写裸 50% */
+  border-radius: var(--radius-full);
   color: var(--on-accent);
 }
 
@@ -122,12 +133,13 @@ const groups = computed<DayGroup[]>(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* 分类名与备注：主次文本上下 2 */
+  gap: var(--gap-text);
 }
 
 .lbl {
   font-size: var(--fs-callout);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 
@@ -139,11 +151,20 @@ const groups = computed<DayGroup[]>(() => {
 }
 
 .amt {
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  /* 金额是这一行的核心读数（分类名只是归属）：升到 Body_L 16 半粗，
+     比左侧 14 的分类名重一档，扫一列金额时先读到的是数字 */
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  /* 金额右对齐 + 等宽（.num 已在模板里给）：一列金额的末位必须成线，
+     上下扫的时候差值一秒读出来 */
+  text-align: right;
+  /* 一个金额串不折行：「−¥12,345.67」拆成两行就等于读错 */
+  white-space: nowrap;
   color: var(--text-1);
 }
 
+/* 收入与支出同色：色彩配额里金额是**数值**（STANDARDS §4），一律 --text-1；
+   区分收支靠正负号（− / +），不靠色相。 */
 .amt.income {
   color: var(--text-1);
 }

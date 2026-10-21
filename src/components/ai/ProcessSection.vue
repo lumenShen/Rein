@@ -266,21 +266,26 @@ const titleText = computed(() => {
 <style scoped>
 /* 无卡片外观：以文档流形式融入 assistant 回复；
    左侧缩进与正文形成明确的层级区分 */
+/* 思考 / 工具流整块的基色：展开时这些行是要读的（哪一步做了什么），
+   落 --text-2；--text-3 只留给「可以略过」的补充。 */
 .process-section {
-  padding-left: 2px;
+  padding-left: var(--sp-2);
   font-size: var(--fs-footnote);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
+/* 折叠头是一枚 28 高的行内胶囊（--control-sm），负外边距抵掉内距好与正文左缘对齐。
+   它是可点的开合控件，热区再用 ::after 上下各补 8 到 44（视觉高度不变）。 */
 .process-header {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   max-width: 100%;
-  height: 28px;
-  padding: 0 8px;
-  margin-left: -8px;
-  border-radius: var(--radius-m);
+  height: var(--control-sm);
+  padding: 0 var(--gap-sm);
+  margin-left: calc(-1 * var(--gap-sm));
+  border-radius: var(--radius-full);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -291,6 +296,12 @@ const titleText = computed(() => {
     transform var(--dur-fast) var(--ease-standard);
 }
 
+.process-header::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
+
 @media (hover: hover) {
   .process-header:hover {
     background: var(--surface-2);
@@ -299,14 +310,14 @@ const titleText = computed(() => {
 
 .process-icon {
   line-height: 1;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .process-title {
   min-width: 0;
   font-size: var(--fs-caption);
-  font-weight: 500;
-  color: var(--text-3);
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -316,7 +327,7 @@ const titleText = computed(() => {
 .process-dots {
   display: inline-flex;
   flex: none;
-  gap: 3px;
+  gap: var(--gap-tight);
 }
 
 .process-dots .dot {
@@ -347,7 +358,7 @@ const titleText = computed(() => {
 .process-arrow {
   line-height: 1;
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -401,19 +412,19 @@ html[data-perf='low'] .process-body {
 .rubber-layer {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 8px 0 6px 8px;
-  padding: 2px 0 2px 12px;
+  gap: var(--gap-tight);
+  margin: var(--gap-sm) 0 var(--gap-sm) var(--gap-sm);
+  padding: var(--sp-2) 0 var(--sp-2) var(--sp-12);
   border-left: 2px solid var(--line);
   min-width: 0;
 }
 
 .process-reasoning {
-  padding: 2px 6px 2px 0;
+  padding: var(--sp-2) var(--sp-6) var(--sp-2) 0;
   min-width: 0;
   font-size: var(--fs-caption);
-  line-height: 1.6;
-  color: var(--text-3);
+  line-height: var(--lh-body);
+  color: var(--text-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

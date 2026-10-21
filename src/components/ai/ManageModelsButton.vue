@@ -22,19 +22,22 @@ function go(): void {
 </template>
 
 <style scoped>
+/* 行内小胶囊按钮：高 28（--control-sm）、左右 12 */
 .manage {
-  gap: 5px;
-  padding: 8px 13px;
+  gap: var(--gap-tight);
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   flex: none;
 }
 
 .chev {
-  margin: 0 -3px 0 -1px;
-  color: var(--text-3);
+  /* 尖括号自带视觉内边距，左右各收 2px 才与胶囊内缘同齐 */
+  margin: 0 calc(-1 * var(--sp-2));
+  color: var(--text-2);
 }
 </style>

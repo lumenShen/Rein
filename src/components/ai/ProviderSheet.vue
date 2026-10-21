@@ -169,30 +169,33 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
 .pv {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 10px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-10);
 }
 
 .card {
-  padding: 13px 14px;
+  padding: var(--pad-card-tight) var(--pad-card);
 }
 
 .cred {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .ad-label {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .style {
+  display: inline-flex;
+  align-items: center;
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 2px 8px;
+  font-weight: var(--fw-medium);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -201,9 +204,9 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
 .edit {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--accent);
 }
 
@@ -215,9 +218,9 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
 .err {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--danger);
   word-break: break-all;
 }
@@ -227,13 +230,14 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 11px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .btn.primary {
@@ -248,12 +252,12 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
 .list-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .l {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
@@ -261,30 +265,25 @@ const keyTail = computed(() => (live.value?.apiKey ? live.value.apiKey.slice(-4)
 .l-hint {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .more {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--accent);
 }
 
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
+/* 转圈走 base.css 的共享 keyframes */
 .spin {
-  animation: rotate 0.9s linear infinite;
-}
-
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 </style>

@@ -23,6 +23,7 @@ import { toParsedItems } from '@/ai/foodMatch'
 import { suggestMeal } from '@/config/domain'
 import { todayStr } from '@/utils/date'
 import { useTodoStore } from '@/stores/todo'
+import { int16ToB64, mergeInt16 } from './pcm'
 import { useToast } from '@/composables/useToast'
 import { claimMic, micOwner, releaseMic } from './micBus'
 
@@ -157,27 +158,6 @@ function stopMicPipeline(): void {
     unlisten()
     unlisten = null
   }
-}
-
-function mergeInt16(parts: Int16Array[]): Int16Array {
-  const total = parts.reduce((s, p) => s + p.length, 0)
-  const out = new Int16Array(total)
-  let off = 0
-  for (const p of parts) {
-    out.set(p, off)
-    off += p.length
-  }
-  return out
-}
-
-function int16ToB64(arr: Int16Array): string {
-  const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)
-  let bin = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)))
-  }
-  return btoa(bin)
 }
 
 /** 纪要展示前把音频绝对路径转成可播放 URL（mock 下原样） */

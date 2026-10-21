@@ -145,7 +145,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
@@ -154,7 +154,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
    此前这里是 14px 的小标签，与同级卡片标题排在一屏里明显矮一截。 */
 .eyebrow {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   color: var(--text-1);
 }
@@ -164,7 +164,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* ── 主数字 ── */
@@ -172,13 +172,14 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  /* 数值与单位是同一行的主次文本：左右 8、上距标题 8（标题与内容一档） */
+  gap: var(--gap-text-inline);
+  margin-top: var(--gap-sm);
 }
 
 .big {
   font-size: var(--fs-display-s);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1.2px;
   line-height: 1;
   /* 摄入量是数值：数值一律中性色（色彩配额，STANDARDS §4）。
@@ -198,7 +199,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   margin-left: auto;
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 /* 「剩余可吃」组降一级：它不是这一屏的英雄（英雄是左边的摄入量），
@@ -211,7 +212,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 
 .rest-v {
   font-size: var(--fs-title3);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   line-height: 1;
   color: var(--text-1);
@@ -224,7 +225,8 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 .bar {
   position: relative;
   height: 12px;
-  margin-top: 12px;
+  /* 主读数与条之间 12（卡内区块）：此前是裸值，改用语义令牌 */
+  margin-top: var(--gap-md);
 }
 
 .bar.sm {
@@ -279,14 +281,16 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 10px;
+  /* 图例项之间 12（同一组要读得清归属），与上方条之间 8 */
+  gap: var(--gap-md);
+  margin-top: var(--gap-sm);
 }
 
 .li {
   display: flex;
   align-items: center;
-  gap: 5px;
+  /* 色点与图例文字：图标 + 文字左右 8 太松，取同一行最小呼吸 4 */
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
   color: var(--text-2);
   white-space: nowrap;
@@ -311,33 +315,38 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 .hr {
   height: 1px;
   background: color-mix(in srgb, var(--text-1) 10%, transparent);
-  margin: 14px 0 12px;
+  /* 分隔线两侧是卡内两个区块：上下各 12（--gap-md） */
+  margin: var(--gap-md) 0;
 }
 
 /* ── 三大宏量 ── */
 .macros {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 .mc {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .m-label {
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-3);
+  font-weight: var(--fw-bold);
+  /* 宏量名是要读的信息（不是补充注脚），退到 --text-2；--text-3 只留给真正可略的注 */
+  color: var(--text-2);
 }
 
 .m-val {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
+  /* 「当前值」与「/目标值」是同一行里最小的一对主次文本：
+     至少留 4（--gap-tight），否则 20/80g 会粘成一个数 */
+  gap: var(--gap-tight);
 }
 
 /* 宏量数字走中性色，**不**用各自的指标色：
@@ -347,7 +356,7 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
    色相只出现在色点、进度条与图例上（色彩配额，STANDARDS §4）。 */
 .m-cur {
   font-size: var(--fs-title2);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   line-height: 1;
   color: var(--text-1);
@@ -356,7 +365,8 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 
 .m-tgt {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  /* 「/ 目标值」是判断达没达标的另一半依据，必须读得出来 */
+  color: var(--text-2);
 }
 
 /* ── 窄卡（桌面便当 hero 格）降一档 ──
@@ -365,14 +375,24 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
    标题两处一致（都是卡片标题规格），所以这里不再覆写它；
    要降的是大数字，否则 4/12 列宽装不下。
    另外那张卡被 bento 拉满整格高（不填满就会漏出灰底，整行读成没画完），
-   所以让内容在卡内均匀铺开，用 `min-height` 而不是 `height`：内容变多时照常往下长。 */
+   用 `min-height` 而不是 `height`：内容变多时照常往下长。
+
+   **不写 justify-content: space-between**：desktop 上这一格被拉到与「待办」同高时，
+   均匀铺开会在标题／数字／条／图例之间同时张开四道大缝，读起来像四个互不相干的块。
+   改成「上组（标题+数字+条+图例）贴顶、下组（分隔线+三大宏量）贴底」——
+   只留**一道**缝，且那道缝正好落在分隔线上，层级关系反而更清楚。 */
 .ov.dense {
   min-height: 100%;
-  justify-content: space-between;
 }
 
 .ov.dense .hero {
-  margin-top: 6px;
+  /* 窄卡再收一档：6 是 4/8 表里的一格，保住「标题—主数字」不散开 */
+  margin-top: var(--sp-6);
+}
+
+/* 下组（分隔线 + 三大宏量）贴底：缝隙全部落在分隔线之上，只此一道 */
+.ov.dense .hr {
+  margin-top: auto;
 }
 
 .ov.dense .big {

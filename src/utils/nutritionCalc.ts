@@ -4,7 +4,76 @@
  * 按目标加减热量缺口后，蛋白质按体重配比、脂肪按供能占比、碳水补足剩余热量。
  */
 
-import type { ActivityLevel, DailyTargets, Goal, Sex } from '@/types'
+import { MICROS, type MicroDef } from '@/config/dri'
+import type { ActivityLevel, DailyTargets, Goal, NutrientIntake, Sex } from '@/types'
+
+/** 宏量供能（千卡/克）：蛋白与碳水 4、脂肪 9 */
+const MACRO_KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const
+
+export interface MacroEnergyPart {
+  key: keyof typeof MACRO_KCAL_PER_G
+  label: string
+  grams: number
+  colorVar: string
+  /** 供能占比（0–100，未四舍五入） */
+  pct: number
+}
+
+/**
+ * 宏量供能占比 —— 食品详情 / 记录详情 / 食谱菜单 / 食品库四处共用。
+ *
+ * 此前四处各写一遍：三处按 >0.5% 过滤、菜单卡不过滤；三处保留小数、菜单卡逐项
+ * 四舍五入（三项之和会出现 99 / 101）。统一在这里算，展示层再决定取整。
+ */
+export function macroEnergyShare(
+  protein: number,
+  carb: number,
+  fat: number,
+  opts: { minPct?: number } = {},
+): MacroEnergyPart[] {
+  const parts: MacroEnergyPart[] = [
+    { key: 'protein', label: '蛋白质', grams: protein, colorVar: '--c-protein', pct: 0 },
+    { key: 'carb', label: '碳水', grams: carb, colorVar: '--c-carb', pct: 0 },
+    { key: 'fat', label: '脂肪', grams: fat, colorVar: '--c-fat', pct: 0 },
+  ]
+  const total = parts.reduce((s, p) => s + p.grams * MACRO_KCAL_PER_G[p.key], 0)
+  if (total <= 0) return []
+  const minPct = opts.minPct ?? 0.5
+  return parts
+    .map((p) => ({ ...p, pct: ((p.grams * MACRO_KCAL_PER_G[p.key]) / total) * 100 }))
+    .filter((p) => p.pct > minPct)
+}
+
+export interface MicroRow extends MicroDef {
+  value: number
+  /** 占 DRI 的百分比（未钳制；进度条宽度由视图自己 min(100)） */
+  pct: number
+  /** 上限类营养已超标 */
+  over: boolean
+}
+
+/**
+ * 微量营养素行 —— 营养全览卡 / 食品详情 / 记录详情共用。
+ *
+ * 三处原先各算一遍：全览卡把 pct 钳在 100 且 value 保留一位；两个详情按实际含量算
+ * 并在模板里再钳一次。数值与百分比口径收在这里，`clampPct` 只给「进度环式」视图用。
+ */
+export function buildMicroRows(
+  intake: Partial<NutrientIntake> | null | undefined,
+  opts: { clampPct?: boolean; roundValue?: boolean; onlyPositive?: boolean } = {},
+): MicroRow[] {
+  const rows = MICROS.map((def) => {
+    const raw = Number(intake?.[def.key]) || 0
+    const pct = def.dri > 0 ? Math.round((raw / def.dri) * 100) : 0
+    return {
+      ...def,
+      value: opts.roundValue ? Math.round(raw * 10) / 10 : raw,
+      pct: opts.clampPct ? Math.min(pct, 100) : pct,
+      over: def.isLimit === true && raw > def.dri,
+    }
+  })
+  return opts.onlyPositive ? rows.filter((r) => r.value > 0) : rows
+}
 
 /** 计算输入：身体数据 + 目标（age 由生日换算或直接输入） */
 export interface CalcParams {

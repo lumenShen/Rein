@@ -183,7 +183,7 @@ function bump(delta: number): void {
 
       <div v-if="mode === 'grams'" class="stepper row between">
         <button aria-label="减少" @click="bump(-50)"><Minus :size="18" /></button>
-        <span class="num"><b>{{ grams }}</b> g</span>
+        <span class="num"><b>{{ grams }}</b><em class="qunit">g</em></span>
         <button aria-label="增加" @click="bump(50)"><Plus :size="18" /></button>
       </div>
 
@@ -197,7 +197,7 @@ function bump(delta: number): void {
         </ul>
         <div class="stepper row between">
           <button aria-label="减少" @click="bump(-0.5)"><Minus :size="18" /></button>
-          <span class="num"><b>{{ unitCount }}</b> {{ unitName }}</span>
+          <span class="num"><b>{{ unitCount }}</b><em class="qunit">{{ unitName }}</em></span>
           <button aria-label="增加" @click="bump(0.5)"><Plus :size="18" /></button>
         </div>
       </template>
@@ -217,9 +217,11 @@ function bump(delta: number): void {
 
 <style scoped>
 .finder {
-  gap: 8px;
-  padding: 11px 14px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  /* 搜索栏当输入框处理：高 40（10 上下 + 14 字），左右 16；
+     圆角取控件档 20（与筛选抽屉里的输入框、按钮同档，卡片才是 16） */
+  padding: var(--sp-10) var(--pad-card);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
 }
 
@@ -229,7 +231,7 @@ function bump(delta: number): void {
 }
 
 .list {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   max-height: 46dvh;
   overflow-y: auto;
 }
@@ -237,8 +239,10 @@ function bump(delta: number): void {
 .item {
   width: 100%;
   text-align: left;
-  gap: 10px;
-  padding: 12px 2px;
+  /* 名称列与右侧热量：12（两列内容要分开读） */
+  gap: var(--gap-md);
+  /* 双行食物行：12 上下 + 两行文本 ≈ 64 档 */
+  padding: var(--sp-12) 0;
 }
 
 .item + .item {
@@ -248,16 +252,17 @@ function bump(delta: number): void {
 .item b {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .item small {
-  color: var(--text-3);
+  /* 分类与「每 100g」是选食物时要看的依据 → --text-2 */
+  color: var(--text-2);
   font-size: var(--fs-caption);
 }
 
 .kcal {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-callout);
   /* 选食物时最该比的热量：主数值走最深一档 */
   color: var(--text-1);
@@ -265,73 +270,85 @@ function bump(delta: number): void {
 
 .kcal em {
   font-style: normal;
-  /* 单位是必读信息（「167」读不出是什么量），不吃 11px 水印档 */
+  /* 单位是必读信息（「167」读不出是什么量），不吃 11px 水印档；
+     数值与单位是同一行内的最小一对，左右留 4（--gap-tight） */
+  margin-left: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-2);
 }
 
 .none {
   text-align: center;
-  padding: 28px 0;
+  padding: var(--sp-28) 0;
   font-size: var(--fs-subhead);
 }
 
 .detail {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 6px;
+  /* 详情里的四段（返回 / 头部 / 步进 / 单位）是卡内区块：12 */
+  gap: var(--gap-md);
+  margin-top: var(--gap-sm);
 }
 
 .back {
+  position: relative;
   align-self: flex-start;
-  gap: 2px;
+  gap: var(--gap-text);
   color: var(--accent);
   font-size: var(--fs-subhead);
-  font-weight: 600;
-  margin-left: -6px;
+  font-weight: var(--fw-semibold);
+  /* 负 margin 把「‹ 返回」的字面对齐到内容左缘，符号本身自带空白 */
+  margin-left: calc(-1 * var(--sp-6));
+}
+
+/* 文字返回键只有一行高：上下各扩 12，命中区补到 44（下方是标题，不会误触控件） */
+.back::after {
+  content: '';
+  position: absolute;
+  inset: -12px 0;
 }
 
 .food-head h3 {
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .food-head p {
   font-size: var(--fs-caption);
-  margin: 2px 0 4px;
-  color: var(--text-3);
+  margin: var(--gap-text) 0 var(--gap-tight);
+  color: var(--text-2);
 }
 
 /* 详情头：每 100g 热量提为主数值，宏量读数竖线分隔、降一档灰 */
 .fkcal {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .fkcal em {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  margin-left: 4px;
+  margin-left: var(--gap-tight);
 }
 
 .fmitem {
-  margin-left: 8px;
+  margin-left: var(--gap-sm);
 }
 
 .fmitem + .fmitem::before {
   content: '|';
-  margin-right: 8px;
+  margin-right: var(--gap-sm);
   color: var(--text-3);
 }
 
 .stepper {
-  padding: 8px 6px;
+  padding: var(--gap-sm) var(--sp-6);
   border-radius: var(--radius-l);
   background: var(--surface-2);
 }
@@ -349,28 +366,52 @@ function bump(delta: number): void {
 
 .stepper b {
   font-size: var(--fs-title1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
-  margin-right: 3px;
+}
+
+/* 步进器的单位与被调整的数值分开排：数值 24 bold，单位 14 半粗 + 次档灰。
+   此前两者同为继承字号，「1200 g」读起来像一个数，单位也不参与层级。 */
+.qunit {
+  margin-left: var(--gap-tight);
+  font-style: normal;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .units {
-  gap: 8px;
+  /* 单位胶囊各自带底：换行上下 16（也是热区余量）、同行 8 */
+  gap: var(--gap-lg) var(--gap-sm);
   flex-wrap: wrap;
 }
 
 .uchip {
-  padding: 8px 13px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 单字单位（「个」「碗」）也不该缩成一条窄条：视觉至少 44 宽，
+     命中区再纵向补 12 到 44（高 34 + 6×2） */
+  min-width: var(--hit-min);
+  /* 单位胶囊：上下 8、左右 12（与其它胶囊同一档） */
+  padding: var(--gap-sm) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+.uchip::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
 }
 
 .uchip small {
-  margin-left: 4px;
+  margin-left: var(--gap-tight);
   color: var(--text-3);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 .uchip.on {
@@ -389,16 +430,17 @@ function bump(delta: number): void {
 
 .preview b {
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .add {
-  padding: 12px 22px;
+  /* 主操作按钮：高 48 档（12 上下 + 16 字），左右 20 */
+  padding: var(--sp-12) var(--sp-20);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .add:disabled {

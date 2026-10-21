@@ -274,7 +274,7 @@ async function onConfirmDelete(value: string): Promise<void> {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 .seg {
@@ -283,20 +283,22 @@ async function onConfirmDelete(value: string): Promise<void> {
 
 .cats {
   display: grid;
+  /* 分类磁贴：行距 12（两行要分开）、列距 6（五列在窄宽下要挤） */
   grid-template-columns: repeat(5, 1fr);
-  gap: 10px 6px;
+  gap: var(--gap-md) var(--sp-6);
 }
 
 .cat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 2px 0 4px;
+  /* 圆章与名称：4；磁贴上下留 2/4（按压底色不贴字） */
+  gap: var(--gap-tight);
+  padding: var(--gap-text) 0 var(--gap-tight);
   border-radius: var(--radius-m);
   /* 分类磁贴的名字（「餐饮」）是要读的字段名，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -307,7 +309,8 @@ async function onConfirmDelete(value: string): Promise<void> {
 .cat i {
   width: 42px;
   height: 42px;
-  border-radius: 50%;
+  /* 正圆走 --radius-full，不写裸 50% */
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -329,14 +332,15 @@ async function onConfirmDelete(value: string): Promise<void> {
 .recent {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .recent-tag {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-3);
+  font-weight: var(--fw-bold);
+  /* 「最近」是这一行的字段名，要读 → --text-2 */
+  color: var(--text-2);
 }
 
 .recent-cat {
@@ -344,7 +348,7 @@ async function onConfirmDelete(value: string): Promise<void> {
   /* 别让单个历史项被拉成通栏一行：上限 88px，剩下的空间留在行尾 */
   max-width: 88px;
   min-width: 0;
-  gap: 3px;
+  gap: var(--gap-tight);
   padding: 0;
 }
 
@@ -356,41 +360,53 @@ async function onConfirmDelete(value: string): Promise<void> {
 .amount {
   display: flex;
   align-items: baseline;
-  gap: 3px;
-  padding: 6px 0;
+  /* 货币符号与大数字：同一行最小呼吸 2 */
+  gap: var(--gap-text);
+  padding: var(--sp-6) 0;
 }
 
 .amount em {
   font-style: normal;
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .amount b {
   font-size: var(--fs-large-title);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
 }
 
 .date {
   display: flex;
-  gap: 6px;
+  gap: var(--sp-6);
   align-items: center;
 }
 
 .chip {
-  padding: 6px 12px;
+  position: relative;
+  /* 胶囊：纵向 6 + 12 字 ≈ 30（--control-sm 28 之上一点，视觉不动），左右 12 */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
+/* 今天 / 昨天 / 自定义是三个并排的日期选择：视觉 30，热区竖向各扩 8 → 46。
+   横向不扩（三个之间只有 6，横向扩会互相压住）。 */
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-8)) 0;
+}
+
+/* 选中态：soft 底上的文字走 --accent-strong（tokens.css 的语义色契约 / STANDARDS §4）。 */
 .chip.on {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .date-chip {
@@ -411,7 +427,8 @@ async function onConfirmDelete(value: string): Promise<void> {
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  /* 九宫格键位：6 的缝让每格读成独立按键，又不至于散开 */
+  gap: var(--sp-6);
 }
 
 .key {
@@ -419,7 +436,7 @@ async function onConfirmDelete(value: string): Promise<void> {
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-title3);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -433,7 +450,8 @@ async function onConfirmDelete(value: string): Promise<void> {
 }
 
 .note {
-  padding: 10px 14px;
+  /* 备注输入：上下 10（40 档）、左右 16 */
+  padding: var(--sp-10) var(--pad-card);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-body);
@@ -445,7 +463,7 @@ async function onConfirmDelete(value: string): Promise<void> {
 }
 
 .actions {
-  margin-top: 2px;
+  margin-top: var(--gap-text);
 }
 
 .empty {
@@ -455,22 +473,24 @@ async function onConfirmDelete(value: string): Promise<void> {
 .danger {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 10px 18px;
+  gap: var(--gap-tight);
+  /* 删除是破坏性操作：danger-soft 底上的文字走 --danger-strong，
+     实底档 --danger 落在这层 soft 底上对比度不够（tokens.css 的语义色契约 / STANDARDS §4） */
+  padding: var(--sp-10) var(--sp-18);
   border-radius: var(--radius-full);
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--danger-strong);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .save {
-  padding: 10px 34px;
+  padding: var(--sp-10) var(--sp-32);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 

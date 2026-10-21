@@ -78,12 +78,12 @@ const ratioOf = (date: string): number => {
 /* 月份导航行：与周视图共用同一套「页头 → 内容」节奏（10px + 本行），
    因此做成紧凑单行，不再在卡片里撑出第二条 38px 高的页头。 */
 .head {
-  margin-bottom: 6px;
+  margin-bottom: var(--gap-sm);
 }
 
 .title {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .nav {
@@ -99,7 +99,7 @@ const ratioOf = (date: string): number => {
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .grid > li {
@@ -125,12 +125,12 @@ const ratioOf = (date: string): number => {
 
 .day {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .cell.today .day {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .bar {
@@ -139,7 +139,7 @@ const ratioOf = (date: string): number => {
   border-radius: var(--radius-full);
   background: var(--surface-2);
   overflow: hidden;
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 .bar i {

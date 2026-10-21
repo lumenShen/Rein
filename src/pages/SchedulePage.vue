@@ -194,7 +194,7 @@ watch([view, anchor], reload)
             <ChevronLeft :size="17" :stroke-width="2.4" />
           </button>
           <button class="label" :disabled="isThisPeriod" @click="goToday">
-            {{ periodLabel }}
+            <span class="label-txt">{{ periodLabel }}</span>
           </button>
           <button class="nv" aria-label="下一段" @click="step(1)">
             <ChevronRight :size="17" :stroke-width="2.4" />
@@ -275,10 +275,12 @@ watch([view, anchor], reload)
 
 <style scoped>
 .page {
-  padding: 0 var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* 工具栏、课表、底部入口是三个各自成块的区域，块间取有明显边界的一档（16） */
+  gap: var(--gap-lg);
 }
 
 /* ============================================================
@@ -316,24 +318,31 @@ watch([view, anchor], reload)
 .bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 分段控件与日期导航两块控件相邻，取卡片间一档，窄屏不挤 */
+  gap: var(--gap-md);
 }
 
 /* ---------- 课表下方的常驻入口 ---------- */
 .links {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
+  /* 两行入口本身就是卡片，行间按卡片间距 12，比原来的 8 分得开 */
+  gap: var(--gap-md);
+  margin-top: var(--gap-tight);
 }
 
 .link-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* 图标 / 文字 / 箭头三段横向间距统一 12 */
+  gap: var(--gap-md);
   width: 100%;
-  padding: 12px 14px;
-  border-radius: var(--radius-l);
+  /* 双行入口：左右用列表行的 16，高度对齐双行行高 64 —— 图标 34 不再顶满，
+     整行读起来才是一件「可点的行」而不是一个被撑大的按钮 */
+  padding: var(--pad-card-tight) var(--pad-card);
+  min-height: var(--row-h-double);
+  /* 卡片档 16：与页面其它卡片同层级，20 在这里会读成按钮 */
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   text-align: left;
@@ -348,6 +357,7 @@ watch([view, anchor], reload)
   flex: none;
   width: 34px;
   height: 34px;
+  /* 图标底是小尺寸容器，收在小圆角档（原来与卡片同 8，视觉上噪） */
   border-radius: var(--radius-s);
   display: grid;
   place-items: center;
@@ -365,14 +375,15 @@ watch([view, anchor], reload)
 
 .links b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .links em {
   font-size: var(--fs-micro);
   font-style: normal;
-  margin-top: 1px;
+  /* 主次文本上下 2：1px 在 100% 缩放下等于没有间隙 */
+  margin-top: var(--gap-text);
 }
 
 .seg {
@@ -384,15 +395,16 @@ watch([view, anchor], reload)
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   background: var(--surface);
   border-radius: var(--radius-s);
   box-shadow: var(--shadow-card);
-  padding: 2px;
+  padding: var(--sp-2);
   min-width: 0;
 }
 
 .nv {
+  position: relative;
   flex: none;
   width: 30px;
   height: 28px;
@@ -404,35 +416,66 @@ watch([view, anchor], reload)
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
+/* 命中区 44×44，视觉尺寸不动：左右各外扩 7px 刚好吃掉 4px 间隙、
+   再压进日期按钮的 4px 内距（文字不从那里开始），不会抢走文字上的点击 */
+.nv::after {
+  content: '';
+  position: absolute;
+  inset: -8px -7px;
+}
+
 .nv:active {
   transform: scale(0.9);
 }
 
 .label {
+  position: relative;
   flex: 1;
   min-width: 0;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
-  padding: 0 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0 var(--sp-4);
   text-align: center;
 }
 
+/* 省略号必须落在内层：按钮自己若 overflow:hidden，::after 撑出的命中区会被裁掉 */
+.label-txt {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 日期按钮只有 28 高：纵向撑到 44，横向本就被整段占满 */
+.label::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
+
 .label:disabled {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .cta {
+  position: relative;
+  /* 常规按钮一档：文字 14 + 高 40 + 胶囊，与选课页 / 抢课页的空态出口同一个形状 */
+  min-height: var(--control-md);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: 8px 22px;
+  padding: var(--sp-8) var(--sp-24);
   transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 40 是按钮视觉档，命中区补到 44（只差 2px，不改变任何布局） */
+.cta::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
 }
 
 .cta:active {
@@ -440,12 +483,6 @@ watch([view, anchor], reload)
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 </style>

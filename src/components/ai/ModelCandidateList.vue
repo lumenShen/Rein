@@ -92,12 +92,12 @@ function isOn(c: ModelCandidate): boolean {
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .none {
   text-align: center;
-  padding: 26px 0;
+  padding: var(--sp-24) 0;
   font-size: var(--fs-footnote);
 }
 
@@ -106,15 +106,19 @@ function isOn(c: ModelCandidate): boolean {
   flex-direction: column;
 }
 
+/* 组标题：14 Semibold 主色（12/700 的三级灰眉标读不出「这是一组」）。
+   它本身是折叠开关（可点），高度按热区下限 44 走 —— 原先 6/2 的内距只有 ~32，
+   手指点分组头时常落到下面第一行。 */
 .grp-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
-  padding: 6px 2px;
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: 700;
+  min-height: var(--hit-min);
+  padding: var(--sp-6) var(--sp-2);
+  color: var(--text-1);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
   text-align: left;
 }
 
@@ -128,7 +132,8 @@ function isOn(c: ModelCandidate): boolean {
 }
 
 .grp-head .cnt {
-  font-weight: 600;
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
 }
 
 .list {
@@ -137,9 +142,10 @@ function isOn(c: ModelCandidate): boolean {
 }
 
 .item {
-  gap: 10px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 11px 2px;
+  min-height: var(--row-h-double);
+  padding: 0 var(--sp-2);
   text-align: left;
 }
 
@@ -158,27 +164,30 @@ function isOn(c: ModelCandidate): boolean {
 .txt b {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   word-break: break-all;
 }
 
 .txt small {
   display: block;
-  margin-top: 2px;
-  color: var(--text-3);
+  margin-top: var(--gap-text);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
   word-break: break-all;
 }
 
 .badge {
+  display: inline-flex;
+  align-items: center;
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 800;
-  padding: 2px 7px;
+  font-weight: var(--fw-medium);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);

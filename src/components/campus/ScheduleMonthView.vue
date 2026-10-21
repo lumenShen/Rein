@@ -106,48 +106,49 @@ const stats = computed(() => {
 .month {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .sum {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  padding: 0 2px;
+  padding: 0 var(--sp-2);
 }
 
 .head {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  padding: 2px 6px 6px;
+  gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-6) var(--sp-6);
 }
 
 .head span {
   text-align: center;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .board {
   background: var(--surface);
-  border-radius: var(--radius-l);
+  /* 内容容器档 16：整月是一张卡面，与日 / 周视图同层；20 是按钮档 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 8px 6px;
+  padding: var(--sp-8) var(--sp-6);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .cell {
   min-height: 68px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 5px 4px;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-4);
   border-radius: var(--radius-s);
   text-align: left;
   overflow: hidden;
@@ -169,12 +170,12 @@ const stats = computed(() => {
   height: 22px;
   line-height: 22px;
   text-align: center;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .d {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -182,7 +183,7 @@ const stats = computed(() => {
 .chips {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-2);
   min-width: 0;
 }
 
@@ -191,8 +192,8 @@ const stats = computed(() => {
    与原先混 transparent 再压到牌面上等效，但合成关系更明确。 */
 .chip {
   font-size: var(--fs-micro);
-  line-height: 1.3;
-  padding: 1px 4px;
+  line-height: var(--lh-title);
+  padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--blk) 12%, var(--surface));
   color: var(--text-1);
@@ -203,22 +204,22 @@ const stats = computed(() => {
 
 /* 「假 / 调」：直接缀在课名前面（色条太窄，放不下独立角标） */
 .hd {
-  font-weight: 700;
-  margin-right: 2px;
+  font-weight: var(--fw-bold);
+  margin-right: var(--sp-2);
 }
 
 .hd.off {
-  color: var(--warn);
+  color: var(--warn-strong);
 }
 
 .hd.makeup {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .more {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 600;
-  padding-left: 3px;
+  font-weight: var(--fw-semibold);
+  padding-left: var(--sp-4);
 }
 </style>

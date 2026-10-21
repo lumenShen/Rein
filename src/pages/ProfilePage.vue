@@ -210,15 +210,17 @@ function openEdit(): void {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
-  /* 竖排卡片间距交给全局 `.card + .card`（14px），与主页一致 */
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
+  /* 竖排卡片间距交给全局 `.card + .card`（12px），与主页一致 */
 }
 
-/* 身份条：一行的信息条不是大卡，收紧行卡内边距（.card 默认 20px 是给内容卡的） */
+/* 身份条：一行的信息条不是大卡，上下收到 8、左右走卡片档 16，行高按双行档 64 */
 .id {
-  gap: 11px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 12px 16px;
+  min-height: var(--row-h-double);
+  padding: var(--sp-8) var(--pad-card);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -239,8 +241,8 @@ function openEdit(): void {
   border-radius: 50%;
   background: linear-gradient(135deg, var(--c-intake), color-mix(in srgb, var(--c-intake) 68%, var(--on-accent)));
   color: var(--on-accent);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-bold);
 }
 
 .idcol {
@@ -248,24 +250,26 @@ function openEdit(): void {
   min-width: 0;
 }
 
+/* 姓名是这张条的主信息，走 16 Semibold；目标作为并列的次级标签跟在同一基线 */
 .nick {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  gap: var(--gap-sm);
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-semibold);
 }
 
 /* 目标贴着姓名：身份行只有两行字，把目标推到卡右缘会跟箭头打架、读着像掉出来的 */
 .goal {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
+/* 主次文本上下 2：姓名与读数之间只留一线呼吸 */
 .meta {
-  margin-top: 1px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
   overflow: hidden;
@@ -273,36 +277,38 @@ function openEdit(): void {
   text-overflow: ellipsis;
 }
 
-/* BMI 分档色（与约束抽屉卡头同一套档色；muted 档不另设色，随 meta 灰） */
+/* BMI 分档色（与约束抽屉卡头同一套档色；muted 档不另设色，随 meta 灰）。
+   三档文字一律走 --*-strong：实底档（--warn / --danger）当小号文字用对比度不够，
+   而同页 t-ok 早就用了 --ok-strong，三档必须同一支口径。 */
 .bmi.t-ok {
   color: var(--ok-strong);
 }
 
 .bmi.t-warn {
-  color: var(--warn);
+  color: var(--warn-strong);
 }
 
 .bmi.t-danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 /* 卡头标题行：标题与帮助入口同一行（落点：卡头图标按钮放标题行右端） */
 .chead-title {
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 /* 卡头：与「摄入总览 / 今日画布」同一规格 —— title3 / 700 / -0.3px / 主色文字 */
 .chead h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   color: var(--text-1);
 }
 
-/* 卡头行与卡内容之间恒为 10px（周/月视图、摘要列表都吃这条） */
+/* 卡头行与卡内容之间恒为 12（卡内区块档，周/月视图、摘要列表都吃这条） */
 .cbody {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 .seg {
@@ -324,9 +330,9 @@ function openEdit(): void {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
-  padding-right: 14px;
+  padding-right: var(--sp-16);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -334,20 +340,20 @@ function openEdit(): void {
 
 .stat + .stat {
   border-left: 0.5px solid color-mix(in srgb, var(--text-1) 10%, transparent);
-  padding-left: 14px;
+  padding-left: var(--sp-16);
   padding-right: 0;
 }
 
-/* 分栏小帽：与摄入总览宏量标签同一档（caption / 700 / 三级灰） */
+/* 分栏小帽：与摄入总览宏量标签同一档。字段名是要读的信息，落 --text-2 */
 .s-label {
   font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-3);
+  font-weight: var(--fw-bold);
+  color: var(--text-2);
 }
 
 .s-big {
   font-size: var(--fs-display-s);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1.2px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -357,9 +363,9 @@ function openEdit(): void {
 .s-big i {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
-  margin-left: 3px;
+  margin-left: var(--sp-4);
   letter-spacing: 0;
 }
 
@@ -367,15 +373,17 @@ function openEdit(): void {
   color: var(--ok-strong);
 }
 
+/* 结余为负与「正」同档：文字档而不是实底档（--danger 压在白卡上当 34px 文字可以、
+   当小字不行；这一对读数必须同一支口径，正档已经是 --ok-strong） */
 .s-big.neg {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .s-sub {
   max-width: 100%;
-  /* 副标读的是「蛋白 100g · 碳水…」这类要照着配餐的比例，不吃 11px */
+  /* 副标读的是「蛋白 100g · 碳水…」这类要照着配餐的比例：12 的字号 + --text-2 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -385,40 +393,43 @@ function openEdit(): void {
 .clist {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
+  gap: var(--gap-md);
 }
 
 .clist em {
   display: block;
   font-style: normal;
-  /* 格上小帽（「训练」「器械」）是要读的字段名，不吃 11px */
+  /* 格上小帽（「训练」「器械」）是要读的字段名：12 字号 + --text-2 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .clist b {
   display: block;
-  margin-top: 1px;
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  margin-top: var(--gap-text);
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 /* 约束 → 方案 的直达链路：一行，强调色文字（约束是方案的输入，去向要显眼但别抢编辑胶囊） */
+/* 卡内的功能入口行：圆角比母卡收一档（16 → 12），文字 14 Medium */
 .plan-link {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  margin-top: var(--gap-md);
+  padding: 0 var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--accent-soft);
-  color: var(--accent);
-  font-size: var(--fs-caption);
-  font-weight: 600;
+  /* accent-soft 底上的文字走 --accent-strong（实底档 --accent 在该底上不足 4.5:1） */
+  color: var(--accent-strong);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   text-align: left;
 }
 
@@ -430,7 +441,8 @@ function openEdit(): void {
 /* 设置入口行 */
 .setrow {
   width: 100%;
-  gap: 10px;
+  gap: var(--gap-md);
+  min-height: var(--row-h);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -442,16 +454,16 @@ function openEdit(): void {
 }
 
 .setlabel {
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .setval {
-  gap: 2px;
+  gap: var(--gap-tight);
   font-size: var(--fs-footnote);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .chev {

@@ -255,13 +255,13 @@ async function onSync(): Promise<void> {
 .result {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .lead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-subhead);
   color: var(--text-1);
 }
@@ -290,8 +290,8 @@ async function onSync(): Promise<void> {
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 0;
+  gap: var(--sp-8);
+  padding: var(--sp-10) 0;
 }
 
 .row + .row {
@@ -301,20 +301,20 @@ async function onSync(): Promise<void> {
 .body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-2);
   min-width: 0;
 }
 
 .name {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .meta {
   font-size: var(--fs-micro);
   font-style: normal;
-  line-height: 1.4;
+  line-height: var(--lh-caption);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -323,19 +323,20 @@ async function onSync(): Promise<void> {
   color: var(--text-2);
 }
 
-/* 免听不是「一条失败」，是一件今天就要去办的事 —— 给它正文级权重 */
+/* 免听不是「一条失败」，是一件今天就要去办的事 —— 给它正文级权重。
+   字号也必须到正文下限 12：10px 的「去教务办免听」读不出来，权重就只是说说 */
 .why {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-caption);
   font-style: normal;
   color: var(--warn-strong);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 .chip {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   /* 中性档（已取消）也是状态词：--text-3 压 --surface-2 只有 2.3:1 */
@@ -367,13 +368,13 @@ async function onSync(): Promise<void> {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: var(--sp-4);
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 命中区撑到 44 高（34 → 48）。行与行之间靠 .row 的 9px 内边距隔开，
@@ -387,8 +388,8 @@ async function onSync(): Promise<void> {
 .acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
+  gap: var(--sp-8);
+  padding-top: var(--sp-10);
   border-top: 0.5px solid var(--line);
 }
 
@@ -396,13 +397,14 @@ async function onSync(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--sp-6);
+  padding: var(--sp-12);
+  /* 按钮档 20：这是结果面板唯一的主操作，与卡片（16）拉开一层 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .primary:disabled {
@@ -413,16 +415,16 @@ async function onSync(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-10);
   flex-wrap: wrap;
 }
 
 .link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
 }
 
@@ -432,17 +434,11 @@ async function onSync(): Promise<void> {
 
 .note {
   font-size: var(--fs-micro);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -75,6 +75,8 @@ class MainActivity : TauriActivity() {
     ShareReceiver.handle(this, intent)
     // 点通知进应用（冷启动）：落待办 + 尽量当场派发 DOM 事件
     handleOpenIntent(intent)
+    // 系统浮层点「打开」进应用（冷启动）：动作随 intent 一起来，交给桥统一派发
+    handleFloatAction(intent)
     ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
       // WindowInsets 是物理像素；CSS 像素 = 物理像素 / density，直接塞会放大 2~3 倍
       val density = resources.displayMetrics.density
@@ -123,6 +125,23 @@ class MainActivity : TauriActivity() {
     ShareReceiver.handle(this, intent)
     // 点通知回前台（Activity 已在）：同样落待办 + 当场派发
     handleOpenIntent(intent)
+    // 系统浮层点「打开」回前台（singleTask 不重建）：动作同样派发
+    handleFloatAction(intent)
+  }
+
+  /**
+   * 前台态是「全局浮窗该不该显示」的唯一边界（契约 §3.1）：
+   * Activity resumed = 程序内浮条在场 → 系统浮层 GONE；pause（切后台/锁屏/去别的应用）
+   * → 浮层 VISIBLE。服务本身不启停，会话状态因此不会被一次切后台打断。
+   */
+  override fun onResume() {
+    super.onResume()
+    GlobalFloatBridge.onAppForeground(this, true)
+  }
+
+  override fun onPause() {
+    super.onPause()
+    GlobalFloatBridge.onAppForeground(this, false)
   }
 
   override fun onDestroy() {
@@ -152,6 +171,26 @@ class MainActivity : TauriActivity() {
         android.util.Log.w("MainActivity", "派发 rein-open-workout 失败", e)
       }
     }
+  }
+
+  /**
+   * 系统浮层 → WebView 的动作通道（intent extra）。
+   *
+   * 走 GlobalFloatBridge.deliverIntentAction 而不是在这里再写一份 evaluateJavascript：
+   * 桥统一负责「先落缓存 → 派发 DOM 事件」，缓存留给前端启动时的 take_action
+   * —— 冷启动这一拍 WebView 往往还在加载空文档，只靠 evaluateJavascript 会把动作弄丢。
+   *
+   * 读完立刻把 extra 摘掉：Activity 重建/进程恢复时同一个 intent 会被重放，
+   * 动作不能因此执行第二次。
+   */
+  private fun handleFloatAction(intent: Intent?) {
+    val raw = intent?.getStringExtra(GlobalFloatBridge.EXTRA_ACTION) ?: return
+    intent.removeExtra(GlobalFloatBridge.EXTRA_ACTION)
+    if (!raw.trimStart().startsWith("{")) {
+      android.util.Log.w("MainActivity", "浮层动作不是 JSON 对象，丢弃")
+      return
+    }
+    GlobalFloatBridge.deliverIntentAction(this, raw)
   }
 
   private fun findWebView(view: View?): WebView? {

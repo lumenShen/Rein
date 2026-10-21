@@ -178,24 +178,39 @@ const emptyCopy = computed(() => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* 月份切换（页头 action 槽） */
 .month {
-  gap: 2px;
-  margin-bottom: 4px;
+  /* 月份导航：两枚圆钮之间 8（无边界控件档）—— 它们各自带 46 的命中区，
+     间距小于 8 两块热区就叠在一起，右界的点击会被后一颗截走；
+     与页头标题基线错开 4。 */
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-tight);
 }
 
+/* 圆钮视觉 38：与页头 .back / .hdr-btn 同一档（PageHeader 的圆钮规格）。
+   原来是 30 —— 同一条页头动作槽里两颗钮差出一档，靠右的月份导航读起来像二级控件。 */
 .nav {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 命中区 46 = 视觉 38 + 四周各 4（--sp-4），过 --hit-min 44；
+   组内 gap 8 时两块热区正好相接、不重叠（38 + 4 + 4 = 46，8 - 4 - 4 = 0）。 */
+.nav::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-4));
 }
 
 .nav:disabled {
@@ -206,7 +221,7 @@ const emptyCopy = computed(() => {
   min-width: 92px;
   text-align: center;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* ---------- 桌面主从构图（.board 内的一切在移动端都是普通块） ---------- */
@@ -230,29 +245,33 @@ const emptyCopy = computed(() => {
    base.css 的 .card.sub），谁覆盖谁不靠样式表注入顺序去赌。 */
 .page .flow-card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 移动端它是这一屏的主卡：圆角与内距取全站卡片同一档（16 / 16），
+     20 圆角 + 20 内距是上一版手感，与其它页的卡并排会高出一档 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 20px;
+  padding: var(--pad-card);
 }
 
 .desk-main .flow-card {
   background: var(--surface-inset);
-  border-radius: var(--radius-l);
+  /* 桌面上它是配角（.card.sub 的二级浅井）：圆角与内距各收一档 */
+  border-radius: var(--radius-m-nest);
   box-shadow: none;
-  padding: 14px;
+  padding: var(--pad-card-tight);
 }
 
 /* 筛选 */
 .filters {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-bottom: 14px;
+  /* 搜索行与分类胶囊行：两组控件之间 12；与下方流水 12 */
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-md);
 }
 
 /* 桌面上搜索框与主操作同一行：搜索框吃掉余量，按钮贴右端 */
 .searchrow {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .add-inline {
@@ -263,13 +282,16 @@ const emptyCopy = computed(() => {
   justify-content: center;
   position: relative;
   flex: none;
-  gap: 5px;
-  padding: 8px 14px;
+  gap: var(--gap-text-inline);
+  /* 主操作胶囊：控件常规高 40（--control-md），上下 8、左右 16；
+     原来只有 37（8+8+14×1.5），比同一行的搜索胶囊还矮一格 */
+  min-height: var(--control-md);
+  padding: var(--gap-sm) var(--pad-card);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 桌面：流水一栏里那条 .card + .card 的边距照旧，但统计卡与右栏是栅格子项，
@@ -279,8 +301,12 @@ const emptyCopy = computed(() => {
 }
 
 .search {
-  gap: 7px;
-  padding: 8px 12px;
+  gap: var(--gap-sm);
+  /* 与同一行的「记一笔」同高：控件常规 40（--control-md）。
+     原来靠 8+8 内距自然撑到 37，两颗控件在同一行上下错开 3px。 */
+  min-height: var(--control-md);
+  /* 搜索胶囊：上下 8、左右 12 */
+  padding: var(--gap-sm) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -307,9 +333,10 @@ const emptyCopy = computed(() => {
 
 .chips {
   display: flex;
-  gap: 7px;
+  /* 分类胶囊一组无边界控件：组内 8 */
+  gap: var(--gap-sm);
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: var(--gap-text);
   scrollbar-width: none;
 }
 
@@ -320,51 +347,58 @@ const emptyCopy = computed(() => {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  /* 色点与分类名是图标 + 文字：左右 8（--gap-text-inline），不是行内最小 4 ——
+     5 个字的分类名贴着一枚 8px 色点，色点会被读成字的偏旁 */
+  gap: var(--gap-sm);
   flex: none;
   /* 高 40px：分类胶囊与「全部」是筛选的主控件（实测约 30px 高），
      40 是拇指能稳准落到的下限，横向滚动行为不变 */
-  min-height: 40px;
-  padding: 0 13px;
+  min-height: var(--control-md);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
+/* 选中态：soft 底上的文字走 --accent-strong，不拿实底档 --accent 当文字色
+   （tokens.css 的语义色契约 / STANDARDS §4）。 */
 .chip.on {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
+/* 分类色点 8：与 LedgerStats 图例、HarmonyOS 列表 Badge 同一档（8×8vp） */
 .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
 }
 
 /* EmptyState 自带 26px 上下内边距，而 .card 外面又给了一圈 16 —— 两层叠起来，
    卡里上下一共 84px 的空白，空态卡因此顶到 208px 高（390 宽的下限窗口里，
    它一路伸到 dock 底下）。组件内边距在这里收掉，外侧的卡已经提供了呼吸。 */
 .card :deep(.empty) {
-  padding: 4px 12px;
+  padding: var(--gap-tight) var(--pad-inline);
 }
 
 /* 空态卡里那颗是当月唯一的入口（筛选条同时收起了），给它 44px 的触控高度；
    筛选条里那颗仍留在行高内，与搜索框齐平。 */
 .card .add-inline {
-  padding: 11px 20px;
+  /* 空态卡里那颗是当月唯一入口，纵向补到 44 档 */
+  padding: var(--sp-12) var(--sp-20);
 }
 
-/* 主操作现在全端就这一处（悬浮钮已取消），命中区必须够拇指：视觉高度跟着搜索框
-   （35px），命中区按项目惯例（PageHeader 的 .back / .hdr-btn）撑到 44 —— 上下各外扩 5px
-   即成 45px 高；横向**只向左**外扩 5px（右侧留给屏幕边缘，横向扩出去也点不到）。
-   左边就是搜索框：扩出来的 5px 从按钮自己的左缘算起，而 .searchrow 上另有 8px gap，
-   两段命中区之间净剩 3px，不会把搜索框右端那一段的点击抢走。 */
+/* 主操作现在全端就这一处（悬浮钮已取消），命中区必须够拇指：视觉高度与搜索框同为 40
+   （--control-md），命中区按项目惯例（PageHeader 的 .back / .hdr-btn）撑到 44 ——
+   上下各外扩 2px（40 + 4 = 44）；横向**只向左**外扩 2px（右侧留给屏幕边缘，
+   横向扩出去也点不到）。左边就是搜索框：扩出来的 2px 从按钮自己的左缘算起，
+   而 .searchrow 上另有 8px gap，两段命中区之间净剩 6px，不会把搜索框右端那一段的点击抢走。 */
 .add-inline::after {
   content: '';
   position: absolute;
-  inset: -5px 0 -5px -5px;
+  /* 命中区外扩 2：40 视觉高 + 4 = 44（--hit-min） */
+  inset: calc(-1 * var(--sp-2)) 0 calc(-1 * var(--sp-2)) calc(-1 * var(--sp-2));
 }
 </style>

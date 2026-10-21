@@ -113,7 +113,7 @@ watch(
 }
 
 .prs {
-  gap: 8px;
+  gap: var(--gap-sm);
   align-items: stretch;
 }
 
@@ -121,15 +121,15 @@ watch(
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 10px 11px;
+  gap: var(--gap-text);
+  padding: var(--sp-10) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .pv {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -143,12 +143,12 @@ watch(
 }
 
 .hist {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 .hrow {
-  gap: 8px;
-  padding: 9px 2px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-2);
   font-size: var(--fs-footnote);
 }
 
@@ -175,8 +175,8 @@ watch(
 
 .more {
   position: relative;
-  margin-top: 8px;
-  padding: 8px 0;
+  margin-top: var(--sp-8);
+  padding: var(--sp-8) 0;
   width: 100%;
   font-size: var(--fs-caption);
   /* 「查看更多」是次要标签文字：中性色（色彩配额，STANDARDS §4） */

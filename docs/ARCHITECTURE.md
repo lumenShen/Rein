@@ -28,9 +28,9 @@
 
 | 路径 | 职责 | 不该出现的东西 |
 | --- | --- | --- |
-| `src/styles/tokens.css` | 全部设计令牌（颜色/圆角/阴影/动效/字号） | 业务选择器 |
+| `src/styles/tokens.css` | 全部设计令牌（颜色 / 圆角 / 间隔 / 排版 / 阴影 / 动效）。几何与排版对齐 HarmonyOS 设计规范，施工依据与逐条理由见 `docs/design/huawei/ALIGNMENT.md`：间隔走 4/8 栅格（`--sp-*` 数值档 + `--gap-*`/`--pad-*` 语义档），圆角层级正相关（4/8/12/16/20/32），字号 `--fs-*`。**组件里禁止再写裸 px** | 业务选择器；裸 5/7/9/11/13 这类非栅格值
 | `src/components/common` | 与领域无关的通用组件 | 领域 store 依赖 |
-| `src/system/*` | 应用级运行时单例（`workoutRuntime` 运动接管、`recorderRuntime` 录音、`voiceRuntime` 语音会话、`micBus` 麦克风互斥仲裁、`sessionImmersive` 沉浸层显隐、`perf` 掉帧判定与降级档） | 组件渲染逻辑、IPC 直连 |
+| `src/system/*` | 应用级运行时单例（`workoutRuntime` 运动接管、`recorderRuntime` 录音、`voiceRuntime` 语音会话、`micBus` 麦克风互斥仲裁、`sessionImmersive` 沉浸层显隐、`globalFloat` 全局浮窗的显示时机 / 快照推送 / 浮窗动作、`perf` 掉帧判定与降级档） | 组件渲染逻辑、IPC 直连 |
 | `src/services/*` | 命令名 → 类型化函数 | 业务逻辑 |
 | `src/stores/exerciseLib.ts` | 动作库缓存与解析：`byId` / `resolveName(item)` / `musclesOf(item)` / `tipsOf(item)` / `forKind` / `search`。课程的展示名一律先查它，查不到才回落课程条目里的名称快照 | 写业务数据（增删改一律经 service）；认识页面组件 |
 | `src/plugins/*` | 功能插件声明与注册表：`builtin/` 一个模块一个文件（`definePlugin`），`registry.ts` 纯数据（不认识 Pinia），`types.ts` 扩展点形状 | 启用状态（在 `stores/features.ts`）；直接 import router |
@@ -52,7 +52,7 @@
 | `src-tauri/src/modules/gateway/*` | 对外服务网关（设置 › 外部访问，`ExternalAccessSection` + `GatewayAuthSheet`）：`tokio-tungstenite` WS 服务，六条握手闸门（绑回环/Origin/Host/首帧令牌/逐次 scope/参数收紧），四态授权（本次会话内存 `conn_id→ConnGrant`、始终允许落 `ext_clients` + `sha256` 令牌、忽略限频、拒绝），28 条 `schedule.*`/`workout.*`/`pomodoro.*` 方法由 WS 私有 router 分发（**不注册成 tauri 命令**）。**模块门禁**：前端把「已启用模块 id」快照推给 Rust（`gateway_set_enabled_modules` → `app_meta:gateway.enabledModules`），`Method::plugin()` 逐方法给归属，关掉的模块其对外方法回 `module_disabled`（见 docs/EXTERNAL-API.md §4.7）—— 与 AI 工具组同一条纪律：关了开关，对外接口跟着关。设置与运行态只写 `app_meta`（`gateway.*`）；凭据/审计落 `ext_clients`/`ext_audit`（**不进同步白名单**）。变更推送复用同步已装的**唯一** `update_hook`（`sync/engine.rs`），网关**绝不**自己再装钩子 | 自己 `Connection::open`（会绕过同步钩子）；注册第二个 update_hook（顶掉同步捕获）；把 `ext_*` 放进 `sync/tables.rs` |
 | `server/*` | **Rein 在线服务**（部署在阿里云 ECS，systemd `rein-services`）：更新清单与安装包分发、发布/回滚/镜像管理接口、（预留）OpenAI 兼容模型网关。零依赖 Node，无构建步骤 | 持有更新签名私钥（服务端只能分发别人签过名的字节）；把业务数据放进这个进程 |
 | `scripts/release/*` | 发布工具链：`keygen`（生成 Ed25519 密钥对并同步公钥到三处）/ `publish`（签名 + 组装两套清单 + 推服务端/发 GitHub Release）/ `verify`（以客户端视角复核）/ `e2e`（本地起服务端跑完整链路）/ `deploy-server`（部署到 ECS） | 被前端或 Rust 代码 import；把私钥或管理令牌写进源码 |
-| `src-tauri/gen/android/.../RunTrackingService.kt` · `TrackingBridge.kt` | 跑步前台保活（Android 原生侧，与 MainActivity 同为手工维护；`tauri android init` 重新生成会丢） | 业务逻辑、SQL |
+| `src-tauri/gen/android/.../RunTrackingService.kt` · `TrackingBridge.kt` · `GlobalFloatService.kt` · `GlobalFloatBridge.kt` | 跑步前台保活 + 全局浮窗系统浮层（Android 原生侧，与 MainActivity 同为手工维护；`tauri android init` 重新生成会丢） | 业务逻辑、SQL |
 | `src-tauri/src/modules/media/*` | HEIF/HEIC → JPEG（`image_decode_heif`）：Android 经 JNI 直调框架的 `BitmapFactory`（只碰框架类，不必加 Kotlin 桥接文件），Windows 经 WIC（依赖系统装了「HEIF 图片扩展」）。**原生优先**，失败由前端降级到 `src/utils/heif.ts` 的内置解码器（动态 import，2MB 的 wasm 分包不进主包） | 让 HEIF 混进「浏览器自己能解」的那一类；在第二个地方再实现一次解码 |
 
 ## 3. IPC 契约
@@ -709,3 +709,51 @@ Rust 侧 `cargo test --lib update::`（37 项，含**官方 CLI 签名必须验�
 （分组装载与功能门禁）、`node scripts/e2e-muscle-map.mjs`（异步之后的肌群图）、
 `node scripts/e2e-layout-guard.mjs`（27 条路由的布局不变量）。
 
+
+
+## 16. 全局沉浸浮窗与自绘标题栏（2026-10-20）
+
+### 16.1 为什么是「另一扇窗」而不是「把浮条画大」
+
+程序内已经有四条底部浮条（`components/common/FloatDock.vue`）。用户离开应用（桌面失焦 / 最小化、
+手机切到别的 App）时，这些浮条随窗口一起消失，而「正在专注」和「正在训练」恰好是**用户不在看这个
+应用时最需要看见**的两种状态。所以这一轮不是重画一套 UI，而是把**同一份内容**搬到系统级浮窗：
+
+- **内容同源**：`components/float/*` 是程序内浮条与浮窗共用的内容组件；`components/float/snapshot.ts`
+  的构造器把 store 状态压成 `GlobalFloatSnapshot`，程序内浮条与主窗口运行时都读它 —— 文案、按钮顺序、
+  色点语义只在构造器里改一次。
+- **状态只有一个真源**：主窗口 `system/globalFloat.ts`。浮窗只收快照、只回动作（`GlobalFloatAction`），
+  没有任何状态机 —— 不会出现「浮窗说暂停、程序内还在跑」。
+- **两端实现不同、协议相同**：桌面 = 第二 Tauri 窗口（`float.html`，transparent + 无边框 + 置顶 +
+  不进任务栏）；Android = `SYSTEM_ALERT_WINDOW` 前台服务 + `WindowManager` 原生浮层（Kotlin 用原生
+  视图重建同一套排版，玻璃与字体按系统能力近似）。协议是 8 条命令 + 2 个事件（见 docs/GLOBAL-FLOAT.md §5）。
+- **显示时机**：只在「有沉浸会话 + 应用不在前台」时出现，回到应用即收起 —— 浮窗与程序内浮条**永不并存**。
+  用户点关闭后本次失焦期不再弹（主窗口回焦后解除）。
+
+### 16.2 降级
+
+全局浮窗是**叠加能力**，任何一步失败都退回现有行为（程序内浮条），判断只看 `global_float_status()`：
+浏览器预览 `supported=false`、Android 未授权 `permitted=false`、桌面建窗失败 `supported=false`。
+计时 / 落库 / 程序内浮条都不经过这条链路，所以降级没有数据风险。
+
+### 16.3 自绘标题栏
+
+`decorations: false` 之后原生标题栏与缩放边框一起消失，两件事都要由前端补回来：
+
+- `components/layout/TitleBarBase.vue` 是唯一外壳（高度 `--titlebar-h`，整条 `data-tauri-drag-region`）；
+  `AppTitleBar`（主窗口：品牌 + 最小化 / 最大化 / 关闭）与 `FloatTitleBar`（浮窗：会话标题 + 泊车 / 关闭）
+  共用它；窗口按钮视觉落在 base.css 的 `.wbtn` / `.wbtn-danger`（scoped 样式够不到 slot 内容，
+  这是唯一一块非局部样式）。
+- **双击最大化**：Tauri 2.11 注入的 drag.js 已在第二次 mousedown 上自己切一次；组件若再监听 dblclick
+  就会切两次（窗口闪一下回原状）。所以 TitleBarBase 在第二次 mousedown 前把拖拽属性临时摘掉，
+  双击只由组件切一次。
+- **八向缩放**：`WindowResizeHandles`（6px 隐形热区）→ `startResizeDragging(direction)`。
+- 只在「Tauri 且非 Android」渲染：浏览器预览与手机保持原样，既有 e2e 的布局断言不受影响。
+
+### 16.4 验证
+
+- `scripts/e2e-global-float.mjs`：mock 降级 + 真机（WebView2 CDP）标题栏 DOM、窗口 ex-style、
+  浮窗出现 / 隐藏 / 动作回灌。
+- 真机开调试端口的坑见 docs/GLOBAL-FLOAT.md §10 末尾：wry 总是显式设置 WebView2 的
+  `AdditionalBrowserArguments`，环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGS` 不生效，
+  必须用 `tauri dev --config <临时配置>` 合并 `additionalBrowserArgs`。

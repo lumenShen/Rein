@@ -10,6 +10,7 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import { useToast } from '@/composables/useToast'
 import { syncService } from '@/services/syncService'
+import { fmtRelativeTime, humanBytes } from '@/utils/format'
 import type { PairStatus, SyncPeerInfo, SyncRunResult, SyncRunStats, SyncStatus } from '@/types'
 
 /**
@@ -113,19 +114,11 @@ function pathText(p: string | null | undefined): string {
 }
 
 function fmtBytes(n: number | null | undefined): string {
-  if (!n) return '0 B'
-  const mb = n / 1024 / 1024
-  if (mb >= 1) return `${mb.toFixed(1)} MB`
-  return `${Math.max(1, Math.round(n / 1024))} KB`
+  return humanBytes(n ?? 0)
 }
 
 function fmtTime(ms: number | null | undefined): string {
-  if (!ms) return '从未'
-  const diff = Date.now() - ms
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
-  return new Date(ms).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return fmtRelativeTime(ms, '从未')
 }
 
 function secs(ms: number): string {
@@ -284,14 +277,14 @@ onUnmounted(() => {
           <i class="fic"><Smartphone :size="17" /></i>
           <span class="col ftxt">
             <b>{{ status?.deviceName || '—' }}</b>
-            <em class="t-3">这台设备在同步里的名字</em>
+            <em class="t-2">这台设备在同步里的名字</em>
           </span>
         </div>
         <div class="frow row">
           <i class="fic"><Fingerprint :size="17" /></i>
           <span class="col ftxt">
             <b class="mono">{{ status?.fingerprint || '—' }}</b>
-            <em class="t-3">公钥指纹 · 设备号 {{ status?.deviceShort || '—' }}</em>
+            <em class="t-2">公钥指纹 · 设备号 {{ status?.deviceShort || '—' }}</em>
           </span>
         </div>
         <div class="frow row">
@@ -322,7 +315,7 @@ onUnmounted(() => {
             <i class="fic"><Link2 :size="17" /></i>
             <span class="col ftxt">
               <b>{{ p.name || '未命名设备' }}</b>
-              <em class="t-3">{{ p.short }} · 上次 {{ fmtTime(p.lastSeen) }}</em>
+              <em class="t-2">{{ p.short }} · 上次 {{ fmtTime(p.lastSeen) }}</em>
             </span>
             <PillChip size="md" :tone="p.path === 'punch' ? 'action' : 'muted'">{{ pathText(p.path) }}</PillChip>
             <ChevronRight :size="16" class="t-3" />
@@ -339,7 +332,7 @@ onUnmounted(() => {
             <PillChip size="md" tone="action">{{ lastSummary.verb }}走「{{ lastSummary.path }}」</PillChip>
             <span class="sum-lead num">{{ lastSummary.lead }}</span>
           </p>
-          <p class="pnote t-3 num">{{ lastSummary.detail.join(' · ') }}</p>
+          <p class="pnote t-2 num">{{ lastSummary.detail.join(' · ') }}</p>
         </div>
       </template>
     </section>
@@ -352,7 +345,7 @@ onUnmounted(() => {
           <i class="fic"><KeyRound :size="17" /></i>
           <span class="col ftxt">
             <b>在这台开同步码</b>
-            <em class="t-3">念给另一台，5 分钟内有效、用过即废</em>
+            <em class="t-2">念给另一台，5 分钟内有效、用过即废</em>
           </span>
           <button class="btn small" :disabled="busy || !!offer" @click="pairStart">开码</button>
         </div>
@@ -360,10 +353,10 @@ onUnmounted(() => {
 
       <div v-if="offer" class="code">
         <b class="mono">{{ offer }}</b>
-        <em class="t-3">在另一台上输入这串码，这边会自动收尾</em>
+        <em class="t-2">在另一台上输入这串码，这边会自动收尾</em>
       </div>
 
-      <p class="pnote t-3">或者反过来 —— 在另一台上开码，把码输到这里：</p>
+      <p class="pnote t-2">或者反过来 —— 在另一台上开码，把码输到这里：</p>
       <div class="claim">
         <input
           v-model="claimCode"
@@ -394,18 +387,22 @@ onUnmounted(() => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
+/* 分区标题：18 Medium（Subtitle_L）。与设置页同一档 —— 「本机 / 已配对设备 /
+   加一台设备」是这一页的三个层级，12/700 的眉标写法读不出它们是「一节的标题」 */
 .gtitle {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--text-2);
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
 /* 卡头行：标题 + 右侧帮助入口（计数口径与同步机制原先平铺在卡面） */
 .ghead {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 标题行右侧的帮助入口：InfoHint 是多根组件，类要落在包裹元素上 */
@@ -416,19 +413,22 @@ onUnmounted(() => {
 }
 
 /* 分组行：整组挂在 .card.sub 那口浅井上（底 / 圆角 / 内距 / 无影都在 base.css 里），
-   这里只留「行间细线，首行不留线」与卡头之下那 4px（与设置页同一套） */
+   这里只留「行间细线，首行不留线」与卡头之下那 8px（标题与内容间隔，与设置页同一套） */
 .rows {
-  margin-top: 4px;
+  margin-top: var(--gap-sm);
 }
 
 .rows > * + * {
   border-top: 0.5px solid var(--line);
 }
 
+/* 双行行：34 的图标章 + 16 的标题 + 12 的说明，走 64 的双行列表档；
+   行高撑开放的是行本身，不再叠上下内距（行间边界由 1px 分隔线画） */
 .frow {
   width: 100%;
-  gap: 11px;
-  padding: 10px 0;
+  gap: var(--gap-md);
+  padding: 0;
+  min-height: var(--row-h-double);
   text-align: left;
   color: inherit;
 }
@@ -447,12 +447,12 @@ onUnmounted(() => {
 .ftxt {
   flex: 1;
   min-width: 0;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .ftxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ftxt em {
@@ -469,18 +469,20 @@ onUnmounted(() => {
   letter-spacing: 0.02em;
 }
 
+/* 常规按钮：高 40（--control-md）、左右 16、文字 14 Medium，胶囊形态 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 10px 16px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-body);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
@@ -488,26 +490,48 @@ onUnmounted(() => {
   opacity: var(--disabled-opacity);
 }
 
+/* 小号按钮 28（--control-sm）：与同一行里的 24 角标同一呼吸档。
+   视觉不放大，命中区撑到 44（规范：可点元素热区 ≥44）；行高 64，上下各外扩 8 不叠行。 */
 .btn.small {
+  position: relative;
   margin-top: 0;
-  padding: 7px 13px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   font-size: var(--fs-caption);
 }
 
+.btn.small::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+}
+
+/* 输码行里的「确认」是输入框的提交键：与 40 的输入框同高，不再是一个 28 的小胶囊 */
+.claim .btn.small {
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  font-size: var(--fs-callout);
+}
+
+/* 同步码块是卡内的二级面：圆角比母卡收一档（16 → 12），内距走卡片档 */
 .code {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-top: 12px;
-  padding: 16px;
-  border-radius: var(--radius-l);
+  gap: var(--gap-tight);
+  margin-top: var(--gap-md);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .code b {
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.18em;
   color: var(--text-1);
 }
@@ -517,11 +541,11 @@ onUnmounted(() => {
   font-size: var(--fs-caption);
 }
 
-/* 说明段：解释的是机制而非状态，字号同设置页（≥12px） */
+/* 说明段：解释的是机制而非状态，字号同设置页（≥12px），行高走正文档 */
 .pnote {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  line-height: 1.7;
+  line-height: var(--lh-body);
 }
 
 /* 上次走哪条路：结论（哪条路 + 用时 / 时间）一行，明细降次要行 */
@@ -529,8 +553,8 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .sum-lead {
@@ -540,14 +564,16 @@ onUnmounted(() => {
 
 .claim {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
+/* 输入框：高 40、左右 16，胶囊形态与同行的按钮同档 */
 .input {
   flex: 1;
   min-width: 0;
-  padding: 9px 13px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   border: 0.5px solid var(--line);
   background: var(--surface-2);
@@ -595,6 +621,6 @@ onUnmounted(() => {
 
 /* 右栏首行是句小字，加个与 .card.sub 同值的 4px 起始偏移，两栏的第一行才齐平 */
 .desk-main .add-card > .pnote {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
 }
 </style>

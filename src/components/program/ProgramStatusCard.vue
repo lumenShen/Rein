@@ -120,9 +120,9 @@ function openReview(): void {
 .main {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--sp-10);
   width: 100%;
-  padding: 13px 16px;
+  padding: var(--sp-12) var(--sp-16);
   text-align: left;
 }
 
@@ -130,7 +130,7 @@ function openReview(): void {
   width: 36px;
   height: 36px;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: grid;
   place-items: center;
   background: var(--accent-soft);
@@ -140,28 +140,28 @@ function openReview(): void {
 .txt {
   flex: 1;
   min-width: 0;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 /* 目标 / 档位：中性小胶囊（尺寸语气在 PillChip.vue），这里只管排布 */
 .ptags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--gap-tight);
 }
 
 /* 主读数「第 N 周」：卡上唯一主档（--fs-title3 + .num）；
    「共 N 周」是分母，退到脚注档、浅一档灰 */
 .pwk {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.01em;
 }
 
 .pwk .pwk-all {
-  margin-left: 6px;
+  margin-left: var(--sp-6);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -180,16 +180,19 @@ function openReview(): void {
   color: var(--text-3);
 }
 
-/* 复盘到期行：强调色的窄条，只在满一周时出现 */
+/* 复盘到期行：强调色的窄条，只在满一周时出现。
+   文字走 --accent-strong（accent-soft 底上的指定文字档，tokens.css:181）；
+   整行是按钮，命中区补到 44 再不是一条 37px 的细边。 */
 .due {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   width: 100%;
-  padding: 10px 16px;
+  min-height: var(--hit-min);
+  padding: var(--sp-10) var(--sp-16);
   border-top: 0.5px solid var(--line);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-strong);
   font-size: var(--fs-caption);
   text-align: left;
 }
@@ -204,7 +207,7 @@ function openReview(): void {
 
 .due .go {
   flex: none;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 到期行的进出场外壳：0fr↔1fr 收高度；出现走入场时长、消失走退场时长。

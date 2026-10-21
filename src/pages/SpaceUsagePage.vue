@@ -499,7 +499,9 @@ function openLargeFiles(): void {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ---------- 骨架（首屏） ---------- */
@@ -514,22 +516,23 @@ function openLargeFiles(): void {
 }
 .sk-m {
   width: 72%;
-  margin-top: 14px;
+  margin-top: var(--sp-14);
 }
 .sk-s {
   width: 32%;
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 /* ---------- 构成 ---------- */
 /* 移动端：大数字与构成条上下排；桌面：左数字右构成（hero 是通栏卡，横着才不空） */
 .hero {
   display: grid;
-  gap: 18px;
+  gap: var(--gap-lg);
 }
 .desk-main .hero {
   grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
-  gap: 34px;
+  /* 桌面两栏之间走桌面栅格间距那一档（--desk-gutter 34），与壳层同一来源 */
+  gap: var(--desk-gutter);
   align-items: start;
 }
 
@@ -537,7 +540,7 @@ function openLargeFiles(): void {
 .cap-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* 标题行 / 卡头右侧的帮助入口：InfoHint 是多根组件，类要落在包裹元素上 */
@@ -552,42 +555,42 @@ function openLargeFiles(): void {
   color: var(--text-3);
 }
 .bignum {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-display-m);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -1.2px;
-  line-height: 1.1;
+  line-height: var(--lh-display);
   color: var(--text-1);
 }
 /* 单位小一号、非斜体，跟数字同一基线 —— 大数字读起来是「132.4 MB」一个整体 */
 .bignum i {
-  margin-left: 4px;
+  margin-left: var(--sp-4);
   font-size: var(--fs-title3);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-style: normal;
   letter-spacing: 0;
   color: var(--text-2);
 }
 .hero-meta {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .hero-side {
   display: grid;
-  gap: 16px;
+  gap: var(--gap-lg);
 }
 
 .lcap {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-caption);
 }
 .lcap b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 .lcap em {
@@ -601,9 +604,9 @@ function openLargeFiles(): void {
 /* 构成条：段宽 = flex-grow = 字节数（比例即数据，不需要算百分比） */
 .stackbar {
   display: flex;
-  gap: 2px;
+  gap: var(--sp-2);
   height: 12px;
-  margin-top: 7px;
+  margin-top: var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   overflow: hidden;
@@ -631,14 +634,14 @@ function openLargeFiles(): void {
 
 .legend {
   display: grid;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-10);
 }
 .legend li {
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) auto 42px;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-footnote);
 }
 .dot {
@@ -648,51 +651,52 @@ function openLargeFiles(): void {
 }
 .lg-name {
   color: var(--text-1);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 .lg-bytes {
   color: var(--text-2);
 }
 .lg-pct {
   text-align: right;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .lgroup.derived .lg-name {
   color: var(--text-2);
 }
 
 /* ---------- 卡片通用小件 ---------- */
+/* 统计卡卡头：与「大文件」页同一套内距与间距 */
 .card-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-md);
 }
 .card-head h2 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 .card-head .sub {
   text-align: right;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 卡头右侧一组：副标 + 帮助入口（副标够窄，两者同行；入口单独占一枚 ?） */
 .head-side {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin-left: auto;
 }
 
 .foot {
-  margin-top: 8px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  color: var(--text-3);
-  line-height: 1.5;
+  color: var(--text-2);
+  line-height: var(--lh-body);
 }
 
 /* 空态的卡：桌面栅格会把同行的矮卡拉到一样高，空态得吃掉剩下那截高度才像「设计过的」
@@ -710,25 +714,26 @@ function openLargeFiles(): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   width: 100%;
-  margin-top: 12px;
-  padding: 9px 0;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  margin-top: var(--gap-md);
+  padding: 0;
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ---------- 占比列表（目录 / 来源 / 模态共用一套读法） ---------- */
 .bars {
   display: grid;
-  gap: 14px;
+  gap: var(--gap-lg);
 }
 .barrow {
   display: grid;
-  gap: 7px;
+  gap: var(--gap-sm);
   width: 100%;
   text-align: left;
 }
@@ -736,7 +741,7 @@ function openLargeFiles(): void {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto 14px;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--sp-10);
   font-size: var(--fs-footnote);
   color: var(--text-1);
 }
@@ -744,7 +749,7 @@ function openLargeFiles(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .br-count {
   font-size: var(--fs-caption);
@@ -758,7 +763,7 @@ function openLargeFiles(): void {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .bars.mini .br-1 {
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -768,7 +773,7 @@ function openLargeFiles(): void {
 }
 .bars.mini li {
   display: grid;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 .br-pct {
   min-width: 34px;
@@ -798,20 +803,22 @@ function openLargeFiles(): void {
 /* ---------- 维护 ---------- */
 .mrows {
   display: grid;
-  gap: 12px;
+  gap: var(--sp-12);
 }
+/* 维护行是卡片**内**的二级面：圆角比母卡（16）收一档到 12，
+   否则「里面那一层」读不出来（规范：卡片内嵌套面 12） */
 .mrow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  gap: var(--sp-10);
+  padding: var(--sp-10) var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 .mrow b {
   display: block;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 .mi {
@@ -831,26 +838,30 @@ function openLargeFiles(): void {
   color: var(--warn-strong);
 }
 
-/* ---------- 按钮（与文件页同一档：胶囊形主按钮 + 灰底幽灵按钮） ---------- */
+/* ---------- 按钮（与文件页同一档：胶囊形主按钮 + 灰底幽灵按钮） ----------
+   常规按钮档 40（--control-md）、左右 16、文字 14 Medium、胶囊 ——
+   此前是 8/14 内距 + 16 圆角的「小方块」，既不足 40 也不在按钮圆角档（20 / full）上。 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--sp-4);
   flex: none;
-  padding: 8px 14px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
 }
 .btn.ghost {
   background: var(--surface);
   color: var(--text-1);
 }
+/* surface 底上的危险动作文字：实底档 --danger 当文字对比度不够，走文字档 */
 .btn.ghost.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 .btn:disabled {
   opacity: var(--disabled-opacity);
@@ -858,12 +869,7 @@ function openLargeFiles(): void {
 
 /* 刷新钮转起来：与课表页的同步钮同一条做法（时长与主页面动效档一致） */
 .spin {
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .spin {

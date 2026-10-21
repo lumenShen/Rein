@@ -20,7 +20,7 @@
 | Pinia store id | 与文件名一致的小驼峰 | `defineStore('nutrition')` |
 | Vue 组件文件 | 大驼峰多词名，按域放目录 | `FoodPickerSheet.vue` |
 | CSS 类 | 组件内 kebab-case，不追求全局复用 | `.pitem`、`.grabber` |
-| 设计令牌 | `--c-领域` / `--语义` / `--fs-` / `--radius-` / `--dur-` | `--c-protein`、`--ease-sheet` |
+| 设计令牌 | `--c-领域` / `--语义` / `--sp-` `--gap-` `--pad-` / `--fs-` / `--radius-` / `--dur-` | `--c-protein`、`--gap-md`、`--ease-sheet` |
 | Rust 命令 | snake_case 动词开头 | `list_foods`、`log_meal` |
 | Rust 结构体字段 | snake_case + `#[serde(rename_all = "camelCase")]` | `sodium_mg → sodiumMg` |
 | IPC 参数例外 | 运动类型用 `workoutType` | 见 ARCHITECTURE §3 |
@@ -35,6 +35,10 @@
 ## 4. 样式规范
 
 - 颜色、圆角、阴影、字号、时长、缓动**只引用 tokens.css 令牌**；review 时看到魔法值直接打回。
+- **几何走 4/8 栅格**：`padding` / `gap` / `margin` 一律取 `--sp-*`（数值档，后缀即 px）或
+  `--gap-*` / `--pad-*`（语义档，按「层级越高间距越大」选）。禁止 5 / 7 / 9 / 11 / 13 这类裸非栅格值；
+  图标尺寸、描边宽度、波形间隙这类**绘图参数**不算布局间距，不受此限。圆角按层级取
+  （卡片 16 / 卡内分组面 12 / 按钮输入框 20 / 半模态 32）。逐条依据见 `docs/design/huawei/ALIGNMENT.md`。
 - 数字展示加 `.num`（tabular-nums）；正文层级用 `--text-2/--text-3`，不用透明度手调。
 - **色彩配额**：数值与正文用中性色；色相只允许出现在「图标 / 色点 / 进度条与图表 / 类型字章」上。
   原因：一屏里几个彩色数字会互相争注意力，读者分不清主次；而颜色一旦从图元泄漏到文字上，就没有任何东西能再当「强调」。

@@ -70,14 +70,14 @@ function baseName(path: string): string {
 <style scoped>
 .files {
   display: grid;
-  gap: 16px;
+  gap: var(--gap-lg);
 }
 
 .filerow {
   display: grid;
   grid-template-columns: 15px minmax(0, 1fr) auto 14px;
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-md);
   width: 100%;
   text-align: left;
 }
@@ -89,7 +89,7 @@ function baseName(path: string): string {
 .filerow b {
   display: block;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -115,7 +115,7 @@ function baseName(path: string): string {
   display: flex;
   gap: 1px;
   height: 4px;
-  margin-top: 9px;
+  margin-top: var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   overflow: hidden;

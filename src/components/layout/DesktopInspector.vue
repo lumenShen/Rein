@@ -260,7 +260,7 @@ function askQuick(q: string): void {
       </header>
       <div class="row" style="gap: 12px">
         <ActivityRings :rings="nutrition.rings" :size="group === 'today' ? 86 : 72" />
-        <div class="col flex-1" style="gap: 7px; min-width: 0">
+        <div class="col flex-1" style="gap: var(--sp-8); min-width: 0">
           <div class="stat">
             <b class="num">{{ nutrition.kcalIntake }}</b>
             <span class="cap">摄入 kcal</span>
@@ -391,7 +391,7 @@ function askQuick(q: string): void {
       </header>
       <div class="row" style="gap: 12px">
         <ActivityRings :rings="nutrition.rings" :size="76" />
-        <div class="col flex-1" style="gap: 7px; min-width: 0">
+        <div class="col flex-1" style="gap: var(--sp-8); min-width: 0">
           <div class="stat">
             <b class="num">{{ nutrition.kcalIntake }}</b>
             <span class="cap">/ {{ nutrition.kcalTarget }} kcal</span>
@@ -553,8 +553,11 @@ function askQuick(q: string): void {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 24px 20px 120px 0;
+  /* 一列卡片：卡片之间 12（--gap-md，与页面栅格同一档；原来 14 是两套节奏） */
+  gap: var(--gap-md);
+  /* 顶部 24 / 右侧 20 / 左侧 0（贴分隔线）；底部 120 是滚到底时最后一张卡
+     仍能停在提问条之上的留白，写成令牌组合保持同值。 */
+  padding: var(--sp-24) var(--sp-20) calc(var(--sp-64) + var(--sp-56)) 0;
   background: color-mix(in srgb, var(--surface) 24%, transparent);
   border-left: 0.5px solid var(--line);
 }
@@ -570,13 +573,14 @@ function askQuick(q: string): void {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  /* 卡头与卡内容 8（规范：标题与内容之间 8） */
+  margin-bottom: var(--gap-sm);
 }
 
 .c-head h2 {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -588,12 +592,13 @@ function askQuick(q: string): void {
 .c-more {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
   flex: none;
-  padding-block: 4px;
-  margin-block: -4px;
+  /* 命中区上下各撑 4、再用负外边距吃回同值：视觉高度与基线都不动 */
+  padding-block: var(--sp-4);
+  margin-block: calc(-1 * var(--sp-4));
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
   text-decoration: none;
 }
@@ -610,20 +615,20 @@ function askQuick(q: string): void {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .stat b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   font-variant-numeric: tabular-nums;
 }
 
 .cap {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
   white-space: nowrap;
 }
@@ -631,31 +636,34 @@ function askQuick(q: string): void {
 /* 方案卡：一行周期 + 一行今天，复盘到期时多一条行动条 */
 .p-head {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
+/* 主次文本上下 2（--gap-text）：周期与「今天」是一对行 */
 .p-today {
-  margin-top: 3px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .due {
   width: 100%;
-  margin-top: 10px;
-  padding: 8px 10px;
+  /* 与上面的正文分开 12（--gap-md）；内距 8×10（--sp-8 / --sp-10） */
+  margin-top: var(--gap-md);
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-s);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   text-align: center;
 }
 
 /* ---------- 大数字三联（运动 / 收支） ---------- */
 .figures {
   display: flex;
-  gap: 6px;
+  /* 三联读数之间无边界 → 8（--gap-sm），原来 6 让两列数字贴得太近 */
+  gap: var(--gap-sm);
 }
 
 .fig {
@@ -663,12 +671,13 @@ function askQuick(q: string): void {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /* 读数与标签上下 2（--gap-text） */
+  gap: var(--gap-text);
 }
 
 .fig b {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.4px;
   font-variant-numeric: tabular-nums;
 }
@@ -685,15 +694,16 @@ function askQuick(q: string): void {
 .mini {
   display: flex;
   flex-direction: column;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
 }
 
 .mini-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  /* 图标与文字 8（吸附自 9）；行内上下 8（吸附自 7）—— 紧凑列表的行距落在 4/8 体系上 */
+  gap: var(--gap-sm);
   width: 100%;
-  padding: 7px 0;
+  padding: var(--sp-8) 0;
   text-align: left;
   min-width: 0;
 }
@@ -722,7 +732,7 @@ function askQuick(q: string): void {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -731,7 +741,7 @@ function askQuick(q: string): void {
 .mini-meta {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -744,9 +754,10 @@ function askQuick(q: string): void {
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 图标与两行文字 12（--gap-md）：双行行比单行的 .mini-row 需要更宽的图标列缝 */
+  gap: var(--gap-md);
   width: 100%;
-  padding: 8px 0;
+  padding: var(--sp-8) 0;
   text-align: left;
   min-width: 0;
 }
@@ -763,12 +774,13 @@ function askQuick(q: string): void {
 .nav-txt {
   flex: 1;
   min-width: 0;
-  gap: 1px;
+  /* 主次文本上下 2（--gap-text） */
+  gap: var(--gap-text);
 }
 
 .nav-txt b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .nav-txt em {
@@ -789,7 +801,7 @@ function askQuick(q: string): void {
 .quick {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .qbtn {
@@ -797,13 +809,14 @@ function askQuick(q: string): void {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 11px 4px;
+  /* 图标与标签 4（--gap-tight）：一格 76 宽的磁贴里不能再宽 */
+  gap: var(--gap-tight);
+  padding: var(--sp-12) var(--sp-4);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -811,15 +824,17 @@ function askQuick(q: string): void {
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  /* 胶囊之间无边界 → 8（--gap-sm，吸附自 7） */
+  gap: var(--gap-sm);
 }
 
 .chip-q {
-  padding: 7px 11px;
+  /* 信息栏里的问句胶囊比全站胶囊小一号：上下 8 / 左右 12（--pad-inline） */
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   text-align: left;
 }
@@ -828,14 +843,15 @@ function askQuick(q: string): void {
 .bars {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-top: 14px;
+  /* 三条进度条之间 8（--gap-sm，吸附自 9） */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .bar-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .bar-label {
@@ -843,7 +859,7 @@ function askQuick(q: string): void {
   flex: none;
   white-space: nowrap;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -866,7 +882,7 @@ function askQuick(q: string): void {
 .bar-val {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -918,7 +934,7 @@ function askQuick(q: string): void {
 }
 
 .empty {
-  padding: 8px 0 2px;
+  padding: var(--sp-8) 0 var(--sp-2);
   font-size: var(--fs-footnote);
   color: var(--text-3);
 }
@@ -927,8 +943,9 @@ function askQuick(q: string): void {
 /* 材质（底 / 受光边 / 高光 / 投影 / 模糊）全在 .glass-surface 里 —— 这里只给排版。
    再写一遍 background 或 backdrop-filter 会与它抢同一条声明，胜负取决于样式表顺序。 */
 .ask {
-  gap: 10px;
-  padding: 11px 11px 11px 16px;
+  /* 输入框与发送钮 12；左右内距不对称是为了让输入文字的起点对齐卡片左缘 16 */
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--sp-12) var(--sp-12) var(--sp-16);
   border-radius: var(--radius-full);
 }
 
@@ -939,7 +956,7 @@ function askQuick(q: string): void {
   min-width: 0;
   min-height: 34px;
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .send {

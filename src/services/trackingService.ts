@@ -1,10 +1,12 @@
 /**
- * 跑步采集（Android 原生前台服务 = 运动真源）。
+ * 跑步采集（Android 前台服务 = 运动真源）。
  *
  * 锁屏后 WebView 会注销 navigator.geolocation，所以取点/计时/落盘全部搬进
- * location 类型的前台服务；前端只消费快照：live/trackTake 走 pull，原生另有
- * evaluateJavascript 的 push 通道做秒级平滑（Activity 销毁/页面重载后 push 丢失，
- * 由 pull + 轨迹文件兜底）。
+ * location 类型的前台服务；**定位请求本身由 Rust `modules/tracking/location.rs`
+ * 通过 JNI 持有**（fused/GPS、QUALITY_HIGH_ACCURACY、1s/500ms），Kotlin 只保留
+ * 保活/通知/WakeLock 与 RunCore 记账。前端只消费快照：live/trackTake 走 pull，
+ * 原生另有 evaluateJavascript 的 push 通道做秒级平滑（Activity 销毁/页面重载后
+ * push 丢失，由 pull + 轨迹文件兜底）。
  * 命令族一律「缓存 + 异步刷新」：exec 没有回执通道（wry-0.57.0/src/android/mod.rs:492-501），
  * 命令返回上次缓存值，调用方按 400ms 重试收敛（形状见 stores/run.ts）。
  * 桌面/浏览器下 status().native === false，同一批命令返回兜底常量，

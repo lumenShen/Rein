@@ -77,26 +77,30 @@ function fmtUsed(lastUsedAt: string | null): string {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .new {
   width: 100%;
-  margin-bottom: 14px;
-  gap: 7px;
-  padding: 15px 0;
+  /* 与下方课程卡之间 12（卡片间距），原来 14 让按钮像悬在两组之间。 */
+  margin-bottom: var(--gap-md);
+  gap: var(--sp-6);
+  padding: var(--sp-14) 0;
   border-radius: var(--radius-l);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
 }
 
 .item {
   width: 100%;
-  gap: 12px;
-  padding: 13px 0;
+  /* 课程条目是双行行（名字 + 时长/动作数）：行高统一 64（--row-h-double），
+     条目再多也齐平，分隔线之间的节奏才稳定。 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
   text-align: left;
 }
 
@@ -106,15 +110,16 @@ function fmtUsed(lastUsedAt: string | null): string {
 
 .name {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .meta {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  gap: var(--gap-tight);
   min-width: 0;
-  margin-top: 3px;
+  /* 主次文本上下 2（--gap-text）：名字与说明是一组，原来 4 读起来分成两段。 */
+  margin-top: var(--gap-text);
   color: var(--text-3);
   font-size: var(--fs-caption);
 }
@@ -123,7 +128,7 @@ function fmtUsed(lastUsedAt: string | null): string {
 .mins {
   flex: none;
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   color: var(--text-2);
 }
@@ -144,7 +149,7 @@ function fmtUsed(lastUsedAt: string | null): string {
 .right {
   align-items: flex-end;
   flex: none;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 /* 计划类型签。虽然是「哪一类」的标签，但它逐行重复出现，不满足类型字章
@@ -152,8 +157,8 @@ function fmtUsed(lastUsedAt: string | null): string {
    单实例的同款字章（ExerciseDetailDrawer 标题行）按字章例外保留。 */
 .type {
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 3px 9px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-xs);
   background: var(--c-exercise-soft);
   color: var(--text-1);

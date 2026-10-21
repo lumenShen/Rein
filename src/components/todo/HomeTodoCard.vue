@@ -63,7 +63,7 @@ onMounted(() => {
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -102,15 +102,16 @@ onMounted(() => {
 }
 
 .list {
-  margin-top: 6px;
+  /* 卡头与列表之间 8（标题与内容一档），6 会让首行贴着标题 */
+  margin-top: var(--gap-sm);
 }
 
 .empty {
-  padding: 22px 0 14px;
+  padding: var(--sp-24) 0 var(--sp-16);
   text-align: center;
 }
 
 .foot {
-  padding-bottom: 4px;
+  padding-bottom: var(--sp-4);
 }
 </style>

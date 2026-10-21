@@ -124,28 +124,29 @@ watch(
 }
 
 .glyph.dim {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: calc(var(--radius-s) + 1px);
+  /* 缩略图走 8 那一档（+1 是描边视觉补偿，收进 8 与母容器的层级差里） */
+  border-radius: var(--radius-s);
   background: var(--surface-2);
 }
 
 .badge {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
+  right: calc(-1 * var(--sp-2));
+  bottom: calc(-1 * var(--sp-2));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1px;
+  padding: var(--sp-2);
   border-radius: var(--radius-full);
   background: var(--surface);
-  color: var(--text-3);
+  color: var(--text-2);
   box-shadow: 0 0 0 1px var(--line);
 }
 

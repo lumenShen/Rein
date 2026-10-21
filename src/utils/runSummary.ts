@@ -19,8 +19,11 @@
  * 直接把整张表删掉，用户连「差多少」都看不到。
  */
 
+import { fmtClock, fmtPace } from './format'
 import { haversineM, trackAscentFiltered, trackLengthM, trackSplits } from './geo'
 import type { RunTrackPoint } from '@/types'
+
+export { fmtClock, fmtPace }
 
 export interface SplitRow {
   /** 第几公里（1-based） */
@@ -63,12 +66,6 @@ export interface RunSummary {
   trackM: number
   /** 填报距离与分段口径不一致：|manualKm*1000 − D| > max(50m, 3%×D) */
   distanceMismatch: boolean
-}
-
-/** 配速显示：秒/公里 → 「5'30"」 */
-export function fmtPace(secPerKm: number): string {
-  const t = Math.round(secPerKm)
-  return `${Math.floor(t / 60)}'${String(t % 60).padStart(2, '0')}"`
 }
 
 /** 时长显示：秒 → 「3 分 20 秒」/「45 秒」 */

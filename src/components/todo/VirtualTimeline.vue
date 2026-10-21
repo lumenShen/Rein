@@ -349,7 +349,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .vt {
   position: relative;
-  margin-top: 14px;
+  /* 与上面 .vt.preview 那条 14px 的上缘渐隐同源：间距小于渐隐高度时
+     首行会落在「还没化开」的那一段里 */
+  margin-top: var(--sp-14);
   touch-action: pan-y;
   /* 预览态宿主是 <button>：还原浏览器默认样式 */
   display: block;
@@ -398,18 +400,20 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
+  gap: var(--gap-sm);
+  /* 日期头钉在轴线上，高度收在 24（--chip-h）以内，不压住相邻刻度 */
+  min-height: var(--chip-h);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   z-index: 2;
 }
 
 .dayhead b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .dayhead.today {
@@ -466,9 +470,10 @@ onBeforeUnmount(() => {
   right: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   text-align: left;
-  padding: 7px 10px;
+  /* 纵向外距压到 6：块的高度由时间跨度决定，上下留白多一档就会把短块的字挤出去 */
+  padding: var(--sp-6) var(--sp-12);
   background: var(--surface-2);
   border-left: 3px solid transparent;
   border-radius: var(--radius-s);
@@ -488,14 +493,14 @@ button.block {
 .block b {
   /* 块上的开始时刻是日程的定位信息，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   flex: none;
 }
 
 .block span {
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -522,17 +527,18 @@ button.block {
   display: flex;
   justify-content: center;
   height: 30px;
-  margin: 0 -18px; /* 抵消 SheetModal .body 的水平 padding */
-  padding: 4px 18px 6px;
+  /* 出血量与抽屉内容区的左右内距同源（--pad-sheet）：两处不同步就会露出一条缝 */
+  margin: 0 calc(-1 * var(--pad-sheet));
+  padding: var(--sp-4) var(--pad-sheet) var(--sp-6);
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent), transparent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   pointer-events: none;
 }
 
 .now-tag {
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   /* 「现在」是定位词：白字压 --danger 实测只有 3.55:1，够不着小字 4.5:1 的 AA 门槛；
      换成 soft 底 + strong 字这一对（约 5.0:1），与 tokens.css:163-168 的规定一致 */
@@ -565,7 +571,7 @@ button.block {
   bottom: 0;
   display: flex;
   justify-content: center;
-  padding: 30px 0 10px;
+  padding: var(--sp-32) 0 var(--sp-12);
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface) 82%, transparent));
   pointer-events: none;
 }
@@ -573,12 +579,13 @@ button.block {
 .pill {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: var(--sp-4) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 </style>

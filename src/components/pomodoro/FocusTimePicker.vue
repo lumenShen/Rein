@@ -104,8 +104,9 @@ const pomo = usePomodoroStore()
 .subrow {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
-  margin: -2px 0 6px;
+  gap: var(--gap-tight);
+  /* 说明贴着它说明的那一行：上 -2（与行内文字顶齐）、下 6（下一行之前） */
+  margin: calc(-1 * var(--gap-text)) 0 var(--sp-6);
 }
 
 /* 说明行：走 --text-2 而不是三级灰 —— 它是用户要照着做的一句话
@@ -115,17 +116,18 @@ const pomo = usePomodoroStore()
   min-width: 0;
   margin: 0;
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
   text-wrap: balance;
 }
 
 .trow {
-  padding: 12px 0;
+  /* 设置行：12 上下 + 一行控件 ≈ 56（比 48 松一档，因为下面还挂着一行说明） */
+  padding: var(--sp-12) 0;
 }
 
 .tlabel {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 </style>

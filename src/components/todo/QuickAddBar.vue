@@ -253,16 +253,17 @@ defineExpose({ clear })
 .quick {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
 }
 
 /* 悬浮胶囊：surface 底 + 软落影，圆角走 radius-full */
 .bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 8px;
+  gap: var(--gap-sm);
+  /* 左 8 让徽章与输入文字之间呼吸，右 6 收住 34 的圆钮（保持胶囊整体高度） */
+  padding: var(--sp-6) var(--sp-6) var(--sp-6) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   border: 0.5px solid var(--line);
@@ -289,9 +290,9 @@ defineExpose({ clear })
 .nl {
   flex: 1;
   min-width: 0;
-  padding: 6px 2px;
+  padding: var(--sp-6) var(--sp-2);
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 
@@ -301,6 +302,7 @@ defineExpose({ clear })
 
 /* → 按钮：无内容时是灰底占位，可填入时升为强调色实底 */
 .go {
+  position: relative;
   flex: none;
   width: 34px;
   height: 34px;
@@ -313,6 +315,18 @@ defineExpose({ clear })
   transition:
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
+}
+
+/* 视觉 34 不动，热区撑到 44（输入条本身 46 高，外扩的 5px 落在条内空白里） */
+.go::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 .go.on {
@@ -341,8 +355,8 @@ defineExpose({ clear })
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 4px;
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-4);
 }
 
 .preview {
@@ -350,8 +364,10 @@ defineExpose({ clear })
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: var(--gap-sm);
+  /* 预览胶囊与全库胶囊同高（24 起），不再比下面的提示行高出一截 */
+  min-height: var(--chip-h);
+  padding: var(--sp-4) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -362,7 +378,7 @@ defineExpose({ clear })
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -371,16 +387,17 @@ defineExpose({ clear })
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--gap-tight);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--warn-soft);
   color: var(--warn-strong);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .clr {
+  position: relative;
   flex: none;
   width: 28px;
   height: 28px;
@@ -391,20 +408,44 @@ defineExpose({ clear })
   color: var(--text-3);
 }
 
+.clr::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .hint {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .link {
+  position: relative;
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
+}
+
+/* 「去添加模型」只有 16px 高，但它是这条提示里唯一的去处：热区补到 44 */
+.link::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 16px);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
 }
 
 /* 全站已由 base.css 对减弱动效统一归零；这里再钉住本组件自己的那点动效 */

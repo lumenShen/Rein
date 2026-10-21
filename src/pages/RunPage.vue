@@ -6,9 +6,8 @@ import { ChevronDown, Play, X } from 'lucide-vue-next'
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import CountdownOverlay from '@/components/common/CountdownOverlay.vue'
 import GlassThumb from '@/components/common/GlassThumb.vue'
-import InfoHint from '@/components/common/InfoHint.vue'
+import HoldToEnd from '@/components/run/HoldToEnd.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import SlideToEnd from '@/components/run/SlideToEnd.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { useRunStore, fmtClock, fmtPace } from '@/stores/run'
 import { DISP_MIN_M, HERO_METER_MAX_M } from '@/stores/runGate'
@@ -28,13 +27,13 @@ import { useToast } from '@/composables/useToast'
  * 亮区承载**读数与动作**——时长 hero 行（+ 距离）、目标进度条、瞬时/平均/消耗
  * 三列指标卡、底部控制行。两区互不重复：同一个量只出现一次。
  *
- * 与训练课同一条结束语义（结束键 → 二级确认）。结束跑步必须**滑到底**（SlideToEnd）：
- * 它落在拇指最顺手的位置，红字按钮擦到就是丢一次记录。GPS 不可用时退化为纯计时，
- * 距离在总结页手动补填（跑步机场景）。
+ * 与训练课同一条结束语义：跑步中只允许暂停，结束必须在暂停后**长按 5 秒**——
+ * 奔跑中误触一颗红按钮就是丢一次记录，长按要求手指原地停留，松手即取消。
+ * GPS 不可用时退化为纯计时，距离在总结页手动补填（跑步机场景）。
  *
  * 这一页只说真话：没落到点的时刻不叫「已连接」（按 fix 新鲜度分四态）、
- * 定位被系统掐断时不假装还在记（后台对账胶囊）、恢复出来的会话先把时长的来路
- * 摊开再让用户决定（恢复核对卡）。
+ * 定位被系统掐断时不假装还在记（后台对账胶囊）、进程被杀再回来直接接续上次
+ * 会话（只给气泡提醒，轨迹与累计量全部继承，不再用核对卡挡住主内容）。
  */
 const r = useRunStore()
 const router = useRouter()
@@ -167,26 +166,6 @@ watch(
 onBeforeUnmount(() => {
   if (gapBannerTimer) clearTimeout(gapBannerTimer)
 })
-
-/* ---------- 恢复核对卡（进程被杀后重开） ---------- */
-
-const resumeSavedSec = computed(() => Math.floor((r.resumeNotice?.savedMs ?? 0) / 1000))
-
-/** 「继续记录」：把恢复出来的会话接着跑（resume() 内部会重建原生相位的播种） */
-function onResumeKeep(): void {
-  r.clearResumeNotice()
-  r.resume()
-}
-
-/**
- * 「结束并保存这 12:30」：进总结页冻结时长，保存仍走那一页的按钮 ——
- * 轨迹要经过距离核对（GPS 可能不完整）才落库，这里替用户跳过那一步是越权。
- */
-function onResumeEnd(): void {
-  r.clearResumeNotice()
-  r.enterSummary()
-  syncManualKm()
-}
 
 /** 通知权限提示：可关闭、不弹窗（首次进入运行态才评估；关掉后本次不再提） */
 const notifyNudge = computed(() => {
@@ -1043,7 +1022,7 @@ function bumpKm(delta: number): void {
         </button>
         <span class="ptitle">跑步</span>
         <!-- 结束不再放这里：它落在拇指最顺手的位置、又只是「红字一碰即中」。
-             进行中走底部滑动闸门（SlideToEnd），暂停态在控制行里保留一个明确的入口。 -->
+             跑步中只留暂停；暂停后由控制行的长按闸门结束（见 HoldToEnd）。 -->
         <span class="ph" />
       </header>
 
@@ -1102,26 +1081,6 @@ function bumpKm(delta: number): void {
           <button class="seg-item glow-layer" :class="{ on: camMode === 'fit' }" @click="fitAll">全览</button>
         </div>
       </div>
-
-      <!-- 恢复核对卡：进程被杀再重开时，先把「找回多少、时长算到哪」摊开，
-           再由用户决定接着跑还是就此结算 —— 两个选择都会改写这次记录，
-           替他选就是替他改数据。两个按钮的后果收进卡头 InfoHint，卡面只留读数。 -->
-      <section v-if="r.resumeNotice" class="rcard">
-        <div class="rc-title">
-          <span>已恢复中断的跑步</span>
-          <InfoHint
-            title="恢复核对"
-            content="继续记录会接着这次累计；结束则按已记录的部分进总结页保存。"
-          />
-        </div>
-        <p class="rc-body">
-          已找回 {{ r.resumeNotice.points }} 个轨迹点 · 已记录时长 {{ fmtClock(resumeSavedSec) }}
-        </p>
-        <button class="primary rc-primary" @click="onResumeKeep">继续记录</button>
-        <button class="ghost glass-surface glow-layer" @click="onResumeEnd">
-          结束并保存这 {{ fmtClock(resumeSavedSec) }}
-        </button>
-      </section>
 
       <!-- 准备页：目标选择 -->
       <div v-if="r.phase === 'ready'" class="pane col center">
@@ -1202,11 +1161,13 @@ function bumpKm(delta: number): void {
               <p class="tcap">本次距离</p>
             </div>
             <div class="lh-r">
-              <span class="lab"><i class="live-dot" />瞬时配速</span>
               <span class="lh-line">
                 <b class="num lh-pace" :class="{ dim: r.pauseCause === 'auto' }">{{ instPaceText }}</b>
                 <i v-if="instPaceText !== '—'" class="lh-unit">/km</i>
               </span>
+              <!-- 与左侧「本次距离」同一套阅读顺序：大数字在上，说明小字在下。
+                   两个标签的底边对齐，眼睛横扫时才不会在左右之间重新找基线。 -->
+              <p class="tcap lh-r-cap"><i class="live-dot" />瞬时配速</p>
             </div>
           </div>
 
@@ -1241,14 +1202,13 @@ function bumpKm(delta: number): void {
           </div>
 
           <div class="ctl row">
+            <!-- 跑步中只允许暂停：结束必须在暂停之后，且要按住 5 秒（HoldToEnd）。 -->
             <template v-if="r.phase === 'running'">
               <button class="primary pausebtn" @click="r.pause()">暂停</button>
-              <!-- 结束走滑动闸门：滑到底才提交，提交后仍进现有的二级确认弹层 -->
-              <SlideToEnd :hold="endOpen" @done="endOpen = true" />
             </template>
             <template v-else>
-              <button class="ghost glass-surface glow-layer danger" @click="endOpen = true">结束</button>
-              <button class="primary" @click="r.resume()">继续</button>
+              <button class="primary continuebtn" @click="r.resume()">继续</button>
+              <HoldToEnd @done="onEndPick('finish')" />
             </template>
           </div>
         </div>
@@ -1522,7 +1482,7 @@ function bumpKm(delta: number): void {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: var(--gap-tight);
   pointer-events: none;
 }
 
@@ -1550,7 +1510,7 @@ function bumpKm(delta: number): void {
   right: 0;
   z-index: 5;
   height: 54px;
-  padding: 0 18px;
+  padding: 0 var(--sp-18);
   background: linear-gradient(rgba(6, 6, 8, 0.55), rgba(6, 6, 8, 0));
 }
 
@@ -1563,18 +1523,18 @@ function bumpKm(delta: number): void {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-text);
   min-height: 44px;
-  padding: 0 8px;
-  margin-left: -8px;
+  padding: 0 var(--sp-8);
+  margin-left: calc(-1 * var(--sp-8));
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--hero-text);
 }
 
 .ptitle {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--hero-text-dim);
 }
 
@@ -1588,13 +1548,15 @@ function bumpKm(delta: number): void {
 .hud {
   position: absolute;
   top: calc(var(--safe-top) + 62px);
-  left: 14px;
+  /* HUD 左缘对齐页面边距（16）：原来 14 与下方抽屉内容的左缘差 2px，
+     暂停时两条竖线一上一下看着错位。 */
+  left: var(--page-pad-x);
   z-index: 4;
   max-width: 64%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 悬浮信息 chip —— 走 .glass-surface + .stage-dark 的暗场令牌
@@ -1602,7 +1564,7 @@ function bumpKm(delta: number): void {
    才是"这块玻璃浮在画面之上"的重量感。手写 blur(14px) 拿不到那三层光学层，
    弱档也顶不掉 blur —— 都交给令牌。） */
 .chip {
-  padding: 9px 13px;
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-m);
   color: var(--hero-text);
 }
@@ -1612,9 +1574,11 @@ function bumpKm(delta: number): void {
 .nudge {
   display: flex;
   align-items: center;
-  gap: 7px;
+  /* 状态点 + 文字是「图标 + 文字」关系，取 --gap-text-inline（8），
+     三枚 chip 里这一处原来 6 与 .nudge 的 8 混着用。 */
+  gap: var(--gap-text-inline);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-align: left;
 }
 
@@ -1627,7 +1591,7 @@ function bumpKm(delta: number): void {
 .gps.ok .gdot {
   background: var(--hero-route-line);
   box-shadow: 0 0 8px var(--hero-route-glow);
-  animation: breathe 1.8s infinite;
+  animation: rein-breathe var(--dur-pulse) infinite;
 }
 
 .run-page.paused .gps.ok .gdot {
@@ -1674,9 +1638,18 @@ function bumpKm(delta: number): void {
 
 /* 通知提示：可点可关的一行，压暗一档不抢 GPS chip 的注意力 */
 .nudge {
-  gap: 8px;
+  position: relative;
+  gap: var(--gap-sm);
   color: var(--hero-text-dim);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
+}
+
+/* 关闭钮视觉 ~33 高，热区补到 44（规则 5）：上下各 6px 落在 HUD 的 8px 列距里，
+   横向 4px 仍在页面 16px 边距之内。 */
+.nudge::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-4));
 }
 
 /* 回前台对账横幅：托在暗区下沿（抽屉上缘之上 14px），
@@ -1688,10 +1661,10 @@ function bumpKm(delta: number): void {
   transform: translateX(-50%);
   bottom: calc(54% + 14px);
   max-width: min(340px, calc(100% - 28px));
-  padding: 10px 16px;
+  padding: var(--sp-10) var(--sp-16);
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-align: center;
   color: var(--hero-text);
 }
@@ -1706,24 +1679,12 @@ function bumpKm(delta: number): void {
   left: 50%;
   top: 26%;
   transform: translate(-50%, -50%);
-  padding: 10px 22px;
+  padding: var(--sp-10) var(--sp-22);
   border-radius: var(--radius-full);
   color: var(--hero-text);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 1px;
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.55);
-    opacity: 0.45;
-  }
 }
 
 .warn {
@@ -1733,7 +1694,7 @@ function bumpKm(delta: number): void {
   right: 0;
   z-index: 30;
   text-align: center;
-  padding: 4px;
+  padding: var(--sp-4);
   font-size: var(--fs-micro);
   color: var(--warn-strong);
   background: var(--warn-soft);
@@ -1755,7 +1716,8 @@ function bumpKm(delta: number): void {
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border-radius: var(--radius-l) var(--radius-l) 0 0;
+  /* 抽屉是顶层浮层：顶部圆角按规范取 32（--radius-xl），与其它半模态一致。 */
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-float);
   overflow: hidden;
   transform: translateY(0);
@@ -1800,55 +1762,15 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   top: 32%;
 }
 
-/* 恢复核对卡（抽屉最上层，任何阶段都在）：它问的是「接着跑还是就此结算」，
-   必须压在所有面板之上 —— 用户不该在核对之前先看到一堆读数。 */
-.rcard {
-  flex: none;
-  margin: 0 28px 10px;
-  padding: 14px 16px;
-  border-radius: var(--radius-l);
-  background: var(--surface);
-  border: 0.5px solid var(--line);
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rc-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-headline);
-  font-weight: 700;
-  color: var(--text-1);
-}
-
-.rc-body {
-  font-size: var(--fs-subhead);
-  font-weight: 600;
-  color: var(--text-1);
-}
-
-/* 卡片里的两个动作上下排：主行动整宽（「继续记录」是默认该走的那条路），
-   「结束并保存这 12:30」标签长，与主按钮并排会被挤成两行数字 */
-.rc-primary {
-  width: 100%;
-  min-width: 0;
-}
-
-.rcard .ghost {
-  width: 100%;
-}
-
 /* 把手行：拖拽条 ｜ 缩放模式切换（回中钮已删，见模板注释） */
 .handle {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 14px 5px;
+  /* 把手行是抽屉的页头：左右 16（--pad-sheet），与 .pane 的内容边同一条线。 */
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--pad-sheet) var(--sp-4);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1856,10 +1778,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .grab {
   flex: 1;
-  max-width: 44px;
+  /* 半模态把手按规范收到 32×4、正圆角：原来 44×5 + 4 圆角读起来是一条小横杠 */
+  max-width: 32px;
   margin: 0 auto;
-  height: 5px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: var(--radius-full);
   background: var(--line);
 }
 
@@ -1868,39 +1791,50 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .mseg {
   position: relative;
   display: flex;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--gap-text);
+  /* 分段按钮整体 32（规则 4）：内缩 2 后段高 28（--control-sm），
+     GlassThumb 的模糊半径也按 32 推（容器高度的 14%），与 SegmentedControl 同档。 */
+  min-height: var(--sp-32);
+  padding: var(--sp-2);
+  /* 滑块内缩跟 32 的轨道走：与 common/SegmentedControl 的 .seg.goo 同值 */
+  --thumb-inset-y: var(--sp-2);
+  --thumb-inset-x: var(--sp-2);
   border-radius: var(--radius-m);
+  /* 裁掉 goo 的模糊外溢。用 clip + clip-margin 而不是 hidden：hidden 会把按钮
+     外扩的 44px 命中区一起裁掉（旧写法实测只剩 ~2px）；clip-margin 把裁切边
+     向外放 8px，模糊照样不出轨道，命中区与焦点环却能完整保留。 */
   overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: var(--gap-sm);
 }
 
 /* 丰富档：滑块落在这条**玻璃轨道**上，所以用半透 blob 语义（不覆写令牌），
    融合时能看到它与轨道玻璃的通透关系。 */
 .mseg button {
   position: relative;
-  padding: 4px 11px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-s);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
-/* 触控目标：这两段只有 ~21px 高，靠伪元素上下各外扩 8px（±8 是允许的上限，
-   见验收：命中区不越出按钮矩形 ±(11/8)px）。
+/* 触控目标：段高 28，靠伪元素上下各外扩 8px 凑满 44。
    用 **::before** 而不是 ::after —— `.glow-layer` 已经占着 ::after 画按压光晕
    （base.css），两条规则会在同一个伪元素上抢位置；padding 也不能动，
-   GlassThumb 的 blob 几何按容器高度推（文件头第 3 条）。
-   ⚠ 裁切的代价：`.mseg` 的 overflow:hidden 是为裁 goo 模糊外溢而设的
-   （同 SegmentedControl），它按 padding box 裁，所以这 8px 实际只留下 ~2px ——
-   真正的 44px 命中区要把整条胶囊长高，而那会改掉 blob 的高度，
-   与「不改 padding」的约束正面冲突。取舍与实测见交付说明的 knownGaps。 */
+   GlassThumb 的 blob 几何按容器高度推（文件头第 3 条）。 */
 .mseg button::before {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
-  top: -8px;
-  bottom: -8px;
+  top: calc(-1 * var(--sp-8));
+  bottom: calc(-1 * var(--sp-8));
 }
 
 .mseg button.on {
@@ -1921,8 +1855,10 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .pane {
   flex: 1;
   min-height: 0;
-  gap: 14px;
-  padding: 18px 28px calc(30px + var(--safe-bottom));
+  /* 抽屉内容区：左右 16（--pad-sheet）与页脚操作区同一条线，块与块之间 16。
+     原来左右 28 是全仓最宽的一档，面板里的读数与页脚按钮不在一条竖线上。 */
+  gap: var(--gap-lg);
+  padding: var(--sp-16) var(--pad-sheet) calc(var(--sp-28) + var(--safe-bottom));
   overflow-y: auto;
 }
 
@@ -1935,12 +1871,13 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  /* 与 .pane 的块间距同一档（16），否则平移层里的内容比滚动时松/紧一截。 */
+  gap: var(--gap-lg);
 }
 
 .eyebrow {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.6px;
   color: var(--text-3);
 }
@@ -1951,8 +1888,9 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .goalbox {
   align-items: baseline;
-  gap: 14px;
-  margin-top: 6px;
+  /* 大字读数与两侧步进钮之间 16（有明显边界的控件间），原来 14 不在一档上 */
+  gap: var(--gap-lg);
+  margin-top: var(--gap-sm);
 }
 
 /* 目标步进钮：控制层小胶囊 —— 材质走 .glass-surface，这里只补几何 */
@@ -1962,7 +1900,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   height: 44px;
   border-radius: var(--radius-l);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .gbtn:disabled {
@@ -1971,7 +1909,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .gval {
   font-size: var(--fs-display-2xl);
-  font-weight: 200;
+  /* 字重阶梯下限是 300（--fw-light）：200 是阶梯外的裸值，56px 上肉眼差不到半像素。 */
+  font-weight: var(--fw-light);
   letter-spacing: -2px;
   line-height: 1;
   min-width: 110px;
@@ -1991,7 +1930,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   font-size: var(--fs-footnote);
   letter-spacing: 0.5px;
   color: var(--text-2);
-  margin-top: 9px;
+  margin-top: var(--sp-8);
 }
 
 .meta {
@@ -2010,7 +1949,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .hint.left {
   align-self: stretch;
   text-align: left;
-  margin: -8px 0 0;
+  margin: calc(-1 * var(--sp-8)) 0 0;
 }
 
 /* 开始跑步：全屏那颗最大的离散控件 —— 走玻璃材质（模板上的 .glass-surface）。
@@ -2022,16 +1961,16 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .gobtn {
   width: 216px;
   height: 216px;
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   border-radius: 50%;
   color: var(--text-1);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition:
     transform var(--dur-base) var(--ease-standard),
     background-color var(--dur-base) var(--ease-standard),
@@ -2084,7 +2023,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .lh-dist {
   font-size: var(--fs-display-xl);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: -2px;
   line-height: 0.95;
   /* 数字首字的左轴承按 -0.02em 补掉：截图要比「距离墨水的左边界」与「指标卡左边缘」
@@ -2097,15 +2036,23 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
-  padding-bottom: 8px; /* 贴齐 hero 行的数字底部（不要各按行盒居中） */
   white-space: nowrap;
+}
+
+/* 右侧说明行：与左侧「本次距离」共用 .tcap 的字号/上边距，
+   只补一条右对齐 + 呼吸点的排布 —— 两个标签的底边由 hero 行的
+   align-items:flex-end 对齐，读数在上、说明在下。 */
+.lh-r-cap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-6);
 }
 
 /* 瞬时配速：自动暂停时不再产生新值，留住停表前的读数并压暗表示「这是上一刻的」 */
 .lh-pace {
   font-size: var(--fs-display-l);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   line-height: 1;
   color: var(--text-1);
@@ -2118,9 +2065,9 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .lh-unit {
   font-size: var(--fs-footnote);
   font-style: normal;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  margin-left: 3px;
+  margin-left: var(--sp-4);
 }
 
 /* 目标进度：满宽一条 + 13px 标签。'open' 目标下整行不渲染（见模板） */
@@ -2128,12 +2075,12 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .goalhead {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -2143,7 +2090,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .gbar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--line-strong);
   overflow: hidden;
 }
@@ -2152,7 +2099,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   background: var(--c-exercise-deep);
   clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round var(--radius-full));
   /* 1s linear 保留：入账是 1s 一次的阶跃，linear 把台阶抹成匀速 ramp；
@@ -2165,15 +2112,17 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    标签与单位一律 13px/--text-2，值 34px/700 的 --text-1。 */
 .pace {
   width: 100%;
-  border-radius: var(--radius-l);
+  /* 数据卡统一走卡片档 16（--radius-m）：与 .sumstat 同层同档。 */
+  border-radius: var(--radius-m);
   overflow: hidden;
 }
 
 .pace > div {
   flex: 1;
   min-width: 0;
-  padding: 16px 8px 15px;
-  gap: 5px;
+  /* 三格内距上下对称 16（--pad-card），左右 8 给三列均分留宽度。 */
+  padding: var(--pad-card) var(--sp-8);
+  gap: var(--gap-tight);
 }
 
 .pace > div + div {
@@ -2185,10 +2134,10 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   flex-direction: row;
   align-items: center;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.4px;
   color: var(--text-2);
-  gap: 6px;
+  gap: var(--sp-6);
   white-space: nowrap;
 }
 
@@ -2198,7 +2147,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   flex: none;
   border-radius: 50%;
   background: var(--c-exercise);
-  animation: breathe 1.6s infinite;
+  animation: rein-breathe var(--dur-pulse) infinite;
 }
 
 .run-page.paused .live-dot {
@@ -2207,7 +2156,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .pace .pv {
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   color: var(--text-1);
 }
@@ -2230,13 +2179,15 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .kcal b {
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   color: var(--text-1);
 }
 
 .ctl {
-  gap: 10px;
+  width: 100%;
+  /* 控制行是按钮组：两颗都带明确边界（继续 / 长按结束），按钮组之间 16。 */
+  gap: var(--gap-lg);
   justify-content: center;
   margin-top: auto;
 }
@@ -2245,12 +2196,13 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .primary {
   min-width: 240px;
   height: 54px;
-  padding: 0 38px;
-  border-radius: var(--radius-xl);
+  padding: 0 var(--sp-36);
+  /* 大主行动 = 胶囊（距 48 以上一律全圆），与卡片 16 / 浮层 32 分开 */
+  border-radius: var(--radius-full);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-headline);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   box-shadow: var(--shadow-float);
 }
 
@@ -2264,13 +2216,24 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   flex: none;
 }
 
+/* 暂停态：继续与长按结束并排。继续不再是全宽主按钮 —— 这一屏的主行动
+   已经从「继续」转到「结束这次记录」，两者各占一半，避免 240px 起宽把
+   长按闸门挤出抽屉。 */
+.primary.continuebtn {
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  padding: 0 var(--sp-14);
+}
+
 /* 次按钮：控制层玻璃 —— 材质走 .glass-surface（全仓一份定义），这里只补几何 */
 .ghost {
   height: 50px;
-  border-radius: var(--radius-xl);
-  padding: 0 24px;
+  /* 与主行动同一档：控制行里两颗按钮形态必须一致，只有材质不同 */
+  border-radius: var(--radius-full);
+  padding: 0 var(--sp-24);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -2284,21 +2247,21 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    行高由它的文案撑开）。 */
 .pfrow {
   width: min(320px, 100%);
-  gap: 12px;
-  margin-top: 4px;
+  gap: var(--gap-md);
+  margin-top: var(--sp-4);
 }
 
 .pf-l {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
   text-align: left;
 }
 
 .pf-lab {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -2328,7 +2291,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .donetitle {
   font-size: var(--fs-large-title);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
 }
 
@@ -2338,13 +2301,13 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  margin-bottom: 4px;
+  gap: var(--gap-text);
+  margin-bottom: var(--sp-4);
 }
 
 .donestate {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -2377,7 +2340,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .sumgrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  /* 四格指标之间 8（无边界控件间距）。 */
+  gap: var(--gap-sm);
   width: 100%;
 }
 
@@ -2393,7 +2357,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   background: var(--surface);
   border: 0.5px solid var(--line);
   border-radius: var(--radius-m);
-  padding: 8px 6px;
+  padding: var(--sp-8) var(--sp-6);
   min-width: 0;
   text-align: center;
 }
@@ -2409,17 +2373,17 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    所以挨着「距离」的标签而不是值（值那一格要给数字留宽度）。 */
 .ssflag {
   font-style: normal;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-left: 3px;
+  margin-left: var(--sp-4);
 }
 
 .ssval {
   display: block;
   font-size: var(--fs-headline);
-  font-weight: 600;
-  margin-top: 2px;
+  font-weight: var(--fw-semibold);
+  margin-top: var(--sp-2);
   color: var(--text-1);
   letter-spacing: -0.3px;
   /* 配速「5'30"」+「/km」在四格并排时是最长的一格：折行会把卡片撑高一档，
@@ -2430,16 +2394,16 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .ssunit {
   font-size: var(--fs-footnote);
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-2);
-  margin-left: 2px;
+  margin-left: var(--sp-2);
 }
 
 /* 记录说明卡逐行：12px，说的是「哪段没算、哪段补了」—— 比卡片标题低一档但必须读得清 */
 .sumnote {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 /* 分段 / 爬升卡 */
@@ -2447,17 +2411,18 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   width: 100%;
   background: var(--surface);
   border: 0.5px solid var(--line);
-  border-radius: var(--radius-l);
+  /* 总结页的卡片与 .sumstat / .pace 同一档圆角 16，不再混用 20。 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 12px 14px;
+  padding: var(--sp-12) var(--sp-14);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .sumcard h3 {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.4px;
   color: var(--text-2);
   text-align: left;
@@ -2465,7 +2430,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .sumbig {
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   line-height: 1.1;
 }
@@ -2475,10 +2440,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    只钉内部文字的话格子仍会被压缩，配速数字就会折行。 */
 .splitrow {
   display: flex;
-  gap: 6px;
+  /* 分段格之间 8，与四格指标同档。 */
+  gap: var(--gap-sm);
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 2px;
+  padding-bottom: var(--sp-2);
 }
 
 .splitrow::-webkit-scrollbar {
@@ -2491,8 +2457,9 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 7px 8px;
+  gap: var(--gap-text);
+  /* 段格内距上下对称 8：格子里是「公里数 / 配速 / 爬升」三行同组信息。 */
+  padding: var(--sp-8);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -2500,7 +2467,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .spidx {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-text);
   font-size: var(--fs-footnote);
   color: var(--text-2);
 }
@@ -2514,7 +2481,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .sppace {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   line-height: 1.15;
 }
@@ -2534,7 +2501,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .spup-row {
   display: flex;
   align-items: baseline;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .spunit {
@@ -2573,12 +2540,12 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .distfield {
   width: min(340px, 100%);
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -2586,14 +2553,14 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   width: 130px;
   text-align: right;
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   background: transparent;
 }
 
 .distfield input::placeholder {
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 </style>

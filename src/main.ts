@@ -5,6 +5,7 @@ import App from './App.vue'
 import { router } from './router'
 import { usePomodoroStore } from './stores/pomodoro'
 import { externalAccessRuntime } from './system/externalAccessRuntime'
+import { globalFloat } from './system/globalFloat'
 import { initRubberScroll } from './system/rubberScroll'
 import { shareInbox } from './system/shareInbox'
 import { workoutRuntime } from './system/workoutRuntime'
@@ -24,6 +25,8 @@ workoutRuntime.init()
 shareInbox.init()
 // 外部访问授权弹窗运行时：订阅授权请求/状态事件并兜底拉取待决列表
 externalAccessRuntime.init()
+// 全局沉浸浮窗：主窗口是唯一真源，离开应用时把正在跑的专注 / 训练推给系统浮窗
+globalFloat.init()
 // 超范围回弹：到边拖动改为自绘平移（Android 原生 stretch 已在 MainActivity 关闭）
 initRubberScroll()
 app.mount('#app')

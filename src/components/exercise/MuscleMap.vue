@@ -477,21 +477,23 @@ onUnmounted(() => {
 
 <style scoped>
 .mmap {
-  gap: 10px;
+  gap: var(--sp-10);
   align-items: center;
   width: 100%;
 }
 
 .figs {
   justify-content: center;
-  gap: 22px;
+  /* 两幅人体图之间 24（--gap-xl，区块级）：原来 22 在格点外 */
+  gap: var(--gap-xl);
 }
 
 figure {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  /* 图与图下标签 8（标题与内容） */
+  gap: var(--gap-sm);
 }
 
 /* 三视图共用同一 viewBox（0 0 660 1500），按宽度等比缩放即得等大人体 */
@@ -658,14 +660,14 @@ figcaption {
 }
 
 .legend {
-  gap: 16px;
+  gap: var(--gap-lg);
   align-items: center;
 }
 
 .legend span {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-micro);
   color: var(--text-2);
 }
@@ -714,25 +716,40 @@ figcaption {
 
 /* 热力图例：五档 + 开关挤一行会换行，允许折行并收紧间距 */
 .heatlegend {
-  gap: 11px;
+  /* 热力档位是一组无边界样本：8 */
+  gap: var(--gap-sm);
   flex-wrap: wrap;
   justify-content: center;
 }
 
 .depthbtn {
+  position: relative;
   font-size: var(--fs-micro);
   color: var(--text-2);
-  padding: 2px 9px;
+  padding: var(--sp-2) var(--sp-8);
   border: 0.5px solid var(--line-strong);
   border-radius: var(--radius-full);
   background: transparent;
+}
+
+/* 图例里的「仅浅层 / 含深层」是一颗开关胶囊：视觉 21 高不动，热区补到 44。
+   它和色块同处一行，外扩只落在图例行的上下留白里。 */
+.depthbtn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 8px);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
 }
 
 /* 桌面壳：「仅浅层 / 含深层」实测 53×21 —— 差 1px，但它坐在一行图例色块的末尾，
    指针精度下 22 是下限。只把内边距上调一档（实测 21 → 25），胶囊样子不变。
    手机端维持原档（22 是指针精度的规则）。 */
 .desk-main .depthbtn {
-  padding: 4px 10px;
+  padding: var(--sp-4) var(--sp-10);
 }
 
 .depthbtn[aria-pressed='true'] {
@@ -748,13 +765,13 @@ figcaption {
 .lh-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .lh-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .lh-dot {
@@ -783,8 +800,10 @@ figcaption {
 /* 激活肌群列表抽屉。热力模式不再有抽屉（明细与计算说明归调用方的
    TrainingScoreSheet），所以这里只剩激活模式要用的行样式。 */
 .mrow {
-  gap: 10px;
-  padding: 13px 2px;
+  /* 肌群行是双行行（名称/数值 + 说明）：高度 64（--row-h-double） */
+  min-height: var(--row-h-double);
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--sp-2);
   border-bottom: 0.5px solid var(--line);
   align-items: flex-start;
 }
@@ -797,7 +816,7 @@ figcaption {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   flex: none;
 }
 
@@ -814,7 +833,7 @@ figcaption {
 }
 
 .namerow {
-  gap: 8px;
+  gap: var(--gap-sm);
   align-items: baseline;
 }
 
@@ -828,9 +847,10 @@ figcaption {
 }
 
 .desc {
-  margin-top: 3px;
+  /* 名称与说明 2（主次文本上下） */
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 </style>

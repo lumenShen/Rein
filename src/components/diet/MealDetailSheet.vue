@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
-import { MICROS } from '@/config/dri'
+import NutritionMicroList from '@/components/diet/NutritionMicroList.vue'
+import { useGrowOnOpen } from '@/composables/useGrowOnOpen'
 import { MEAL_LABELS, fmtGrams, mealKcal, mealQtyText } from '@/config/domain'
+import { buildMicroRows, macroEnergyShare } from '@/utils/nutritionCalc'
 import type { DailyTargets, MealLog, NutrientIntake } from '@/types'
 
 /** 单笔饮食记录详情：按记录克重把「每 100g」营养折成实际摄入量，
@@ -60,16 +62,7 @@ const kcal = computed(() => {
 const share = computed(() => {
   const f = props.log?.food
   if (!f) return []
-  const parts = [
-    { key: 'protein' as const, label: '蛋白质', grams: f.protein, colorVar: '--c-protein' },
-    { key: 'carb' as const, label: '碳水', grams: f.carb, colorVar: '--c-carb' },
-    { key: 'fat' as const, label: '脂肪', grams: f.fat, colorVar: '--c-fat' },
-  ]
-  const total = parts.reduce((s, x) => s + x.grams * (x.key === 'fat' ? 9 : 4), 0)
-  if (total <= 0) return []
-  return parts
-    .map((x) => ({ ...x, pct: ((x.grams * (x.key === 'fat' ? 9 : 4)) / total) * 100 }))
-    .filter((x) => x.pct > 0.5)
+  return macroEnergyShare(f.protein, f.carb, f.fat)
 })
 
 /** 占本日：热量 + 三大宏量 + 钠，对照当日目标；目标未设（≤0）只给实际量 */
@@ -94,12 +87,7 @@ const dayRows = computed(() => {
 })
 
 /** 微量营养素：按实际克重折算后对照 DRI，含量为 0 的不列 */
-const microRows = computed(() =>
-  MICROS.map((m) => {
-    const value = scaled.value[m.key] ?? 0
-    return { ...m, value, pct: m.dri > 0 ? Math.round((value / m.dri) * 100) : 0 }
-  }).filter((r) => r.value > 0),
-)
+const microRows = computed(() => buildMicroRows(scaled.value, { onlyPositive: true }))
 
 const timeText = computed(() => {
   const iso = props.log?.createdAt
@@ -109,22 +97,8 @@ const timeText = computed(() => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 })
 
-/* 数据入场：抽屉展开后供能条/进度条从零生长（双 rAF 确保初始态先上屏） */
-const grown = ref(false)
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) {
-      grown.value = false
-      return
-    }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        grown.value = true
-      })
-    })
-  },
-)
+/* 数据入场：抽屉展开后供能条/进度条从零生长 */
+const grown = useGrowOnOpen(() => props.open)
 </script>
 
 <template>
@@ -202,22 +176,7 @@ watch(
             />
           </header>
           <p class="legend">百分比 = 这一笔实际含量占每日推荐摄入的比例；上限项对照建议上限</p>
-          <ul class="micros">
-            <li v-for="m in microRows" :key="m.key">
-              <div class="row between mrow">
-                <span class="mlabel">
-                  {{ m.label }}<em v-if="m.isLimit" class="lim">上限</em>
-                </span>
-                <span class="mright">
-                  <span class="num mval">{{ fmtGrams(m.value) }}<em class="munit"> {{ m.unit }}</em></span>
-                  <b class="num mpct">{{ m.pct }}%</b>
-                </span>
-              </div>
-              <div class="bar">
-                <div class="fill" :class="{ limit: m.isLimit }" :style="{ '--p': `${Math.min(m.pct, 100)}%` }" />
-              </div>
-            </li>
-          </ul>
+          <NutritionMicroList :rows="microRows" :grown="grown" />
         </section>
       </div>
     </template>
@@ -234,25 +193,26 @@ watch(
 <style scoped>
 .missing {
   text-align: center;
-  padding: 40px 0;
+  padding: var(--sp-40) 0;
   font-size: var(--fs-subhead);
   color: var(--text-3);
 }
 
 .card {
-  margin-top: 12px;
-  padding: 16px;
-  border-radius: var(--radius-l);
+  /* 抽屉里的分组面：卡间距 12、内距 16、圆角取卡片档 16 */
+  margin-top: var(--gap-md);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .card:first-child {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -263,10 +223,11 @@ watch(
 
 /* 唯一图例：解释行末百分比是什么（真实读得出的信息，不吃 11px 水印档） */
 .legend {
-  margin-top: 2px;
+  /* 标题与图例说明：主次文本上下 2 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .hero .top {
@@ -275,24 +236,24 @@ watch(
 
 .kcal b {
   font-size: var(--fs-display-m);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1px;
 }
 
 .kcal em {
   font-style: normal;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .meta {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-footnote);
 }
 
 .macros {
-  gap: 14px;
+  gap: var(--gap-md);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -300,7 +261,7 @@ watch(
 .macros li {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
 }
 
@@ -316,14 +277,15 @@ watch(
 }
 
 .macros b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .share {
   display: flex;
-  gap: 3px;
+  /* 三段之间 2 的缝：再大就断成三根条 */
+  gap: var(--gap-text);
   height: 10px;
-  margin-top: 16px;
+  margin-top: var(--gap-lg);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
@@ -348,7 +310,7 @@ watch(
 }
 
 .share-label {
-  margin-top: 7px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -356,17 +318,19 @@ watch(
 /* 供能占比并进宏量列表：克数是主、占比是次（色点与堆叠条同色） */
 .macros .mpct {
   font-style: normal;
-  margin-left: 4px;
-  color: var(--text-3);
+  /* 克数与占比是同一项的两半：4 就够，不再分出一档灰 */
+  margin-left: var(--gap-tight);
+  color: var(--text-2);
 }
 
 /* 占本日 */
 .daylist {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 .daylist li {
-  padding: 10px 0;
+  /* 双行（标签行 + 条）行：10 上下 + 两行 ≈ 48 */
+  padding: var(--sp-10) 0;
 }
 
 .daylist li + li {
@@ -374,44 +338,47 @@ watch(
 }
 
 .drow {
-  margin-bottom: 7px;
+  /* 标签行与下方进度条之间 8 */
+  margin-bottom: var(--gap-sm);
 }
 
 .dlabel {
   display: flex;
   align-items: center;
-  gap: 7px;
+  /* 色点与名称：图标与文字左右 8 */
+  gap: var(--gap-sm);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 数字走中性色、颜色留给条：四个指标色当文字用对比度全不达标（同摄入总览的取舍） */
 .dval {
   display: flex;
   align-items: baseline;
-  gap: 3px;
+  /* 数值与单位：同一行最小呼吸 2 */
+  gap: var(--gap-text);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
 
 .dunit {
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
 }
 
 .dval em {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--fs-caption);
   color: var(--text-3);
-  margin-left: 3px;
+  margin-left: var(--gap-tight);
 }
 
 .dpct {
-  margin-left: 4px;
+  margin-left: var(--gap-tight);
   color: var(--text-2);
 }
 
@@ -435,76 +402,19 @@ watch(
   clip-path: inset(0 100% 0 0 round var(--radius-full));
 }
 
-.fill.limit {
-  background: var(--c-sodium);
-}
-
-/* 微量营养素 */
-.micros {
-  margin-top: 6px;
-}
-
-.micros li + li {
-  margin-top: 15px;
-}
-
-.mrow {
-  margin-bottom: 6px;
-}
-
-/* 实际含量 + 结论占比同一行右端：含量是详情，占比是结论 */
-.mright {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.mval em {
-  font-style: normal;
-  font-weight: 400;
-  color: var(--text-3);
-}
-
-.mpct {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  color: var(--text-2);
-}
-
-.mlabel {
-  font-size: var(--fs-subhead);
-  font-weight: 600;
-}
-
-.lim {
-  font-style: normal;
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  background: var(--danger-soft);
-  /* 「高钠」是健康状态词，读不出来等于没标。soft 底上的文字走 strong 档
-     （--c-sodium 是 danger 实底档，压 soft 底只有 3.5:1，STANDARDS §4） */
-  color: var(--danger-strong);
-  font-size: var(--fs-caption);
-  font-weight: 700;
-}
-
-.mval {
-  font-weight: 600;
-}
-
 /* 删除入口：抽屉固定操作区，内容从下方滚过时不被顶走 */
 .del {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--gap-sm);
   width: 100%;
-  height: 48px;
+  /* 高度是尺寸：底部操作区按钮统一 48（--row-h） */
+  height: var(--row-h);
   border-radius: var(--radius-l);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 </style>

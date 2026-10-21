@@ -138,12 +138,19 @@ async function skip(): Promise<void> {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(400px, calc(100vw - 40px));
+  /* 弹窗最大宽 400（HarmonyOS 弹出框规格）；两侧各让 20 = 合计 --sp-40，
+     不再写裸 40px —— 窄屏时这条是唯一的呼吸来源 */
+  width: min(400px, calc(100vw - var(--sp-40)));
   max-height: min(70dvh, 560px);
   display: flex;
   flex-direction: column;
-  padding: 16px 18px calc(14px + var(--safe-bottom, 0px));
-  border-radius: var(--radius-l);
+  /* 弹窗内距 16（四边）：此前横向借用 --page-pad-x，桌面档会被顶成 40，
+     一张 400 宽的弹窗只剩 320 的内容宽；纵向 16/14 也是两个裸值，一并归到令牌。
+     底部不再叠加 --safe-bottom：这张卡在视口里居中（max-height 70dvh），
+     离底边始终有余量，留出安全区只会把内容整体推高、四边也不再对称 */
+  padding: var(--sp-16);
+  /* 居中对话框与底部抽屉同层：统一 --radius-xl（此前是 --radius-l，22） */
+  border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow-float);
 }
@@ -151,7 +158,7 @@ async function skip(): Promise<void> {
 .up-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   color: var(--accent);
 }
 
@@ -160,10 +167,11 @@ async function skip(): Promise<void> {
   min-width: 0;
   color: var(--text-1);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .up-x {
+  position: relative;
   flex: none;
   width: 28px;
   height: 28px;
@@ -175,26 +183,39 @@ async function skip(): Promise<void> {
   color: var(--text-2);
 }
 
+/* 视觉 28px 不变，热区撑到 44×44：关闭是这张模态卡唯一的「不选就走」出口 */
+.up-x::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .up-meta {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 底色与字色由 StatusChip 的 danger 档成对提供（--danger-soft 底 + --danger-strong 字），
    这里只管落点：不拉满整行、与页头留一档间距 */
 .up-must {
   align-self: flex-start;
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
+/* 卡内的二级块：圆角比母卡收一档（16 → 12），行高走正文档 */
 .up-notes {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-s);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
   /* 不再 pre-wrap：说明现在由 MdText 渲成块级元素（p / ul / li），
      留 pre-wrap 只会把块之间的换行再撑一份行高 */
@@ -204,36 +225,44 @@ async function skip(): Promise<void> {
 
 /* 条目自带左内边距会在这块窄提示里显得很凹，收紧一档 */
 .up-notes :deep(ul) {
-  padding-left: 15px;
+  padding-left: var(--sp-16);
 }
 
 /* soft 底上的文字走 --danger-strong（tokens.css 规定实底档不当文字用） */
 .up-warn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--danger-strong);
 }
 
+/* 三颗动作的排布按 HarmonyOS 弹出框规范：数量 ≥3 时由左右排改为上下排，
+   顺序由「左→右」映射成「下→上」。DOM 里仍是主操作在前（读屏 / Tab 顺序不变），
+   视觉用 column-reverse 把主操作翻到最底 —— 拇指区最近的一格是「立即更新」，
+   「跳过此版本」这颗最轻的落在最上，误触也不会误跳过。 */
 .up-actions {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  /* 3 个以上按钮上下排列时，按钮上下间隔 12（HarmonyOS 弹出框 / 按钮规范）；
+     此前 8 是「无边界控件」那一档，而这三颗都带整块底板 */
+  gap: var(--gap-md);
+  margin-top: var(--gap-lg);
 }
 
 .up-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 14px;
-  border-radius: var(--radius-s);
+  justify-content: center;
+  gap: var(--gap-sm);
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -247,20 +276,21 @@ async function skip(): Promise<void> {
   opacity: var(--disabled-opacity);
 }
 
-/* 「跳过此版本」是这一排里最轻的一颗，但也得先读得清才点得中（--text-3 只有 3.6:1） */
+/* 「跳过此版本」是这一组里最轻的一颗，但也得先读得清才点得中（--text-3 只有 3.6:1）。
+   它同样吃满 44 的命中高度：此前实测只有 60×16，手机上几乎点不到。 */
 .up-skip {
-  margin-left: auto;
-  font-size: var(--fs-caption);
+  align-self: stretch;
+  /* 视觉仍是纯文字链，但按压给一块整行浅底：它和上面两颗有底板的按钮不同，
+     只靠全局 scale(.96) 在这张窄卡里几乎看不出来 */
+  border-radius: var(--radius-l);
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-12);
+  font-size: var(--fs-footnote);
   color: var(--text-2);
 }
 
-/* 这张卡是 Teleport 到 body 的（不在 .desk-main 里），所以桌面限定只能走
-   html[data-shell="desk"] —— 与悬浮条那一族游离子孙同一条做法。
-   实测「跳过此版本」只有 60×16：它是这一排里最轻的一颗，但也得点得住，
-   padding-block 给到 24px。整排高度由 .up-btn(34px) 决定，所以这一行不会被它顶高
-   （实测 .up-actions 34、.up-skip 24 且仍然居中）。 */
-html[data-shell='desk'] .up-skip {
-  padding-block: 4px;
+.up-skip:active {
+  background: var(--surface-2);
 }
 
 .upfade-enter-active,

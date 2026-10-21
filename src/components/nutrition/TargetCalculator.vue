@@ -282,9 +282,10 @@ function onConfirm(value: string): void {
 .head h2 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 标题里的图标与文字：4·8 表里的一格 6 */
+  gap: var(--sp-6);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -293,15 +294,17 @@ function onConfirm(value: string): void {
 }
 
 .form {
-  margin-top: 10px;
+  /* 标题与内容 8：表单行自己带上下内距，这里不必再给 12 */
+  margin-top: var(--gap-sm);
 }
 
 .frow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 7px 0;
+  /* 标签与控件之间 12：中间有可伸缩空隙，12 是下限 */
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
 }
 
 .form > * + * {
@@ -310,7 +313,7 @@ function onConfirm(value: string): void {
 
 .flabel {
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   flex: none;
 }
 
@@ -325,35 +328,39 @@ function onConfirm(value: string): void {
 
 /* 推荐面板 */
 .plan {
-  margin-top: 16px;
-  padding: 14px;
+  /* 与上方表单 16（有明显边界的区块） */
+  margin-top: var(--gap-lg);
+  /* 二级分组面：内距收一档 12 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .cap {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .kcal {
   align-items: baseline;
-  gap: 6px;
-  margin-top: 4px;
+  /* 大数与「大卡」：图标与文字左右 8 */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-tight);
 }
 
 .kcal b {
   font-size: var(--fs-display-s);
-  font-weight: 200;
+  font-weight: var(--fw-light);
   letter-spacing: -1px;
   color: var(--accent);
-  line-height: 1.1;
+  /* 展示级数字用紧行高（--lh-display） */
+  line-height: var(--lh-display);
 }
 
 /* 缺口/盈余结论：soft 底 + strong 字的语义胶囊，落在主读数正下方 */
 .goalsign {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 .unit {
@@ -362,10 +369,11 @@ function onConfirm(value: string): void {
 }
 
 .cells {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px 6px;
+  /* 行距 8 / 列距 6：五列在窄宽下要挤，列距不能再大 */
+  gap: var(--gap-sm) var(--sp-6);
 }
 
 .cells li {
@@ -375,9 +383,9 @@ function onConfirm(value: string): void {
 .cells em {
   display: block;
   font-style: normal;
-  /* 字段小帽，与相邻的单位后缀（11px）区分开：要读 */
+  /* 字段小帽（蛋白质 / 碳水…）：要读的字段名，不落 --text-3 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   white-space: nowrap;
 }
 
@@ -387,70 +395,71 @@ function onConfirm(value: string): void {
 }
 
 .cv b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .cv i {
   font-style: normal;
-  /* 单位后缀，装饰性微字，可留在 11px 档 */
+  /* 单位后缀，装饰性微字，可留在 10px 档 */
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-left: 1px;
+  margin-left: var(--gap-text);
 }
 
 .formula {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 /* 差异行拆两档：主变化（能量）是要读的数，其余项降为三级灰、竖线分隔 */
 .diffs {
-  margin-top: 6px;
-  line-height: 1.5;
+  margin-top: var(--gap-sm);
+  line-height: var(--lh-body);
 }
 
 .dlead {
   font-size: var(--fs-caption);
   color: var(--text-3);
-  margin-right: 6px;
+  margin-right: var(--sp-6);
 }
 
 .dmain {
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .drest {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .diffs.same {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 /* 采用按钮 */
 .adopt {
   width: 100%;
-  margin-top: 16px;
-  padding: 13px 0;
+  margin-top: var(--gap-lg);
+  /* 主按钮高度 40 档（12 上下 + 16 字） */
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .note {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   text-align: center;
   font-size: var(--fs-caption);
 }

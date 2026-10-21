@@ -1,0 +1,211 @@
+/* ============================================================
+   浮窗私有样式（float.html 专用；主窗口的入口不会加载这一份）
+   只放窗口级的三件事：透明底、窗口形状布局、无滚动。
+   内容（状态点 / 文案 / 按钮）的样式在 components/float/*，与程序内浮条同源。
+   ============================================================ */
+
+/* 透明底：浮窗是 Tauri 透明窗口，圆角之外必须真的透出桌面。
+   base.css 把画布底色画在 <html> 上（那是主窗口的画布），这里必须顶掉。 */
+html.float-win,
+html.float-win body {
+  background: transparent;
+}
+
+html.float-win body {
+  /* 窗口尺寸就是布局尺寸（bar 92 / blob 64 / confirm 172 由 Rust 改），
+     浮窗里不该出现任何页面级滚动 */
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#float-app {
+  height: 100%;
+}
+
+.float-app {
+  height: 100%;
+  display: flex;
+  /* 与程序内浮条一致：两侧各让 12，浮条不贴窗口边缘（430 - 24 = 406，与 430 宽
+     应用窗口里的浮条逐像素同宽） */
+  padding: 0 var(--sp-12);
+  overflow: hidden;
+  background: transparent;
+}
+
+/* 泊车方块撑满窗口：64×64 的窗口里再让 12 就只剩 40 */
+.float-app.is-blob {
+  padding: 0;
+}
+
+/* 浏览器直接打开 float.html（不是 Tauri 小窗）：按一条浮条的高度预览，别把整页
+   拉成一块全屏玻璃。真正的窗口尺寸只由 Rust 决定，这里只服务人工预览。 */
+.float-app.is-preview {
+  height: auto;
+  padding: var(--sp-12);
+}
+
+.float-app.is-preview .float-shell {
+  height: 92px;
+}
+
+/* ---------- 玻璃壳 ----------
+   与程序内浮条的 .dock-body 同一套材质（全局 .glass-surface + useLiquidGlass 派生的
+   内联折射）；这里只加「窗口即停靠位」的几何。 */
+.float-shell {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-l);
+  overflow: hidden;
+}
+
+/* ---------- 条内容区 ----------
+   紧凑标题栏 32 由 TitleBarBase 给，剩下的高度全给内容：
+   bar 态内容在窗口里垂直居中（focus 内容高 34 → 上下各 12；workout 高 38 → 上下各 10，
+   与程序内 .dock-body 的 padding-y 8/10 对齐）。 */
+.float-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--pad-inline);
+}
+
+/* 与 FloatDock 的 .layer-bar 同一组几何。浮窗不能直接用 FloatDock —— 它自带 fixed
+   定位与 useDragDock 的停靠（窗口本身就是停靠位）。这四行是外壳唯一需要复刻的一段，
+   改浮条内容排版时两处一起看。 */
+.float-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- blob 泊车态 ----------
+   与 .dock-body.is-blob 同一套：64×64 / 圆角 20 / 竖排 / gap 4。
+   拖动与轻点展开在 FloatApp 里自己判位移（原生 drag region 会吞掉点击）。 */
+.float-blob {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-tight);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.float-blob:active {
+  cursor: grabbing;
+}
+
+/* ---------- 空态（浏览器预览 / 尚未收到载荷） ---------- */
+.float-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-text);
+  padding: 0 var(--sp-16) var(--sp-8);
+  text-align: center;
+}
+
+.fe-title {
+  font-size: var(--fs-footnote);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+}
+
+.fe-hint {
+  font-size: var(--fs-micro);
+  line-height: var(--lh-caption);
+  color: var(--text-3);
+}
+
+/* ---------- 结束确认 ----------
+   窗口临时长高到 430×172：上半整段标题（说明后果那句话，最多 3 行），下半一行
+   等宽按钮（取消 + 快照里的 action，文案逐字取自 end.sheet）。
+   flex-end 是兜底：Rust 没长高时（仍 92 高）标题被裁，但按钮永远贴在底边可点。 */
+.float-confirm {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--gap-sm);
+  padding: 0 var(--pad-inline) var(--sp-12);
+}
+
+/* 只给长高后的窗口（172）加顶部呼吸：92 高的兜底态加了会把按钮挤出下缘。 */
+@media (min-height: 120px) {
+  .float-confirm {
+    padding-top: var(--sp-12);
+  }
+}
+
+/* 标题与按钮之间用 auto 外距吃掉多余高度：窗口长高后标题留在上半、按钮压在下半；
+   窗口还是 92 高（长高失败）时 auto 归零，标题让位、按钮仍贴底可点。 */
+.c-title {
+  margin: 0 0 auto;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  color: var(--text-2);
+}
+
+.c-acts {
+  flex: none;
+  display: flex;
+  gap: var(--gap-sm);
+}
+
+/* 三颗按钮按内容分配剩余宽度：flex-basis auto（不是 0）—— 之前等宽时
+   「放弃这一轮（不保存）」正好差十几像素，会折成「（不保 / 存）」，把一句完整后果
+   拆成两行；按内容起算后三条都单行放得下（306 + 间距 < 406），再把余量摊掉就满宽。 */
+.cbtn {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  height: var(--control-md);
+  padding: 0 var(--gap-sm);
+  border-radius: var(--radius-m);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-caption);
+  color: var(--text-1);
+  background: var(--surface-2);
+  text-align: center;
+  transition:
+    transform var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+
+.cbtn:active {
+  transform: scale(0.97);
+}
+
+.cbtn.cancel {
+  color: var(--text-2);
+}
+
+.cbtn.danger {
+  color: var(--danger-strong);
+  background: var(--danger-soft);
+}

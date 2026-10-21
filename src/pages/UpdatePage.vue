@@ -12,6 +12,7 @@ import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import MdText from '@/components/common/MdText.vue'
 import { useToast } from '@/composables/useToast'
 import { useUpdateStore } from '@/stores/update'
+import { fmtRelativeTime, humanBytes } from '@/utils/format'
 import { notesAboveCurrent } from '@/utils/updateNotes'
 import type { SourceReport, UpdatePhase, UpdateSettingsPatch, UpdateSource } from '@/types'
 
@@ -48,9 +49,7 @@ const PHASE_TEXT: Record<UpdatePhase, string> = {
 }
 
 function fmtBytes(n: number | null | undefined): string {
-  if (!n) return '未知大小'
-  const mb = n / 1024 / 1024
-  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
+  return n ? humanBytes(n) : '未知大小'
 }
 
 function fmtSpeed(n: number): string {
@@ -59,14 +58,7 @@ function fmtSpeed(n: number): string {
 }
 
 function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return '从未'
-  const t = Date.parse(iso)
-  if (Number.isNaN(t)) return iso
-  const diff = Date.now() - t
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3600_000)} 小时前`
-  return new Date(t).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return fmtRelativeTime(iso, iso ?? '从未')
 }
 
 /** 发布时间：空值单独成句，不与「发布于」拼句（拼出来是「发布于 从未」） */
@@ -464,36 +456,40 @@ onMounted(async () => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .head {
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .ver {
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .status {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
 }
 
+/* 卡内分区标题：与设置页 / 同步页 / 健康数据同一档 18 Medium（Subtitle_L）。
+   此前 12/700 + --text-2 是「眉标」写法，在这一条设置链路里比别的二级页弱一档。 */
 .gtitle {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--text-2);
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
 .ghead + * {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* 卡头行右侧一组（副标 / 文字按钮 / 帮助入口）：行内再分一组，不让 space-between 摊平 */
 .head-side {
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* 标题行右侧的帮助入口：InfoHint 是多根组件，类要落在包裹元素上 */
@@ -507,23 +503,23 @@ onMounted(async () => {
 }
 
 .meta {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
 }
 
 .notes {
-  margin-top: 8px;
-  padding: 10px 12px;
+  margin-top: var(--sp-8);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   /* 块级渲染（MdText）：不再需要 pre-wrap 去保换行 */
   color: var(--text-2);
 }
 
 .progress-box {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 .pbar {
@@ -543,25 +539,29 @@ onMounted(async () => {
 }
 
 .progress-box > .row {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-12);
 }
 
+/* 动作按钮：常规档 40（--control-md）、左右 16、胶囊、14 Medium。
+   此前 8/14 内距 + 8 圆角的小方块，高度约 32 —— 既不在按钮的 40/28 两档，
+   圆角也落在「小容器」那档而不是按钮档。 */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 14px;
-  border-radius: var(--radius-s);
+  gap: var(--sp-6);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
   background: var(--surface-2);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -578,34 +578,51 @@ onMounted(async () => {
   color: var(--on-accent);
 }
 
+/* 文字型次要动作走 --text-2：--text-3 是「补充信息」档，当按钮文字太淡 */
 .btn.ghost {
   background: transparent;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
+/* 文字链按钮（添加自定义源 / 移除 / 重新探测 / 恢复提示）：视觉仍是 12px 一行字，
+   命中区撑到 44（规范：可点元素热区 ≥44）。它们是卡头与行尾唯一的小入口，
+   17px 的行高在触屏上摸不准。 */
 .link {
+  position: relative;
   color: var(--accent);
   font-size: var(--fs-caption);
 }
 
-.editor {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
+.link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
 }
 
+.editor {
+  display: grid;
+  gap: var(--sp-8);
+  margin-top: var(--sp-10);
+}
+
+/* 自定义源表单：输入框走常规控件档 40（--control-md）、胶囊，与按钮同高 */
 .inp {
   width: 100%;
-  padding: 9px 12px;
-  border-radius: var(--radius-s);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
   background: var(--surface-2);
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-subhead);
   color: var(--text-1);
 }
 
 .srow {
-  gap: 10px;
-  padding: 10px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-10) 0;
 }
 
 .srow + .srow {
@@ -615,23 +632,24 @@ onMounted(async () => {
 .stxt {
   flex: 1;
   min-width: 0;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .stxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .stxt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
   overflow-wrap: anywhere;
 }
 
+/* 检查失败的诊断行：实底档 --danger 当 12px 文字对比度不够，走文字档 */
 .stxt em.bad {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .url {
@@ -641,7 +659,7 @@ onMounted(async () => {
 .rows {
   display: grid;
   grid-template-columns: 1fr;
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .rows > * + * {
@@ -649,55 +667,57 @@ onMounted(async () => {
 }
 
 .frow {
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--sp-12);
+  padding: var(--sp-10) 0;
 }
 
 .ftxt {
   flex: 1;
   min-width: 0;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .ftxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ftxt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .chips {
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .warn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
-  color: var(--danger);
-  line-height: 1.5;
+  /* 警告文字走 --danger-strong（实底档当文字对比度不够） */
+  color: var(--danger-strong);
+  line-height: var(--lh-body);
 }
 
 .ok {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
-  color: var(--ok);
+  /* 与 StatusChip 的 ok 档同一支口径：soft/浅底上的文字走 --ok-strong */
+  color: var(--ok-strong);
 }
 
 .ai-box {
   display: grid;
-  gap: 6px;
-  margin-top: 10px;
-  padding: 10px 12px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-10);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
 }
@@ -705,17 +725,17 @@ onMounted(async () => {
 /* 「可用 / 未配置」：ready 态走 StatusChip 的 ok 档（soft 底 + strong 字）；
    中立态与 .ai-box 同底会看不出形状，垫回 --surface-3，几何与 StatusChip sm 对齐 */
 .tag {
-  padding: 5px 10px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-3);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 /* 在线状态行：地址降一档小字，可达性独立成胶囊（在线 ok / 不可达 danger） */
 .onlinestat {
-  gap: 8px;
+  gap: var(--sp-8);
   flex-wrap: wrap;
 }
 
@@ -726,9 +746,9 @@ onMounted(async () => {
 }
 
 .note {
-  margin: 14px 4px 0;
+  margin: var(--sp-14) var(--sp-4) 0;
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* ============================================================
@@ -777,13 +797,7 @@ onMounted(async () => {
 }
 
 .spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 1s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

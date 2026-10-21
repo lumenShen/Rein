@@ -208,18 +208,19 @@ function onReset(): void {
 
 <style scoped>
 .dim + .dim {
-  margin-top: 18px;
+  /* 筛选项分组之间 16：两组之间有明显边界（分组标题 + 选项组） */
+  margin-top: var(--gap-lg);
 }
 
 .dhead {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .dhead h3 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .unit {
@@ -231,18 +232,30 @@ function onReset(): void {
 .opts {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  /* 选项胶囊各自带底与影，属「有明确边界」的控件：换行上下 16、同行 8；
+     上下这 16 同时给每枚胶囊的 ::after 热区（28 + 8×2 = 44）留出互不重叠的余量。
+     与分组标题之间 8（标题与内容）。 */
+  gap: var(--gap-lg) var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .opt {
-  padding: 7px 14px;
+  position: relative;
+  /* 胶囊：纵向 6 + 12 字 ≈ 28（--control-sm），左右 12 */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+
+/* 28 的胶囊命中区纵向撑到 44：视觉不变，热区补到规范下限（横向由胶囊宽度承担） */
+.opt::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .opt.on {
@@ -253,15 +266,16 @@ function onReset(): void {
 .range {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .range input {
   flex: 1;
   min-width: 0;
-  padding: 9px 12px;
-  border-radius: var(--radius-m);
+  /* 输入框规范：高 40（10 上下 + 14 字），圆角与按钮同档 20 */
+  padding: var(--sp-10) var(--pad-inline);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
   text-align: center;
@@ -274,29 +288,31 @@ function onReset(): void {
 
 .acts {
   display: flex;
-  gap: 10px;
-  margin-top: 22px;
+  /* 按钮组 8；与上方最后一组筛选项之间 24（底部操作区是独立区块） */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-xl);
   padding-bottom: var(--safe-bottom);
 }
 
 .reset {
-  padding: 0 20px;
-  height: 48px;
+  padding: 0 var(--sp-20);
+  /* 高度是尺寸不是间距：底部操作区两枚按钮同为 48 */
+  height: var(--row-h);
   border-radius: var(--radius-l);
   background: var(--surface-2);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .apply {
   flex: 1;
-  height: 48px;
+  height: var(--row-h);
   border-radius: var(--radius-l);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
 }
 </style>

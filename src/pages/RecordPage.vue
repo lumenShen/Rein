@@ -9,6 +9,7 @@ import { useToast } from '@/composables/useToast'
 import { useTodoStore } from '@/stores/todo'
 import { cancelRecording, fmtDur, recorder, startRecording, stopRecording, type RecTake } from '@/system/recorderRuntime'
 import { minToHHmm, todayStr } from '@/utils/date'
+import { humanBytes } from '@/utils/format'
 import type { Todo, TodoAttachment } from '@/types'
 
 /**
@@ -41,9 +42,7 @@ function hhmm(iso: string): string {
 }
 
 function fmtSize(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return humanBytes(n)
 }
 
 function removeTake(t: RecTake): void {
@@ -202,7 +201,8 @@ async function attachTo(todo: Todo): Promise<void> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ---------- 录音台 ---------- */
@@ -211,8 +211,10 @@ async function attachTo(todo: Todo): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 26px 16px 22px;
+  /* 圆钮 / 计时 / 提示三块：12（同一张卡内的区块） */
+  gap: var(--sp-12);
+  /* 上 26 / 下 22 是「一屏只有一颗圆钮」的呼吸，左右 16 */
+  padding: var(--sp-26) var(--pad-card) var(--sp-22);
 }
 
 .rec-btn {
@@ -242,7 +244,8 @@ async function attachTo(todo: Todo): Promise<void> {
 .rec-btn.on::after {
   content: '';
   position: absolute;
-  inset: -7px;
+  /* 呼吸光环外扩 8：7 不在 4/8 体系里，8 的光环宽度与圆钮直径之比几乎不变 */
+  inset: calc(-1 * var(--sp-8));
   border-radius: 50%;
   border: 2px solid color-mix(in srgb, var(--danger) 55%, transparent);
   animation: recpulse 1.6s var(--ease-standard) infinite;
@@ -262,7 +265,7 @@ async function attachTo(todo: Todo): Promise<void> {
 
 .timer {
   font-size: var(--fs-display-m);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 1px;
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
@@ -277,17 +280,32 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .rec-acts {
-  gap: 10px;
-  margin-top: 2px;
+  /* 录音中的两颗动作钮：无边界 8 */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-text);
 }
 
 .cancel {
-  padding: 9px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  /* 常规按钮高 40（HarmonyOS 控件规范）：原先 10+10 内距 + 12 字（行高 1.5）= 38 */
+  min-height: var(--control-md);
+  padding: var(--sp-10) var(--pad-card);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+/* 40 高的视觉钮命中区补到 44（上下各 2），触屏上「取消录音」不该点空 */
+.cancel::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-text)) 0;
+  border-radius: inherit;
 }
 
 .err {
@@ -295,13 +313,13 @@ async function attachTo(todo: Todo): Promise<void> {
   color: var(--danger-strong);
   background: var(--danger-soft);
   border-radius: var(--radius-s);
-  padding: 7px 12px;
+  padding: var(--gap-sm) var(--pad-inline);
 }
 
 /* ---------- 未归档 take ---------- */
 
 .takes {
-  margin-top: 14px;
+  margin-top: var(--gap-md);
 }
 
 /* ============================================================
@@ -323,7 +341,7 @@ async function attachTo(todo: Todo): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: var(--desk-gap);
-  padding: 18px 22px;
+  padding: var(--sp-18) var(--sp-22);
 }
 
 /* take 是等高条目（名字 + 两个动作 + 一条播放器），桌面上摊成多栏。
@@ -336,7 +354,10 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .thead b {
-  font-size: var(--fs-footnote);
+  /* 区块标题走 Subtitle_S（14 Medium/Bold）：原先 12 与右侧计数同档，
+     读不出「这是这一段的标题」 */
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
 }
 
 /* 计数降到与标题同档并补单位（「N 条」）：原来无字号继承 body 17px，比标题还大 */
@@ -345,37 +366,39 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .thead-side {
-  gap: 10px;
+  gap: var(--gap-sm);
 }
 
 .empty {
   font-size: var(--fs-caption);
-  line-height: 1.6;
-  padding: 8px 2px;
+  line-height: var(--lh-body);
+  padding: var(--gap-sm) var(--gap-text);
 }
 
 .tlist {
   list-style: none;
-  margin: 8px 0 0;
+  /* 与区块标题 8；条目之间 12（卡间距） */
+  margin: var(--gap-sm) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .take {
-  padding: 12px 14px;
+  /* 条内距 12/16；名字行 / 动作行 / 播放器三块之间 8 */
+  padding: var(--sp-12) var(--pad-card);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .trow {
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .tmeta {
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
 }
 
@@ -388,7 +411,7 @@ async function attachTo(todo: Todo): Promise<void> {
   /* 「14:03」是这条录音的身份信息，做这一行的主；体积降一档做体积注 */
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
 }
 
@@ -403,17 +426,33 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .tacts {
-  gap: 8px;
+  gap: var(--gap-sm);
   flex: none;
 }
 
 .mini {
-  padding: 7px 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  /* 小按钮视觉 28（--control-sm），命中区由下面的 ::after 补到 44 */
+  height: var(--control-sm);
+  /* 固定高 + flex 居中，纵向不再叠内距；横向 12 */
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
-  color: var(--accent);
+  /* soft 底上的文字走 strong 档（STANDARDS §4） */
+  color: var(--accent-strong);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+}
+
+.mini::after {
+  content: '';
+  position: absolute;
+  /* 28 → 44：纵向各扩 8；横向不扩，右边的删除钮另有 44 热区 */
+  inset: calc(-1 * var(--gap-sm)) 0;
+  border-radius: inherit;
 }
 
 .mini:disabled {
@@ -421,6 +460,7 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .tdel {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -429,6 +469,19 @@ async function attachTo(todo: Todo): Promise<void> {
   justify-content: center;
   background: var(--surface-2);
   color: var(--text-3);
+}
+
+/* 32 的视觉钮命中区撑到 44（各外扩 6）：删除录音是破坏性操作，
+   触屏上点偏了不该没反应，也不该误触到旁边的「附加」 */
+.tdel::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 /* hover 反色只在真悬停设备生效：触屏点一下会粘在危险色上，像已经删掉了 */
@@ -448,14 +501,22 @@ async function attachTo(todo: Todo): Promise<void> {
 .picker {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .search {
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--gap-sm);
+  /* 搜索胶囊：上下 10（40 档）、左右 12 */
+  padding: var(--sp-10) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface-2);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+/* 输入框自己是 outline:none（base.css），容器必须接住焦点：
+   否则键盘用户 Tab 进搜索框后完全看不出焦点在哪 */
+.search:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .search input {
@@ -477,8 +538,10 @@ async function attachTo(todo: Todo): Promise<void> {
 
 .prow {
   width: 100%;
-  gap: 10px;
-  padding: 11px 4px;
+  min-height: var(--row-h);
+  gap: var(--gap-md);
+  /* 单行选择行：12 上下 + 20 文本 ≈ 48 档（HarmonyOS 效率型列表 48 起） */
+  padding: var(--sp-12) var(--gap-tight);
   border-bottom: 0.5px solid var(--line);
   text-align: left;
 }
@@ -489,7 +552,7 @@ async function attachTo(todo: Todo): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .pmeta {
@@ -498,7 +561,7 @@ async function attachTo(todo: Todo): Promise<void> {
 }
 
 .pempty {
-  padding: 14px 0;
+  padding: var(--gap-lg) 0;
   font-size: var(--fs-caption);
   text-align: center;
 }

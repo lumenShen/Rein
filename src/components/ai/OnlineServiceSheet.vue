@@ -333,19 +333,19 @@ async function importPicked(): Promise<void> {
 .onl {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-12);
 }
 
 .card {
-  padding: 13px 14px;
+  padding: var(--pad-card-tight) var(--pad-card);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .head-card {
-  gap: 7px;
+  gap: var(--gap-sm);
 }
 
 /* 头部徽章：统一 token-soft（与设置页 / 同步页 / 模型页的图标章同一套），
@@ -364,15 +364,18 @@ async function importPicked(): Promise<void> {
 
 .head-card b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-medium);
   border-radius: var(--radius-full);
-  padding: 3px 9px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
 }
 
 .chip-ok {
@@ -382,7 +385,7 @@ async function importPicked(): Promise<void> {
 
 .chip-idle {
   background: var(--surface-2);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .chip-warn {
@@ -392,13 +395,13 @@ async function importPicked(): Promise<void> {
 
 .acct {
   font-size: var(--fs-footnote);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .l {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
@@ -406,7 +409,7 @@ async function importPicked(): Promise<void> {
 .l-hint {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 /* 卡面结论：一行胶囊，明细收进 InfoHint */
@@ -415,22 +418,22 @@ async function importPicked(): Promise<void> {
 }
 
 .diff {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .err {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--danger);
   word-break: break-all;
 }
 
 .acts {
-  gap: 8px;
-  margin-top: 2px;
+  gap: var(--gap-sm);
+  margin-top: var(--sp-2);
 }
 
 .btn {
@@ -438,19 +441,20 @@ async function importPicked(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .acts .btn + .btn {
   flex: none;
-  padding-left: 18px;
-  padding-right: 18px;
+  padding-left: var(--sp-18);
+  padding-right: var(--sp-18);
   color: var(--text-2);
 }
 
@@ -467,18 +471,19 @@ async function importPicked(): Promise<void> {
    位置由 .cornered 钉在卡片右上角。 */
 .pill {
   position: absolute;
-  top: 11px;
-  right: 12px;
+  top: var(--sp-8);
+  right: var(--sp-12);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
+  gap: var(--gap-tight);
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border: none;
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -496,7 +501,8 @@ async function importPicked(): Promise<void> {
 }
 
 .cornered > .l {
-  padding-right: 92px;
+  /* 92 = 64 + 28：给右上角那颗胶囊让出的固定宽度（两个间隔档拼出来，不写裸值） */
+  padding-right: calc(var(--sp-64) + var(--sp-28));
 }
 
 .list {
@@ -506,19 +512,21 @@ async function importPicked(): Promise<void> {
 }
 
 .grp + .grp {
-  margin-top: 8px;
+  margin-top: var(--gap-md);
 }
 
 .grp-head {
-  padding: 4px 2px;
+  padding: var(--sp-4) var(--sp-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .m {
-  gap: 9px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 9px 2px;
+  min-height: var(--row-h);
+  padding: 0 var(--sp-2);
   text-align: left;
 }
 
@@ -550,20 +558,20 @@ async function importPicked(): Promise<void> {
 
 .mt b {
   display: block;
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
   word-break: break-all;
 }
 
 .mt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .cost {
   background: var(--surface-2);
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .crow {
@@ -582,19 +590,14 @@ async function importPicked(): Promise<void> {
 .csub {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  color: var(--text-3);
-  margin-bottom: 4px;
+  color: var(--text-2);
+  margin-bottom: var(--sp-4);
 }
 
+/* 转圈走 base.css 的共享 keyframes（scoped 的 @keyframes 会被改名，各文件各存一份） */
 .spin {
-  animation: rotate 0.9s linear infinite;
-}
-
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 </style>

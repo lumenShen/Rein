@@ -52,5 +52,16 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      // 两个入口，同一份依赖与别名：
+      //   main  = 主窗口（index.html，完整 Vue 应用）；
+      //   float = 系统浮窗（float.html，独立 webview，不含 Pinia / router）。
+      // dev 下 http://localhost:1420/float.html 直接可开（浏览器预览走空态）；
+      // 生产构建必须两个都产出，否则 Rust 建 float 窗口时会 404。
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        float: fileURLToPath(new URL('./float.html', import.meta.url)),
+      },
+    },
   },
 })

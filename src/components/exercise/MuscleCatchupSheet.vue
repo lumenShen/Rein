@@ -332,12 +332,12 @@ function goConflict(): void {
 <style scoped>
 .lede {
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .weaklist {
-  margin-top: 14px;
+  margin-top: var(--sp-14);
   display: flex;
   flex-direction: column;
 }
@@ -346,8 +346,8 @@ function goConflict(): void {
   display: grid;
   grid-template-columns: 84px 62px 1fr;
   align-items: baseline;
-  gap: 8px;
-  padding: 9px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) 0;
   border-bottom: 0.5px solid var(--line);
 }
 
@@ -358,38 +358,38 @@ function goConflict(): void {
 
 .wname {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .wgap {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   /* 「差 N 组」是数值：中性色（色彩配额，STANDARDS §4） */
   color: var(--text-1);
 }
 
 .wex {
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   min-width: 0;
 }
 
 /* 现成课程：这张抽屉里唯一的**推荐**块，用 accent-soft 底与草稿的中性底分开。
    色相交给前景（--accent-strong），底保持同色低透明 —— 与 tokens 里那条语义色约定一致。 */
 .rc {
-  margin-top: 14px;
-  padding: 12px 14px;
+  margin-top: var(--sp-14);
+  padding: var(--sp-12) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--accent-soft);
 }
 
 .rc-head {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .rc-k {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
 }
 
@@ -401,9 +401,9 @@ function goConflict(): void {
 }
 
 .rc-name {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.2px;
 }
 
@@ -411,19 +411,19 @@ function goConflict(): void {
 .rc-groups {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 8px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-8);
 }
 
 .rc-g {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
+  gap: var(--gap-tight);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -433,9 +433,9 @@ function goConflict(): void {
 }
 
 .rc-why {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
@@ -444,19 +444,19 @@ function goConflict(): void {
 }
 
 .draft {
-  margin-top: 16px;
-  padding: 12px 14px;
+  margin-top: var(--sp-16);
+  padding: var(--sp-12) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .dhead {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
 }
 
 .dt {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ds {
@@ -472,8 +472,8 @@ function goConflict(): void {
 .drow {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-6) 0;
 }
 
 .drow + .drow {
@@ -493,7 +493,7 @@ function goConflict(): void {
 
 .dname {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -502,41 +502,41 @@ function goConflict(): void {
 .dsets {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .dhint {
-  padding: 8px 0;
+  padding: var(--sp-8) 0;
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .acts {
-  margin-top: 16px;
+  margin-top: var(--sp-16);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .primary {
-  gap: 7px;
-  padding: 13px 18px;
+  gap: var(--sp-6);
+  padding: var(--sp-12) var(--sp-18);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ghost {
-  gap: 7px;
-  padding: 12px 18px;
+  gap: var(--sp-6);
+  padding: var(--sp-12) var(--sp-18);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .primary:disabled,
@@ -545,9 +545,9 @@ function goConflict(): void {
 }
 
 .hint {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   font-size: var(--fs-micro);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 </style>

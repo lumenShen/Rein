@@ -141,8 +141,8 @@ function close(): void {
 
 <style scoped>
 .sum {
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-sm);
 }
 
 /* 总热量是这一行的主数值，项数与可写入数是副行（胶囊/说明文字降一档） */
@@ -150,54 +150,56 @@ function close(): void {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .kcal {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .t-unit {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
-  margin-left: 3px;
+  margin-left: var(--sp-4);
 }
 
 .sub {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .mini {
   width: 44px;
   height: 44px;
   flex: none;
-  border-radius: var(--radius-m);
+  /* 缩略图走小尺寸容器档 8 */
+  border-radius: var(--radius-s);
   object-fit: cover;
   background: var(--surface-2);
 }
 
 .meal {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
 }
 
 .acts {
-  gap: 10px;
-  margin-top: 14px;
+  gap: var(--gap-md);
+  margin-top: var(--gap-lg);
 }
 
 .ghost {
-  gap: 5px;
-  padding: 11px 14px;
+  gap: var(--gap-tight);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .ghost:disabled {
@@ -205,12 +207,13 @@ function close(): void {
 }
 
 .primary {
-  padding: 11px 22px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-22);
   border-radius: var(--radius-full);
   background: var(--ok);
   color: var(--on-accent);
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .primary:disabled {

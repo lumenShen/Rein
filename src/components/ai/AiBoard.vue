@@ -20,6 +20,7 @@ import { useAiStore } from '@/stores/ai'
 import { useNutritionStore } from '@/stores/nutrition'
 import { listFoodDrafts, type FoodDraft } from '@/utils/foodDrafts'
 import { todayStr } from '@/utils/date'
+import { fmtSameDayTime } from '@/utils/format'
 import type { RingItem } from '@/components/common/ActivityRings.vue'
 
 /**
@@ -161,10 +162,7 @@ const quickAsks: QuickAsk[] = [
 const recent = computed(() => ai.chats.slice(0, 4))
 
 function fmtTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return d.toDateString() === new Date().toDateString() ? hm : `${d.getMonth() + 1}-${d.getDate()} ${hm}`
+  return fmtSameDayTime(iso)
 }
 
 const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length === 0)
@@ -262,17 +260,18 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 
 <style scoped>
 .board {
-  padding: 4px 2px 8px;
+  padding: var(--sp-4) var(--sp-2) var(--sp-8);
 }
 
 /* ---------- 今天 ---------- */
+/* 「今天」是一张卡：圆角走卡片档 16（不是按钮的 20），内距 16、卡片间距 24 */
 .today {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  margin-bottom: 22px;
-  border-radius: var(--radius-l);
+  gap: var(--gap-lg);
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-xl);
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -294,12 +293,13 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .t-row {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--gap-sm);
 }
 
 .t-row b {
   font-size: var(--fs-large-title);
-  font-weight: 200;
+  /* 展示级大数字走 Light 档（阶梯里最轻的一档是 300，200 在阶梯外） */
+  font-weight: var(--fw-light);
   letter-spacing: -1px;
   line-height: 1;
   /* 摄入量是数值：数值一律中性色 —— 色相只允许出现在图标/色点/进度条与图表/类型字章上
@@ -311,9 +311,9 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .t-unit {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
-  margin-left: 3px;
+  margin-left: var(--sp-4);
 }
 
 .t-lab {
@@ -323,41 +323,43 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 
 .t-sub {
   display: flex;
-  gap: 14px;
-  margin-top: 8px;
+  gap: var(--gap-lg);
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
+/* 色点尺寸是图形几何（7px 视觉点），不是间距；点与字的距离走 4 */
 .t-sub .d {
   display: inline-block;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  margin-right: 5px;
+  margin-right: var(--sp-4);
 }
 
 /* ---------- 分节 ---------- */
 .sec {
-  margin-bottom: 22px;
+  margin-bottom: var(--gap-xl);
 }
 
+/* 分节标题：14 Semibold 主色（原来是 12/700 的三级灰眉标，读不出「这是新一轮」） */
 .sec-t {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--text-2);
-  margin-bottom: 10px;
-  padding-left: 2px;
+  gap: var(--gap-sm);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+  margin-bottom: var(--gap-sm);
+  padding-left: var(--sp-2);
 }
 
 /* ---------- 做什么 ---------- */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 /* 桌面：整块看板落在 760 的阅读栏里（实测 756），两列时每格 373px，
@@ -372,8 +374,8 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .qa {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 13px;
+  gap: var(--gap-md);
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -394,21 +396,21 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .qa-t {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--gap-text);
   min-width: 0;
   flex: 1;
 }
 
 .qa-t b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .qa-t em {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 500;
-  color: var(--text-3);
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -416,8 +418,8 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 
 /* 六格入口的结论行：胶囊承载；完整解释收进标题行 InfoHint，分层不重复 */
 .qa-tip {
-  margin-top: 10px;
-  padding-left: 2px;
+  margin-top: var(--gap-md);
+  padding-left: var(--sp-2);
 }
 
 /* 悬停反馈（只有真有指针的设备才要）：内容卡走「抬影」—— 与 base.css 里
@@ -454,10 +456,11 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .dr {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 11px 14px;
-  margin-bottom: 12px;
+  min-height: var(--row-h-double);
+  padding: var(--sp-8) var(--pad-inline);
+  margin-bottom: var(--gap-md);
   border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--ok) 10%, var(--surface));
   text-align: left;
@@ -478,7 +481,7 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .dr b {
   display: block;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .dr em {
@@ -494,7 +497,7 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .dr-go {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--ok-strong);
 }
 
@@ -507,12 +510,14 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
   overflow: hidden;
 }
 
+/* 会话行：48 的单行列表档，左右走列表行内距 16 */
 .ch {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 12px 14px;
+  min-height: var(--row-h);
+  padding: 0 var(--pad-row);
   text-align: left;
   min-width: 0;
 }
@@ -533,7 +538,7 @@ const isEmpty = computed(() => recent.value.length === 0 && drafts.value.length 
 .ch b {
   display: block;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

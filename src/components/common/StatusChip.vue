@@ -33,20 +33,26 @@ withDefaults(
 .schip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   max-width: 100%;
   border-radius: var(--radius-full);
-  font-weight: 600;
+  /* 与 PillChip 同一档字重：状态词是 12px 的标签，不是标题 */
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
+/* 标签高 24（--chip-h）/ 左右 12（--pad-inline），与 PillChip 同尺寸 ——
+   两者常并排出现在同一个卡头里，高度不同就会错基线 */
 .md {
-  padding: 6px 12px;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   font-size: var(--fs-caption);
 }
 
+/* 微状态（在线 / 已同步）：20 高一档，左右收到 8 */
 .sm {
-  padding: 5px 10px;
+  min-height: var(--sp-20);
+  padding: 0 var(--sp-8);
   font-size: var(--fs-micro);
 }
 

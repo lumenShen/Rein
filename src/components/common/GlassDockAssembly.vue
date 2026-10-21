@@ -49,7 +49,7 @@ defineSlots<{
     >
       <slot name="left" :item="left" :active="active === left.id">
         <span class="dock-slot" :class="{ active: active === left.id }">
-          <component :is="left.icon" :size="21" :stroke-width="active === left.id ? 2.4 : 1.9" />
+          <component :is="left.icon" :size="24" :stroke-width="active === left.id ? 2.4 : 1.9" />
           <span>{{ left.label }}</span>
         </span>
       </slot>
@@ -66,7 +66,7 @@ defineSlots<{
       <template v-for="item in items" :key="item.id">
         <slot name="tab" :item="item" :active="item.id === active">
           <span class="dock-tab" :class="{ active: item.id === active }">
-            <component :is="item.icon" :size="22" :stroke-width="item.id === active ? 2.4 : 1.9" />
+            <component :is="item.icon" :size="24" :stroke-width="item.id === active ? 2.4 : 1.9" />
             <span>{{ item.label }}</span>
           </span>
         </slot>
@@ -84,7 +84,7 @@ defineSlots<{
     >
       <slot name="right" :item="right" :active="active === right.id">
         <span class="dock-slot" :class="{ active: active === right.id }">
-          <component :is="right.icon" :size="21" :stroke-width="active === right.id ? 2.4 : 1.9" />
+          <component :is="right.icon" :size="24" :stroke-width="active === right.id ? 2.4 : 1.9" />
           <span>{{ right.label }}</span>
         </span>
       </slot>
@@ -96,7 +96,8 @@ defineSlots<{
 .dock-assembly {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* 三块玻璃并列留缝、互不叠压（各自都有受光边）：无边界控件之间 8 */
+  gap: var(--gap-sm);
   width: 100%;
   height: var(--tabbar-h);
 }

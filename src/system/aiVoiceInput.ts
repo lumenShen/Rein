@@ -20,6 +20,7 @@ import { reactive } from 'vue'
 import { voiceService } from '@/services/voiceService'
 import type { AsrEventPayload } from '@/types'
 import { claimMic, micOwner, releaseMic } from './micBus'
+import { int16ToB64, mergeInt16 } from './pcm'
 
 /** 按下低于该时长视为「轻点」（转入连听），否则是「按住」（松开即结束） */
 export const VOICE_TAP_MS = 320
@@ -230,27 +231,6 @@ function onPcm(chunk: Int16Array): void {
     acc = []
     void voiceService.asrAudio(sessionId, int16ToB64(merged)).catch(() => undefined)
   }
-}
-
-function mergeInt16(parts: Int16Array[]): Int16Array {
-  const total = parts.reduce((s, p) => s + p.length, 0)
-  const out = new Int16Array(total)
-  let off = 0
-  for (const p of parts) {
-    out.set(p, off)
-    off += p.length
-  }
-  return out
-}
-
-function int16ToB64(arr: Int16Array): string {
-  const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)
-  let bin = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)))
-  }
-  return btoa(bin)
 }
 
 /* ---------- 周期检查：计时 + 连听自动结束 ---------- */

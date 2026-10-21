@@ -103,7 +103,8 @@ function onKey(e: KeyboardEvent, date: string): void {
 }
 
 .wsum b {
-  font-weight: 800;
+  /* 字重只走五档令牌：800 不在阶梯上，收在 Bold */
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -120,8 +121,9 @@ function onKey(e: KeyboardEvent, date: string): void {
 /* 七列一排：flex 均分（窄屏一列也有 ~40px，放得下「周一」「0/2」） */
 .strip {
   display: flex;
-  gap: 6px;
-  margin-top: 9px;
+  gap: var(--gap-sm);
+  /* 小结行与七列之间 8（标题与内容一档），9 是落单值 */
+  margin-top: var(--gap-sm);
 }
 
 .wcell {
@@ -130,8 +132,9 @@ function onKey(e: KeyboardEvent, date: string): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 8px 2px 7px;
+  gap: var(--gap-tight);
+  /* 上下内距拉平成 8：原来 8 / 7 会让七格里的进度条不在一条线上 */
+  padding: var(--sp-8) var(--sp-2);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   cursor: pointer;
@@ -155,14 +158,14 @@ function onKey(e: KeyboardEvent, date: string): void {
 .wd-head {
   display: flex;
   align-items: baseline;
-  gap: 3px;
+  gap: var(--gap-tight);
   white-space: nowrap;
 }
 
 .wd-label {
   /* 「周一」是周视图里的定位信息，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -178,7 +181,7 @@ function onKey(e: KeyboardEvent, date: string): void {
 
 .wd-count {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }

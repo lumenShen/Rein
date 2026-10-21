@@ -434,92 +434,107 @@ async function onTry(): Promise<void> {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-bottom: 10px;
+  gap: var(--sp-6);
+  padding-bottom: var(--sp-10);
 }
 
 .hint,
 .auto-notice {
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .auto-notice {
-  color: var(--accent);
+  /* soft 底上的文字走 strong 档（STANDARDS §4） */
+  color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-xs);
-  padding: 6px 10px;
-  margin-top: 6px;
+  padding: var(--sp-6) var(--sp-10);
+  margin-top: var(--sp-6);
 }
 
 .warn-notice {
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   /* --c-warn 这个 token 从来不存在，原先的 #b45309 回退值就是真实生效值，
      且在暗色下对比度不足；收口到有明暗两档的 warn 家族 */
   color: var(--warn-strong);
   background: var(--warn-soft);
   border-radius: var(--radius-xs);
-  padding: 6px 10px;
-  margin-top: 6px;
+  padding: var(--sp-6) var(--sp-10);
+  margin-top: var(--sp-6);
 }
 
 .divider {
   height: 1px;
   background: var(--surface-3);
-  margin: 14px 0 4px;
+  margin: var(--gap-lg) 0 var(--gap-tight);
 }
 
 /* 第二层推荐气泡：只提示不强改 */
 .suggestion {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
-  margin-top: 6px;
-  padding: 7px 10px;
+  margin-top: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--ok-soft);
   color: var(--ok-strong);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+/* 推荐气泡里的两枚小按钮：高 28（--control-sm）、左右 12，与全库小按钮同档 */
+.suggestion .sgo,
+.suggestion .sgx {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+}
+
+/* 28 的小按钮命中区补到 44（纵向各 8，横向不扩：两枚只隔 8，扩了会互相抢） */
+.suggestion .sgo::after,
+.suggestion .sgx::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-sm)) 0;
+  border-radius: inherit;
 }
 
 .suggestion .sgo {
-  padding: 3px 10px;
-  border-radius: var(--radius-full);
   background: var(--ok);
   color: var(--on-accent);
-  font-size: var(--fs-caption);
-  font-weight: 700;
 }
 
 .suggestion .sgx {
-  padding: 3px 10px;
-  border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: 600;
 }
 
 .f-label {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 /* 标签行：字段名 + 行尾胶囊 / InfoHint（同一行不放第二枚图标按钮，落点见 InfoHint 注释） */
 .label-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   flex-wrap: wrap;
 }
 
 .label-row .f-label {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* InfoHint 是多根片段，类不会透传到按钮上 —— 用一层 span 占位再推到行尾 */
@@ -530,22 +545,23 @@ async function onTry(): Promise<void> {
 
 /* 协议头名 / 机制说明降到这里：次要说明档，不再是字段名 */
 .f-hint {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .form input {
   width: 100%;
-  padding: 10px 12px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
 }
 
 .form input.mono {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: var(--fs-caption);
 }
 
@@ -553,46 +569,59 @@ async function onTry(): Promise<void> {
   display: flex;
   background: var(--surface-2);
   border-radius: var(--radius-s);
-  padding: 2px;
+  padding: var(--sp-2);
 }
 
 .mode-seg button {
+  position: relative;
   flex: 1;
-  height: 30px;
+  /* 段高 28 + 轨道内距 2×2 = 整体 32（HarmonyOS 分段按钮规格）；
+     原先 30 让整体到 34，比同页输入框还高一档 */
+  height: var(--control-sm);
   border-radius: var(--radius-xs);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
+}
+
+/* 28 的分段项命中区补到 44（纵向各 8）：两段各占一半宽度，横向不扩、互不重叠 */
+.mode-seg button::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-sm)) 0;
+  border-radius: inherit;
 }
 
 .mode-seg button.on {
   background: var(--surface);
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-thumb);
 }
 
 .acts {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-16);
 }
 
 .acts button {
   flex: 1;
-  height: 42px;
+  /* 常规按钮 40（--control-md）：原先 42 落在两个档位之间 */
+  min-height: var(--control-md);
   border-radius: var(--radius-full);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .try {
   background: var(--accent-soft);
-  color: var(--accent);
+  /* soft 底上的文字走 strong 档（STANDARDS §4） */
+  color: var(--accent-strong);
 }
 
 .save {

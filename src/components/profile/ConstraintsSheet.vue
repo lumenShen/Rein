@@ -363,11 +363,11 @@ async function save(): Promise<void> {
 /* 灰底分组卡坐在白抽屉上（iOS Health 的 inset grouped）；
    行内控件一律反白 —— 灰卡上的 surface-2 会隐形，这是选型不是口味。 */
 .csform {
-  padding-top: 6px;
+  padding-top: var(--sp-6);
 }
 
 .sec + .sec {
-  margin-top: 18px;
+  margin-top: var(--sp-18);
 }
 
 /* 分组小帽：左标题右实时读数。呼吸位上多下少 */
@@ -375,22 +375,23 @@ async function save(): Promise<void> {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 0 6px;
-  margin-bottom: 7px;
+  gap: var(--sp-10);
+  padding: 0 var(--sp-6);
+  margin-bottom: var(--sp-8);
 }
 
+/* 分组小帽是这一节的标题（不是批注）：12 Semibold + --text-2 */
 .seccap span {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.02em;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .capinfo {
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 /* BMI 读数分档色：soft 档令牌的配套字色，实底档（--warn/--danger）不当文字用 */
@@ -409,7 +410,7 @@ async function save(): Promise<void> {
 .card {
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 3px 14px;
+  padding: var(--sp-4) var(--pad-card);
 }
 
 /* 发丝线分行：卡内第二个孩子起都压一条，行节奏统一 */
@@ -421,24 +422,24 @@ async function save(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 0;
-  min-height: 44px;
+  gap: var(--gap-md);
+  padding: 0;
+  min-height: var(--row-h);
 }
 
 .rlabel {
   flex: none;
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 
 .rhint {
-  margin-left: 7px;
+  margin-left: var(--gap-sm);
   /* 「点选排除，食谱会自动避开」是操作指令，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 400;
-  color: var(--text-3);
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
   font-style: normal;
 }
 
@@ -454,17 +455,18 @@ async function save(): Promise<void> {
 /* 生日：年 / 月 / 日 三个白底下拉，替掉原生 date（yyyy/mm/日 占位键盘难用） */
 .bsels {
   display: flex;
-  gap: 7px;
+  gap: var(--sp-8);
   flex: none;
 }
 
 .bsel {
-  padding: 8px 8px 8px 11px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-s);
   border: none;
   background: var(--surface);
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 
@@ -479,14 +481,14 @@ async function save(): Promise<void> {
 
 /* 未选中的占位（年/月/日）降灰：读起来是「未设置」而不是一个已选的值 */
 .bsel.unset {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 步进行本身就是一个行：把组件自带的上下内边距并进行节奏 */
 .card :deep(.stepper) {
   flex: 1;
-  padding: 9px 0;
-  min-height: 44px;
+  padding: 0;
+  min-height: var(--row-h);
   box-sizing: border-box;
 }
 
@@ -498,22 +500,23 @@ async function save(): Promise<void> {
 /* chips 行：标签在上，选项换行铺满 */
 .crow {
   display: grid;
-  gap: 9px;
-  padding: 11px 0;
+  gap: var(--sp-8);
+  padding: var(--sp-12) 0;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .chip {
-  padding: 8px 14px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface);
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
@@ -523,19 +526,20 @@ async function save(): Promise<void> {
 .chip.on {
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 自定义忌口 chip：文字 + 删除叉排成一行 */
 .chip-x {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
 }
 
 .cinput {
   width: 100%;
-  padding: 9px 12px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-s);
   border: none;
   background: var(--surface);
@@ -551,12 +555,13 @@ async function save(): Promise<void> {
 
 .save {
   width: 100%;
-  padding: 14px 0;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-body);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 

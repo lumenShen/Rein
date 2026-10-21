@@ -494,7 +494,7 @@ function adjustmentsOf(r: ProgramRecord): number {
         />
 
         <button class="why-link" @click="evidenceOpen = true">
-          <Info :size="13" style="vertical-align:-2px;margin-right:3px" />为什么每个肌群要练 2~3 次？看研究曲线
+          <Info :size="13" style="vertical-align:-2px;margin-right:var(--gap-tight)" />为什么每个肌群要练 2~3 次？看研究曲线
         </button>
 
         <!-- 启用确认 -->
@@ -721,7 +721,7 @@ function adjustmentsOf(r: ProgramRecord): number {
       <ul class="hist-list">
         <li v-for="r in archivedList" :key="r.id">
           <button class="hist-item pressable row between center" @click="openWrapup(r)">
-            <span class="col" style="gap: 2px; min-width: 0">
+            <span class="col" style="gap: var(--gap-text); min-width: 0">
               <b>{{ GOAL_LABELS[r.goal] }} · {{ tierLabel(r.tier) }} · v{{ r.version }}</b>
               <em class="t-3 num">{{ reportSpanOf(r) }} · 调整 {{ adjustmentsOf(r) }} 次</em>
             </span>
@@ -745,10 +745,11 @@ function adjustmentsOf(r: ProgramRecord): number {
 /* flex + gap 统一卡片间距：卡片来自多个子组件（.card / .pod 混排），
    全局 .card + .card 的相邻选择器跨组件会断链，这里由页面容器统一负责 */
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 卡片之间 12（卡片间距）：原来 14 与卡内 12 的节奏对不上 */
+  gap: var(--gap-md);
 }
 
 .rubber-layer > .card + .card {
@@ -759,23 +760,25 @@ function adjustmentsOf(r: ProgramRecord): number {
   /* 模板里与 .center 成对使用：center 只给对齐属性，display 在这里补上，
      否则「加载中…」这类单行文案会贴在卡左上角而不是居中 */
   display: flex;
-  padding: 40px 0;
+  padding: var(--sp-40) 0;
 }
 
 .card h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .primary {
   width: 100%;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  /* 页脚主按钮高 40（--control-md），圆角走按钮档 20 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) 0;
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition:
     opacity var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);
@@ -788,21 +791,21 @@ function adjustmentsOf(r: ProgramRecord): number {
 .linkbtn {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  gap: var(--gap-text);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 科学依据入口：选档时最需要「为什么」，做成文字链不抢主按钮 */
 .why-link {
   display: block;
   width: 100%;
-  margin: 4px 0 12px;
+  margin: var(--sp-4) 0 var(--sp-12);
   text-align: center;
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 引导与档位卡样式已随 01/02/03 组件化移除 */
@@ -815,7 +818,15 @@ function adjustmentsOf(r: ProgramRecord): number {
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
+}
+
+/* 320 档：卡内可用的 260px 分给四列只剩 59px，而「每日热量偏移」六个 10px 汉字
+   正好 60px —— 标签是 nowrap，会从格子里溢出去。收到两列，标签保持整行。 */
+@media (max-width: 359px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .stats em {
@@ -828,36 +839,36 @@ function adjustmentsOf(r: ProgramRecord): number {
 
 .stats b {
   display: block;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .stats i {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-left: 1px;
+  margin-left: var(--sp-2);
 }
 
 /* 偏移量的方向词（多吃 / 少吃）：把 +/− 号翻成人话，与数值同行不抢层级 */
 .s-dir {
-  margin-left: 4px;
+  margin-left: var(--sp-4);
   font-size: var(--fs-micro);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
 }
 
 /* BMR/TDEE 拆成两组「标签 + 值」竖排：缩写不解释没人读得懂，中文名各带单位 */
 .stat-pair {
   display: grid;
-  gap: 2px;
+  gap: var(--gap-text);
   align-content: center;
 }
 
 .stat-pair em + b {
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-6);
 }
 
 /* 状态条：一行概要 + 周期进度 + 可展开参数详情 */
@@ -869,20 +880,24 @@ function adjustmentsOf(r: ProgramRecord): number {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
+  gap: var(--gap-sm);
+  /* 四边同距 12，与 .act / .stats 的内距同档 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--accent-soft);
-  color: var(--accent);
+  /* accent-soft 底上的文字走 strong 档（tokens.css:181）：实底档 --accent 在这层浅蓝上不够稳 */
+  color: var(--accent-strong);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-align: left;
 }
 
 .strip .grow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* 320 档：周次 + 目标/档位胶囊放不进一行时让胶囊换行，而不是被 overflow 切掉半个「v2」 */
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
   flex: 1;
   min-width: 0;
 }
@@ -891,7 +906,7 @@ function adjustmentsOf(r: ProgramRecord): number {
 .strip-week {
   flex: none;
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   color: var(--text-1);
 }
@@ -899,11 +914,12 @@ function adjustmentsOf(r: ProgramRecord): number {
 .strip-tags {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  /* 目标与档位胶囊是主次文本左右的关系：8（--gap-text-inline） */
+  gap: var(--gap-text-inline);
   min-width: 0;
   overflow: hidden;
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--accent-strong);
   white-space: nowrap;
 }
@@ -926,9 +942,11 @@ function adjustmentsOf(r: ProgramRecord): number {
 /* 周期进度：细条替代被删掉的周期地图，「走到哪了」一眼可见 */
 .strip-bar {
   height: 3px;
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   border-radius: var(--radius-full);
-  background: var(--surface-2);
+  /* 轨道用 --ring-track 而不是 --surface-2：进度条落在画布上，
+     surface-2 与页面底色几乎同值，轨道会整条消失（tokens.css:158-161） */
+  background: var(--ring-track);
   overflow: hidden;
 }
 
@@ -963,8 +981,8 @@ function adjustmentsOf(r: ProgramRecord): number {
 }
 
 .strip-detail .stats {
-  margin: 10px 0 0;
-  padding: 11px 14px;
+  margin: var(--sp-10) 0 0;
+  padding: var(--sp-10) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -973,8 +991,8 @@ function adjustmentsOf(r: ProgramRecord): number {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin: 7px 2px 0;
+  gap: var(--sp-10);
+  margin: var(--sp-6) var(--sp-2) 0;
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -989,25 +1007,26 @@ function adjustmentsOf(r: ProgramRecord): number {
 /* 操作区：高频操作 2 列网格，归档 / 删除降级为胶囊 */
 .acts {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 .acts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .act {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 14px 8px 12px;
+  gap: var(--gap-tight);
+  /* 动作磁贴四边同距 12（二级分组面），原来三边 14/8/12 不等 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-align: center;
   transition: transform var(--dur-fast) var(--ease-standard);
 }
@@ -1017,7 +1036,7 @@ function adjustmentsOf(r: ProgramRecord): number {
 }
 
 .act span {
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -1026,21 +1045,26 @@ function adjustmentsOf(r: ProgramRecord): number {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  /* 两枚描边胶囊是有明确边界的控件：16（--gap-lg），不是无边界的那一档 8 */
+  gap: var(--gap-lg);
 }
 
-/* 归档 / 删除：胶囊按钮——低频但有引导性，危险项 armed 态红底强化 */
+/* 归档 / 删除：胶囊按钮——低频但有引导性，危险项 armed 态红底强化。
+   视觉走常规按钮 40（--control-md），命中区由 ::after 补到 44。 */
 .cap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 16px;
+  justify-content: center;
+  gap: var(--gap-tight);
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   transition:
     background var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard),
@@ -1048,39 +1072,49 @@ function adjustmentsOf(r: ProgramRecord): number {
     transform var(--dur-fast) var(--ease-standard);
 }
 
+.cap::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
+  border-radius: var(--radius-full);
+}
+
 .cap:active {
   transform: scale(0.96);
 }
 
+/* 危险动作的文字走 strong 档：--danger 压白底只有 3.55:1，12px 文字读不清 */
 .cap.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .cap.danger.armed {
   background: var(--danger-soft);
   border-color: var(--danger);
-  color: var(--danger);
-  font-weight: 700;
+  color: var(--danger-strong);
+  font-weight: var(--fw-bold);
 }
 
 .acts .primary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 /* 主按钮里的副行走 --on-accent：这颗是 .primary（底 --accent），
    灰字压蓝底实测只有 1.56:1，降字号与字重来分层次，不靠 opacity 手调 */
 .acts .primary .primary-sub {
   font-size: var(--fs-caption);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--on-accent);
 }
 
 /* 调整历史 */
 .log-list li {
-  padding: 10px 0;
+  /* 日志行是单行行：高度 48（--row-h） */
+  min-height: var(--row-h);
+  padding: var(--sp-8) 0;
   border-top: 0.5px solid var(--line);
 }
 
@@ -1091,21 +1125,21 @@ function adjustmentsOf(r: ProgramRecord): number {
 .log-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-subhead);
 }
 
 .log-sum {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
 }
 
 /* 调整历史：每条变更独立成行 —— 账本要逐行读，
    标签与旧值次要、新值（after）加粗提亮，不再用「·」串成一行 */
 .log-changes {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   display: grid;
-  gap: 3px;
+  gap: var(--gap-tight);
   padding: 0;
   list-style: none;
   font-size: var(--fs-caption);
@@ -1115,7 +1149,7 @@ function adjustmentsOf(r: ProgramRecord): number {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .ch-lab {
@@ -1128,12 +1162,12 @@ function adjustmentsOf(r: ProgramRecord): number {
 
 .ch-to {
   color: var(--text-1);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 采购清单弹层 */
 .shop-state {
-  padding: 36px 0;
+  padding: var(--sp-36) 0;
 }
 
 .shop-head {
@@ -1141,15 +1175,15 @@ function adjustmentsOf(r: ProgramRecord): number {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: var(--gap-sm) var(--sp-10);
 }
 
 .shop-note {
   flex: 1;
   min-width: 0;
-  margin: 0 0 12px;
+  margin: 0 0 var(--sp-12);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 覆盖天数做成主数值胶囊（accent-soft 底 + accent-strong 字）置前，
@@ -1157,19 +1191,19 @@ function adjustmentsOf(r: ProgramRecord): number {
 .shop-total {
   display: inline-flex;
   align-items: baseline;
-  gap: 3px;
-  margin-right: 8px;
-  padding: 3px 12px;
+  gap: var(--gap-tight);
+  margin-right: var(--sp-8);
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .shop-total span {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .shop-src {
@@ -1177,17 +1211,18 @@ function adjustmentsOf(r: ProgramRecord): number {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  /* 来源胶囊是一组无边界控件：8 */
+  gap: var(--gap-sm);
 }
 
 .shop-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-16);
 }
 
 .shop-group .g-name {
-  margin: 0 0 4px;
+  margin: 0 0 var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
@@ -1200,9 +1235,11 @@ function adjustmentsOf(r: ProgramRecord): number {
 .s-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--sp-10);
   width: 100%;
-  padding: 9px 0;
+  /* 采购清单是单行列表：行高 48（--row-h），勾选行之间节奏一致 */
+  min-height: var(--row-h);
+  padding: var(--sp-8) 0;
   background: none;
   border: none;
   border-top: 0.5px solid var(--line);
@@ -1253,12 +1290,12 @@ function adjustmentsOf(r: ProgramRecord): number {
 }
 
 .shop-hint {
-  margin: 4px 0 0;
+  margin: var(--sp-4) 0 0;
 }
 
 .shop-copy {
   width: 100%;
-  margin-top: 14px;
+  margin-top: var(--sp-14);
 }
 
 /* 历史方案列表 */
@@ -1268,8 +1305,8 @@ function adjustmentsOf(r: ProgramRecord): number {
 
 .hist-item {
   width: 100%;
-  gap: 10px;
-  padding: 11px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-10) 0;
   text-align: left;
 }
 
@@ -1285,7 +1322,7 @@ function adjustmentsOf(r: ProgramRecord): number {
 .hist-cta {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent);
 }
 
@@ -1294,19 +1331,19 @@ function adjustmentsOf(r: ProgramRecord): number {
 /* 弹层表单 */
 .form {
   display: grid;
-  gap: 16px;
-  padding-bottom: 20px;
+  gap: var(--gap-lg);
+  padding-bottom: var(--sp-20);
 }
 
 .confirm-list {
   display: grid;
-  gap: 6px;
+  gap: var(--sp-6);
   list-style: disc inside;
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .sumin {
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-s);
   border: none;
   background: var(--surface-2);

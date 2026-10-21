@@ -441,19 +441,22 @@ const shortcutHints = [
    它**不做折射**：640×480 已经是 30 万 px² 的大面积，折射预算只给离散小控件。 */
 .panel {
   position: relative;
-  width: min(640px, calc(100vw - 64px));
+  /* 两侧各让 32（--sp-64）；12vh 是定位公式，不动 */
+  width: min(640px, calc(100vw - var(--sp-64)));
   margin-top: 12vh;
   max-height: min(560px, 70vh);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-l);
+  /* 命令面板是一块顶层浮层 → 圆角 32（--radius-xl；桌面档由令牌降到 24） */
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .field {
   flex: none;
-  gap: 10px;
-  padding: 14px 16px;
+  /* 图标 / 输入框 / 快捷键提示三组：12（--gap-md）；上下左右 16 与面板内距同线 */
+  gap: var(--gap-md);
+  padding: var(--sp-16);
   border-bottom: 0.5px solid var(--line);
 }
 
@@ -461,7 +464,7 @@ const shortcutHints = [
   flex: 1;
   min-width: 0;
   font-size: var(--fs-headline);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .field input::placeholder {
@@ -479,15 +482,18 @@ const shortcutHints = [
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px 8px 8px;
+  /* 上方 6 承接输入框那条分隔线的呼吸，下方 8 与左右 8 对称 */
+  padding: var(--sp-6) var(--sp-8) var(--sp-8);
 }
 
 .ghead {
-  padding: 10px 10px 4px;
+  /* 组标题是有信息的一行（「最近 / 页面 / 动作」）：--text-3 在这块玻璃上读不清，
+     抬到 --text-2；左右内距与行的 10 对齐 */
+  padding: var(--sp-12) var(--sp-10) var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0.4px;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 一行 = 图标 + 主标签 + 去向 + 快捷键。悬停与键盘选中**同一套视觉**：
@@ -495,10 +501,12 @@ const shortcutHints = [
 .rowitem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 图标与标签 12；行内距 8×10 —— 与信息栏的 .nav-row 同一档节奏 */
+  gap: var(--gap-md);
   width: 100%;
-  padding: 9px 10px;
-  border-radius: var(--radius-m);
+  padding: var(--sp-8) var(--sp-10);
+  /* 菜单行圆角 20（--radius-l），与 AppMenu / 操作面板同档 */
+  border-radius: var(--radius-l);
   text-align: left;
 }
 
@@ -521,7 +529,7 @@ const shortcutHints = [
   flex: 1;
   min-width: 0;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -553,51 +561,54 @@ const shortcutHints = [
 .k {
   flex: none;
   white-space: nowrap;
-  padding: 2px 6px;
+  padding: var(--sp-2) var(--sp-6);
   border-radius: var(--radius-xs);
   border: 0.5px solid var(--line-strong);
   background: color-mix(in srgb, var(--text-1) 5%, transparent);
   font-family: inherit;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .empty {
-  padding: 28px 20px 30px;
+  /* 空态：上下 28/32（30 吸附到 32），左右 20 */
+  padding: var(--sp-28) var(--sp-20) var(--sp-32);
   text-align: center;
 }
 
 .empty-title {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .empty-hint {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-footnote);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .foot {
   flex: none;
   border-top: 0.5px solid var(--line);
-  padding: 9px 14px;
+  /* 页脚：上下 8 / 左右 16（与面板内距同线，键帽提示不贴边） */
+  padding: var(--sp-8) var(--sp-16);
   background: color-mix(in srgb, var(--surface) 40%, transparent);
 }
 
 .hints {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  /* 行间 8 / 列间 16：键帽提示是「一组一组」的，组内紧、组间松 */
+  gap: var(--sp-8) var(--sp-16);
 }
 
 .hint {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 出场比入场快一点：面板是"随时能关"的东西，关闭不该有拖尾 */

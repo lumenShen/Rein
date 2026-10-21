@@ -187,36 +187,37 @@ watch(
 
 <style scoped>
 .br {
-  padding: 10px 12px;
+  padding: var(--pad-card-tight) var(--pad-inline);
 }
 
 .head {
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .head b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 6px 10px;
-  margin-top: 8px;
+  gap: var(--gap-sm) var(--gap-md);
+  margin-top: var(--gap-md);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .field input {
-  padding: 6px 8px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   color: var(--text-1);
@@ -226,20 +227,21 @@ watch(
 .padrow {
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .mini {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .num {
   width: 58px;
-  padding: 5px 6px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   color: var(--text-1);
@@ -247,16 +249,16 @@ watch(
 }
 
 .toggles {
-  gap: 12px;
-  margin-top: 8px;
+  gap: var(--sp-12);
+  margin-top: var(--sp-8);
   flex-wrap: wrap;
 }
 
 .preview {
   max-height: 180px;
-  margin-top: 8px;
-  padding: 6px 8px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--sp-8);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   overflow: auto;
   font-size: var(--fs-caption);
@@ -265,9 +267,9 @@ watch(
 .prev {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 3px 0;
-  color: var(--text-3);
+  gap: var(--gap-sm);
+  padding: var(--sp-4) 0;
+  color: var(--text-2);
 }
 
 .prev.ok .new {
@@ -288,7 +290,7 @@ watch(
 
 .new {
   flex: 0 1 auto;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -307,16 +309,16 @@ watch(
 .err {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 8px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--danger-strong);
 }
 
 .foot {
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--gap-md);
+  margin-top: var(--gap-md);
 }
 
 .sum {
@@ -325,7 +327,7 @@ watch(
 }
 
 .btn.ghost.tiny {
-  padding: 4px 10px;
+  padding: var(--sp-4) var(--sp-10);
   font-size: var(--fs-caption);
 }
 </style>

@@ -460,8 +460,10 @@ function prDeltaText(p: PrRow): string {
    于是 scrollHeight 真的大于 clientHeight，滚动有得滚。 */
 .sumpane {
   flex: 1 0 auto;
-  gap: 14px;
-  padding: 24px 26px;
+  /* 卡与卡之间 12（规范卡片间距）；左右收成 16（--pad-sheet 那一档）——
+     原来 26 既不在 4/8 体系里，也让总结页的正文比沉浸层其它屏窄一圈。 */
+  gap: var(--gap-md);
+  padding: var(--sp-24) var(--pad-sheet);
   /* 与 SessionOverlay 的 .pane 共用**同一组 keyframes**，时长就必须同档：一处 420ms、
      一处 250ms，会让同一个「内容块入场」在相邻两屏里给出两种手感。取 --dur-base 而不是
      --dur-sheet：这是沉浸层内的内容入场，不是抽屉面板的运动（令牌语义对不上），
@@ -479,15 +481,15 @@ function prDeltaText(p: PrRow): string {
 /* ---------- 完成环 ---------- */
 
 .hero {
-  gap: 8px;
-  padding: 8px 0 4px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) 0 var(--sp-4);
 }
 
 .heropct {
   /* 沉浸层单屏读数档（与 SessionOverlay 的休息倒数 / 计时同一条刻度），
      值与原裸值一致：30px */
   font-size: var(--fs-readout-sm);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 1;
   letter-spacing: -0.5px;
 }
@@ -495,7 +497,8 @@ function prDeltaText(p: PrRow): string {
 .herosub {
   font-size: var(--fs-footnote);
   color: var(--text-2);
-  margin-top: 4px;
+  /* 主次文本上下只留 2（--gap-text）：它紧贴在完成环读数下面，属于同一条读数。 */
+  margin-top: var(--gap-text);
 }
 
 /* ratio 为 null（无任何组位）时的占位：保持与环同高，避免整块塌下去 */
@@ -512,10 +515,10 @@ function prDeltaText(p: PrRow): string {
 
 .sumtitle {
   font-size: var(--fs-large-title);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   text-align: center;
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .sumsub {
@@ -523,7 +526,7 @@ function prDeltaText(p: PrRow): string {
   align-items: center;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 /* 日期只是上下文：降为 caption / --text-3 的次要说明，训练类型交给胶囊 */
@@ -536,15 +539,15 @@ function prDeltaText(p: PrRow): string {
 .herostat {
   display: flex;
   justify-content: center;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .sumtags {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
-  margin-top: 2px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-2);
 }
 
 /* 「撤销最后一组」：总结页唯一的回头路，是**次按钮** —— 描边白底 + 中性字，
@@ -552,15 +555,17 @@ function prDeltaText(p: PrRow): string {
 .undo {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 44px;
-  margin-top: 14px;
-  padding: 0 18px;
+  gap: var(--sp-6);
+  /* 命中区直接引用 --hit-min（44），不再写一个裸数字：
+     它是这一屏唯一的次要操作，视觉可以小、热区必须够。 */
+  min-height: var(--hit-min);
+  margin-top: var(--sp-14);
+  padding: 0 var(--sp-18);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -572,7 +577,7 @@ function prDeltaText(p: PrRow): string {
   color: var(--text-1);
   background: var(--surface-2);
   border-radius: var(--radius-full);
-  padding: 3px 9px;
+  padding: var(--sp-4) var(--sp-8);
 }
 
 /* ---------- 四项指标 ---------- */
@@ -580,14 +585,14 @@ function prDeltaText(p: PrRow): string {
 .statgrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 自重单独报的那一行：不占指标格（否则会被读成与「总容量」同单位的第五格），
    只在配重与自重混在同一节课时出现 */
 .stnote {
-  margin-top: 8px;
-  padding-left: 2px;
+  margin-top: var(--sp-8);
+  padding-left: var(--sp-2);
   font-size: var(--fs-caption);
 }
 
@@ -596,8 +601,8 @@ function prDeltaText(p: PrRow): string {
 .feelrow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--sp-10);
+  margin-top: var(--sp-12);
 }
 
 .feellabel {
@@ -609,7 +614,7 @@ function prDeltaText(p: PrRow): string {
 .feelopts {
   display: flex;
   flex: 1;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 /* 三枚等权（flex:1 一样宽）：视觉上就暗示「没有更正确的答案」。
@@ -617,8 +622,9 @@ function prDeltaText(p: PrRow): string {
    这一行上下没有相邻控件，撑高不会造成误触。 */
 .feelopt {
   flex: 1;
-  min-height: 44px;
-  padding: 0 6px;
+  /* 同上：三枚体感胶囊的热区走 --hit-min，与 .undo 同一档。 */
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-6);
   border: 0.5px solid var(--line);
   border-radius: var(--radius-full);
   background: var(--surface-2);
@@ -632,13 +638,13 @@ function prDeltaText(p: PrRow): string {
   background: var(--accent-soft);
   border-color: var(--accent-soft);
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .stat {
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 9px 8px;
+  padding: var(--sp-8) var(--sp-8);
   min-width: 0;
 }
 
@@ -657,17 +663,17 @@ function prDeltaText(p: PrRow): string {
   display: block;
   /* 19px = --fs-title3 */
   font-size: var(--fs-title3);
-  font-weight: 600;
-  margin-top: 2px;
+  font-weight: var(--fw-semibold);
+  margin-top: var(--sp-2);
   letter-spacing: -0.3px;
 }
 
 .stunit {
   font-size: var(--fs-micro);
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
-  margin-left: 2px;
+  margin-left: var(--sp-2);
 }
 
 /* ---------- 进步 ---------- */
@@ -686,7 +692,7 @@ function prDeltaText(p: PrRow): string {
 .prtitle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   /* 标题用 --text-1：它是这一屏唯一的「好消息」分区标题，
      但绿字压绿底不达标（见上），所以语义靠左侧绿环而不是文字颜色。 */
   color: var(--text-1);
@@ -705,7 +711,7 @@ function prDeltaText(p: PrRow): string {
 .prrow {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .prname {
@@ -737,8 +743,8 @@ function prDeltaText(p: PrRow): string {
 /* 校正级（真历史 PR）：加重 + 一枚实心绿点，与即时档在视觉与文字上双重分开。
    文字本身也带「历史」二字（见 prDeltaText）—— 不靠颜色单独承担这个信息。 */
 .prdelta.verified {
-  font-weight: 700;
-  padding-left: 10px;
+  font-weight: var(--fw-bold);
+  padding-left: var(--sp-10);
   position: relative;
 }
 
@@ -749,7 +755,7 @@ function prDeltaText(p: PrRow): string {
   top: 50%;
   width: 5px;
   height: 5px;
-  margin-top: -2.5px;
+  margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
   background: var(--c-exercise);
 }
@@ -759,7 +765,7 @@ function prDeltaText(p: PrRow): string {
 .exrow {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .exname {
@@ -788,7 +794,7 @@ function prDeltaText(p: PrRow): string {
 .extop {
   flex: none;
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   letter-spacing: -0.3px;
 }
@@ -812,7 +818,7 @@ function prDeltaText(p: PrRow): string {
   color: var(--text-1);
   background: var(--surface-2);
   border-radius: var(--radius-full);
-  padding: 1px 6px 1px 15px;
+  padding: var(--sp-2) var(--sp-6) var(--sp-2) var(--sp-14);
   position: relative;
 }
 
@@ -823,7 +829,7 @@ function prDeltaText(p: PrRow): string {
   top: 50%;
   width: 5px;
   height: 5px;
-  margin-top: -2.5px;
+  margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
   background: var(--c-exercise);
 }
@@ -833,18 +839,18 @@ function prDeltaText(p: PrRow): string {
 .musrow {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .muschip {
   font-size: var(--fs-micro);
   border-radius: var(--radius-full);
-  padding: 4px 9px;
+  padding: var(--sp-4) var(--sp-8);
   /* 三档只用**底色深浅**区分，文字一律 --text-1 —— 同「绿字压绿底」的道理，
      任何把档位编码进文字颜色的做法都会在某一档掉到 4.5:1 以下。
      档位另有文字（「主攻/辅助/稳定」）与左侧色点，读起来不靠猜。 */
   color: var(--text-1);
-  padding-left: 16px;
+  padding-left: var(--sp-16);
   position: relative;
 }
 
@@ -855,7 +861,7 @@ function prDeltaText(p: PrRow): string {
   top: 50%;
   width: 5px;
   height: 5px;
-  margin-top: -2.5px;
+  margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
 }
 

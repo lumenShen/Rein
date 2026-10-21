@@ -65,9 +65,10 @@ const dir = computed(() => {
 .file-card {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--gap-sm);
   max-width: 100%;
-  padding: 9px 12px;
+  min-height: var(--row-h);
+  padding: var(--sp-8) var(--pad-inline);
   border: none;
   border-radius: var(--radius-m);
   background: var(--surface);
@@ -86,7 +87,7 @@ const dir = computed(() => {
 
 .fc-name {
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -95,10 +96,10 @@ const dir = computed(() => {
 .fc-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .fc-meta .num {
@@ -108,8 +109,8 @@ const dir = computed(() => {
 /* 箭头只在悬停时亮起来：卡片本身是「一句话」，指路的那一撇不用一直抢注意力 */
 .fc-go {
   flex: none;
-  color: var(--text-3);
-  opacity: 0.5;
+  color: var(--text-2);
+  opacity: var(--disabled-opacity);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 

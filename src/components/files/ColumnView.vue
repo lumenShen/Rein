@@ -130,9 +130,10 @@ function iconOf(item: FileItem) {
 </template>
 
 <style scoped>
+/* 列间距 8、外框内距 8：分栏浏览器的栏与栏之间只隔一道线，不该有缝 */
 .cols {
   display: flex;
-  gap: 6px;
+  gap: var(--gap-sm);
   height: min(58vh, 540px);
   min-height: 240px;
   overflow-x: auto;
@@ -140,7 +141,7 @@ function iconOf(item: FileItem) {
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
-  padding: 6px;
+  padding: var(--sp-8);
 }
 
 .busy {
@@ -164,14 +165,16 @@ function iconOf(item: FileItem) {
 }
 
 .pt {
-  padding: 6px 9px 4px;
+  padding: var(--sp-8) var(--sp-8) var(--sp-4);
   font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .list {
   flex: 1;
   margin: 0;
-  padding: 0 4px 6px;
+  padding: 0 var(--sp-4) var(--sp-8);
   list-style: none;
   overflow: auto;
 }
@@ -179,9 +182,10 @@ function iconOf(item: FileItem) {
 .item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
-  padding: 5px 6px;
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-s);
   text-align: left;
   color: var(--text-1);
@@ -221,7 +225,7 @@ function iconOf(item: FileItem) {
 }
 
 .item.file .ic {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .nm {
@@ -238,7 +242,7 @@ function iconOf(item: FileItem) {
 }
 
 .empty {
-  padding: 6px 8px;
+  padding: var(--sp-8);
   font-size: var(--fs-caption);
 }
 </style>

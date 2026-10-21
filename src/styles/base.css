@@ -50,7 +50,8 @@ html {
 body {
   font-family: var(--font);
   font-size: var(--fs-body);
-  line-height: 1.45;
+  /* 行高走令牌：文档要求「一致的行间距」，正文 1.5 是中文可读区间 */
+  line-height: var(--lh-body);
   color: var(--text-1);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -108,6 +109,57 @@ button {
    只换指针形状，不动任何盒模型 / 颜色（浓度值待收编，见 --disabled-opacity）。 */
 button:disabled {
   cursor: default;
+}
+
+/* ---------- 自绘标题栏 · 窗口控制按钮（.wbtn / .wbtn-danger） ----------
+   为什么放在全局而不是某个组件的 scoped 样式里：主窗口标题栏（AppTitleBar）与浮窗
+   标题栏（float/FloatTitleBar）是**两个组件**，按钮视觉却必须逐像素同一套；而两者都通过
+   TitleBarBase 的 slot 落进 DOM —— Vue 的 scoped 样式穿不过插槽，各写一遍又必然会漂
+   （这个项目已经付过「两份定义必然漂」的代价，见 tokens.css 的 dock 那一段）。
+   于是把「一颗窗口按钮长什么样」收成两个全局类，两边只负责放图标与 aria-label。
+
+   几何：44×30 —— 宽走 44（--hit-min 的触控底线，三颗并排也不至于吃掉标题），
+   高 30 是紧凑控件（比 --control-sm 28 高一档，鼠标更容易停住）；圆角走 --radius-m，
+   与页头那排 38 圆钮同属控制层，只是这里排成方角紧凑形。 */
+.wbtn {
+  width: 44px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-m);
+  color: var(--text-2);
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 悬停只给精确指针：触屏上 :hover 会粘住（base.css 里桌面悬停那一段同一条理由） */
+@media (hover: hover) {
+  .wbtn:hover {
+    background: var(--surface-2);
+    color: var(--text-1);
+  }
+}
+
+/* 按压反馈：缩放而不是换色 —— 三颗按钮并排时换色会让「刚点过哪颗」在松开后留下残影 */
+.wbtn:active {
+  transform: scale(0.96);
+}
+
+.wbtn:disabled {
+  opacity: var(--disabled-opacity);
+}
+
+/* 关闭钮：hover 用危险 soft 底 + strong 文字（同 --danger 实底当文字对比度不够，
+   与站点里 danger-soft 上的文字一律走 --danger-strong 同一条规则） */
+@media (hover: hover) {
+  .wbtn-danger:hover {
+    background: var(--danger-soft);
+    color: var(--danger-strong);
+  }
 }
 
 input,
@@ -237,15 +289,19 @@ button:active,
 }
 
 /* ---------- 卡片 ---------- */
+/* 卡片按 HarmonyOS《圆角参数》的「系统通用圆角 16」+《间隔参数》的卡片内距 16：
+   与按钮（20）和半模态（32）拉开层级，一屏几卡时圆角不再抢戏。 */
 .card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 20px;
+  padding: var(--pad-card);
 }
 
+/* 卡片间距 12：HarmonyOS 间隔规范的泛手机卡片间隔（文档原文「卡片之间的间隔，12vp」）。
+   走语义令牌而不是裸值 —— 组件层一律如此，改令牌即全站对齐。 */
 .card + .card {
-  margin-top: 14px;
+  margin-top: var(--gap-md);
 }
 
 /* ---------- 桌面：基础元素的两处低特指度覆盖 ----------
@@ -258,7 +314,7 @@ button:active,
    注：这正是「.card.sub 内距被误顶到 16px」那个副作用的解药 —— 高特指度写法会
    连二级分组面一起改掉，低特指度不会。 */
 :where(html[data-shell='desk']) .card {
-  padding: 16px;
+  padding: var(--pad-card);
 }
 
 /* ② <small> 只限桌面：桌面档把 --fs-footnote 压到 12px 之后，UA 给 small 的
@@ -274,17 +330,17 @@ button:active,
    整组垫在一口浅井上，与母卡面分出层次。用 .card.sub 而不是另起一个类 —— 它仍然是卡
    （直接挂在 .page 下时，桌面上照样进半栏栅格、照样吃 hover 抬影那套规则），只是**降一档**：
      底   --surface-inset（4% 文字色混透明的浅井；母卡换成玻璃底时它跟着退）
-     圆角 --radius-l（比 .card 的 --radius-xl 收一档，读出「里面那一层」）
-     内距 14px（与 --desk-gap、.card + .card 的 14px 同值，换栏后垂直节奏不变）
+     圆角 --radius-m-nest 12（比 .card 的 16 收一档，读出「里面那一层」）
+     内距 --pad-card-tight 12（比母卡的 16 收一档，与 --gap-md 的卡片间距同源）
      投影 none —— 嵌在卡里的面再压落影，只会把母卡切成两截
    .card.sub 的特指度（0,2,0）压过高画质档的玻璃规则（:where(...) .card，0,1,0），
    所以它在任何画质档都保持这口实底，不跟着母卡变玻璃 —— 二级面就该是「退一档」，
    而不是「也变成玻璃」。 */
 .card.sub {
   background: var(--surface-inset);
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-m-nest);
   box-shadow: none;
-  padding: 14px;
+  padding: var(--pad-card-tight);
 }
 
 /* ---------- 少量布局工具类 ---------- */
@@ -318,6 +374,34 @@ button:active,
 
 .t-3 {
   color: var(--text-3);
+}
+
+/* ---------- 共享循环动效 ----------
+   同一效果只留一份定义：加载旋转、输入光标闪烁、状态点呼吸。
+   组件里的 scoped `@keyframes` 会被编译器改名，导致同一段动画在十几个文件里
+   各存一份；放到全局后，各组件只写 `animation: rein-*`，节拍由令牌统一。 */
+@keyframes rein-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rein-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes rein-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
 }
 
 /* ---------- 减弱动效 ---------- */
@@ -759,11 +843,15 @@ html[data-perf='low'] .stage-dark {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  /* 图标与微标签之间的最小呼吸：HarmonyOS 底部页签给 2，3 会让 58 高的页签里
+     图标与标签读成两块不相干的东西（--gap-text 就是这一档） */
+  gap: var(--gap-text);
   border-radius: var(--radius-full);
   color: var(--text-3);
+  /* 底部页签标签：Caption_M 10 Medium（文档「图标 24 / 标签 10–11 Medium」）；
+     600 在 10px 上会把「主页 / 我」糊成一团粗点 */
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   text-decoration: none;
   /* 松手后的回弹段：弹簧曲线冲过 1 再收回（压扁 → 拉长 → 回正）。
      时长走令牌而不是写死的 480ms —— 它与丰富档的 blob 位移（GlassThumb 读的就是
@@ -801,7 +889,9 @@ html[data-perf='low'] .stage-dark {
   content: '';
   position: absolute;
   z-index: -1;
-  inset: 4px 5px;
+  /* 四边同档：原来左右 5 / 上下 4 是为了让椭圆底更像药丸，但 58 高的页签里
+     这 1px 差读不出来，只让「同类一档」这条断掉 —— 统一用 --gap-tight 4 */
+  inset: var(--gap-tight);
   border-radius: var(--radius-full);
   background: var(--glass-tab-fill);
   opacity: 0;
@@ -809,7 +899,7 @@ html[data-perf='low'] .stage-dark {
 }
 
 .dock-slot::before {
-  inset: 4px;
+  inset: var(--gap-tight);
 }
 
 /* 选中态前景：活动底现在是中性底（浅白 / 淡灰），文字蓝走 --accent-strong ——
@@ -905,7 +995,7 @@ html[data-motion='rich'] .glow-layer:active::after {
   grid-column: span 1;
 }
 
-/* 栅格用 gap 管行距；卡片之间那条 14px 的兄弟边距要收掉，否则行距翻倍 */
+/* 栅格用 gap 管行距；卡片之间那条 --gap-md 的兄弟边距要收掉，否则行距翻倍 */
 .desk-main .page > .card + .card {
   margin-top: 0;
 }
@@ -973,7 +1063,7 @@ html[data-motion='rich'] .glow-layer:active::after {
   align-items: stretch;
 }
 
-/* 栅格用 gap 管间距，卡片之间那条 +14px 的边距要收掉，否则行距翻倍 */
+/* 栅格用 gap 管间距，卡片之间那条 --gap-md 的边距要收掉，否则行距翻倍 */
 .desk-main .d-grid > .card + .card {
   margin-top: 0;
 }
@@ -998,10 +1088,12 @@ html[data-motion='rich'] .glow-layer:active::after {
    （`left: 50%` 或 `right: max(18px, 50% - --frame-max/2 + 18px)`），到了桌面上会停在
    内容栏正中间、压在列表行上 —— 既不是桌面的落点习惯（右下角），也和右侧信息栏撞不着。
    信息栏收起时跟着让位，否则会在空出来的地方多留一格空白。 */
+/* 右缘落点对齐 PC 边距（--desk-gutter 40）：与页面内容右缘同一条竖线，
+   信息栏收起时它跟着贴到边距上。 */
 html[data-shell='desk'] .fab {
   left: auto;
   right: calc(var(--inspector-w) + var(--desk-gutter));
-  bottom: calc(var(--dock-top) + 14px);
+  bottom: calc(var(--dock-top) + var(--sp-16));
   transform: none;
 }
 

@@ -136,10 +136,16 @@ function goBack(): void {
   z-index: 30;
   display: flex;
   align-items: flex-end;
-  gap: 12px;
-  padding: 8px 2px 14px;
+  /* 标题块与操作区是页头上的两个同级大组，分开 16（无边界的小控件才用 8）。
+     组内圆钮之间同样 16（.ph-bar），整行节奏一致。 */
+  gap: var(--gap-lg);
+  /* 横向 0：左右 16 已由页面自己的 --page-pad-x 给出，页头再补 2px 只会让
+     30px 的标题比卡片容器左缘偏出去 2px，标题与卡片就不在同一条竖线上了。
+     纵向 8 是吸顶条的呼吸（页面顶部留白由 --page-pad-top 那一层负责，页头不能重复吃）；
+     下缘 16 = 「页头与首个卡片之间 16」这条规范，从前是 14，首卡会被顶上一点。 */
+  padding: var(--sp-8) 0 var(--sp-16);
   /* 遮罩在页头下缘之外多铺一段，模糊才有化开的空间 */
-  --ph-tail: 14px;
+  --ph-tail: var(--sp-16);
 }
 
 /* 渐进模糊遮罩（模糊本身见 ProgressiveBlur 组件）：
@@ -247,7 +253,9 @@ html[data-motion='rich'] .page-header.collapsed .ph-bar > :slotted(.hdr-btn) {
   width: 38px;
   height: 38px;
   flex: none;
-  margin-bottom: 3px;
+  /* 与标题基线的错位微调：页头是 flex-end 对齐，标题行盒比圆形钮低一点点，
+     抬 4px（原来是 3px 的手感值，进不了 4/8 体系）刚好让钮的视觉中心落在标题腰线上 */
+  margin-bottom: var(--sp-4);
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -260,7 +268,7 @@ html[data-motion='rich'] .page-header.collapsed .ph-bar > :slotted(.hdr-btn) {
 /* 返回键与页头图标钮：视觉尺寸不动，命中区撑到 44×44。
    38 是这些圆钮的视觉规格，不该为了触控改掉；但 44 是拇指的下限，
    而返回是每个二级页**唯一**的退路（图标钮则常常是这一页唯一的设置入口）。
-   横向外扩 3px：同一排按钮间隔 12px，不会互相压住。 */
+   横向外扩 3px（(44 - 38) / 2）：同一排按钮间隔 16px，热区之间还留着 10px，不会互相压住。 */
 .back::after,
 .page-header :slotted(.hdr-btn)::after {
   content: '';
@@ -275,7 +283,8 @@ html[data-motion='rich'] .page-header.collapsed .ph-bar > :slotted(.hdr-btn) {
   width: 38px;
   height: 38px;
   flex: none;
-  margin-bottom: 3px;
+  /* 与返回键同一档基线微调（理由见 .back） */
+  margin-bottom: var(--sp-4);
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -296,20 +305,21 @@ html[data-motion='rich'] .page-header.collapsed .ph-bar > :slotted(.hdr-btn) {
 .page-header :slotted(.hdr-btn.pill) {
   width: auto;
   min-width: 38px;
-  padding: 0 13px;
-  gap: 6px;
+  padding: 0 var(--pad-inline);
+  gap: var(--sp-6);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* 动作区折射壳（见模板里那段注释）：与页头同一套横向节奏（gap 12、底部对齐、不伸长），
+/* 动作区折射壳（见模板里那段注释）：与页头同一套横向节奏（gap 16、底部对齐、不伸长），
    所以包进来之后**一个像素都不挪**。壳没有底、没有命中区 —— 它只是背后那次采样的承载。 */
 .ph-bar {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  /* 每颗圆钮都自带一块玻璃盘（有可见边界），组内按「有明显边界 → 16」给 */
+  gap: var(--gap-lg);
   flex: none;
   min-width: 0;
 }
@@ -430,28 +440,32 @@ html[data-glass='collapsed'][data-perf]:not([data-perf='low']) .page-header .ph-
 
 h1 {
   font-size: var(--fs-large-title);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.6px;
-  line-height: 1.15;
+  /* 展示级标题用最紧的一档行高（--lh-display 1.16），30px Bold 再多半行就散 */
+  line-height: var(--lh-display);
 }
 
+/* 主次文本上下 2：标题与副标题是一对，不该被行高撑出空隙 */
 p {
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-footnote);
   color: var(--text-2);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 /* 紧凑导航条：17px 单行标题（iOS 导航条规格），图标按钮改为垂直居中 */
 .page-header.compact {
   align-items: center;
-  padding: 4px 2px 10px;
+  /* 导航条模式只保留上下 4 / 12 的呼吸：它把纵向空间让给内容，
+     横向同样交给页面的 --page-pad-x（见上） */
+  padding: var(--sp-4) 0 var(--sp-12);
 }
 
 .page-header.compact h1 {
   font-size: var(--fs-headline);
   letter-spacing: -0.3px;
-  line-height: 1.2;
+  line-height: var(--lh-title);
 }
 
 .page-header.compact .back,

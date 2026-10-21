@@ -37,16 +37,18 @@ const html = computed(() => {
 }
 
 .md :deep(p + p) {
-  margin-top: 6px;
+  /* 段落之间 6（--sp-6）：正文行高 1.5 之下，6 是「另起一段」的最小可见差 */
+  margin-top: var(--sp-6);
 }
 
 .md :deep(ul),
 .md :deep(ol) {
-  margin: 4px 0 0;
-  padding-left: 18px;
+  margin: var(--gap-tight) 0 0;
+  /* 列表缩进 18（--sp-18）：与项目符号的悬挂宽度对齐，比 16 多 2 才不挤字 */
+  padding-left: var(--sp-18);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .md :deep(code) {
@@ -55,13 +57,14 @@ const html = computed(() => {
   /* 底色取 --text-1 的混合而不是写死黑：写死的 6% 黑贴在暗色画布上等于没贴，
      气泡在亮暗两档都存在，合成后两档都读得出来 */
   background: color-mix(in srgb, var(--text-1) 8%, transparent);
-  padding: 1px 5px;
+  /* 行内代码只横向留白（--sp-4），纵向交给行高 —— 上下加 px 会把行撑开 */
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-xs);
 }
 
 .md :deep(.md-pre) {
-  margin: 6px 0 2px;
-  padding: 9px 11px;
+  margin: var(--sp-6) 0 var(--gap-text);
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--text-1) 8%, transparent);
   overflow-x: auto;
@@ -74,7 +77,7 @@ const html = computed(() => {
 }
 
 .md :deep(.md-h) {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 /* 引用块：不用「3px 左边框强调条」——那是全库最泛滥的一块 slop。
@@ -83,7 +86,7 @@ const html = computed(() => {
    连续多行引用会渲染成相邻的几个 .md-quote：相邻选择器把缝、内侧圆角与内侧
    留白收掉，让它们读成一面底里的一段话，而不是一排碎块。 */
 .md :deep(.md-quote) {
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--text-1) 8%, transparent);
   color: var(--text-2);
@@ -107,7 +110,7 @@ const html = computed(() => {
    外层 wrap 管横向滚动：手机气泡窄，宽表在表内滚，不把气泡撑破。
    对齐由 renderTable 写进单元格的 inline style（对齐是数据，不是主题）。 */
 .md :deep(.md-table-wrap) {
-  margin: 6px 0 2px;
+  margin: var(--sp-6) 0 var(--gap-text);
   overflow-x: auto;
 }
 
@@ -116,12 +119,13 @@ const html = computed(() => {
   border-collapse: collapse;
   font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .md :deep(.md-table th),
 .md :deep(.md-table td) {
-  padding: 5px 8px;
+  /* 单元格 4×8（--sp-4 / --sp-8）：行高靠上下 4 撑开，窄表格也不糊成一片 */
+  padding: var(--sp-4) var(--sp-8);
   border-bottom: 0.5px solid var(--line);
   color: var(--text-2);
   vertical-align: top;
@@ -129,7 +133,7 @@ const html = computed(() => {
 }
 
 .md :deep(.md-table th) {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   /* 表头与表体同档 --text-2：表头比数据还浅会层级倒置，加重只留字重 */
   color: var(--text-2);
   white-space: nowrap;

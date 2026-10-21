@@ -57,45 +57,48 @@ const remember = ref(false)
 
 <style scoped>
 .cf {
-  padding: 10px 12px;
+  padding: var(--pad-card-tight) var(--pad-inline);
 }
 
 .head {
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .head b {
   display: block;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .head small {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .warn {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   color: var(--warn);
 }
 
 .names {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  margin: 8px 0 0;
+  gap: var(--sp-4) var(--sp-8);
+  margin: var(--sp-8) 0 0;
   padding: 0;
   list-style: none;
 }
 
 .names li {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--warn-soft);
   color: var(--warn-strong);
@@ -103,16 +106,16 @@ const remember = ref(false)
 }
 
 .acts {
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
   flex-wrap: wrap;
 }
 
 .mini {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 8px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -120,6 +123,6 @@ const remember = ref(false)
 .btn.ghost {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
 }
 </style>

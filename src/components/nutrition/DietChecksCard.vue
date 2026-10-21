@@ -57,25 +57,27 @@ const doneCount = computed(() => checks.value.filter((c) => c.done).length)
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .head p {
   font-size: var(--fs-caption);
-  margin-top: 1px;
+  /* 标题与副标题之间是主次文本的 2（--gap-text） */
+  margin-top: var(--gap-text);
 }
 
 /* 标题行右端：说明入口 + x/6 计数 */
 .head-side {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 说明入口与 x/6 计数是一组无边界控件：8 */
+  gap: var(--gap-sm);
 }
 
 .count {
   font-size: var(--fs-title2);
-  font-weight: 200;
+  font-weight: var(--fw-light);
   color: var(--text-1);
   letter-spacing: -0.5px;
 }
@@ -84,26 +86,30 @@ const doneCount = computed(() => checks.value.filter((c) => c.done).length)
   font-style: normal;
   font-size: var(--fs-subhead);
   color: var(--text-3);
-  margin-left: 1px;
+  /* 分母紧贴分子，1px 无可读差异，归零 */
+  margin-left: 0;
 }
 
 /* 打卡 */
 .checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+  /* 打卡胶囊是一组无边界控件：组内 8、与上方标题行之间 12（卡内区块） */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  /* 勾选标记与类别名之间取 4：它是同一行内最小呼吸 */
+  gap: var(--gap-tight);
+  /* 胶囊内距：纵向 6 + 12 字 ≈ 28（--control-sm 档），左右 12 */
+  padding: var(--sp-6) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }

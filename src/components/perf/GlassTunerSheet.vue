@@ -159,7 +159,7 @@ const stateText = computed(() =>
 
     <!-- 面板上下不再各罗列一遍参数名：管线顺序这种背景收进 InfoHint，面上只留操作结论 -->
     <p class="pnote">
-      <span class="t-3">数值点一下可直接输入；改动即时生效并存在本机。</span>
+      <span class="t-2">数值点一下可直接输入；改动即时生效并存在本机。</span>
       <InfoHint
         class="hint"
         title="参数的排布依据"
@@ -171,13 +171,13 @@ const stateText = computed(() =>
 
 <style scoped>
 .reset {
-  height: 30px;
-  padding: 0 10px;
+  height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 .reset:disabled {
@@ -195,8 +195,8 @@ const stateText = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 4px 0 12px;
-  padding: 22px 12px;
+  margin: var(--sp-4) 0 var(--gap-lg);
+  padding: var(--sp-20) var(--sp-12);
   border-radius: var(--radius-l);
   background: var(--hero-bg);
 }
@@ -242,10 +242,10 @@ const stateText = computed(() =>
 .state {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
@@ -268,19 +268,36 @@ const stateText = computed(() =>
 .jump {
   flex: none;
   margin-left: auto;
-  padding: 3px 9px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent-strong);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 
-/* ---------- 参数行 ---------- */
+/* ---------- 参数行 ----------
+   这组面板此前**没有任何排版规则**（.params / .prow 只在模板里挂着类）：参数行之间
+   零间距、标签与滑块之间只靠输入框自带的行高撑着，一屏八行滑杆糊成一整块。
+   这里按「区块 16 / 行内 8」补齐：行与行 16（每行是一个独立参数），
+   行内「标签 + 数值」与滑块之间 8。 */
+.params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-lg);
+}
+
+.prow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+
 .ptop {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-8);
 }
 
 /* 英文键名退出可见行位（面板看起来不再是调试属性表），但节点与文本保留：
@@ -297,7 +314,7 @@ const stateText = computed(() =>
 
 .pcn {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 /* 当前值：点一下就地输入（数字等宽，避免拖动滑杆时抖动） */
@@ -305,11 +322,12 @@ const stateText = computed(() =>
   flex: none;
   margin-left: auto;
   min-width: 64px;
-  padding: 3px 6px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-6);
   border-radius: var(--radius-s);
   color: var(--accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -327,7 +345,8 @@ const stateText = computed(() =>
 .prange {
   width: 100%;
   height: 28px;
-  margin-top: 1px;
+  /* 与标签行的间距由 .prow 的 8px gap 给，这里不再叠一层 */
+  margin-top: 0;
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
@@ -342,7 +361,7 @@ const stateText = computed(() =>
 .prange::-webkit-slider-thumb {
   width: 20px;
   height: 20px;
-  margin-top: -8px;
+  margin-top: calc(-1 * var(--sp-8));
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow-thumb);
@@ -367,12 +386,12 @@ const stateText = computed(() =>
 
 /* 操作结论一行 + 行内帮助入口（管线顺序的背景说明收进 InfoHint） */
 .pnote {
-  margin-top: 10px;
+  margin-top: var(--gap-lg);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 </style>

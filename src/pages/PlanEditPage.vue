@@ -346,12 +346,12 @@ async function save(): Promise<void> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .field {
   display: block;
-  padding: 9px 0;
+  padding: var(--sp-8) 0;
 }
 
 .field + .field {
@@ -360,16 +360,17 @@ async function save(): Promise<void> {
 
 .flabel {
   display: block;
-  margin-bottom: 6px;
+  /* 字段标签与输入框 8（表单：标签 ↔ 控件 8） */
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .field input,
 .field textarea {
   width: 100%;
-  padding: 11px 14px;
+  padding: var(--sp-10) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-body);
@@ -378,7 +379,7 @@ async function save(): Promise<void> {
 
 .field textarea {
   resize: vertical;
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .field input::placeholder,
@@ -393,8 +394,8 @@ async function save(): Promise<void> {
 /* 动作选择器：只读展示已选动作（名称/肌群来自动作库），点击开选择弹层 */
 .expick {
   width: 100%;
-  gap: 10px;
-  padding: 11px 14px;
+  gap: var(--sp-10);
+  padding: var(--sp-10) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   text-align: left;
@@ -403,24 +404,24 @@ async function save(): Promise<void> {
 .expickmain {
   flex: 1;
   min-width: 0;
-  gap: 3px;
+  gap: var(--gap-tight);
 }
 
 .exname {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .exname.empty {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 .exmeta {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   min-width: 0;
   font-size: var(--fs-caption);
 }
@@ -441,7 +442,8 @@ async function save(): Promise<void> {
 .exrow {
   display: grid;
   grid-template-rows: 1fr;
-  margin-top: 14px;
+  /* 动作块之间 12（卡内区块） */
+  margin-top: var(--gap-md);
 }
 
 /* 裸壳：动作卡自带 padding，直接当轨道项 0fr 收不干净，会剩一截卡内边距 */
@@ -490,28 +492,39 @@ async function save(): Promise<void> {
 }
 
 .exhead {
-  margin-bottom: 4px;
+  /* 动作块标题与条目 8（标题与内容） */
+  margin-bottom: var(--gap-sm);
 }
 
 .exidx {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
 .ops {
-  gap: 4px;
+  /* 上移 / 下移 / 删除三枚图标钮：视觉 36、外扩 4 后热区 44，钮心距 44，
+     命中区正好相接而不互相盖住（原来 30 + 4 间距，热区只有 30）。 */
+  gap: var(--gap-sm);
 }
 
 .ops button {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.ops button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--radius-full);
 }
 
 .ops button.danger {
@@ -524,26 +537,28 @@ async function save(): Promise<void> {
 
 .add {
   width: 100%;
-  margin-top: 14px;
-  gap: 6px;
-  padding: 14px 0;
+  margin-top: var(--gap-md);
+  gap: var(--gap-sm);
+  /* 按钮高 40（--control-md 一档），不再靠 14 的上下内距撑出来 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) 0;
   border-radius: var(--radius-l);
   border: 1.5px dashed var(--line-strong);
   color: var(--text-2);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .save {
   width: 100%;
-  margin-top: 16px;
-  gap: 7px;
-  padding: 15px 0;
+  margin-top: var(--sp-16);
+  gap: var(--sp-6);
+  padding: var(--sp-14) 0;
   border-radius: var(--radius-l);
   background: var(--text-1);
   color: var(--bg);
   font-size: var(--fs-body);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
 }
 

@@ -149,8 +149,11 @@ function onCreated(e: ExerciseRecord): void {
 <style scoped>
 /* 搜索行/筛选入口/计数徽章与动作库页同款（白卡 finder + cap 胶囊 + accent pill） */
 .searchrow {
-  gap: 8px;
-  padding: 11px 14px;
+  /* 输入框一档高 40（--control-md）：搜索行是这一屏的第一枚控件，
+     与下方胶囊/列表的间距必须比胶囊之间大一档，层级才读得出来。 */
+  min-height: var(--control-md);
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -165,8 +168,9 @@ function onCreated(e: ExerciseRecord): void {
 }
 
 .filterbtn {
-  gap: 4px;
-  padding: 6px 11px;
+  position: relative;
+  gap: var(--gap-tight);
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
@@ -174,35 +178,44 @@ function onCreated(e: ExerciseRecord): void {
   flex: none;
 }
 
+/* 与动作库页同一枚筛选胶囊：视觉 ~27 高不动，热区撑到 44+（规则 5）。
+   上下 10px 落在搜索行与胶囊组之间的 8px 间隙，横向 4px 只吃掉行内 gap。 */
+.filterbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-10)) calc(-1 * var(--sp-4));
+}
+
 .fcount {
   min-width: 15px;
   height: 15px;
-  padding: 0 5px;
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   /* soft 底上的文字走文字档（--accent-strong），不拿实底档当小字 —— tokens.css 的
      语义色两档约定：实底档是给填充/描边/图标用的，压在同名 soft 底上当文字读不清。 */
   color: var(--accent-strong);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 15px;
   text-align: center;
 }
 
 .chips {
-  gap: 7px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
-  margin-top: 10px;
+  /* 筛选胶囊与搜索行之间 8（无边界控件之间），原来 10 不在一档上。 */
+  margin-top: var(--gap-sm);
 }
 
 /* 与动作库页同一套 chips：描边白底，选中实底 accent */
 .chip {
-  padding: 7px 13px;
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -214,22 +227,26 @@ function onCreated(e: ExerciseRecord): void {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .list {
-  margin-top: 10px;
+  /* 列表与胶囊组之间同样是 8：两者都无边界，间距要一致。 */
+  margin-top: var(--gap-sm);
   max-height: 46vh;
   overflow: auto;
 }
 
 .rowitem {
   width: 100%;
-  gap: 2px;
+  /* 双行列表项（名称 + 处方说明）统一 64 高（--row-h-double），
+     原来是内容撑高，条目一多就高低不齐。 */
+  min-height: var(--row-h-double);
+  gap: var(--gap-text);
   /* 行节奏与「训练中临时换动作」的 StrengthExercisePicker `.prow` 统一（13px / body 600）：
      两处都是「从列表里选一个动作」，而列表行的高度直接决定触控容错 —— 取高的那个。
      （决策见 docs/exercise-quality-review-2026-10-17.md §8 D4） */
-  padding: 13px 2px;
+  padding: var(--sp-12) var(--sp-2);
   text-align: left;
   border-radius: var(--radius-s);
 }
@@ -246,9 +263,9 @@ function onCreated(e: ExerciseRecord): void {
 .ename {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .emeta {
@@ -259,7 +276,7 @@ function onCreated(e: ExerciseRecord): void {
 }
 
 .empty {
-  padding: 20px 0 6px;
+  padding: var(--sp-20) 0 var(--sp-6);
   text-align: center;
   font-size: var(--fs-caption);
   color: var(--text-3);
@@ -267,13 +284,13 @@ function onCreated(e: ExerciseRecord): void {
 
 .newrow {
   width: 100%;
-  margin-top: 12px;
-  gap: 6px;
-  padding: 13px 0;
+  margin-top: var(--sp-12);
+  gap: var(--sp-6);
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-l);
   border: 1.5px dashed var(--line-strong);
   color: var(--text-2);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 </style>

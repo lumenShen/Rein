@@ -147,17 +147,18 @@ async function pick(ref_: string): Promise<void> {
 .picker {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 10px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-12);
 }
 
 .hint {
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
+/* 弹层高度上限约半屏（参照里那条「多时给滚动、上限约 1/2 屏高」） */
 .list {
-  max-height: 52dvh;
+  max-height: 50dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -166,12 +167,13 @@ async function pick(ref_: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 </style>

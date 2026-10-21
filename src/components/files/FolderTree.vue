@@ -165,7 +165,7 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
   flex: none;
   width: 190px;
   max-height: min(58vh, 540px);
-  padding: 8px 6px;
+  padding: var(--sp-8);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -173,8 +173,10 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
 }
 
 .head {
-  padding: 2px 6px 6px;
+  padding: var(--sp-2) var(--sp-6) var(--sp-8);
   font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .nodes {
@@ -185,7 +187,7 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
 
 .node {
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-tight);
   border-radius: var(--radius-s);
 }
 
@@ -197,8 +199,8 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
   flex: none;
   display: inline-flex;
   width: 16px;
-  padding: 2px;
-  color: var(--text-3);
+  padding: var(--sp-2);
+  color: var(--text-2);
 }
 
 .twist svg {
@@ -212,18 +214,19 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
 .label {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-sm);
   flex: 1;
   min-width: 0;
-  padding: 3px 4px;
+  min-height: var(--sp-32);
+  padding: var(--sp-4) var(--sp-8);
   text-align: left;
-  color: var(--text-2);
-  font-size: var(--fs-caption);
+  color: var(--text-1);
+  font-size: var(--fs-callout);
 }
 
 .label.cur {
   color: var(--accent-strong);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .ic {
@@ -243,6 +246,6 @@ const depthOf = (p: string): number => (p ? p.split('/').length : 0)
   flex: none;
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 </style>

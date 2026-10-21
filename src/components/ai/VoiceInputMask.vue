@@ -15,6 +15,7 @@ import {
   aiVoiceCancel,
   appendVoiceText,
 } from '@/system/aiVoiceInput'
+import { fmtMmSs } from '@/utils/format'
 
 const orbEl = ref<HTMLElement | null>(null)
 const glowEl = ref<HTMLElement | null>(null)
@@ -31,8 +32,7 @@ const hint = computed(() => {
 const modeLabel = computed(() => (aiVoiceInput.mode === 'hold' ? '按住说话' : '轻点说话'))
 
 function fmtSec(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms)
 }
 
 function onMaskClick(): void {
@@ -154,27 +154,31 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+/* 顶层浮层：圆角走 32 那一档（比卡片 16 / 按钮 20 都高一级），内距上下 18 / 底部 16 */
 .vm-card {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   width: min(78vw, 340px);
-  padding: 18px 18px 16px;
-  border-radius: var(--radius-l);
+  padding: var(--sp-18) var(--sp-18) var(--pad-card);
+  border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   box-shadow: var(--shadow-float);
   text-align: center;
 }
 
 .vm-mode {
-  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 
 /* 音量球舞台：transform 缩放不占布局，舞台定住不挤文本 */
@@ -182,7 +186,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 88px;
   height: 88px;
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -229,7 +233,7 @@ onBeforeUnmount(() => {
 .vm-sec {
   font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 转写预览：最少三行高避免逐句跳动，长了内部滚动 */
@@ -239,7 +243,7 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   scrollbar-width: none;
   font-size: var(--fs-subhead);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-1);
   white-space: pre-wrap;
   word-break: break-word;
@@ -250,26 +254,27 @@ onBeforeUnmount(() => {
 }
 
 .vm-partial {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .vm-wait {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .vm-hint {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .vm-cancel {
-  margin-top: 4px;
-  padding: 7px 18px;
+  margin-top: var(--gap-tight);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-20);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--text-1) 9%, transparent);
   color: var(--text-2);
-  font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   transition:
     background-color var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);

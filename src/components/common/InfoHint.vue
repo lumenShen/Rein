@@ -55,6 +55,7 @@ const open = ref(false)
 
 <style scoped>
 .info-hint {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -67,6 +68,19 @@ const open = ref(false)
   color: var(--text-3);
   cursor: pointer;
   flex: none;
+}
+
+/* 视觉 28px 不变，热区撑到 44×44。它是卡头里唯一的「问一句」入口，
+   28 的图标按起来太小；外扩的 8px 落在标题行的空白里。 */
+.info-hint::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 .info-hint:active {
@@ -83,9 +97,11 @@ const open = ref(false)
 .info-hint-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* 说明段落之间 10（--sp-10），行高走正文档 --lh-body —— 原来 1.6 让
+     这种短说明在小气泡里读起来比正文还松 */
+  gap: var(--sp-10);
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 

@@ -1,37 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { ChevronUp, Square } from 'lucide-vue-next'
 
-import GlassFilter from '@/components/common/GlassFilter.vue'
+import FloatDock from '@/components/common/FloatDock.vue'
 import TimeSpine from './TimeSpine.vue'
 import { finishSpeaking, restore, voice } from '@/system/voiceRuntime'
-import { liquidGlass } from '@/system/perf'
-import { useDragDock } from '@/composables/useDragDock'
+import { fmtMmSs } from '@/utils/format'
 
 /**
  * 语音转写悬浮条：转写进行中被「⌄ 收起」后常驻（App.vue 挂载）。
- * 与录音浮条/运动条同套 useDragDock 拖拽停靠，但用独立持久化 key；
- * 轻点信息区展开回会话视图，「■ 完成」就地触发整理。
+ * 外壳走 common/FloatDock（四条浮条共用的停靠 / 材质 / 进出场），本文件只留语音域内容，
+ * 并用独立持久化 key；轻点信息区展开回会话视图，「■ 完成」就地触发整理。
  */
-const posEl = ref<HTMLElement | null>(null)
-const { slot, form, pressing, dragging, onPointerDown, expandFromBlob } = useDragDock(posEl, {
-  storageKey: 'rein.vbar.dock.v1',
-})
-
-/* 材质：超高 / 极致档换**真折射**，与悬浮运动条同一套做法（为什么这么做、以及三条边界
-   见 ActiveWorkoutBar.vue 的那段注释）：把元素自己的 backdrop-filter 从 blur() 换成
-   `url(#…)`，底 / 受光边 / 光学层继续由 `.glass-surface` 那套令牌给。滤镜定义在
-   common/GlassFilter.vue，量尺默认是父元素（这条浮条的 .dock-body 自己）。 */
-const glassFilterId = `glass-filter-${Math.random().toString(36).slice(2, 10)}`
-const glassStyle = computed<Record<string, string> | undefined>(() => {
-  if (!liquidGlass.value) return undefined
-  const filter = `url(#${glassFilterId}) saturate(var(--glass-sat))`
-  return { backdropFilter: filter, WebkitBackdropFilter: filter }
-})
-
 function fmtMs(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms)
 }
 
 /** 收起态的那根脊：只喂已经定稿的句子，未定稿那句由 head 游标表达 */
@@ -46,157 +28,47 @@ const dockSegs = computed(() =>
 </script>
 
 <template>
-  <Transition name="vdock">
-    <section
-      v-if="voice.minimized && (voice.status === 'recording' || voice.status === 'processing')"
-      class="vdock-root"
-      :class="[`dock-${slot}`, { dragging }]"
-    >
-      <div ref="posEl" class="dock-pos">
-        <div
-          class="dock-body glass-surface"
-          :class="[form === 'blob' ? 'is-blob' : 'is-bar', { pressing, dragging }]"
-          :style="glassStyle"
-          role="region"
-          aria-label="正在转写"
-          @pointerdown="onPointerDown"
-        >
-          <!-- 折射滤镜定义（不参与绘制，绝对定位）：只在超高档挂，量尺是这个 .dock-body -->
-          <GlassFilter :id="glassFilterId" :enabled="liquidGlass" />
-
-          <div class="layer layer-bar" :class="{ off: form !== 'bar' }">
-            <button class="info" type="button" @click="restore">
-              <span class="dot" />
-              <b>{{ voice.status === 'recording' ? '转写中' : '整理中' }}</b>
-              <!-- 时长是主角（caption + .num），句数降成微字档 —— 两者不再共用同一字号字重 -->
-              <span class="s num">{{ fmtMs(voice.elapsedMs) }}</span>
-              <span class="s-sc num">{{ voice.sentences.length }} 句</span>
-            </button>
-            <!-- 浮条就是那根正在生长的时间脊：收起后也能看出「说到哪、密不密」 -->
-            <TimeSpine
-              v-if="voice.sentences.length"
-              class="barspine"
-              size="mini"
-              :segments="dockSegs"
-              :head-ms="voice.elapsedMs"
-            />
-            <div class="acts">
-              <button v-if="voice.status === 'recording'" class="abtn end" type="button" @click="finishSpeaking">
-                <Square :size="11" :stroke-width="2.5" /> 完成
-              </button>
-              <button class="abtn ico" type="button" aria-label="展开语音会话" @click="restore">
-                <ChevronUp :size="15" :stroke-width="2.5" />
-              </button>
-            </div>
-          </div>
-          <button
-            class="layer layer-blob"
-            :class="{ off: form !== 'blob' }"
-            type="button"
-            aria-label="展开语音会话"
-            @click="expandFromBlob"
-          >
-            <span class="dot" />
-            <b class="bt num">{{ fmtMs(voice.elapsedMs) }}</b>
-          </button>
-        </div>
+  <FloatDock
+    :open="voice.minimized && (voice.status === 'recording' || voice.status === 'processing')"
+    storage-key="rein.vbar.dock.v1"
+    region-label="正在转写"
+    blob-label="展开语音会话"
+    root-class="vdock-root"
+  >
+    <template #bar>
+      <button class="info" type="button" @click="restore">
+        <span class="dot" />
+        <b>{{ voice.status === 'recording' ? '转写中' : '整理中' }}</b>
+        <!-- 时长是主角（caption + .num），句数降成微字档 —— 两者不再共用同一字号字重 -->
+        <span class="s num">{{ fmtMs(voice.elapsedMs) }}</span>
+        <span class="s-sc num">{{ voice.sentences.length }} 句</span>
+      </button>
+      <!-- 浮条就是那根正在生长的时间脊：收起后也能看出「说到哪、密不密」 -->
+      <TimeSpine
+        v-if="voice.sentences.length"
+        class="barspine"
+        size="mini"
+        :segments="dockSegs"
+        :head-ms="voice.elapsedMs"
+      />
+      <div class="acts">
+        <button v-if="voice.status === 'recording'" class="abtn end" type="button" @click="finishSpeaking">
+          <Square :size="11" :stroke-width="2.5" /> 完成
+        </button>
+        <button class="abtn ico" type="button" aria-label="展开语音会话" @click="restore">
+          <ChevronUp :size="15" :stroke-width="2.5" />
+        </button>
       </div>
-    </section>
-  </Transition>
+    </template>
+
+    <template #blob>
+      <span class="dot" />
+      <b class="bt num">{{ fmtMs(voice.elapsedMs) }}</b>
+    </template>
+  </FloatDock>
 </template>
 
 <style scoped>
-/* 与 ActiveWorkoutBar / RecordFloatBar 同构：root 只管 fixed 与 z 序 */
-.vdock-root {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  z-index: 59;
-  pointer-events: none;
-}
-
-.vdock-root.dragging {
-  z-index: 70;
-}
-
-.dock-pos {
-  position: absolute;
-  left: 0;
-  top: 0;
-  will-change: transform;
-}
-
-/* 材质走全局 .glass-surface（与底部 Dock 同一份定义），这里只留几何与手感 */
-.dock-body {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius-l);
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  transition:
-    transform var(--dur-fast) var(--ease-standard),
-    box-shadow var(--dur-fast) var(--ease-standard);
-}
-
-.dock-body.is-blob {
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  border-radius: var(--radius-l);
-}
-
-.dock-body.pressing {
-  transform: scale(0.97);
-}
-
-.dock-body.is-bar {
-  width: calc(100vw - 24px);
-  max-width: calc(var(--frame-max) - 24px);
-}
-
-.dock-body.dragging {
-  transform: scale(1.03);
-  box-shadow: var(--shadow-float-lift);
-}
-
-.layer {
-  visibility: visible;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s;
-}
-
-.layer.off {
-  opacity: 0;
-  transform: scale(0.92);
-  visibility: hidden;
-  pointer-events: none;
-  transition:
-    opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard),
-    visibility 0s linear var(--dur-fast);
-}
-
-.layer-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
 /* 浮条里的脊：夹在「转写中 · 时长」与操作按钮之间，是这根条的主体视觉 */
 .barspine {
   flex: 1;
@@ -204,69 +76,40 @@ const dockSegs = computed(() =>
   max-width: 120px;
 }
 
-.layer-blob {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
 .bt {
   max-width: 100%;
-  padding: 0 4px;
+  padding: 0 var(--sp-4);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.vdock-enter-active,
-.vdock-leave-active {
-  transition:
-    opacity var(--dur-sheet) var(--ease-sheet),
-    transform var(--dur-sheet) var(--ease-sheet);
-}
-
-.vdock-enter-from,
-.vdock-leave-to {
-  opacity: 0;
-}
-
-.dock-bottom.vdock-enter-from,
-.dock-bottom.vdock-leave-to {
-  transform: translateY(18px);
-}
-
-.dock-top.vdock-enter-from,
-.dock-top.vdock-leave-to {
-  transform: translateY(-18px);
-}
-
-.dock-left.vdock-enter-from,
-.dock-left.vdock-leave-to {
-  transform: translateX(-14px);
-}
-
-.dock-right.vdock-enter-from,
-.dock-right.vdock-leave-to {
-  transform: translateX(14px);
-}
-
 .info {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--gap-sm);
   text-align: left;
   border-radius: var(--radius-m);
-  padding: 2px;
+  padding: var(--sp-2);
   transition: background var(--dur-fast) var(--ease-standard);
+}
+
+/* 信息区（转写状态 + 时长 + 句数）是打开会话的入口：一行约 19 高，命中区撑到 44 */
+.info::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+  border-radius: inherit;
 }
 
 .info:active {
@@ -280,24 +123,12 @@ const dockSegs = computed(() =>
   border-radius: 50%;
   background: var(--danger);
   box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 65%, transparent);
-  animation: vbreathe-dot 1.4s infinite;
-}
-
-@keyframes vbreathe-dot {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
+  animation: rein-breathe var(--dur-pulse) infinite;
 }
 
 .info b {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: -0.2px;
   color: var(--text-1);
   flex: none;
@@ -305,7 +136,7 @@ const dockSegs = computed(() =>
 
 .info .s {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -323,20 +154,21 @@ const dockSegs = computed(() =>
 .acts {
   flex: none;
   display: flex;
-  gap: 7px;
+  gap: var(--gap-sm);
 }
 
 .abtn {
   position: relative;
   flex: none;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: var(--radius-m);
+  height: var(--control-icon);
+  padding: 0 var(--sp-12);
+  /* 按钮圆角 20（HarmonyOS 圆角规范 · 按钮档）；原先 16 是卡片档 */
+  border-radius: var(--radius-l);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -344,11 +176,16 @@ const dockSegs = computed(() =>
   transform: scale(0.94);
 }
 
-/* 34 高的胶囊命中区撑到 44：横向各扩 3px（条内只隔 7px），纵向 5px */
+/* 34 高的胶囊命中区撑到 44×44（原先图标钮只有 40 宽）：
+   视觉不放大，热区按触控下限走 */
 .abtn::after {
   content: '';
   position: absolute;
-  inset: -5px -3px;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
 }
 
 /* 结束钮的 soft 底 + 图标色走令牌对（--danger-soft 底 / --danger-strong 字），
@@ -369,16 +206,6 @@ const dockSegs = computed(() =>
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vdock-enter-from,
-  .vdock-leave-to {
-    transform: none;
-  }
-
-  .vdock-enter-active,
-  .vdock-leave-active {
-    transition-duration: 150ms;
-  }
-
   .dot {
     animation: none;
   }

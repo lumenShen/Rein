@@ -8,7 +8,11 @@
  * 收成「两档尺寸 + 三档语气」，规格只有一份，以后改一处就是全站。
  *
  * 尺寸（差的是「一行放得下几颗」，不是随手 1px）：
- *   `md` 常规 12px 字 / 6×12 内边距；`sm` 密集 11px 字，用于一行的元数据摘要。
+ *   `md` 常规 12px 字 / 左右 12 内边距；`sm` 密集 12px 字 / 左右 8 内边距。
+ *   两档高度都锁在 --chip-h（24px，胶囊 / 标签规格；--control-sm 的 28 是小按钮，
+ *   不是标签 —— 一排胶囊与旁边的按钮同高会显得比按钮还壮）：
+ *   11px 曾是 `sm` 的档位，但它是**可点**控件，低于 12px 的中文开始糊；
+ *   密集只该省横向，不该省到读不清。
  * 语气（只决定正文色与强调，不改变形状）：
  *   `label` 中性内容（待办标题，最深一档）、`muted` 中性控件（导航、摘要）、
  *   `action` 去处（强调色 + 更重字重，按下去交给全局 `button:active`）。
@@ -38,24 +42,45 @@ withDefaults(
 
 <style scoped>
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   max-width: 100%;
   border-radius: var(--radius-full);
   background: var(--surface-2);
-  font-weight: 600;
+  /* 胶囊文字 12 Medium（Caption_L）：600 在这个尺寸上会读成「加粗过一遍」 */
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
+/* 可点的胶囊（as="button"）：视觉仍是 24 高的标签，热区用伪元素撑到 44。
+   只对 button 生效 —— span 版本常被塞进另一个 button（button 不能嵌 button），
+   给它加伪元素只会在父按钮里多出一块抢点击的死区。
+
+   用 inset 简写而不是 height + transform：调用点若已经自己补过热区
+   （HomeCanvas .detail / HomeTodoCard .all-link 的 ::after 都比这里特指度高），
+   简写会被整条覆盖，不会残留一个孤零零的 translate 把热区顶偏。 */
+button.chip::after {
+  content: '';
+  position: absolute;
+  inset: calc(50% - var(--hit-min) / 2) 0;
+  border-radius: var(--radius-full);
+}
+
+/* 胶囊 / 标签统一 24 高（--chip-h）、左右 12（--pad-inline）：
+   此前两档都是 28 高，比规范高 4，一排胶囊在一行里比旁边的按钮还壮 */
 .md {
-  padding: 6px 12px;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   font-size: var(--fs-caption);
 }
 
+/* 小号只收字号与左右内距，高度仍落在 24 —— 20 会让 12px 中文上下贴边 */
 .sm {
-  padding: 5px 10px;
-  font-size: var(--fs-micro);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
+  font-size: var(--fs-caption);
 }
 
 .label {
@@ -68,7 +93,7 @@ withDefaults(
 
 .action {
   color: var(--accent-strong);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 前导圆点：四颗 chip 此前各写一份 7px，这里收一份。
@@ -84,7 +109,7 @@ withDefaults(
    `muted` 下与正文同为 --text-2，是刻意的「不加戏」。 */
 .chip :slotted(.trail) {
   font-style: normal;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 </style>

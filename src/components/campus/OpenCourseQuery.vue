@@ -229,23 +229,25 @@ onMounted(init)
    在一页 --radius-xl + shadow-card 的卡片里像是另一个应用。拉回同一套语言 ——
    它是同一页上的第二块内容，不是嵌进来的工具 */
 .card {
-  padding: 14px 16px;
-  border-radius: var(--radius-xl);
+  padding: var(--pad-card);
+  /* 卡片档 16：这块与同页其它卡片是同级的内容容器，32 是半模态的圆角；
+     与它们同档之后「同一页的几块」才读得出是一组 */
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
-  margin-bottom: 14px;
+  margin-bottom: var(--gap-md);
 }
 .head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 .head h2 {
   /* 原先写的是 var(--fs-title) —— 这个令牌**不存在**（阶梯里叫 title1/2/3），
      于是标题字号一直落在浏览器的默认档上。与同页其它卡片标题对齐 */
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   margin: 0;
 }
@@ -253,16 +255,16 @@ onMounted(init)
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
   min-height: 32px;
-  padding: 5px 12px;
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line);
   background: transparent;
   /* 原先的 var(--text) 也不存在（只有 --text-1/2/3），文字色一直是继承来的 */
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .mini::after {
   content: '';
@@ -271,22 +273,22 @@ onMounted(init)
 }
 .hint {
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
-  margin: 8px 0 0;
+  margin: var(--sp-8) 0 0;
 }
 .domains {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-10);
 }
 .domain {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-caption);
@@ -299,11 +301,11 @@ onMounted(init)
   color: var(--text-2);
 }
 .host {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 .verdict {
-  padding: 1px 8px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   color: var(--text-2);
@@ -320,23 +322,23 @@ onMounted(init)
   color: var(--text-2);
 }
 .tech p {
-  margin: 4px 0 0;
-  line-height: 1.5;
+  margin: var(--sp-4) 0 0;
+  line-height: var(--lh-body);
   overflow-wrap: anywhere;
 }
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--sp-10);
+  margin-top: var(--sp-12);
 }
 .field {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   flex: 1;
   min-height: 44px;
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-2);
@@ -358,21 +360,20 @@ onMounted(init)
   outline: none;
 }
 .count { font-size: var(--fs-caption); color: var(--text-2); white-space: nowrap; }
-.src { font-size: var(--fs-caption); color: var(--text-2); margin: 8px 0 0; }
-.list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.src { font-size: var(--fs-caption); color: var(--text-2); margin: var(--sp-8) 0 0; }
+.list { list-style: none; margin: var(--sp-10) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-8); }
 .row {
-  padding: 9px 10px;
+  padding: var(--sp-10) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
-.l1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
-.name { font-weight: 600; color: var(--text-1); }
+.l1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-8); }
+.name { font-weight: var(--fw-semibold); color: var(--text-1); }
 .lesson { font-size: var(--fs-caption); color: var(--text-2); }
 .num { font-variant-numeric: tabular-nums; font-size: var(--fs-caption); color: var(--text-2); }
-.l2 { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--fs-caption); margin-top: 4px; }
+.l2 { display: flex; flex-wrap: wrap; gap: var(--sp-10); font-size: var(--fs-caption); margin-top: 4px; }
 .dim { color: var(--text-2); }
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: rein-spin 1s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .spin { animation-duration: 3s; }

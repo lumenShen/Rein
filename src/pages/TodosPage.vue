@@ -530,13 +530,16 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶距走 --page-pad-top（手机 12 / 桌面 40）：页面四边留白只有这一处来源，
+     各页不再各自加一档 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .toolbar {
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  /* 分段控件与右侧主操作是两块各有边界的控件，取卡片间的 12 档 */
+  gap: var(--gap-md);
+  margin-bottom: var(--gap-md);
 }
 
 /* 视图分段：共享 SegmentedControl（radiogroup + roving tabindex + 方向键）。
@@ -550,15 +553,23 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 }
 
 .ai-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 15px;
-  border-radius: var(--radius-m);
+  justify-content: center;
+  /* 图标与文字之间按「主次文本左右 8」；横向 16 与页面卡片内距同档 */
+  gap: var(--gap-text-inline);
+  /* 常规按钮高 40（HarmonyOS 控件规范）：原先 8+8 内距 + 12 字（行高 1.5）= 34，
+     在日期行与分段控件旁边明显矮一档 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-16);
+  /* 与 .cbtn / 各页 .cta 统一成胶囊：同一类主操作全库一个形状，
+     不再出现「页内按钮 16 圆角、空态按钮 full」的两种同级写法 */
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   box-shadow: var(--shadow-float);
 }
 
@@ -567,25 +578,47 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
   box-shadow: none;
 }
 
-.dateline {
-  margin: 0 0 8px;
+/* 视觉 40 的常规钮命中区补到 44（上下各 2）：主操作不该比触控下限还窄 */
+.ai-btn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-text)) 0;
+  border-radius: inherit;
 }
 
+.dateline {
+  margin: 0 0 var(--gap-sm);
+}
+
+/* 日期翻页：视觉 34（--control-icon），热区撑到 44。
+   它停在屏幕两缘，是这一页每天都会点的两颗钮，30px 的视觉对拇指偏小。 */
 .daynav {
-  width: 30px;
-  height: 30px;
+  position: relative;
+  width: var(--control-icon);
+  height: var(--control-icon);
   border-radius: 50%;
   background: var(--surface);
   border: 0.5px solid var(--line);
   color: var(--text-2);
-  font-size: 16px;
+  font-size: var(--fs-headline);
   line-height: 1;
+}
+
+.daynav::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 /* 日期行：页头大标题已是这一天（fmtDateCn），这里只是「正在看哪天」的次要说明 */
 .dlabel {
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
@@ -593,8 +626,10 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
   background: var(--surface);
   border: 0.5px solid var(--line);
   border-radius: var(--radius-m);
-  padding: 10px 14px 12px;
-  margin-bottom: 12px;
+  /* 卡片内距统一 16：原先 10/14/12 三边各不相同，读起来像「凑出来的」边距；
+     四边拉平成规范值后标题与胶囊组在卡内的落点才稳 */
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 .poolh b {
@@ -609,21 +644,24 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
   min-height: 20px;
 }
 
 .pchip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
+  gap: var(--gap-sm);
+  /* 药丸统一 24 高（--chip-h）：原先 6px 上下内距把这一档撑到 30，
+     比规范高一档，和页内其它胶囊不在一条水平线上 */
+  min-height: var(--chip-h);
+  padding: var(--sp-4) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   border: 0.5px solid var(--line);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   touch-action: none;
   cursor: grab;
 }
@@ -658,40 +696,55 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 .pool-empty {
   font-size: var(--fs-footnote);
   color: var(--text-3);
-  padding: 4px 0;
+  padding: var(--sp-4) 0;
 }
 
 .confirm {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--gap-md);
   background: var(--accent-soft);
   border-radius: var(--radius-m);
-  padding: 10px 14px;
-  margin-bottom: 12px;
+  /* 确认条是紧凑条，纵 12 / 横 16：横向与卡片内距对齐，纵向留出按钮自身的呼吸 */
+  padding: var(--sp-12) var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 .confirm .cr {
   font-size: var(--fs-footnote);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 .confirm b {
   color: var(--accent);
-  margin-right: 6px;
+  margin-right: var(--gap-text-inline);
 }
 
 .gap {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .cbtn {
-  padding: 7px 14px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 与 .ai-btn 同档：确认条里的取消 / 应用也是常规按钮，视觉高度取 40 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+}
+
+/* 40 → 44 的命中区：两颗并排，横向各撑自身，之间仍留 8 的槽位 */
+.cbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-text)) 0;
+  border-radius: inherit;
 }
 
 .cbtn.ghost {
@@ -706,7 +759,7 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 .cgrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 .cgrid.wide {

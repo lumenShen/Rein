@@ -148,7 +148,7 @@ function bump(d: number): void {
 .biginput {
   width: 100%;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 /* 步进钮：它们压在**内容卡**上（本组登记卡），卡本身已经是不透明的内容层表面，
@@ -176,19 +176,19 @@ function bump(d: number): void {
 .wval {
   flex: 1;
   min-width: 0;
-  gap: 6px;
+  gap: var(--sp-6);
   justify-content: center;
 }
 
 .wval.editing {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .wview {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 2px 4px;
+  gap: var(--sp-6);
+  padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-s);
   color: var(--text-1);
 }
@@ -199,7 +199,8 @@ function bump(d: number): void {
 
 .wview b {
   font-size: var(--fs-display-l);
-  font-weight: 200;
+  /* 大字读数取阶梯最轻一档（--fw-light 300）；裸 200 不在五档里，44px 上区别可忽略。 */
+  font-weight: var(--fw-light);
   letter-spacing: -1.5px;
   line-height: 1.15;
   white-space: nowrap;
@@ -207,7 +208,7 @@ function bump(d: number): void {
 
 .wunit {
   font-size: var(--fs-callout);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   /* 单位是大数字的**必读**部分（「62.5」不带 kg 就不是一个重量），而 15px 不属于
      WCAG 的 large text：--text-3（3.6:1）在这个字号上过不了 AA。同批的 .restsec /
      .punit 也都取 --text-2，这里跟随。 */
@@ -220,11 +221,11 @@ function bump(d: number): void {
    从前是写死的 32px 魔法值，观感不变 */
 .winp {
   width: 116px;
-  padding: 4px 10px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-large-title);
-  font-weight: 300;
+  font-weight: var(--fw-light);
   letter-spacing: -0.5px;
   text-align: center;
   color: var(--text-1);
@@ -235,12 +236,12 @@ function bump(d: number): void {
   /* 命中区撑到 44，与两侧 ± 步进钮同高：输入法弹出时这一行最容易被误触，
      而这颗「确定」从前只有 28 高。这是全批最小的热区。 */
   min-height: 44px;
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   /* 「确定」是按钮标签：文字中性色，色相留在 soft 底的色块上（色彩配额，STANDARDS §4） */
   background: var(--c-exercise-soft);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 </style>

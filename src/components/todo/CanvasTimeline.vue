@@ -5,6 +5,7 @@ import { ChevronRight, Layers, Pencil } from 'lucide-vue-next'
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import { CATEGORY_META } from '@/config/domain'
+import { useZoomWheel } from '@/composables/useZoomWheel'
 import { minToHHmm, nowMin, todayStr } from '@/utils/date'
 import { durationOf as durOfShared, layoutDayBlocks } from '@/utils/timelineLayout'
 import type { Todo } from '@/types'
@@ -228,15 +229,7 @@ function blkStyle(b: Laid): Record<string, string> {
 
 /* ---------- 滚动 / 缩放 ---------- */
 
-function zoom(factor: number): void {
-  px.value = Math.min(Math.max(px.value * factor, MIN_PX), MAX_PX)
-}
-
-function onWheel(e: WheelEvent): void {
-  if (!e.ctrlKey && !e.metaKey) return
-  e.preventDefault()
-  zoom(e.deltaY > 0 ? 1 / 1.15 : 1.15)
-}
+const { onWheel } = useZoomWheel(px, MIN_PX, MAX_PX)
 
 /** 锚定：今天看"现在"附近，其它日子看第一个安排或 8 点 */
 function scrollToAnchor(): void {
@@ -610,7 +603,7 @@ onBeforeUnmount(() => {
 
 .inner {
   position: relative;
-  margin: 0 10px 0 0;
+  margin: 0 var(--sp-10) 0 0;
 }
 
 /* 刻度标签：与「摄入总览」里 `.m-label`（蛋白质 / 碳水 / 脂肪 那排）同一规格 ——
@@ -622,7 +615,7 @@ onBeforeUnmount(() => {
   text-align: right;
   transform: translateY(-6px);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
@@ -673,14 +666,14 @@ onBeforeUnmount(() => {
 .nowtag {
   position: absolute;
   right: 100%;
-  margin-right: 8px;
+  margin-right: var(--gap-sm);
   top: 1px;
   transform: translateY(-50%);
-  padding: 2px 6px;
+  padding: var(--sp-2) var(--sp-6);
   /* 「现在」是定位词；白字压 --danger-strong 只有 5.87:1，11px 粗体勉强够，
      提一档到 12px 更稳，且不撑高（line-height: 1）+ 视觉仍是角标 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 1;
   white-space: nowrap;
   color: var(--on-accent);
@@ -739,8 +732,8 @@ onBeforeUnmount(() => {
   display: flex;
   /* 顶对齐：标题从块顶向下折行铺开，不悬浮居中 */
   align-items: flex-start;
-  gap: 7px;
-  padding: 4px 8px;
+  gap: var(--gap-sm);
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-s);
   overflow: hidden;
   background: color-mix(in srgb, var(--blk-cat) 15%, var(--surface));
@@ -786,7 +779,7 @@ onBeforeUnmount(() => {
   left: 2px;
   font-size: var(--fs-caption);
   line-height: 1;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   pointer-events: none;
   white-space: nowrap;
@@ -804,7 +797,7 @@ onBeforeUnmount(() => {
 
 .bmin.live {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .blk.dragging {
@@ -870,13 +863,13 @@ onBeforeUnmount(() => {
   display: flex;
   /* 幽灵块里时间与标题同行：基线对齐首行；块内单标题时无感 */
   align-items: baseline;
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .tt {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 画布块内标题：顶对齐、按块宽折行、按块高截行（--blk-lines 由块高折算），放不下才省略 */
@@ -898,8 +891,8 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-s);
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 4px 8px;
+  gap: var(--gap-sm);
+  padding: var(--sp-4) var(--sp-8);
   overflow: hidden;
   cursor: default;
   z-index: 2;
@@ -916,7 +909,7 @@ onBeforeUnmount(() => {
 .blk.ghost .body b {
   /* 时段标题（「第 3 节」这类）是日历块上的信息，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -955,9 +948,9 @@ onBeforeUnmount(() => {
   display: flex;
   /* 与 .blk-card 同配方：顶对齐铺开 */
   align-items: flex-start;
-  gap: 7px;
+  gap: var(--gap-sm);
   height: 100%;
-  padding: 4px 8px;
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-s);
   /* 卡面必须不透明：底层错位条（.stk-under）铺在卡面之后，透出来会让卡面看着发灰发虚 */
   background: color-mix(in srgb, var(--blk-cat) 15%, var(--surface));
@@ -1000,15 +993,15 @@ onBeforeUnmount(() => {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-tight);
   /* 高度写死：叠层卡最小高度按「展开钮 + 编辑钮」折算（见 minStackH），不能随字号浮动 */
   height: 18px;
-  padding: 0 8px;
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--text-1) 8%, transparent);
   /* 「展开同时段 N 项」是操作按钮，不吃 11px；下方 .compact 里另有降档规则 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -1037,7 +1030,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 /* 卡片右下角编辑钮：比勾选框低一档的次级控件（勾选框与行高等大，它是一枚角标），
@@ -1089,14 +1082,14 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 .stk-list li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-2) 0;
 }
 
 .dot {
@@ -1119,8 +1112,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 4px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-4);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -1128,7 +1121,7 @@ onBeforeUnmount(() => {
 
 .stk-row .tt {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1140,14 +1133,14 @@ onBeforeUnmount(() => {
 }
 
 .stk-hint {
-  margin-top: 10px;
+  margin-top: var(--gap-sm);
   /* 「点条目在画布上置顶并查看详情」是操作指令，不吃 11px */
   font-size: var(--fs-caption);
 }
 
 .compact .stk-more {
   height: 14px;
-  padding: 0 6px;
+  padding: 0 var(--sp-6);
 }
 
 .compact .edit {
@@ -1231,7 +1224,7 @@ onBeforeUnmount(() => {
   min-width: 22px;
   min-height: 22px;
   /* margin-left 仍是 auto（贴右端）；多出的 4px 用负外边距吃回，右下角位置不动 */
-  margin: -4px -4px -4px auto;
+  margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) auto;
   background: transparent;
 }
 
@@ -1268,6 +1261,6 @@ onBeforeUnmount(() => {
    同样用负外边距保住 .card-acts 那一列的排布（18 + 2 + 14）。 */
 .desk-main .stk-more {
   min-height: 22px;
-  margin-block: -2px;
+  margin-block: calc(-1 * var(--gap-text));
 }
 </style>

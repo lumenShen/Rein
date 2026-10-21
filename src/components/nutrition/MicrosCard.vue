@@ -3,8 +3,8 @@ import { computed } from 'vue'
 
 import InfoHint from '@/components/common/InfoHint.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { MICROS } from '@/config/dri'
 import { useNutritionStore } from '@/stores/nutrition'
+import { buildMicroRows } from '@/utils/nutritionCalc'
 import type { DailySummary } from '@/types'
 
 /** 微量元素全览：逐项对照 DRI 的数值与进度条；作用与来源说明收进标题行 InfoHint。
@@ -19,18 +19,9 @@ const n = useNutritionStore()
 /** 区分「没传」与「传了 null」：前者回落 store，后者是「这天还没拿到数据」 */
 const data = computed(() => (props.summary === undefined ? n.summary : props.summary))
 
-const cells = computed(() => {
-  const intake = data.value?.intake
-  return MICROS.map((def) => {
-    const current = intake?.[def.key] ?? 0
-    return {
-      ...def,
-      value: Math.round(current * 10) / 10,
-      pct: def.dri <= 0 ? 0 : Math.min((current / def.dri) * 100, 100),
-      over: def.isLimit === true && current > def.dri,
-    }
-  })
-})
+const cells = computed(() =>
+  buildMicroRows(data.value?.intake, { clampPct: true, roundValue: true }),
+)
 </script>
 
 <template>
@@ -70,7 +61,7 @@ const cells = computed(() => {
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .head .hint {
@@ -79,7 +70,7 @@ const cells = computed(() => {
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
@@ -87,25 +78,28 @@ const cells = computed(() => {
 .hint-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin: 0;
-  padding-left: 18px;
+  /* 列表符号缩进：取同值令牌（不是间距语义） */
+  padding-left: var(--sp-18);
 }
 
 .hint-list li {
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .hint-list b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .list {
-  margin-top: 6px;
+  /* 标题与内容之间 8 */
+  margin-top: var(--gap-sm);
 }
 
 .item {
-  padding: 12px 0;
+  /* 双行数值行（名称·数值 + 进度条）按 64 档：12 上下 + 一行 24 + 条 4 + 间距 8 ≈ 60 */
+  padding: var(--sp-12) 0;
 }
 
 .item + .item {
@@ -113,33 +107,40 @@ const cells = computed(() => {
 }
 
 .top {
-  margin-bottom: 6px;
+  /* 数值行与下方进度条之间 8：条要读得出属于哪一行，但不能与行间分隔线混为一谈 */
+  margin-bottom: var(--gap-sm);
 }
 
 .item.over .val {
-  color: var(--danger);
+  /* 超标是状态词，要读得清：实底档 --danger 当文字只有约 3.4:1，
+     文字档 --danger-strong 才过 AA（STANDARDS §4 的 soft/实底分档同一条理由） */
+  color: var(--danger-strong);
 }
 
 .name {
   font-size: var(--fs-subhead);
-  font-weight: 700;
-  /* 行名 + 「上限」胶囊同一行居中 */
+  /* 名称是标签不是读数：semibold 让位给右侧 bold 的当前值 */
+  font-weight: var(--fw-semibold);
+  /* 行名 + 「上限」胶囊同一行居中：文字与胶囊左右 8（--gap-text-inline） */
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-text-inline);
 }
 
 .val {
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  /* 当前 / DRI 是这张卡的读数：16 bold（与宏量卡同一档；--fs-headline 桌面档不降，
+     保证与 14 的名称始终差一档） */
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-bold);
 }
 
 .val em {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-3);
   font-size: var(--fs-caption);
-  margin-left: 2px;
+  /* 数值与「/ DRI 单位」是同一行内的最小一对：4 */
+  margin-left: var(--gap-tight);
 }
 
 .bar {

@@ -319,11 +319,12 @@ async function confirmDelete(value: string): Promise<void> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .seg {
-  margin-bottom: 14px;
+  /* 分段控件与下方内容 12（卡片间距） */
+  margin-bottom: var(--gap-md);
 }
 
 /* 视图 / 周期切换的轻过渡 —— 连点翻周会反复重启，时长短到看不出重启 */
@@ -344,20 +345,36 @@ async function confirmDelete(value: string): Promise<void> {
 }
 
 .nav {
-  min-height: 32px;
+  min-height: var(--sp-32);
+  /* 周期导航与「回到本期」之间 8（无边界控件间距）；窄屏时下面是截断，不靠它兜底 */
+  gap: var(--gap-sm);
 }
 
+/* 周期标签吃掉剩余宽度：320px 上「2026年10月1日 周四」+ 两枚 30px 箭头 + 「本周」
+   会超出卡片内宽（256px）。给 .arrows flex:1 + .nav-label ellipsis 后，
+   窄屏是标签截断而不是整行溢出；宽屏仍是标签居中、两侧箭头等距。 */
 .arrows {
-  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  gap: var(--sp-10);
 }
 
 .navbtn {
+  position: relative;
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
+}
+
+/* 视觉 30 不动，热区撑到 44+（规则 5）：上下 8px 落在卡头 16px 内距里，
+   横向 8px 只压到不可点的周期标签。 */
+.navbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-8));
 }
 
 .navbtn:disabled {
@@ -365,29 +382,45 @@ async function confirmDelete(value: string): Promise<void> {
 }
 
 .nav-label {
-  min-width: 150px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   text-align: center;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .pill {
-  padding: 5px 10px;
+  position: relative;
+  flex: none;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+/* 视觉 ~22 高，热区 44+：上下各 12px 落在卡头内距与图表上方 12px 里；
+   横向 6px 落在卡片自己的 16px 内距里（不越出卡面）。 */
+.pill::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-12)) calc(-1 * var(--sp-6));
 }
 
 .chart {
-  margin-top: 16px;
+  /* 主读数与图表 12（卡内区块间距） */
+  margin-top: var(--gap-md);
 }
 
 .stat {
-  gap: 4px;
-  margin-top: 14px;
-  padding-top: 12px;
+  gap: var(--gap-tight);
+  /* 图表与统计行 12 */
+  margin-top: var(--gap-md);
+  padding-top: var(--sp-12);
   border-top: 0.5px solid var(--line);
   font-size: var(--fs-caption);
   color: var(--text-2);
@@ -398,24 +431,25 @@ async function confirmDelete(value: string): Promise<void> {
 }
 
 .group + .group {
-  margin-top: 18px;
+  /* 记录分组之间 16（区块间距） */
+  margin-top: var(--gap-lg);
 }
 
 /* 组头：月份/日期是标识（--text-2），次数拆出来降成尾注，不再「·」串成一行 */
 .grouplabel {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 2px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
   color: var(--text-2);
 }
 
 /* 组内次数：尾注档，不与组头标识抢层级 */
 .gcount {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }

@@ -323,8 +323,9 @@ function onPicked(f: Food): void {
 .fpr {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
+  gap: var(--gap-sm);
+  /* 解析行是三列（名称 / 份量 / 删除）的一整行：上下 8 + 内容 ≈ 48 档 */
+  padding: var(--gap-sm) 0;
 }
 
 .fpr + .fpr {
@@ -377,9 +378,10 @@ function onPicked(f: Food): void {
 .name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 名称与铅笔微图标：同一行最小呼吸 4 */
+  gap: var(--gap-tight);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   min-width: 0;
 }
 
@@ -387,9 +389,10 @@ function onPicked(f: Food): void {
 .name-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   min-width: 0;
-  padding: 1px 2px;
+  /* 1px/2px 只是给按压底色一圈边，归到 2 一档 */
+  padding: var(--sp-2);
   border-radius: var(--radius-s);
   text-align: left;
   font: inherit;
@@ -414,11 +417,11 @@ function onPicked(f: Food): void {
 
 .name input {
   width: 100%;
-  padding: 2px 6px;
+  padding: var(--gap-text) var(--sp-6);
   border-radius: var(--radius-s);
   background: var(--surface);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 换一个（已匹配）：低调的 mini pill，错配时人工纠正 */
@@ -426,14 +429,15 @@ function onPicked(f: Food): void {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 7px;
+  gap: var(--gap-text);
+  /* 迷你按钮：上下 2、左右 8 */
+  padding: var(--gap-text) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
   /* 「换一个」是用户要点的按钮，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .rematch:active {
@@ -444,37 +448,39 @@ function onPicked(f: Food): void {
 .golink {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-tight);
   align-self: flex-start;
-  margin-top: 3px;
-  padding: 2px 0;
+  margin-top: var(--gap-tight);
+  padding: var(--gap-text) 0;
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .tag {
-  padding: 1px 6px;
-  margin-left: 2px;
+  /* 状态角标：上下 2、左右 6（两字不贴边） */
+  padding: var(--sp-2) var(--sp-6);
+  margin-left: var(--gap-text);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
   /* 「未匹配」这类状态词必须读得出 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   vertical-align: 1px;
 }
 
 .macro {
-  margin-top: 1px;
+  /* 名称与下方宏量行：主次文本上下 2 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.35;
+  line-height: var(--lh-caption);
 }
 
 /* 热量是主数值：等宽 + 加粗 + 最深一档，扫列表时先落眼 */
 .mk {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -485,7 +491,7 @@ function onPicked(f: Food): void {
 
 .mm::before {
   content: '|';
-  margin: 0 5px;
+  margin: 0 var(--gap-tight);
   color: var(--text-3);
 }
 
@@ -517,24 +523,26 @@ function onPicked(f: Food): void {
 .units {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 5px;
+  /* 份单位胶囊一组无边界控件：组内 4（它们是紧邻的同一族） */
+  gap: var(--gap-tight);
+  margin-top: var(--gap-tight);
 }
 
 .unit {
-  padding: 3px 9px;
+  /* 迷你胶囊：上下 4、左右 8 */
+  padding: var(--gap-tight) var(--gap-sm);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .weight {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   min-width: 74px;
   justify-content: flex-end;
 }
@@ -542,23 +550,24 @@ function onPicked(f: Food): void {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: var(--gap-tight);
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
 }
 
 .weight input {
   width: 72px;
-  padding: 6px 8px;
+  /* 行内小输入：上下 6、左右 8（与它旁边的 .chip 同高） */
+  padding: var(--sp-6) var(--gap-sm);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

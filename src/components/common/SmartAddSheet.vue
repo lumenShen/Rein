@@ -15,7 +15,8 @@ import { recordCardOutcome } from '@/ai/cardOutcomes'
 import { useAiStore } from '@/stores/ai'
 import { useModelsStore } from '@/stores/models'
 import { useTodoStore } from '@/stores/todo'
-import { minToHHmm, parseDate } from '@/utils/date'
+import { minToHHmm } from '@/utils/date'
+import { fmtShortDate } from '@/utils/format'
 import { fileToJpegBase64, IMAGE_ACCEPT, DEFAULT_IMAGE_EDGE } from '@/utils/image'
 import { useToast } from '@/composables/useToast'
 import type { MealType, ParsedFoodItem, Todo, TodoCategory, TodoDraft } from '@/types'
@@ -225,8 +226,7 @@ function onEditorSaved(todo: Todo): void {
 
 /** AI 会推断日期（明天/下周…），不等于当前日期时必须显式展示，否则用户看不到排错天 */
 function shortDate(s: string): string {
-  const d = parseDate(s)
-  return `${d.getMonth() + 1}/${d.getDate()}`
+  return fmtShortDate(s)
 }
 
 function fmtMeta(d: TodoDraft): string {
@@ -456,32 +456,36 @@ function clearAll(): void {
 </template>
 
 <style scoped>
+/* 抽屉内容是一列块：块与块之间 12（--gap-md，与卡内区块同一档） */
 .add {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
+/* 抽屉里的二级面：比抽屉的白底退一档（--surface-2 + 12 圆角 --radius-m-nest），
+   内距 12（--pad-card-tight）—— 它嵌在 --pad-sheet 16 里面，不该再用母卡的 16 */
 .smart {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
 }
 
 .tag {
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent);
 }
 
+/* 「清除」是一个可点的动作，不是说明文字：--text-3 的 3.6:1 读不出来 */
 .clear {
   font-size: var(--fs-footnote);
-  font-weight: 600;
-  color: var(--text-3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
 }
 
 .clear:disabled {
@@ -489,36 +493,38 @@ function clearAll(): void {
 }
 
 .paste {
-  padding: 10px 12px;
-  border-radius: var(--radius-s);
+  /* 输入框与所在二级面同档圆角（12），左右 12 与二级面的内距对齐 */
+  padding: var(--sp-10) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface);
   font-size: var(--fs-subhead);
   resize: vertical;
   min-height: 64px;
 }
 
+/* 胶囊按钮：图标与文字 4（同组无边界），左右 --pad-inline 12 */
 .pic {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 12px;
+  gap: var(--gap-tight);
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .run {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 18px;
+  gap: var(--gap-tight);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
@@ -540,7 +546,7 @@ function clearAll(): void {
 .attach-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 
 .attach-chip {
@@ -574,10 +580,11 @@ function clearAll(): void {
   color: var(--text-2);
 }
 
+/* 13px 不在字号阶梯上：吸附到 Caption_L 12 */
 .xmark {
-  font-size: 13px;
+  font-size: var(--fs-caption);
   line-height: 1;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .attach-hint {
@@ -593,7 +600,7 @@ function clearAll(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .state .err {
@@ -602,23 +609,24 @@ function clearAll(): void {
 
 /* 流式食物行预览：逐条流出时的单行摘要 */
 .fprev {
-  margin-top: 4px;
-  line-height: 1.5;
+  margin-top: var(--gap-tight);
+  line-height: var(--lh-body);
 }
 
 /* 识别数：主数值升一档，副行（待添加 / 全部已处理 / 总热量）降为 caption 灰 */
 .count {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ck {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
+/* 主次文本左右 8（--gap-text-inline） */
 .ck-sub {
-  margin-left: 8px;
+  margin-left: var(--gap-text-inline);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -627,22 +635,22 @@ function clearAll(): void {
 .food-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   animation: draft-in 250ms var(--ease-standard) both;
 }
 
 .meal {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 /* 待办草稿 */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 /* 增删时其余卡 FLIP 平滑让位 */
@@ -677,9 +685,10 @@ function clearAll(): void {
 .draft {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-m);
+  /* 草稿行是抽屉里的二级面：12 内距 / 12 圆角，与 .food-card 同一档 */
+  gap: var(--gap-md);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   animation: draft-in 250ms var(--ease-standard) both;
   animation-delay: calc(var(--i, 0) * 40ms);
@@ -734,7 +743,8 @@ function clearAll(): void {
 
 .info {
   text-align: left;
-  gap: 3px;
+  /* 标题 + 元信息两行文本：主次文本上下 2（--gap-text） */
+  gap: var(--gap-text);
   min-width: 0;
   padding: 0;
 }
@@ -742,23 +752,24 @@ function clearAll(): void {
 .trow {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--sp-6);
   min-width: 0;
 }
 
+/* 分类点与首行文字对齐：7px 的点在 14px 行里要下移 4 才落在文本腰线上 */
 .catdot {
   flex: none;
   width: 7px;
   height: 7px;
-  margin-top: 5px;
+  margin-top: var(--gap-tight);
   border-radius: 50%;
 }
 
 /* AI 标题可能很长：换行到两行而非截断丢信息 */
 .dt {
   font-size: var(--fs-subhead);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-subtitle);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -769,7 +780,8 @@ function clearAll(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  /* 元信息胶囊之间：无边界的一组 → 4（--gap-tight） */
+  gap: var(--gap-tight);
 }
 
 /* 错排日期是必须被看见的信息（脚本注释明说）：不吃 11px 水印档 */
@@ -782,13 +794,14 @@ function clearAll(): void {
 .mchip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
+  gap: var(--gap-tight);
+  /* 微标签不撑高：纵向内距 0 由字号与行高决定，横向 8（--sp-8） */
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   font-style: normal;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -817,7 +830,7 @@ function clearAll(): void {
 /* AI 可能带来源说明：一行截断预览，点了编辑器里看全文 */
 .notes {
   font-size: var(--fs-micro);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -827,7 +840,7 @@ function clearAll(): void {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .act {
@@ -854,13 +867,14 @@ function clearAll(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-tight);
+  padding: var(--sp-12);
+  /* 主按钮与全局按钮同档：圆角 20（--radius-l），不是卡片的 16 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .commit:disabled {
@@ -870,9 +884,9 @@ function clearAll(): void {
 .done {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--ok);
 }
 
@@ -881,12 +895,13 @@ function clearAll(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 12px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-tight);
+  padding: var(--sp-12);
+  /* 与 .commit 同一几何（全宽 / 20 圆角 / 12 上下内距），只换底与字重 */
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 </style>

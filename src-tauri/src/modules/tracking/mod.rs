@@ -2,6 +2,8 @@
 //! `PlatformWebview::jni_handle().exec` 调 Kotlin `TrackingBridge`/`RunTrackingService`：
 //! **原生前台服务是运动真源**（锁屏后 WebView 会注销 navigator.geolocation），
 //! 前端只消费 live/轨迹快照。桌面端全部为空操作。
+//! 定位请求本身由 `location.rs` 通过 JNI 持有（fused/GPS 高精度、1s/500ms）；
+//! Kotlin 前台服务只负责保活、通知、WakeLock 与 RunCore 记账。
 //! 契约见前端 `services/trackingService.ts`；K/L 的数值口径见 `model.rs`。
 //!
 //! exec 没有返回值通道（wry-0.57.0/src/android/mod.rs:492-501）：Kotlin 的数据经
@@ -9,6 +11,9 @@
 
 pub mod commands;
 pub mod model;
+/// Android 高精度定位采集（Rust 持有 LocationManager 请求；Kotlin 只保留前台服务壳）。
+#[cfg(target_os = "android")]
+pub mod location;
 
 /// true = 定位权限已授予
 #[cfg(target_os = "android")]

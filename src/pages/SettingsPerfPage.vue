@@ -280,13 +280,15 @@ const ICON_BTN = 54
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* ---------- 暗场标本台 ---------- */
 .bench {
   position: relative;
-  margin: 4px calc(var(--page-pad-x) * -1) 14px;
+  margin: var(--sp-4) calc(var(--page-pad-x) * -1) var(--gap-lg);
   overflow: hidden;
   background: var(--hero-bg);
 }
@@ -406,7 +408,7 @@ const ICON_BTN = 54
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--sp-22);
   padding: 18px var(--page-pad-x) 20px;
   pointer-events: none; /* 空处留给壁纸拖动 */
 }
@@ -417,20 +419,22 @@ const ICON_BTN = 54
 }
 
 /* 读数：与跑步页 HUD 同一套芯片材质；文字如实反映状态，色点只是第二通道 */
+/* 读数胶囊：高 24（--chip-h）、左右 12、12 Medium —— 与全库角标同一档 */
 .plaque {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   max-width: 100%;
-  padding: 4px 10px;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
   border: 1px solid var(--hero-chip-line);
   border-radius: var(--radius-full);
   background: var(--hero-chip-bg);
   color: var(--hero-text);
   font-size: var(--fs-caption);
-  font-weight: 600;
-  line-height: 1.5;
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-body);
 }
 
 .dot {
@@ -444,7 +448,7 @@ const ICON_BTN = 54
 /* 读数胶囊只留主结论；「怎么才能开折射」降成下方一行次要说明（rails 的 22px gap
    在这里收成 8px，它属于读数的一部分） */
 .plaque-note {
-  margin-top: -14px;
+  margin-top: calc(-1 * var(--sp-14));
   font-size: var(--fs-caption);
   color: var(--hero-text-dim);
 }
@@ -464,7 +468,7 @@ const ICON_BTN = 54
 .parts {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 /* 按钮本体透明：玻璃由 GlassSurface 画，按钮只负责命中区与前景 */
@@ -475,7 +479,7 @@ const ICON_BTN = 54
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--sp-8);
   border-radius: inherit;
   color: var(--hero-text);
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -488,7 +492,7 @@ const ICON_BTN = 54
 
 .tbtn {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
 }
 
 /* 底栏标本：三块玻璃的尺寸关系与页签前景在 base.css 的 .dock-block / .dock-tab /
@@ -496,18 +500,20 @@ const ICON_BTN = 54
 .dockrow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* ---------- 参数调节入口 ---------- */
+/* 与页面上其余卡片同一档：圆角 16、内距 16、双行行高 64 */
 .tuner {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 13px 16px;
-  border-radius: var(--radius-xl);
+  gap: var(--gap-md);
+  min-height: var(--row-h-double);
+  margin-bottom: var(--gap-lg);
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   text-align: left;
@@ -522,12 +528,12 @@ const ICON_BTN = 54
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .tuner-txt b {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .tuner-txt small {
@@ -536,13 +542,13 @@ const ICON_BTN = 54
 
 .chev {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* ---------- 档位 ---------- */
 /* 卡头行：标题 + 右侧帮助入口（原先两段实现细节平铺在卡面，扫读时被整段跳过） */
 .chead {
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .hint-slot {
@@ -551,26 +557,28 @@ const ICON_BTN = 54
   margin-left: auto;
 }
 
+/* 卡头标题走 18（Subtitle_L）Semibold：一页两张档位卡，标题要读得出是一节 */
 .ctitle {
-  font-size: var(--fs-headline);
-  font-weight: 700;
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-semibold);
 }
 
 .perfseg {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 /* 「试一下」：让台上那台底栏走一格 —— 「丰富」这一档有没有生效，
    看一眼比读说明快。样式与 .tuner 同族（一块次级实底、无影子） */
 .replay {
   width: 100%;
-  margin-top: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  margin-top: var(--gap-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   text-align: center;
   transition: background-color var(--dur-fast) var(--ease-standard);
 }
@@ -580,25 +588,25 @@ const ICON_BTN = 54
 }
 
 .spec {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* 台上三件尺寸：数值做主读数、量名降一档，组间竖线分开 ——
    原来是「·」串成一行的同字号规格句，三个平权数字谁也不是重点 */
 .spec-label {
-  margin-top: 14px;
+  margin-top: var(--gap-lg);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .dims {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px 0;
-  margin-top: 4px;
+  gap: var(--sp-6) 0;
+  margin-top: var(--sp-4);
 }
 
 .dim {
@@ -608,41 +616,41 @@ const ICON_BTN = 54
 }
 
 .dim + .dim {
-  margin-left: 10px;
-  padding-left: 10px;
+  margin-left: var(--sp-12);
+  padding-left: var(--sp-12);
   border-left: 0.5px solid var(--line);
 }
 
 .dim b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .dim i {
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 卡面结论行：实现细节都收进标题行 InfoHint，这里只留一句要做的动作 */
 .pnote {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .modes {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--sp-8);
 }
 
 .modes li {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-caption);
 }
 
@@ -652,7 +660,7 @@ const ICON_BTN = 54
      右边的说明才对得齐 */
   width: 56px;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 

@@ -230,16 +230,20 @@ function onSaved(e: ExerciseRecord): void {
 <style scoped>
 /* 布局与方案页同构：flex 容器统一管纵向间距（14px），块内不再各写 margin-top */
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 段与段之间 12（卡片间距）：原来 14 让页面比卡内节奏还松 */
+  gap: var(--gap-md);
 }
 
-/* 搜索行是页面级独立控件：白卡 + 卡片落影（与食物库 finder 同款），不再是灰底内嵌 */
+/* 搜索行是页面级独立控件：白卡 + 卡片落影（与食物库 finder 同款），不再是灰底内嵌。
+   高度取常规控件 40（--control-md）：原来 10px 内距 + 28px 的筛选胶囊把行撑到 ~48，
+   比动作选择器的同款 finder 高出一档，320 下还白占 8px 纵向。 */
 .searchrow {
-  gap: 8px;
-  padding: 11px 14px;
+  min-height: var(--control-md);
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -255,27 +259,36 @@ function onSaved(e: ExerciseRecord): void {
 
 /* 筛选入口：程序页 .cap 胶囊同款（描边 + 白底） */
 .filterbtn {
-  gap: 4px;
-  padding: 6px 11px;
+  position: relative;
+  gap: var(--gap-tight);
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   flex: none;
+}
+
+/* 视觉 ~27 高不动，热区撑到 44+：上下各 10px 落在搜索行与胶囊组之间的 12px 里，
+   横向 4px 只吃掉行内 8px gap 的一半（不会压到输入框）。 */
+.filterbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-10)) calc(-1 * var(--sp-4));
 }
 
 /* 计数徽章：程序 .pill 的 accent-soft 语言 */
 .fcount {
   min-width: 16px;
   height: 16px;
-  padding: 0 5px;
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 16px;
   text-align: center;
 }
@@ -283,22 +296,27 @@ function onSaved(e: ExerciseRecord): void {
 .chip.fav {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .chips {
-  gap: 7px;
+  /* 动作分类胶囊之间 8（无边界控件间距） */
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
+/* 分类胶囊的视觉高度保持 28 左右、不补 44 伪元素热区：它们在 flex-wrap 行里，
+   上下外扩会与相邻行抢同一段 8px 间隙（点上一行会落到下一行）。
+   同族决定见 docs/exercise-quality-review-2026-10-17.md §D10 拍板 B。 */
+
 /* chips 用程序向导的描边语言：未选中描边白底，选中实底 accent（不再是绿 tint） */
 .chip {
-  padding: 7px 13px;
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -310,33 +328,43 @@ function onSaved(e: ExerciseRecord): void {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .exrow {
   width: 100%;
-  gap: 2px;
-  padding: 4px 2px 4px 0;
+  /* 动作条目是双行行：高度 64（--row-h-double） */
+  min-height: var(--row-h-double);
+  gap: var(--gap-text);
+  padding: var(--sp-4) var(--sp-2) var(--sp-4) 0;
   text-align: left;
 }
 
 .exrow .main {
   flex: 1;
   min-width: 0;
-  gap: 10px;
-  padding: 8px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-8) 0;
   text-align: left;
 }
 
 .exrow .text {
   flex: 1;
   min-width: 0;
-  gap: 3px;
+  gap: var(--gap-tight);
 }
 
+/* 收藏钮：视觉仍是 15px 星星，盒子直接取 44×44（规则 5 的热区下限）。
+   行本身 64 高，44 的方形落进去不会改变行高；按钮仍在行尾、不与整行点击区重叠。 */
 .starbtn {
   flex: none;
-  padding: 8px 4px 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  padding: 0;
+  border-radius: var(--radius-full);
   color: var(--text-3);
 }
 
@@ -351,19 +379,19 @@ function onSaved(e: ExerciseRecord): void {
 .ename {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 自建/隐藏标签：程序 .pill 几何（胶囊）。「自建」是来源标签不是类型字章：
    文字走中性色，运动域色相留在 soft 底的色块上（色彩配额，STANDARDS §4） */
 .tag {
-  padding: 2px 8px;
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--c-exercise-soft);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -377,7 +405,8 @@ function onSaved(e: ExerciseRecord): void {
 .emeta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 行内次信息之间 4（--gap-tight），与 .text 的 4 一致 */
+  gap: var(--gap-tight);
   min-width: 0;
 }
 
@@ -398,23 +427,23 @@ function onSaved(e: ExerciseRecord): void {
 
 /* 竖线分隔：与肌群胶囊的「·」不是同一枚分隔符，两层信息不同符 */
 .esub + .esub {
-  padding-left: 7px;
+  padding-left: var(--sp-6);
   border-left: 0.5px solid var(--line);
 }
 
 .newrow {
   width: 100%;
-  gap: 6px;
-  padding: 14px 0;
+  gap: var(--sp-6);
+  padding: var(--sp-14) 0;
   border-radius: var(--radius-l);
   border: 1.5px dashed var(--line-strong);
   color: var(--text-2);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .hiddenrow {
-  padding: 12px 2px 0;
+  padding: var(--sp-12) var(--sp-2) 0;
   justify-content: space-between;
   font-size: var(--fs-caption);
   color: var(--text-2);

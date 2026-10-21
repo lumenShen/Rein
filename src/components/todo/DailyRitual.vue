@@ -140,7 +140,8 @@ function confirm(mode: 'ai' | 'manual'): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  /* 弹层离屏边 24：与页面级大区块同档 */
+  padding: var(--sp-24);
 }
 
 .ritual {
@@ -149,12 +150,12 @@ function confirm(mode: 'ai' | 'manual'): void {
   background: var(--surface);
   border-radius: var(--radius-l);
   box-shadow: var(--shadow-float);
-  padding: 20px 22px;
+  padding: var(--sp-20) var(--sp-22);
 }
 
 h2 {
   font-size: var(--fs-title3);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 .st {
@@ -164,8 +165,8 @@ h2 {
 
 .dots {
   display: flex;
-  gap: 5px;
-  margin: 10px 0 16px;
+  gap: var(--gap-tight);
+  margin: var(--gap-md) 0 var(--gap-lg);
 }
 
 .dots i {
@@ -185,29 +186,29 @@ h2 {
 
 .hi {
   font-size: var(--fs-large-title);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.02em;
 }
 
 .cap {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .desc {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-body);
   color: var(--text-1);
 }
 
 .hint {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-footnote);
   color: var(--text-3);
 }
 
 .cands {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   max-height: 260px;
   overflow-y: auto;
 }
@@ -216,8 +217,9 @@ h2 {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 4px;
+  gap: var(--gap-md);
+  /* 候选行上下 12：19px 的勾选框 + 16 号标题要一行读得开，8 会显得挤 */
+  padding: var(--sp-12) var(--sp-4);
   text-align: left;
   border-bottom: 0.5px solid var(--line);
 }
@@ -243,7 +245,7 @@ h2 {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .cand .dur {
@@ -252,37 +254,41 @@ h2 {
 }
 
 .none {
-  padding: 14px 0;
+  padding: var(--sp-16) 0;
   color: var(--text-3);
   font-size: var(--fs-footnote);
 }
 
 .acts {
-  margin-top: 18px;
+  /* 页脚操作区：与内容之间一档 16 */
+  margin-top: var(--gap-lg);
 }
 
 .gap {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .ghost {
-  padding: 9px 14px;
+  min-height: var(--control-sm);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   color: var(--text-2);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .primary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 22px;
+  gap: var(--gap-sm);
+  /* 常规按钮一档：高 40、左右 24、胶囊 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-24);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .primary:disabled {

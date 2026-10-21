@@ -482,14 +482,15 @@ function adoptSuggest(): void {
 <style scoped>
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .head-right {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  /* 标题行右端的模式开关与帮助入口：无边界控件 6（4·8 表里的一格） */
+  gap: var(--sp-6);
 }
 
 .mode-switch {
@@ -510,8 +511,9 @@ function adoptSuggest(): void {
 }
 
 .body {
-  gap: 16px;
-  margin-top: 12px;
+  /* 计时环 / 主操作簇 / 设置摘要 / 番茄计数四块：块间 16（有明显边界的区块） */
+  gap: var(--gap-lg);
+  margin-top: var(--gap-md);
 }
 
 /* 双击目标层：手势面必须自己吃掉双击的文本选择，否则连点两下会选中读数、冒出一条蓝底 */
@@ -524,15 +526,17 @@ function adoptSuggest(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 0 12px;
+  /* 状态行 / 读数 / 关联待办：卡内主次文本上下 2 */
+  gap: var(--gap-text);
+  padding: 0 var(--pad-inline);
 }
 
 /* 说明行 + 左侧状态色点：必读信息，从三级灰提到 --text-2 */
 .cap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  /* 状态色点与说明文字：图标与文字 6 */
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -547,56 +551,68 @@ function adoptSuggest(): void {
 
 .cdot.live {
   background: var(--cat-work);
-  animation: pbreathe 1.8s infinite;
+  animation: rein-breathe var(--dur-pulse) infinite;
 }
 
 .cdot.rest {
   background: var(--cat-general);
 }
 
-@keyframes pbreathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
-}
+
 
 /* 读数：展示级字号 + 轻字重。数字全部中性（--text-1），色相只落在冒号上 */
 .readout {
   display: inline-flex;
   align-items: baseline;
   font-size: var(--fs-display-m);
-  font-weight: 200;
+  font-weight: var(--fw-light);
   letter-spacing: -1px;
-  line-height: 1.05;
+  /* 展示级行高走令牌（--lh-display 1.16）；原先裸 1.05 会把读数行压得比环心排版更紧 */
+  line-height: var(--lh-display);
   color: var(--text-1);
 }
 
 /* 只有冒号带色相：分隔符着色让读数有落点，又不会把数值染成彩色（数值要能扫读） */
 .colon {
-  padding: 0 1px;
+  /* 分隔符两侧各 2：够把两段数字分开，又不至于让读数散成三段 */
+  padding: 0 var(--gap-text);
   color: var(--cat-work);
 }
 
 /* 环内关联待办：做成一颗矮胶囊 —— 环心横向只有 176px 可用，撑满会把读数挤变形 */
 .pick {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   max-width: 150px;
-  margin-top: 2px;
-  padding: 3px 10px;
+  margin-top: var(--gap-text);
+  /* 环内矮胶囊：纵向 4、左右 10（环心横向只有 176px，不能按 12 撑） */
+  padding: var(--gap-tight) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   text-align: left;
+}
+
+/* 矮胶囊的视觉高度保持 ~26，命中区补到 44：环心只有这一颗可点控件，
+   拇指点「在做哪件」不该点空 */
+.pick:not(.pick-idle)::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + var(--gap-sm));
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
+}
+
+/* 按压态：环内没有 hover 可用，按下时整颗胶囊沉一档表面色 */
+.pick:not(.pick-idle):active {
+  background: var(--surface-3);
 }
 
 /* 无待办时的静态引导：不再是控件，不做按压/悬停，只降一档色 */
@@ -635,7 +651,7 @@ function adoptSuggest(): void {
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.2px;
   box-shadow: var(--shadow-float);
 }
@@ -646,8 +662,9 @@ function adoptSuggest(): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 6px 10px;
+  /* 四颗圆钮之间 12：它们之间有空隙而不是分隔线，得比 8 大一档才不粘连 */
+  gap: var(--gap-md);
+  padding: var(--sp-6) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -688,7 +705,7 @@ function adoptSuggest(): void {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   width: 100%;
-  padding: 12px 0;
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -702,11 +719,11 @@ function adoptSuggest(): void {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   min-width: 0;
   /* 上下留一口气：发丝线跟着格子的高度走，不留白的话分隔线只有一行字那么高，
      读起来像一条划在字上的删除线 */
-  padding: 4px 0;
+  padding: var(--gap-tight) 0;
 }
 
 .cell + .cell {
@@ -721,7 +738,7 @@ function adoptSuggest(): void {
 /* 数值带语义色相，且只落到数值上：这是「一眼扫到三个参数」的锚点 */
 .sv {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .sv.work {
@@ -744,14 +761,15 @@ function adoptSuggest(): void {
 .tomatos {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
   width: 100%;
 }
 
 .figs {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  /* 番茄图形挨着排：同一行最小呼吸 4 */
+  gap: var(--gap-tight);
   min-width: 0;
 }
 
@@ -764,9 +782,10 @@ function adoptSuggest(): void {
 }
 
 .more {
-  margin-left: 3px;
+  /* 图形组与「+N」之间 4 */
+  margin-left: var(--gap-tight);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -778,14 +797,14 @@ function adoptSuggest(): void {
 
 .tcount b {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .roundhint {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   margin: 0;
   font-size: var(--fs-caption);
   color: var(--text-3);
@@ -794,7 +813,8 @@ function adoptSuggest(): void {
 .dots {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  /* 轮次圆点之间 4：7px 的点用 4 才不会连成一串 */
+  gap: var(--gap-tight);
 }
 
 /* 圆点。未点亮态用 --surface-3 —— 它直接坐在白卡面（--surface）上，
@@ -839,7 +859,8 @@ function adoptSuggest(): void {
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* 主行与副行：主次文本上下 2 */
+  gap: var(--gap-text);
   width: 100%;
   text-align: center;
 }
@@ -848,7 +869,7 @@ function adoptSuggest(): void {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   margin: 0;
   font-size: var(--fs-caption);
   color: var(--text-2);
@@ -857,7 +878,7 @@ function adoptSuggest(): void {
 /* 卡底唯一主数值：完整段分钟数提到主档（数值走中性 --text-1，不带色相） */
 .stat-main .hero {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 

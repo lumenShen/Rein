@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-
 import SheetModal from '@/components/common/SheetModal.vue'
 import TimeSpine from './TimeSpine.vue'
-import { voiceService } from '@/services/voiceService'
+import { memoSpine, useVoiceMemos } from '@/composables/useVoiceMemos'
+import { fmtMonthDay } from '@/utils/format'
 import type { VoiceMemo } from '@/types'
 
 /** @纪要 选择器：AI 页输入 @ 时弹出，选中后以 chip 附到消息（发送时注入纪要内容）。
@@ -11,49 +10,14 @@ import type { VoiceMemo } from '@/types'
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; pick: [memo: VoiceMemo] }>()
 
-const loading = ref(false)
-const memos = ref<VoiceMemo[]>([])
-const keyword = ref('')
-
-const spineOf = (m: VoiceMemo) =>
-  m.sentences.map((s) => ({
-    t: s.startMs,
-    durMs: s.endMs > s.startMs ? s.endMs - s.startMs : undefined,
-    who: '我',
-    text: s.text,
-  }))
-
-watch(
-  () => props.open,
-  (v) => {
-    if (v) void load()
-  },
-)
-
-async function load(): Promise<void> {
-  loading.value = true
-  try {
-    memos.value = await voiceService.memoList(50)
-  } catch {
-    memos.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-const filtered = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return memos.value
-  return memos.value.filter(
-    (m) =>
-      m.title.toLowerCase().includes(kw) ||
-      m.sentences.some((s) => s.text.toLowerCase().includes(kw)),
-  )
+const { loading, keyword, filtered } = useVoiceMemos(() => props.open, {
+  limit: 50,
+  clearOnError: true,
 })
+const spineOf = memoSpine
 
 function fmtWhen(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+  return fmtMonthDay(iso)
 }
 </script>
 
@@ -83,19 +47,20 @@ function fmtWhen(iso: string): string {
 
 <style scoped>
 .search {
-  padding: 0 2px 8px;
+  padding: 0 var(--sp-2) var(--gap-sm);
 }
 
 .search input {
   width: 100%;
-  padding: 9px 12px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-subhead);
 }
 
 .empty {
-  padding: 22px 8px;
+  padding: var(--sp-20) var(--sp-8);
   text-align: center;
   font-size: var(--fs-footnote);
 }
@@ -108,8 +73,9 @@ function fmtWhen(iso: string): string {
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 2px;
+  gap: var(--gap-md);
+  min-height: var(--row-h);
+  padding: 0 var(--sp-2);
   border-radius: var(--radius-s);
   cursor: pointer;
 }
@@ -142,13 +108,13 @@ function fmtWhen(iso: string): string {
 /* 每行一缕缩略脊 */
 .rowspine {
   display: block;
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .mt b {
   display: block;
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

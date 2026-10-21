@@ -10,9 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -20,6 +17,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -33,16 +31,20 @@ import org.json.JSONObject
  * 跑步前台采集服务。
  *
  * **原生采集是运动真源**：页面不可见（锁屏/切后台）会让 WebView 注销
- * navigator.geolocation，所以取点、按 K/L 口径累计、落轨迹文件都在这里做；
- * 前端只消费快照（live/trackTake 走 pull，另有一条 evaluateJavascript push 做秒级平滑）。
+ * navigator.geolocation，所以取点/计时/落盘全部搬进 location 类型前台服务。
+ * 取点请求本身由 Rust `modules/tracking/location.rs` 通过 JNI 持有（fused/GPS、
+ * QUALITY_HIGH_ACCURACY、1s/500ms）；本服务只负责前台保活、WakeLock、通知、
+ * 轨迹文件与 RunCore 记账。前端只消费 live/轨迹快照
+ * （live/trackTake 走 pull，另有一条 evaluateJavascript push 做秒级平滑）。
  * 服务同时负责常驻通知的渲染与刷新（载荷由前端按 G 组好，原生只渲染、不判断）。
  *
  * 两类用途共用 NOTIFICATION_ID=41：
  *  · mode='location'：跑步/户外采集（location 前台服务类型，需定位权限）；
  *  · mode='specialUse'：训练课常驻通知（不取定位，Android 14+ 用 specialUse 类型）。
  *
- * fix 处理串行在定位回调所在的 HandlerThread 上（RunCore 不是线程安全的），
- * 轨迹文件缓冲 3 行或 1.5s flush；服务被杀/stopSelf/onTaskRemoved 都走同一套收尾。
+ * fix 处理串行在 HandlerThread 上（RunCore 不是线程安全的）：Rust 的定位回调在主线程，
+ * 只把原始值转发到这条线程，不在这里做任何定位策略；轨迹文件缓冲 3 行或 1.5s flush；
+ * 服务被杀/stopSelf/onTaskRemoved 都走同一套收尾。
  */
 class RunTrackingService : Service() {
   companion object {
@@ -68,6 +70,9 @@ class RunTrackingService : Service() {
     private const val FLUSH_MS = 1_500L
     private const val LOG_FIX_EVERY = 5
     private const val LOG_AP_EVERY = 5
+    /** 亮屏后超过这么久没有新 fix → 重新注册定位请求（ROM 可能在熄屏时挂起 provider） */
+    private const val FIX_STALL_MS = 20_000L
+    private const val FIX_WATCHDOG_MS = 10_000L
 
     /** 服务实例（通知渲染要它；空 = 没在跑，updateNotification 只缓存 payload） */
     @Volatile
@@ -83,6 +88,32 @@ class RunTrackingService : Service() {
     @Volatile
     var collecting = false
       private set
+
+    init {
+      System.loadLibrary("rein_lib")
+    }
+
+    /**
+     * Rust 定位回调的入口（`modules/tracking/location.rs` 的 JNI 调用）。
+     *
+     * 只做转发：Rust 在主线程收到 Location，这里把原始值投到 HandlerThread，
+     * 真正的精度门/距离/暂停判定仍在 RunCore，避免跨线程共享状态。
+     */
+    @JvmStatic
+    fun handleFixFromRust(
+      t: Long,
+      lat: Double,
+      lon: Double,
+      acc: Double,
+      alt: Double,
+      altAcc: Double,
+      hasAcc: Boolean,
+      hasAlt: Boolean,
+      hasAltAcc: Boolean,
+      provider: String,
+    ) {
+      instance?.enqueueFixFromRust(t, lat, lon, acc, alt, altAcc, hasAcc, hasAlt, hasAltAcc, provider)
+    }
 
     fun start(context: Context, intent: Intent): Unit =
       ContextCompat.startForegroundService(context, intent)
@@ -104,7 +135,6 @@ class RunTrackingService : Service() {
   private val main = Handler(Looper.getMainLooper())
   private var thread: HandlerThread? = null
   private var collectHandler: Handler? = null
-  private var listener: LocationListener? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var mode = MODE_LOCATION
 
@@ -113,6 +143,12 @@ class RunTrackingService : Service() {
   private var lastFix: Fix? = null
   private var fixCount = 0
   private var judgeCount = 0
+  /** 最近一次收到任何定位回调的 elapsedRealtime（含被精度门丢弃的回调） */
+  private var lastFixWall = 0L
+  /** 最近一次主动重注册的时刻：限频，避免无 GPS 环境里每 10s 拆装一次请求 */
+  private var lastNudgeWall = 0L
+  /** 正在结束：亮屏/看门狗都不再重注册，避免与收尾竞态 */
+  private var finishing = false
 
   private val ioLock = Any()
   private var writer: FileWriter? = null
@@ -137,19 +173,54 @@ class RunTrackingService : Service() {
       }
     }
 
-  private val locationListener =
-    object : LocationListener {
-      override fun onLocationChanged(location: Location) {
-        try {
-          handleFix(location)
-        } catch (e: Exception) {
-          // 采集不能因为一次异常停摆：记日志继续
-          Log.w(TAG, "fix 处理失败", e)
+  /**
+   * 亮屏/解锁时重新注册定位请求。
+   *
+   * 部分 ROM 的 fused provider 在熄屏后会保持「注册还在、但不再投递」的状态
+   * （真机取证：`dumpsys location` 里 registration 一直在，delivered 计数冻结）。
+   * 光等系统自己恢复可能几十秒到永远；亮屏这一刻主动 remove + request 一次，
+   * 是最便宜且不误伤其它路径的自愈点。
+   */
+  private val screenReceiver =
+    object : BroadcastReceiver() {
+      override fun onReceive(context: Context?, intent: Intent?) {
+        when (intent?.action) {
+          Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> nudgeUpdates()
         }
       }
     }
 
+  /**
+   * 亮屏后的兜底：若 20s 内没有任何定位回调，重注册一次。
+   * 只在屏幕可交互时执行 —— 熄屏后没有 fix 可能只是 GPS 环境，不该反复唤醒。
+   */
+  private val fixWatchdog =
+    object : Runnable {
+      override fun run() {
+        if (
+          collecting &&
+            mode == MODE_LOCATION &&
+            !finishing &&
+            lastFixWall > 0 &&
+            getSystemService(PowerManager::class.java)?.isInteractive == true &&
+            SystemClock.elapsedRealtime() - lastFixWall > FIX_STALL_MS
+        ) {
+          Log.w(TAG, "fix stall ${SystemClock.elapsedRealtime() - lastFixWall}ms，重注册定位")
+          restartUpdates()
+        }
+        main.postDelayed(this, FIX_WATCHDOG_MS)
+      }
+    }
+
   override fun onBind(intent: Intent?): IBinder? = null
+
+  /* ---------- Rust 定位采集（JNI） ---------- */
+
+  private external fun nativeStartLocation(): Boolean
+
+  private external fun nativeStopLocation(): Boolean
+
+  private external fun nativeRestartLocation(): Boolean
 
   override fun onCreate() {
     super.onCreate()
@@ -169,6 +240,18 @@ class RunTrackingService : Service() {
       IntentFilter(ACTION_RESUME),
       ContextCompat.RECEIVER_NOT_EXPORTED,
     )
+    ContextCompat.registerReceiver(
+      this,
+      screenReceiver,
+      IntentFilter().apply {
+        addAction(Intent.ACTION_SCREEN_ON)
+        addAction(Intent.ACTION_USER_PRESENT)
+      },
+      // SCREEN_ON/USER_PRESENT 是系统保护广播（第三方无法伪造），用 EXPORTED
+      // 保证在 Android 13+ 的注册标志收紧后仍能收到；自定义 ACTION_RESUME 才用 NOT_EXPORTED。
+      ContextCompat.RECEIVER_EXPORTED,
+    )
+    main.postDelayed(fixWatchdog, FIX_WATCHDOG_MS)
     // 判定逻辑的规格取证：向量表跑一遍，失败会以 FAIL 行暴露在 logcat。
     // 唯一调用点（服务启动时一次，绝不在 fix 路径上跑）；debug/release 都跑，真机靠
     // `adb logcat -s ReinRunTrack` 看 apvector 行取证。放后台线程，不阻塞服务启动。
@@ -232,6 +315,12 @@ class RunTrackingService : Service() {
     } catch (e: IllegalArgumentException) {
       Log.w(TAG, "resumeReceiver 注销失败（未注册）", e)
     }
+    try {
+      unregisterReceiver(screenReceiver)
+    } catch (e: IllegalArgumentException) {
+      Log.w(TAG, "screenReceiver 注销失败（未注册）", e)
+    }
+    main.removeCallbacks(fixWatchdog)
     shutdown()
     super.onDestroy()
   }
@@ -245,6 +334,9 @@ class RunTrackingService : Service() {
     baselineElapsedMs: Long,
     baselineDistanceM: Double,
   ) {
+    finishing = false
+    lastNudgeWall = 0
+    lastFixWall = 0
     core = RunCore(enterSecPerKm, exitSecPerKm, baselineElapsedMs, baselineDistanceM)
     // 同 runId 且带基线（恢复续跑）→ 追加；否则新建/截断
     val dir = File(filesDir, TRACK_DIR).apply { mkdirs() }
@@ -265,59 +357,58 @@ class RunTrackingService : Service() {
 
   private fun startUpdates() {
     if (collecting) return
-    val lm = getSystemService(LocationManager::class.java) ?: return
+    // 清掉上一轮可能残留的 handler/native 注册，避免重试路径叠出两条采集线程。
+    stopUpdates()
+    // 处理线程仍由 Kotlin 持有：Rust 的 LocationManager 回调在主线程，只做转发；
+    // RunCore/轨迹写入保持单线程串行。
     val t = HandlerThread("rein-run-loc").also { it.start() }
     thread = t
-    val h = Handler(t.looper)
-    collectHandler = h
-    val l = locationListener
-    listener = l
-    try {
-      if (Build.VERSION.SDK_INT >= 31 && lm.allProviders.contains(LocationManager.FUSED_PROVIDER)) {
-        // 只有 Builder(long) 这一个可用构造（(quality, interval) 那个不在 android.jar 里），
-        // 质量用 setQuality 单独给：fused 优先，退化时下面走 GPS 的老接口
-        val req =
-          android.location.LocationRequest.Builder(1_000L)
-            .setQuality(android.location.LocationRequest.QUALITY_HIGH_ACCURACY)
-            .setMinUpdateIntervalMillis(500L)
-            .build()
-        // LocationRequest 重载只收 Executor（没有 Looper 版）：用它把回调按序投到采集线程
-        lm.requestLocationUpdates(
-          LocationManager.FUSED_PROVIDER,
-          req,
-          java.util.concurrent.Executor { r -> h.post(r) },
-          l,
-        )
-        provider = "fused"
-      } else {
-        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1_000L, 0f, l, t.looper)
-        provider = "gps"
-      }
-      collecting = true
+    collectHandler = Handler(t.looper)
+    collecting = nativeStartLocation()
+    if (collecting) {
       main.postDelayed(flushTick, FLUSH_MS)
-    } catch (e: SecurityException) {
-      // 无定位权限：服务留着（通知/保活仍在），但采集不可用
-      Log.w(TAG, "无定位权限，采集未启动", e)
-      collecting = false
+    } else {
+      Log.w(TAG, "Rust 定位启动失败（权限/Provider 不可用）")
       stopUpdates()
     }
   }
 
   private fun stopUpdates() {
-    val lm = getSystemService(LocationManager::class.java)
-    listener?.let { l ->
-      try {
-        lm.removeUpdates(l)
-      } catch (e: Exception) {
-        Log.w(TAG, "removeUpdates 失败", e)
-      }
-    }
-    listener = null
+    nativeStopLocation()
     collecting = false
     main.removeCallbacks(flushTick)
     thread?.quitSafely()
     thread = null
     collectHandler = null
+  }
+
+  /**
+   * 亮屏/继续跑的自愈入口：先确认当前确实在采（保活型服务也有 core），
+   * 然后在 Rust 侧重注册一次。`stopUpdates` 会把 collecting 置 false，
+   * 随后 `startUpdates` 走正常注册路径；core/lastFix 都不动，累计量不受影响。
+   */
+  private fun nudgeUpdates() {
+    if (mode != MODE_LOCATION || finishing) return
+    if (!collecting) {
+      startUpdates()
+      return
+    }
+    Log.i(TAG, "亮屏 → 重注册定位请求")
+    restartUpdates()
+  }
+
+  private fun restartUpdates() {
+    if (mode != MODE_LOCATION || finishing) return
+    // 限频：熄屏屏亮一次会触发，看门狗也可能触发；两者挨得太近时只保留第一次。
+    val now = SystemClock.elapsedRealtime()
+    if (lastNudgeWall > 0 && now - lastNudgeWall < 20_000) return
+    lastNudgeWall = now
+    // Rust 内部先 removeUpdates 再重新 request；失败时清掉处理线程，等下一次屏幕/看门狗再试。
+    collecting = nativeRestartLocation()
+    if (!collecting) {
+      Log.w(TAG, "Rust 定位重注册失败，等待下一次重试")
+      stopUpdates()
+    }
   }
 
   /** 相位切换（B4）：暂停时先结账自动暂停段；继续时判定器复位 */
@@ -332,6 +423,13 @@ class RunTrackingService : Service() {
         if (settled > 0) Log.i(TAG, "ap-settle ms=$settled（手动暂停结账）")
       } else {
         c.setManualPaused(false)
+        // 暂停期间可能跨过一次熄屏：继续时若定位早已停摆，主动重注册一次
+        if (
+          lastFixWall > 0 &&
+            SystemClock.elapsedRealtime() - lastFixWall > FIX_STALL_MS
+        ) {
+          main.post { nudgeUpdates() }
+        }
       }
       publishLive()
     }
@@ -339,6 +437,7 @@ class RunTrackingService : Service() {
 
   /** 结束：停定位更新 → 结账自动暂停段 → 刷盘 → 停服务（通知消失、Wakelock 释放） */
   fun finishRun() {
+    finishing = true
     val h = collectHandler
     val finish = {
       core?.let { c ->
@@ -356,26 +455,64 @@ class RunTrackingService : Service() {
 
   /* ---------- fix 处理（K/L 口径全在 RunCore） ---------- */
 
-  private fun handleFix(loc: Location) {
+  /** Rust 回调在主线程：更新时间戳后把原始值投到采集线程，不在定位回调里跑判定。 */
+  private fun enqueueFixFromRust(
+    t: Long,
+    lat: Double,
+    lon: Double,
+    acc: Double,
+    alt: Double,
+    altAcc: Double,
+    hasAcc: Boolean,
+    hasAlt: Boolean,
+    hasAltAcc: Boolean,
+    fixProvider: String,
+  ) {
+    lastFixWall = SystemClock.elapsedRealtime()
+    val h = collectHandler ?: return
+    h.post {
+      try {
+        handleFixValues(t, lat, lon, acc, alt, altAcc, hasAcc, hasAlt, hasAltAcc, fixProvider)
+      } catch (e: Exception) {
+        // 采集不能因为一次异常停摆：记日志继续
+        Log.w(TAG, "fix 处理失败", e)
+      }
+    }
+  }
+
+  private fun handleFixValues(
+    t: Long,
+    lat: Double,
+    lon: Double,
+    acc: Double,
+    alt: Double,
+    altAcc: Double,
+    hasAcc: Boolean,
+    hasAlt: Boolean,
+    hasAltAcc: Boolean,
+    fixProvider: String,
+  ) {
+    if (finishing) return
     val c = core ?: return
-    if (loc.time <= 0L) return
-    val acc = if (loc.hasAccuracy()) loc.accuracy.toDouble() else 99.0
-    val fix = Fix(loc.time, loc.latitude, loc.longitude, acc)
+    if (t <= 0L) return
+    // 没有精度值按最差处理（RunCore 的精度门会丢弃），与从 Location.hasAccuracy=false 时一致。
+    val accM = if (hasAcc && acc > 0.0) acc else 99.0
+    val fix = Fix(t, lat, lon, accM)
     val out = c.onFix(fix)
     if (out.dropped) return // 精度门未过：不判定、不落盘、不推送
 
-    provider = providerOf(loc)
+    provider = fixProvider.ifEmpty { provider }
     lastFix = fix
     if (out.accepted) {
       fixCount++
-      val line = pointLine(loc, out)
+      val line = pointLine(lat, lon, acc, alt, altAcc, hasAcc, hasAlt, hasAltAcc, out)
       appendTrack(line)
       pushJs("window.__reinRunPoint && window.__reinRunPoint($line)")
       if (fixCount % LOG_FIX_EVERY == 0) {
         Log.i(
           TAG,
           "seq=$fixCount provider=$provider lat=${f6(fix.lat)} lon=${f6(fix.lon)} " +
-            "acc=${f1(acc)} d=${f1(out.stepM)} dist=${f1(c.distM)} dispM=${f1(c.dispM)} " +
+            "acc=${f1(accM)} d=${f1(out.stepM)} dist=${f1(c.distM)} dispM=${f1(c.dispM)} " +
             "elapsed=${c.elapsedMs} ap=${c.autoPaused} " +
             "jt=${f1(out.jitterTurnDeg)} jc=${c.jitterCorrections}",
         )
@@ -416,15 +553,20 @@ class RunTrackingService : Service() {
   }
 
   /** 一行轨迹点（契约 E）：t=落账时刻的运动毫秒、acc=水平精度、alt/altAcc 缺失为 null */
-  private fun pointLine(loc: Location, out: Outcome): String {
-    val alt = if (loc.hasAltitude()) jnum(loc.altitude) else "null"
-    val altAcc =
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && loc.hasVerticalAccuracy()) {
-        jnum(loc.verticalAccuracyMeters.toDouble())
-      } else {
-        "null"
-      }
-    return """{"t":${out.elapsedMs},"lat":${jnum(loc.latitude)},"lon":${jnum(loc.longitude)},"acc":${jnum(if (loc.hasAccuracy()) loc.accuracy.toDouble() else 0.0)},"alt":$alt,"altAcc":$altAcc,"brk":${out.brk}}"""
+  private fun pointLine(
+    lat: Double,
+    lon: Double,
+    acc: Double,
+    alt: Double,
+    altAcc: Double,
+    hasAcc: Boolean,
+    hasAlt: Boolean,
+    hasAltAcc: Boolean,
+    out: Outcome,
+  ): String {
+    val altText = if (hasAlt) jnum(alt) else "null"
+    val altAccText = if (hasAltAcc) jnum(altAcc) else "null"
+    return """{"t":${out.elapsedMs},"lat":${jnum(lat)},"lon":${jnum(lon)},"acc":${jnum(if (hasAcc) acc else 0.0)},"alt":$altText,"altAcc":$altAccText,"brk":${out.brk}}"""
   }
 
   /* ---------- 轨迹文件 ---------- */
@@ -568,6 +710,8 @@ class RunTrackingService : Service() {
   /** 收尾：停采集 → 刷盘 → 释放 Wakelock → 取消通知（轨迹文件保留） */
   private fun shutdown() {
     try {
+      finishing = true
+      main.removeCallbacks(fixWatchdog)
       stopUpdates()
       closeWriter()
       releaseWakeLock()
@@ -748,14 +892,6 @@ class RunTrackingService : Service() {
       android.content.pm.PackageManager.PERMISSION_GRANTED ||
       ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
         android.content.pm.PackageManager.PERMISSION_GRANTED
-
-  private fun providerOf(loc: Location): String =
-    when (loc.provider) {
-      LocationManager.FUSED_PROVIDER -> "fused"
-      LocationManager.GPS_PROVIDER -> "gps"
-      LocationManager.NETWORK_PROVIDER -> "network"
-      else -> ""
-    }
 
   private fun clock(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)

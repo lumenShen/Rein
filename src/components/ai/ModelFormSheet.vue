@@ -292,21 +292,23 @@ async function save(): Promise<void> {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 4px 2px 14px;
+  gap: var(--gap-lg);
+  padding: 0 0 var(--sp-12);
 }
 
 .l {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
+/* 输入框贯通行（参照里的「整行浅井」）：--surface-inset 浅井 + 16 圆角 + 左右 16 + 高 48 */
 .label {
-  gap: 12px;
-  background: var(--surface-2);
+  gap: var(--gap-md);
+  min-height: var(--row-h);
+  background: var(--surface-inset);
   border-radius: var(--radius-m);
-  padding: 4px 14px;
+  padding: 0 var(--sp-16);
 }
 
 .label .l {
@@ -317,14 +319,15 @@ async function save(): Promise<void> {
 .label input {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--row-h);
+  padding: 0;
   font-size: var(--fs-subhead);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* 在线档：地址与密钥由服务端下发，这里只读 */
@@ -333,13 +336,14 @@ async function save(): Promise<void> {
 }
 
 .label.locked input {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .select {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--row-h);
+  padding: 0;
   font-size: var(--fs-subhead);
   background: transparent;
   color: var(--text-1);
@@ -348,7 +352,7 @@ async function save(): Promise<void> {
 
 .prices {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .pcell {
@@ -356,10 +360,11 @@ async function save(): Promise<void> {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--surface-2);
+  gap: var(--gap-sm);
+  min-height: var(--row-h);
+  background: var(--surface-inset);
   border-radius: var(--radius-m);
-  padding: 4px 12px;
+  padding: 0 var(--sp-12);
 }
 
 .pcell span {
@@ -370,7 +375,8 @@ async function save(): Promise<void> {
 .pcell input {
   flex: 1;
   min-width: 0;
-  padding: 11px 0;
+  min-height: var(--row-h);
+  padding: 0;
   font-size: var(--fs-subhead);
 }
 
@@ -381,16 +387,17 @@ async function save(): Promise<void> {
 
 .edge-hint {
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .save {
-  padding: 14px 0;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: var(--fs-headline);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .save:disabled {
@@ -399,6 +406,6 @@ async function save(): Promise<void> {
 
 .hint {
   text-align: center;
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 </style>

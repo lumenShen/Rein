@@ -458,7 +458,14 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
         <div v-if="open" class="sheet" :ref="(el) => setSheet(el)" role="dialog" :aria-label="title ?? '操作'">
           <p v-if="title" class="stitle">{{ title }}</p>
           <template v-for="(f, fi) in flatActions" :key="`${f.item.value}-${fi}`">
-            <p v-if="f.header" class="group" :style="{ paddingLeft: `${12 + f.depth * 22}px` }">
+            <!-- 缩进基线与其余行同一档：行内文字左右 16（--pad-row）。
+                 此前 12 让分组的文字比下面的「取消」多缩进一格（取消吃 .item 的 16）；
+                 22px 的层级步长也走令牌，避免再出现一个脱离 4/8 栅格的裸值 -->
+            <p
+              v-if="f.header"
+              class="group"
+              :style="{ paddingLeft: `calc(var(--pad-row) + ${f.depth} * var(--sp-22))` }"
+            >
               {{ f.item.label }}
             </p>
             <button
@@ -466,7 +473,7 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
               type="button"
               class="item tall"
               :class="{ danger: f.item.danger, disabled: f.item.disabled }"
-              :style="{ paddingLeft: `${12 + f.depth * 22}px` }"
+              :style="{ paddingLeft: `calc(var(--pad-row) + ${f.depth} * var(--sp-22))` }"
               @click="emit('select', f.item.value); emit('close')"
             >
               <component :is="f.item.icon" v-if="f.item.icon" class="ic" :size="19" :stroke-width="2" />
@@ -490,24 +497,29 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
 }
 
 .panel {
-  /* 菜单的参数：宽 200–300px（窄于 200 时「生成本期成绩单」这类标签会被截成省略号，
-     宽于 300 就失去「贴着触发点」的读感）；窄屏用 100vw−16 兜底 */
-  min-width: 200px;
-  max-width: min(300px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
+  /* 菜单的参数：宽 224–300px。下限取 HarmonyOS 菜单的 224vp —— 再多两个字的
+     中文标签也不会被截成省略号；宽于 300 就失去「贴着触发点」的读感；
+     窄屏用 100vw−16 兜底 */
+  min-width: 224px;
+  max-width: min(300px, calc(100vw - var(--sp-16)));
+  max-height: calc(100vh - var(--sp-16));
   overflow-y: auto;
   background: var(--surface);
   border: 0.5px solid var(--line);
-  border-radius: var(--radius-m);
-  padding: 6px;
+  /* 菜单是高频可点的浮层 → 圆角 20（--radius-l）；面板内距 6 让行的高亮底
+     与面板边框之间留出一圈等量的边 */
+  border-radius: var(--radius-l);
+  padding: var(--sp-6);
   box-shadow: var(--shadow-float);
 }
 
 .ptitle {
   font-size: var(--fs-footnote);
-  font-weight: 600;
-  color: var(--text-3);
-  padding: 8px 12px 4px;
+  font-weight: var(--fw-semibold);
+  /* 组标题是「这张菜单是干什么的」：--text-3 的 3.6:1 读不清，抬到 --text-2 */
+  color: var(--text-2);
+  /* 左右与行内文字同线（--pad-row 16），否则组标题比下面的菜单项缩进一格 */
+  padding: var(--sp-8) var(--pad-row) var(--sp-4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -516,13 +528,15 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
 .item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* 图标列与标签 12（--gap-md）；菜单行高 48（--row-h）、圆角 20、左右 16 ——
+     与设置行、操作面板行同一档，此前 44 / 8 / 12 各写各的 */
+  gap: var(--gap-md);
   width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: var(--radius-s);
+  min-height: var(--row-h);
+  padding: 0 var(--pad-row);
+  border-radius: var(--radius-l);
   font-size: var(--fs-callout);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
   text-align: left;
   transition: background-color var(--dur-fast) var(--ease-standard);
@@ -569,8 +583,10 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
   color: var(--text-2);
 }
 
+/* 文字走 strong 档（实底 --danger 白底约 3.5:1）；下面那条 .ic 是图标，
+   仍留在领域色上 —— tokens.css 的色彩契约对图标与文字是两档 */
 .item.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .item.danger .ic {
@@ -591,41 +607,47 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
 
 .sheet {
   position: fixed;
-  bottom: calc(var(--dock-top) + 12px);
+  /* 与 ActionSheet 同一套落点：离底栏一个卡片间距、两侧各让 12 */
+  bottom: calc(var(--dock-top) + var(--gap-md));
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: calc(var(--frame-max) - 24px);
+  width: calc(100% - var(--sp-24));
+  max-width: calc(var(--frame-max) - var(--sp-24));
   z-index: 111;
   background: var(--surface);
-  border-radius: var(--radius-l);
-  padding: 8px;
+  /* dialog 模式就是一块半模态底板：与 ActionSheet / SheetModal 同层同圆角，
+     内距也统一到 16（--pad-sheet）—— 此前 8 是这一族里唯一的例外 */
+  border-radius: var(--radius-xl);
+  padding: var(--pad-sheet);
   box-shadow: var(--shadow-float);
 }
 
 .stitle {
   text-align: center;
   font-size: var(--fs-footnote);
-  font-weight: 600;
-  color: var(--text-3);
-  padding: 10px 0 6px;
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  /* 上边由面板的 16 内距承担，这里只补下方 8 */
+  padding: 0 0 var(--sp-8);
 }
 
 .group {
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-3);
-  padding: 10px 12px 4px;
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  padding: var(--sp-8) var(--pad-row) var(--sp-4);
 }
 
 .item.tall {
-  min-height: 50px;
-  border-radius: var(--radius-m);
-  font-weight: 600;
+  /* 与 ActionSheet 的 .opt 同一档：行高 48 / 圆角 20 / 文字 Medium */
+  min-height: var(--row-h);
+  border-radius: var(--radius-l);
+  font-weight: var(--fw-medium);
 }
 
 .item.cancel {
-  margin-top: 6px;
+  /* 取消与选项是两组按钮 → 8 */
+  margin-top: var(--gap-sm);
   border-top: 0.5px solid var(--line);
 }
 

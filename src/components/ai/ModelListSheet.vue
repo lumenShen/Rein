@@ -187,8 +187,8 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
 .all {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 10px;
+  gap: var(--gap-md);
+  padding-bottom: var(--sp-10);
 }
 
 .list {
@@ -199,51 +199,58 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
 
 .none {
   text-align: center;
-  padding: 26px 0;
+  padding: var(--sp-24) 0;
   font-size: var(--fs-footnote);
 }
 
+/* 组与组之间 24：模型按分组读，组是一级区块 */
 .grp + .grp {
-  margin-top: 12px;
+  margin-top: var(--gap-xl);
 }
 
+/* 组标题：14 Semibold 主色 —— 12/700 的三级灰眉标读不出「这是一组」 */
 .grp-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 2px;
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-  font-weight: 700;
+  gap: var(--gap-sm);
+  padding: var(--sp-6) var(--sp-2);
+  color: var(--text-1);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
 }
 
 .grp-head .cnt {
-  font-weight: 600;
+  font-weight: var(--fw-regular);
+  color: var(--text-2);
 }
 
 .m-card {
-  padding: 13px 14px;
+  padding: var(--pad-card-tight) var(--pad-card);
 }
 
 .m-card + .m-card {
-  margin-top: 8px;
+  margin-top: var(--gap-md);
 }
 
 .m-name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   word-break: break-all;
 }
 
+/* 状态胶囊：高 24（--chip-h）、左右 8（贴在名字后，用不到 12 的满内距） */
 .chip-def,
 .chip-onl {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
   font-size: var(--fs-caption);
-  font-weight: 800;
-  padding: 2px 7px;
+  font-weight: var(--fw-medium);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
 }
 
@@ -259,21 +266,27 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
 
 .m-id,
 .m-cost {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   word-break: break-all;
 }
 
+/* 行内右侧元素与正文保持 12（HarmonyOS 列表规范），四颗操作钮之间同档 ——
+   原先 2px 的缝让四颗圆钮读成一串，也逼得命中区只能纵向扩张。 */
+.m-card .top {
+  gap: var(--gap-md);
+}
+
 .acts {
   display: flex;
-  gap: 2px;
+  gap: var(--gap-md);
   flex: none;
 }
 
 .act {
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -286,12 +299,12 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
   opacity: var(--disabled-opacity);
 }
 
-/* 30 的圆钮命中区纵向撑到 44；横向不外扩 —— 同排四颗只隔 2px，
-   再扩就会把相邻那颗的点击吃到自己里。 */
+/* 32 + 上下左右各 6 = 44×44 热区。间距也是 12，所以相邻两颗的命中区正好相接、
+   不互相覆盖（圆心距 32 + 12 = 44）。 */
 .act::after {
   content: '';
   position: absolute;
-  inset: -7px 0;
+  inset: -6px;
 }
 
 .act .danger {
@@ -299,8 +312,8 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
 }
 
 .caps {
-  margin-top: 9px;
-  gap: 6px;
+  margin-top: var(--gap-sm);
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
@@ -313,22 +326,19 @@ function capTone(v: boolean | null): 'ok' | 'danger' | 'neutral' {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px 0;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0;
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
+/* 转圈走 base.css 的共享 keyframes：scoped 的 @keyframes 会被编译器改名，
+   同一段动画就会在多个文件里各存一份 */
 .spin {
-  animation: rotate 0.9s linear infinite;
-}
-
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 0.9s linear infinite;
 }
 </style>

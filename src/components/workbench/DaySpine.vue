@@ -250,9 +250,13 @@ function fmtMin(min: number | null): string {
 .spine {
   max-width: 900px;
   margin-inline: auto;
-  padding-bottom: 40px;
+  /* 底部留白 40（--sp-40）：与页面 PC 档的边距同档 */
+  padding-bottom: var(--sp-40);
 }
 
+/* 72 是时间轴的**坐标几何**（时间列宽 54 + 卡与轴的缝 18），
+   .tl::before 的 left: 0 与 .ev .time 的 left: -72px 都按它对齐 ——
+   这不是页面间距，不参与 4/8 体系令牌，保持原值。 */
 .tl {
   position: relative;
   padding-left: 72px;
@@ -262,18 +266,22 @@ function fmtMin(min: number | null): string {
   content: '';
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  /* 纵轴两端各缩 8（--sp-8），不让线头从第一 / 最后一条卡里冒出来 */
+  top: var(--sp-8);
+  bottom: var(--sp-8);
   width: 2px;
-  border-radius: 2px;
+  /* 2px 的线看不到圆角，统一收到最小一档 */
+  border-radius: var(--radius-xs);
   background: var(--line);
 }
 
 .ev {
   position: relative;
   display: flex;
-  gap: 16px;
-  margin-bottom: 10px;
+  /* 卡内图标 / 文本 / 读数三组之间 16（有明显边界） */
+  gap: var(--gap-lg);
+  /* 事件卡之间 12（--gap-md）：与页面卡片节奏一致（原来 10 让时间轴读成一串散块） */
+  margin-bottom: var(--gap-md);
 }
 
 .ev .time {
@@ -283,7 +291,7 @@ function fmtMin(min: number | null): string {
   width: 54px;
   text-align: right;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -304,10 +312,12 @@ function fmtMin(min: number | null): string {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
+  gap: var(--gap-md);
+  /* 时间轴卡片：内距 12×16（紧凑卡），圆角 16（--radius-m）——
+     32 的圆角在 60 高的行上读成「被切掉一块」，卡片档统一 16 */
+  padding: var(--pad-card-tight) var(--pad-card);
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
 }
 
@@ -328,13 +338,13 @@ function fmtMin(min: number | null): string {
 .ev .ett-line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   min-width: 0;
 }
 
 .ev .ett {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -343,15 +353,16 @@ function fmtMin(min: number | null): string {
 .ev .esb {
   font-size: var(--fs-footnote);
   color: var(--text-2);
-  margin-top: 1px;
+  /* 主次文本上下 2（--gap-text） */
+  margin-top: var(--gap-text);
 }
 
 .ev .eval_ {
   margin-left: auto;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
-  padding-left: 12px;
+  padding-left: var(--sp-12);
 }
 
 .ev.done .ett {
@@ -376,7 +387,7 @@ function fmtMin(min: number | null): string {
 .nowrow {
   position: relative;
   height: 34px;
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-6);
 }
 
 .nowchip {
@@ -386,9 +397,9 @@ function fmtMin(min: number | null): string {
   width: 54px;
   text-align: right;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .nowdot {
@@ -425,7 +436,7 @@ function fmtMin(min: number | null): string {
 }
 
 .empty {
-  padding: 40px 0;
+  padding: var(--sp-40) 0;
   text-align: center;
   font-size: var(--fs-callout);
 }

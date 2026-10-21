@@ -92,7 +92,7 @@ const manualOpen = ref(false)
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 /* 快速入口：与主页同款四列磁贴网格 */
@@ -100,8 +100,10 @@ const manualOpen = ref(false)
   display: grid;
   /* 三颗磁贴（跑步/手动记/动作库）：列数跟着条目走，4 列会在右缘空出一格灰底 */
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin: 14px 0;
+  /* 磁贴之间与上下卡片之间都取 12（规范卡片间距），
+     原来 10 / 14 两档混用，三颗磁贴与上方周卡看着比下方卡更近。 */
+  gap: var(--gap-md);
+  margin: var(--gap-md) 0;
 }
 
 /* 桌面：磁贴并进栅格后，上下那 14px 会变成行内错位（栅格已经用 gap 管间距） */
@@ -111,11 +113,11 @@ const manualOpen = ref(false)
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .list {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 </style>

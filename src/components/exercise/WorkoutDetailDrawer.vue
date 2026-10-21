@@ -14,8 +14,8 @@ import { useExerciseLibStore } from '@/stores/exerciseLib'
 import { useExerciseStore } from '@/stores/exercise'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePlanStore } from '@/stores/plan'
-import { fmtClock, fmtPace } from '@/stores/run'
 import { todayStr, fmtDateCn, minToHHmm } from '@/utils/date'
+import { fmtClock, fmtKg, fmtPace } from '@/utils/format'
 import { projectTrack, trackAscentM, trackSplits } from '@/utils/geo'
 import { libraryMuscles } from '@/utils/libraryMuscles'
 import { setVolumeKg } from '@/utils/sessionSummary'
@@ -452,7 +452,7 @@ function warmupChip(row: CourseExRow, d: DoneSet, i: number): string {
 }
 
 function fmtWeight(w: number): string {
-  return `${Number.isInteger(w) ? w : w.toFixed(1)}kg`
+  return `${fmtKg(w)}kg`
 }
 
 const courseTotals = computed(() => {
@@ -644,9 +644,9 @@ const courseTotals = computed(() => {
 .name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .nm {
@@ -659,33 +659,34 @@ const courseTotals = computed(() => {
 /* meta 行：日期 / 时刻 / 类型三段一列排开，类型交给中性胶囊承载 ——
    同一行不许再用同一个「·」串起同权信息（那正是全清单最高频的写法问题） */
 .meta {
-  margin-top: 3px;
+  /* 标题与副信息 2（主次文本上下），行内三段信息之间 8 */
+  margin-top: var(--gap-text);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 /* 来源结论行：胶囊承载一行结论，口径说明已收进标题栏 InfoHint */
 .srcline {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* 失败态：独立告警块，不用中性胶囊 —— 错误必须可见、且与说明文字形态有别。
    底走 --danger-soft、字走 --danger-strong（实底档 --danger 不当文字用） */
 .failrow {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 11px;
+  gap: var(--sp-6);
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--danger-soft);
   color: var(--danger-strong);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .failic {
@@ -693,9 +694,9 @@ const courseTotals = computed(() => {
 }
 
 .sec {
-  margin: 18px 0 10px;
+  margin: var(--sp-18) 0 var(--sp-10);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
   color: var(--text-3);
 }
@@ -703,7 +704,7 @@ const courseTotals = computed(() => {
 /* 节标题行：结论胶囊与标题同行右端。胶囊不塞进 <p class="sec"> ——
    .sec 的 letter-spacing 会漏进胶囊，且标题是块级元素、胶囊要跟着它同行 */
 .sec-wrap {
-  margin: 18px 0 10px;
+  margin: var(--sp-18) 0 var(--sp-10);
 }
 
 .sec-wrap .sec {
@@ -711,7 +712,7 @@ const courseTotals = computed(() => {
 }
 
 .hint {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -719,9 +720,10 @@ const courseTotals = computed(() => {
 /* 轨迹块沿用跑步沉浸页的暗色语言 */
 .routebox {
   position: relative;
-  margin-top: 14px;
-  border-radius: var(--radius-l);
-  padding: 10px 10px 8px;
+  /* 轨迹图容器按二级分组面：半径 16、四边同距 12（原来三边 10/8 不等） */
+  margin-top: var(--gap-md);
+  border-radius: var(--radius-m);
+  padding: var(--pad-card-tight);
   background: var(--hero-bg);
   background-image:
     linear-gradient(var(--hero-grid) 1px, transparent 1px),
@@ -754,22 +756,22 @@ const courseTotals = computed(() => {
 }
 
 .route-empty {
-  padding: 44px 0;
+  padding: var(--sp-44) 0;
   text-align: center;
   font-size: var(--fs-caption);
   color: var(--hero-text-dim);
 }
 
 .goal {
-  margin: 4px 4px 2px;
+  margin: var(--sp-4) var(--sp-4) var(--sp-2);
   /* 「目标 5 km · 已达成」是用户自己定的目标与结论，不吃 11px */
   font-size: var(--fs-caption);
   color: var(--hero-text-dim);
 }
 
 .splitrow {
-  gap: 10px;
-  margin: 9px 0;
+  gap: var(--sp-10);
+  margin: var(--sp-8) 0;
 }
 
 .splitrow .k {
@@ -802,48 +804,49 @@ const courseTotals = computed(() => {
   text-align: right;
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .splitrow .v .unit {
-  margin-left: 2px;
+  margin-left: var(--sp-2);
   /* 配速值后的单位后缀（km/h），装饰性微字 */
   font-size: var(--fs-micro);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 .dgrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--gap-md);
+  margin-top: var(--sp-16);
 }
 
 /* ---------- 肌群练够分提醒 ----------
    与统计格同一块「次级底」（--surface-2），但用圆角 + 行内条把它读成"一组数据"
    而不是又一张卡：这一块是解释性的补充，不该和上面的完成组数/总容量抢层级。 */
 .mvol {
-  margin-top: 12px;
-  padding: 13px 14px;
+  margin-top: var(--gap-md);
+  /* 四边同距 12，与 .routebox / .cell 同一套内距 */
+  padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
 
 .mvol-head {
-  gap: 8px;
-  margin-bottom: 9px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--sp-8);
 }
 
 .mv-t {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .mv-s {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   /* 「均已练够」是状态词：次要标签走中性色（色彩配额，STANDARDS §4） */
   color: var(--text-2);
 }
@@ -858,13 +861,13 @@ const courseTotals = computed(() => {
   display: grid;
   grid-template-columns: 74px 1fr 52px 30px;
   align-items: center;
-  gap: 8px;
-  padding: 5px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-4) 0;
 }
 
 .mv-n {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -896,19 +899,19 @@ const courseTotals = computed(() => {
 .mv-num {
   text-align: right;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .mv-num small {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 .mv-st {
   /* 「运动充分」这类档名是练够分的结论词，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   text-align: right;
   color: var(--text-3);
 }
@@ -919,28 +922,30 @@ const courseTotals = computed(() => {
 }
 
 .mv-note {
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   /* 分数口径说明，是「怎么读这个数」的解释文字 */
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
 .cell {
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 14px 16px;
+  /* 参数格四边同距 16（--pad-card） */
+  padding: var(--pad-card);
 }
 
 .cell .v {
   font-size: var(--fs-title1);
-  font-weight: 200;
+  /* 字重阶梯下限 300（--fw-light）：200 是阶梯外裸值 */
+  font-weight: var(--fw-light);
   letter-spacing: -0.5px;
 }
 
 .cell .v .sub {
   font-size: var(--fs-callout);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
@@ -950,11 +955,11 @@ const courseTotals = computed(() => {
      与动作详解抽屉的 `.cell .k` 同档（决策见 docs/exercise-quality-review-2026-10-17.md §8 D3）。 */
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .excard {
-  padding: 12px 0;
+  padding: var(--sp-12) 0;
 }
 
 .excard:not(:first-of-type) {
@@ -962,12 +967,12 @@ const courseTotals = computed(() => {
 }
 
 .exhead {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .exname {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .excount {
@@ -979,18 +984,18 @@ const courseTotals = computed(() => {
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 9px;
+  gap: var(--gap-sm);
+  margin-top: var(--sp-8);
 }
 
 .chip {
-  padding: 5px 11px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   /* 「60×8」是登记值：数值中性色，色相留在 soft 底的色块上（色彩配额，STANDARDS §4） */
   background: var(--c-exercise-soft);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 热身组：中性描边样式与正式组区分 */
@@ -998,17 +1003,17 @@ const courseTotals = computed(() => {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--line-strong, var(--line));
   color: var(--text-3);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .chip.miss {
   background: var(--surface-2);
   color: var(--text-3);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
 }
 
 .note {
-  margin-top: 14px;
+  margin-top: var(--sp-14);
   font-size: var(--fs-caption);
 }
 
@@ -1020,12 +1025,12 @@ const courseTotals = computed(() => {
 .del-row {
   display: block;
   width: 100%;
-  margin-top: 20px;
-  padding: 12px 0;
+  margin-top: var(--sp-20);
+  padding: var(--sp-12) 0;
   border-top: 0.5px solid var(--line);
   text-align: center;
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--danger-strong);
 }
 

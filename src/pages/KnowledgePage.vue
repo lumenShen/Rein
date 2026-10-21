@@ -1237,7 +1237,7 @@ function requestCloseEditor(): void {
 .cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 /* 页头设置钮上的警示点（索引中 / 语义后端未就绪） */
@@ -1254,13 +1254,14 @@ function requestCloseEditor(): void {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .mode-chip .dot {
   width: 7px;
@@ -1268,28 +1269,37 @@ function requestCloseEditor(): void {
   border-radius: var(--radius-full);
   background: var(--accent);
 }
+/* 模式胶囊本身是打开检索设置的按钮：24 的视觉高 + 上下各 10 的 ::after = 44 热区 */
+.mode-chip::after {
+  content: '';
+  position: absolute;
+  inset: -10px 0;
+}
 
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  /* 圆角沿用全局 .card 的 var(--radius-xl)（桌面档自动收窄），不另写 16px */
-  padding: 14px;
+  /* 圆角沿用全局 .card（--radius-m 16 / 桌面 14），内距同样走卡片档 16 */
+  padding: var(--pad-card);
 }
 .card-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
 }
 .card-head h2 {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   flex: 1;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
   font-size: var(--fs-caption);
-  padding: 2px 8px;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -1302,7 +1312,7 @@ function requestCloseEditor(): void {
 /* 检索 */
 .searchbar {
   display: flex;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 .searchbar input {
   flex: 1;
@@ -1310,30 +1320,32 @@ function requestCloseEditor(): void {
 }
 input {
   width: 100%;
-  padding: 9px 11px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-m);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-1);
-  /* 16px 起才不触发 iOS 聚焦自动放大 */
-  font-size: 16px;
+  /* 16px 起才不触发 iOS 聚焦自动放大：走 --fs-headline（手机档 16 / 桌面档 16），
+     比正文大一档，既守住 iOS 的聚焦阈值，又不出字号阶梯 */
+  font-size: var(--fs-headline);
 }
 .hits {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-md);
 }
 .hits li {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: var(--sp-10);
 }
 .hit-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .src {
   flex: none;
@@ -1342,14 +1354,14 @@ input {
 .hpath {
   font-family: ui-monospace, monospace;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .hpath.big {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
   white-space: normal;
   word-break: break-all;
 }
@@ -1358,13 +1370,13 @@ input {
   margin-left: auto;
 }
 .hit-title {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-subhead);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 .hit-snippet {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-footnote);
   line-height: 1.5;
   color: var(--text-2);
@@ -1387,9 +1399,9 @@ input {
 /* 长期记忆 */
 .snr {
   display: grid;
-  gap: 8px;
-  margin-top: 4px;
-  padding: 10px 12px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-4);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -1399,28 +1411,35 @@ input {
   color: var(--text-1);
 }
 .snr-toggle {
+  position: relative;
   justify-self: start;
+  min-height: var(--control-sm);
   font-size: var(--fs-caption);
   color: var(--accent);
 }
+.snr-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
 .snr-detail {
   display: grid;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .snr-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .snr-grid > div {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 .snr-grid b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 .snr-grid b.bad {
   color: var(--danger);
@@ -1439,23 +1458,33 @@ input {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* 文字链接视觉保持 12px 一行，热区上下补到 44 */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
 .mems {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 .mems li {
   position: relative;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: var(--sp-10);
 }
 .mems li.is-archived .mem-text {
   color: var(--text-3);
@@ -1464,10 +1493,10 @@ input {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
-  /* 给右侧操作钮让位，避免长 topic 塞到按钮底下 */
-  padding-right: 96px;
+  /* 给右侧操作钮让位，避免长 topic 塞到按钮底下（96 = 64 + 32，两档拼出来不写裸值） */
+  padding-right: calc(var(--sp-64) + var(--sp-32));
 }
 .type {
   color: var(--accent);
@@ -1477,7 +1506,7 @@ input {
   color: var(--text-3);
 }
 .badge {
-  padding: 1px 7px;
+  padding: 1px var(--sp-8);
   border-radius: var(--radius-full);
   font-size: var(--fs-caption);
 }
@@ -1490,7 +1519,7 @@ input {
   color: var(--danger-strong);
 }
 .mem-text {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-footnote);
   line-height: 1.5;
   color: var(--text-1);
@@ -1499,8 +1528,8 @@ input {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-4);
 }
 .op {
   position: relative;
@@ -1509,7 +1538,7 @@ input {
   justify-content: center;
   min-width: 32px;
   min-height: 32px;
-  padding: 6px;
+  padding: var(--sp-6);
   border: none;
   border-radius: var(--radius-s);
   background: none;
@@ -1525,14 +1554,14 @@ input {
   opacity: 0.6;
 }
 .op.del-arm {
-  padding: 6px 12px;
+  padding: var(--sp-6) var(--sp-12);
   background: var(--danger);
   color: var(--on-accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .foot {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   font-size: var(--fs-caption);
   line-height: 1.5;
   color: var(--text-2);
@@ -1540,34 +1569,42 @@ input {
 
 /* 文件 / 编辑器 */
 .mini {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: var(--sp-4);
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
 }
+/* 两枚小按钮横向只隔 8：热区只上下补 8，不做左右扩张 */
+.mini::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
 .hint {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   line-height: 1.5;
   color: var(--text-2);
 }
 .editor {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
   border-top: 1px solid var(--line);
-  padding-top: 12px;
+  padding-top: var(--sp-12);
 }
 .epath {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 .epath span {
   font-size: var(--fs-caption);
@@ -1575,7 +1612,7 @@ input {
 }
 textarea {
   width: 100%;
-  padding: 10px;
+  padding: var(--sp-10);
   border-radius: var(--radius-m);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
@@ -1589,9 +1626,9 @@ textarea {
 /* 抽屉里的设置块 */
 .set-block {
   display: grid;
-  gap: 10px;
-  padding-bottom: 18px;
-  margin-bottom: 6px;
+  gap: var(--sp-10);
+  padding-bottom: var(--sp-18);
+  margin-bottom: var(--sp-6);
   border-bottom: 1px solid var(--line);
 }
 .set-block:last-child {
@@ -1601,24 +1638,24 @@ textarea {
 .set-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-8);
   color: var(--text-1);
 }
 .set-head h3 {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   flex: 1;
 }
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .stats div {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 .stats b {
   font-size: var(--fs-headline);
@@ -1647,17 +1684,17 @@ textarea {
   color: var(--danger);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 .fields {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .fields label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 .fields span {
   font-size: var(--fs-caption);
@@ -1665,24 +1702,33 @@ textarea {
 }
 .row {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-8);
   flex-wrap: wrap;
 }
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--sp-4);
   /* flex 内不被输入框（width:100%）挤成竖排字；窄屏也不折行 */
   flex: none;
   white-space: nowrap;
-  padding: 8px 14px;
-  border-radius: var(--radius-m);
+  /* 按钮常规档 40、圆角走大圆角 20（HarmonyOS 按钮规格） */
+  min-height: var(--control-md);
+  padding: var(--sp-8) var(--sp-14);
+  border-radius: var(--radius-l);
   border: none;
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+/* 40 的按钮热区补到 44：只外扩 2，与相邻按钮的 8px 间距互不侵占 */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
 }
 .btn.ghost {
   background: var(--surface-2);
@@ -1697,15 +1743,24 @@ textarea {
 .toggles {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 .toggle {
-  padding: 6px 11px;
+  position: relative;
+  min-height: var(--control-sm);
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
+}
+/* 11 枚来源标签视觉保持小按钮档 28；热区上下补 8 到 44。
+   横向不扩（同一行相邻标签只隔 8），避免把邻枚的点击吃进来。 */
+.toggle::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 .toggle.on {
   background: var(--accent-soft);
@@ -1718,7 +1773,7 @@ textarea {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 .src-actions .hint {
   /* 挤不下时整行换行，别让说明文字把两个按钮压扁 */
@@ -1727,20 +1782,27 @@ textarea {
   text-align: right;
 }
 .src-act {
-  padding: 5px 12px;
+  position: relative;
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+.src-act::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 /* 分组小头：占满一行断开 flex 换行，把 11 枚开关分成几簇；视觉重量比 .toggle 低一档 */
 .src-grp {
   flex-basis: 100%;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 .src-grp:first-child {
@@ -1750,7 +1812,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-12);
   font-size: var(--fs-footnote);
   color: var(--text-1);
 }
@@ -1759,14 +1821,14 @@ textarea {
 .models {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
   list-style: none;
 }
 .model {
   display: flex;
   align-items: stretch;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-m);
   border: 1px solid var(--line);
   background: var(--surface-2);
@@ -1780,7 +1842,7 @@ textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--sp-4);
   text-align: left;
   color: var(--text-1);
   min-width: 0;
@@ -1791,14 +1853,14 @@ textarea {
 .model-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 .model-label i {
   font-style: normal;
   font-size: var(--fs-caption);
-  padding: 1px 6px;
+  padding: 1px var(--sp-6);
   border-radius: var(--radius-full);
 }
 .model-label .in-use {
@@ -1822,16 +1884,21 @@ textarea {
 .model-ops {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   flex: none;
 }
 .btn.tiny {
-  padding: 5px 9px;
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-8);
   font-size: var(--fs-caption);
+}
+/* 小按钮视觉 28，热区四边各补 8 到 44（模型行里每行只有一枚，横向不会撞邻居） */
+.btn.tiny::after {
+  inset: -8px;
 }
 .dl {
   display: grid;
-  gap: 5px;
+  gap: var(--sp-4);
 }
 .dl-head {
   display: flex;
@@ -1843,7 +1910,7 @@ textarea {
 .link {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--accent);
 }
@@ -1851,7 +1918,7 @@ textarea {
 /* 嵌入测试 */
 .test-input {
   width: 100%;
-  padding: 9px 10px;
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-m);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
@@ -1863,7 +1930,7 @@ textarea {
 .test-pick {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
   flex: 1;
   min-width: 140px;
 }
@@ -1872,7 +1939,7 @@ textarea {
   color: var(--text-2);
 }
 .test-pick select {
-  padding: 7px 8px;
+  padding: var(--sp-8) var(--sp-8);
   border-radius: var(--radius-m);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
@@ -1882,30 +1949,30 @@ textarea {
 .test-results {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 .test-col {
   display: grid;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 .test-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-footnote);
 }
 .test-meta {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 2px 10px;
+  gap: var(--sp-2) var(--sp-10);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
 /* 维度是这组数里的主角：19px 等宽主数值；两项耗时降成说明档 */
 .test-dim {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 .test-dim-unit {
@@ -1915,14 +1982,14 @@ textarea {
 .ranks {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--sp-4);
   list-style: none;
 }
 .ranks li {
   display: grid;
   grid-template-columns: 42px 1fr;
   grid-template-areas: 'score bar' 'text text';
-  gap: 2px 8px;
+  gap: var(--sp-2) var(--sp-8);
   align-items: center;
 }
 .rank-score {
@@ -1958,15 +2025,15 @@ textarea {
 /* 记忆卡：整理线索 */
 .audit {
   display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-10);
+  padding-top: var(--sp-10);
   border-top: 1px dashed var(--line);
 }
 .dup-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   width: 100%;
   font-size: var(--fs-caption);
   color: var(--text-1);
@@ -1977,14 +2044,14 @@ textarea {
 }
 .dup-list {
   display: grid;
-  gap: 6px;
-  margin-top: 6px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-6);
   list-style: none;
 }
 .dup-list li {
   display: grid;
   grid-template-columns: 72px 1fr;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -1999,7 +2066,7 @@ textarea {
 }
 .diffs {
   display: grid;
-  gap: 3px;
+  gap: var(--sp-4);
 }
 .diffs-head {
   font-size: var(--fs-caption);
@@ -2014,8 +2081,8 @@ textarea {
 .reader-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--sp-8);
+  margin-bottom: var(--sp-10);
 }
 /* 分段控件吃满抽屉宽度（根节点 .seg 默认收缩到内容宽） */
 .reader-bar :deep(.seg) {
@@ -2025,7 +2092,7 @@ textarea {
 .doc-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-footnote);
   line-height: 1.7;
   color: var(--text-1);
@@ -2036,13 +2103,13 @@ textarea {
   color: var(--text-2);
 }
 .more-row {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 .more-row .btn {
   flex: 1;
 }
 .fin {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   text-align: center;
   font-size: var(--fs-caption);
   color: var(--text-2);
@@ -2124,7 +2191,7 @@ textarea {
 
 .desk-main .hits > li {
   break-inside: avoid;
-  margin-top: 10px; /* 顶替原来的 flex gap */
+  margin-top: var(--sp-10); /* 顶替原来的 flex gap */
 }
 
 /* 记忆条目同理：一列排到 700px 宽、一条只有两三行字，两栏才看得完 */
@@ -2136,6 +2203,6 @@ textarea {
 
 .desk-main .mems > li {
   break-inside: avoid;
-  margin-top: 10px; /* 顶替原来的 flex gap */
+  margin-top: var(--sp-10); /* 顶替原来的 flex gap */
 }
 </style>

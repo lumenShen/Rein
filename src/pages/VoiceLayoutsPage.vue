@@ -5,6 +5,7 @@ import { ListTodo, MessageCircle, Users } from 'lucide-vue-next'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
+import { fmtMmSs } from '@/utils/format'
 
 /**
  * 语音会话 · 10 种版式对照（设计探索页，不属于产品导航）。
@@ -73,8 +74,7 @@ const active = ref(1)
 const current = computed(() => VARIANTS.find((v) => v.id === active.value)!)
 
 function fmt(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms, { padMinutes: true })
 }
 const fmtLong = (ms: number) => `${Math.floor(ms / 60_000)} 分 ${Math.floor((ms % 60_000) / 1000)} 秒`
 
@@ -389,14 +389,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 /* ===== 对照页外壳（不属于任何版式） ===== */
 .lab {
   min-height: 100dvh;
-  padding-bottom: 60px;
+  /* 60 = 32 + 28：页面底部呼吸按 4/8 档拼出来（这页没有 Dock，不了 --page-pad-bottom） */
+  padding-bottom: calc(var(--sp-32) + var(--sp-28));
 }
 
 .bar {
   position: sticky;
   top: 0;
   z-index: 5;
-  padding: 16px var(--page-pad-x) 12px;
+  /* 顶栏内距走间隔令牌（原先 16/12 是裸值）：与页面左右边距同一套 4/8 栅格 */
+  padding: var(--sp-16) var(--page-pad-x) var(--sp-12);
   background: var(--surface-translucent);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--line);
@@ -406,13 +408,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--sp-12);
+  margin-bottom: var(--sp-10);
 }
 
 .kicker {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.06em;
   color: var(--text-3);
 }
@@ -424,9 +426,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .pills {
   display: flex;
-  gap: 6px;
+  /* 行高取命中区下限 44：下方胶囊的 ::after 才有地方展开（overflow 会裁掉溢出的热区） */
+  min-height: var(--hit-min);
+  align-items: center;
+  gap: var(--sp-6);
   overflow-x: auto;
-  padding-bottom: 2px;
   scrollbar-width: none;
 }
 
@@ -435,21 +439,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .pill {
+  position: relative;
   flex: none;
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 6px 11px;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   white-space: nowrap;
 }
 
+/* 版式切换是这一页的主导航：30 高的胶囊命中区补到 44（纵向各 7，横向撑满自身，
+   相邻两颗之间仍有 6 的槽位，不互相抢） */
+.pill::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+  border-radius: inherit;
+}
+
 .pill b {
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
@@ -463,14 +481,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .idea {
-  margin-top: 9px;
+  margin-top: var(--sp-8);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .stage {
-  margin: 18px auto 0;
-  padding: 20px;
+  /* 18 落回令牌（--sp-18）：舞台与顶栏之间的呼吸不再写裸值 */
+  margin: var(--sp-18) auto 0;
+  padding: var(--sp-20);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
 }
@@ -487,12 +506,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .v {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-14);
 }
 
 .vhead h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -503,8 +522,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+  gap: var(--sp-6);
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -512,8 +531,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .who {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 7px;
+  font-weight: var(--fw-bold);
+  /* 纵向 1px 是阶梯外的手感值：落到最小间隔 4/8 档里的 2，胶囊高度回到 4/8 体系 */
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--led-shopping) 12%, transparent);
   color: var(--text-1);
@@ -522,12 +542,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .ct {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.06em;
   color: var(--text-3);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-10);
 }
 
 /* 标题行右侧的帮助入口：InfoHint 是多根组件，类要落在包裹元素上 */
@@ -550,8 +570,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .stream li {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 11px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-12) 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -560,7 +580,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .stream.tight li {
-  padding: 9px 0;
+  padding: var(--sp-8) 0;
 }
 
 .stream time {
@@ -574,7 +594,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 1;
   min-width: 0;
   font-size: var(--fs-callout);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
@@ -582,7 +602,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .v2 {
   flex-direction: row;
   align-items: flex-start;
-  gap: 22px;
+  gap: var(--sp-22);
 }
 
 .col-l {
@@ -595,7 +615,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   min-width: 0;
   position: sticky;
   top: 130px;
-  padding: 16px;
+  padding: var(--sp-16);
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -603,11 +623,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .note {
   display: flex;
-  gap: 8px;
-  padding: 9px 0;
+  gap: var(--sp-8);
+  padding: var(--sp-8) 0;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
@@ -617,7 +637,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .note svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   color: var(--text-3);
 }
 
@@ -629,12 +649,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .chat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .bub {
   max-width: 84%;
-  padding: 10px 13px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -642,13 +662,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .bub p {
   font-size: var(--fs-callout);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 .bub time {
   display: block;
-  margin-top: 5px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -664,9 +684,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .bwho {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: var(--sp-4);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
@@ -676,7 +696,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 /* ===== ④ 卡片流 ===== */
 .blk {
-  padding: 15px 16px;
+  padding: var(--sp-16) var(--sp-16);
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -686,7 +706,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
 }
 
 .blk header time {
@@ -696,18 +716,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .blk p {
   font-size: var(--fs-callout);
-  line-height: 1.65;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 .blk p + p {
-  margin-top: 7px;
+  margin-top: var(--sp-8);
 }
 
 /* ===== ⑤ 时间尺 ===== */
 .ruler-wrap {
   position: relative;
-  padding-left: 46px;
+  /* 46 = 40 + 6：与版式里的图标起点对齐（尺寸几何，不是排版间距） */
+  padding-left: calc(var(--sp-40) + var(--sp-6));
 }
 
 .ruler {
@@ -725,7 +746,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   right: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .tick i {
@@ -743,14 +764,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .lanes {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .lane {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 7px 11px;
+  gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -760,7 +781,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 1;
   min-width: 0;
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
@@ -771,27 +792,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .lane.r {
-  margin-left: 26px;
+  margin-left: var(--sp-26);
 }
 
 /* ===== ⑥ 说话人分栏 ===== */
 .duo {
   display: flex;
-  gap: 16px;
+  gap: var(--sp-16);
   align-items: flex-start;
 }
 
 .duo-col {
   flex: 1;
   min-width: 0;
-  padding: 16px;
+  padding: var(--sp-16);
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
 
 .duo-item + .duo-item {
-  margin-top: 11px;
+  margin-top: var(--sp-12);
 }
 
 .duo-item time {
@@ -800,15 +821,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .duo-item p {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 /* ===== ⑦ 仪表盘 ===== */
 .dash {
-  padding: 18px;
+  padding: var(--sp-18);
   border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -816,26 +837,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .dash h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 16px;
+  gap: var(--sp-10);
+  margin-top: var(--sp-16);
 }
 
 .stats div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .stats b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   letter-spacing: -0.02em;
 }
@@ -848,7 +869,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 /* ===== ⑧ 小地图 ===== */
 .v8 {
   flex-direction: row;
-  gap: 14px;
+  gap: var(--sp-14);
   align-items: flex-start;
 }
 
@@ -860,9 +881,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .mini-body .stream li {
   cursor: pointer;
   border-radius: var(--radius-xs);
-  padding-left: 8px;
-  padding-right: 8px;
-  margin-left: -8px;
+  padding-left: var(--sp-8);
+  padding-right: var(--sp-8);
+  margin-left: calc(-1 * var(--sp-8));
 }
 
 .mini-body .stream li.cur {
@@ -875,8 +896,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 5px;
-  padding-top: 74px;
+  gap: var(--sp-4);
+  /* 74 = 64 + 10：留出上面那排固定工具栏的高度 */
+  padding-top: calc(var(--sp-64) + var(--sp-10));
   position: sticky;
   top: 130px;
 }
@@ -898,7 +920,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 /* ===== ⑨ 波形 ===== */
 .wav {
-  padding: 16px;
+  padding: var(--sp-16);
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -907,7 +929,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .wav-bars {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--sp-2);
   height: 68px;
 }
 
@@ -926,8 +948,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--sp-10);
+  margin-top: var(--sp-10);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -940,8 +962,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .rows li {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 10px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-10) 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -960,26 +982,26 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex: 1;
   min-width: 0;
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 /* ===== ⑩ 杂志式 ===== */
 .v10 {
-  gap: 18px;
+  gap: var(--sp-18);
 }
 
 .mag-head {
-  padding-bottom: 14px;
+  padding-bottom: var(--sp-14);
   border-bottom: 2px solid var(--text-1);
 }
 
 .mag-head h2 {
-  margin: 6px 0 8px;
+  margin: var(--sp-6) 0 var(--sp-8);
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.03em;
-  line-height: 1.15;
+  line-height: var(--lh-display);
   color: var(--text-1);
   text-wrap: balance;
 }
@@ -991,59 +1013,59 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .mag-cols {
   column-count: 2;
-  column-gap: 26px;
+  column-gap: var(--sp-26);
 }
 
 .mag-cols p {
   font-size: var(--fs-callout);
-  line-height: 1.75;
+  line-height: var(--lh-body);
   color: var(--text-1);
   break-inside: avoid;
 }
 
 .mag-cols p + p {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 .mag-cols .lead {
   font-size: var(--fs-title3);
-  font-weight: 600;
-  line-height: 1.5;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-body);
 }
 
 .mag-cols .lead::first-letter {
   float: left;
-  margin: 4px 8px 0 0;
+  margin: var(--sp-4) var(--sp-8) 0 0;
   font-size: var(--fs-display-l);
   line-height: 0.9;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .mag-foot {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 14px;
+  gap: var(--sp-8);
+  padding-top: var(--sp-14);
   border-top: 1px solid var(--line);
 }
 
 .mag-note {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: var(--sp-8);
   flex: 1 1 320px;
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--led-shopping) 8%, transparent);
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
 .mag-note svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   color: var(--led-shopping);
 }
 

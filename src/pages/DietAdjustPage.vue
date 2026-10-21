@@ -70,19 +70,20 @@ watch(targets, () => {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部沿用全站页头节奏的一格 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
 .head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 /* 「自动保存」是界面推不出的那半句（六行步进器已明说「直接改」），
    做成中性胶囊与周围 --text-3 正文分层 */
 .head .chip {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 /* ---------- 桌面（≥ --desk-min 时壳层才渲染 .desk-main，所以这里不用写断点） ----------

@@ -105,14 +105,16 @@ watch(
   position: fixed;
   inset: 0;
   z-index: 105;
-  gap: 14px;
+  /* 副标题与读数之间 14 → 12（--gap-md）：这组是「标签 + 读数」，不是两个区块 */
+  gap: var(--gap-md);
   background: color-mix(in srgb, var(--bg) 94%, transparent);
 }
 
 .big {
   /* 全 App 最大的读数走展示级令牌（--fs-display-xl 84px），num 等宽防 8→1 抖位 */
   font-size: var(--fs-display-xl);
-  font-weight: 200;
+  /* 200 不在字重阶梯上：展示级最细的一档是 Light 300 */
+  font-weight: var(--fw-light);
   letter-spacing: -3px;
   line-height: 1;
   /* 数字节拍 1000ms：动画长过节拍，下一个数字会顶着上一个的余韵进场，
@@ -124,12 +126,12 @@ watch(
   /* GO! 是读数：数值走中性色（色彩配额，STANDARDS §4）。随字色一起去掉粉色光晕 ——
      光晕是同一支色相爬在文字上的另一种形态；「开始了」由字号、字重与画面本身表达。 */
   color: var(--text-1);
-  font-weight: 300;
+  font-weight: var(--fw-light);
 }
 
 .sub {
   font-size: var(--fs-callout);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 

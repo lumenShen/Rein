@@ -24,16 +24,22 @@ const maxMin = computed(() => Math.max(60, ...props.bars.map((b) => b.value)))
 <style scoped>
 .bars {
   justify-content: space-between;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .barcol {
   flex: 1;
-  gap: 6px;
+  /* 允许列被压缩：年视图 12 根柱在 320px 的内宽里每列只有 ~17.7px，
+     固定 18px 会多出 4px 横向溢出（最后一根被裁掉） */
+  min-width: 0;
+  /* 柱与星期标签是一组：上下留 4（--gap-tight），不要 6。 */
+  gap: var(--gap-tight);
 }
 
 .track {
-  width: 18px;
+  /* 正常 18px；窄屏按列宽收（年视图 12 列时不溢出）。高度不变 */
+  width: 100%;
+  max-width: 18px;
   height: 64px;
   border-radius: var(--radius-full);
   background: var(--surface-2);
@@ -59,8 +65,10 @@ const maxMin = computed(() => Math.max(60, ...props.bars.map((b) => b.value)))
 
 .label {
   font-size: var(--fs-micro);
-  color: var(--text-3);
-  font-weight: 600;
+  /* 星期标签是读这张图的必要条件（哪根柱是哪天），不能只靠 --text-3：
+     契约里 --text-3 只给「补充信息」，这里提到 --text-2。 */
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
 }
 
 .label.today {

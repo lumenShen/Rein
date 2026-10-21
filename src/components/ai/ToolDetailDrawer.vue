@@ -96,15 +96,19 @@ const argsText = computed(() => (shown.value ? prettyJson(shown.value.arguments)
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
 }
 
+/* 状态胶囊：高 24（--chip-h）、左右 12、12 Medium —— 与全库角标同一档 */
 .state {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
   font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 3px 9px;
+  font-weight: var(--fw-medium);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
 }
 
@@ -127,38 +131,39 @@ const argsText = computed(() => (shown.value ? prettyJson(shown.value.arguments)
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 
 .raw-lab {
   font-family: var(--font);
-  color: var(--text-3);
-  margin-right: 5px;
+  color: var(--text-2);
+  margin-right: var(--sp-4);
 }
 
+/* 小节标题：「输入参数 / 返回」是可点的两块内容的分界，落到 --text-2 才读得出 */
 .sec {
-  margin: 18px 0 10px;
+  margin: var(--gap-lg) 0 var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .size {
-  margin-left: 8px;
-  font-weight: 500;
+  margin-left: var(--gap-sm);
+  font-weight: var(--fw-medium);
   letter-spacing: 0;
 }
 
 .pre {
   margin: 0;
-  padding: 12px 14px;
-  border-radius: var(--radius-m);
+  padding: var(--pad-card-tight) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
   /* 换行 + 长串任意断行：详情永远不横向溢出 */
   white-space: pre-wrap;
@@ -173,16 +178,16 @@ const argsText = computed(() => (shown.value ? prettyJson(shown.value.arguments)
 }
 
 .empty {
-  padding: 12px 14px;
-  border-radius: var(--radius-m);
+  padding: var(--pad-card-tight) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .img {
   display: block;
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   max-width: 100%;
   max-height: 300px;
   border-radius: var(--radius-s);

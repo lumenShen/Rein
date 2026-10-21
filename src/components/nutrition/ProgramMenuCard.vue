@@ -10,6 +10,7 @@ import { useModelsStore } from '@/stores/models'
 import { useProgramStore } from '@/stores/program'
 import { parseBlob } from '@/utils/programEngine'
 import { todayStr } from '@/utils/date'
+import { macroEnergyShare } from '@/utils/nutritionCalc'
 import type { ProgramMeal } from '@/types'
 import type { AiMenuMeal } from '@/ai/recipeGen'
 
@@ -67,20 +68,15 @@ const totals = computed(() => {
   const protein = sum('protein')
   const carb = sum('carb')
   const fat = sum('fat')
-  const pE = protein * 4
-  const cE = carb * 4
-  const fE = fat * 9
-  const eSum = pE + cE + fE
+  const parts = macroEnergyShare(protein, carb, fat, { minPct: 0 })
+  const pctOf = (key: 'protein' | 'carb' | 'fat') =>
+    Math.round(parts.find((p) => p.key === key)?.pct ?? 0)
   return {
     kcal,
     protein,
     carb,
     fat,
-    share: {
-      p: eSum > 0 ? Math.round((pE / eSum) * 100) : 0,
-      c: eSum > 0 ? Math.round((cE / eSum) * 100) : 0,
-      f: eSum > 0 ? Math.round((fE / eSum) * 100) : 0,
-    },
+    share: { p: pctOf('protein'), c: pctOf('carb'), f: pctOf('fat') },
   }
 })
 
@@ -262,7 +258,7 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 标题行右端的帮助入口（落点约定见 InfoHint 注释） */
@@ -272,38 +268,41 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 
 .title {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 /* 菜单合计：本卡唯一主数值（19px + .num + --text-1），
    与「摄入总览」报的今日已摄入热量分两句说 */
 .menu-total {
-  margin-top: 14px;
+  /* 与上方标题 8（标题与内容一档）；右侧数值与左标签之间至少 8 才不粘连 */
+  margin-top: var(--gap-sm);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .mt-label {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  /* 它是主数值的标签，属于要读的信息 → --text-2 */
+  color: var(--text-2);
 }
 
 .mt-val {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 /* 供能堆叠条 */
 .stack-head {
-  margin-top: 10px;
+  /* 卡内区块之间 12；标签与它标注的条之间 8 */
+  margin-top: var(--gap-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -313,7 +312,8 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
   height: 10px;
   border-radius: var(--radius-full);
   overflow: hidden;
-  gap: 2px;
+  /* 三段供能条之间 2（同一根条上的缝，再大会断成三根） */
+  gap: var(--gap-text);
 }
 
 .stack i {
@@ -324,17 +324,18 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 }
 
 .macros {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .macro-row {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  /* 名称与数值是主次文本：上下 2 */
+  gap: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -342,30 +343,32 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 .macro-name {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  /* 色点与名称：同一行最小呼吸 4 */
+  gap: var(--gap-tight);
 }
 
 .dot {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  /* 色点走最小圆角档（4 的 4px 圆角落在 8px 方块上已经接近圆形，与图例点同一形态） */
+  border-radius: var(--radius-xs);
 }
 
 .macro-val b {
   color: var(--text-1);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 蛋白对照刻度 */
 .ptarget {
-  margin-top: 13px;
+  margin-top: var(--gap-md);
 }
 
 .ptarget-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -399,37 +402,41 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 }
 
 .verdict {
-  margin-top: 11px;
-  padding: 10px 13px;
-  border-radius: var(--radius-m);
+  margin-top: var(--gap-md);
+  padding: var(--pad-card-tight);
+  /* 落在白卡上的二级分组面：12（比母卡收一档） */
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.55;
+  line-height: var(--lh-body);
 }
 
 .split {
   height: 0.5px;
-  margin: 14px 0 4px;
+  /* 分隔线两侧：上方区块 12、下方列表 4 */
+  margin: var(--gap-md) 0 var(--gap-tight);
   background: var(--line);
 }
 
 /* 来源标注：胶囊承载「模板菜单 / AI 菜单」，说明口径收进标题行 InfoHint */
 .menu-src {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 /* 餐次列表 */
 .menu {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
   display: grid;
 }
 
 .menu li {
   display: grid;
   grid-template-columns: 62px 1fr;
-  gap: 10px;
-  padding: 9px 0;
+  /* 餐次名与菜名两列：12（有明显分栏，比同行间距大一档） */
+  gap: var(--gap-md);
+  /* 双行菜单行：10 上下 + 两行文本 ≈ 64 档 */
+  padding: var(--sp-10) 0;
   border-top: 0.5px solid var(--line);
 }
 
@@ -440,9 +447,10 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 .menu em {
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
-  padding-top: 1px;
+  /* 与右侧菜名的首行基线对齐：1px 是 12 字上的一格微调，取 2（--gap-text） */
+  padding-top: var(--gap-text);
 }
 
 .menu p {
@@ -452,28 +460,38 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 .menu p b {
   font-size: var(--fs-caption);
   color: var(--text-3);
-  margin-left: 4px;
-  font-weight: 400;
+  margin-left: var(--gap-tight);
+  font-weight: var(--fw-regular);
 }
 
 .items {
-  margin-top: 2px;
-  line-height: 1.5;
+  margin-top: var(--gap-text);
+  line-height: var(--lh-body);
 }
 
 .menu-acts {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 6px;
+  /* 文字链按钮组：无边界 8 */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .linkbtn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
+}
+
+/* 文字链按钮只有一行高（约 18）：上下各扩 13 把命中区补到 44。
+   两枚按钮隔 8、且下方没有可点元素，扩出去不会吃掉别人的点击。 */
+.linkbtn::after {
+  content: '';
+  position: absolute;
+  inset: -13px -4px;
 }
 
 .linkbtn:disabled {
@@ -482,13 +500,14 @@ AI 菜单的份量与营养数值按食物库实算，不是模型估算。"
 
 .ai-err {
   font-size: var(--fs-caption);
-  color: var(--danger);
+  /* 错误是必须读出来的状态词：走文字档 --danger-strong */
+  color: var(--danger-strong);
 }
 
 /* 生成中的流式活动摘要（匹配食材…） */
 .ai-status {
-  /* 生成中的活动摘要（「匹配食材…」）是状态播报，不吃 11px */
+  /* 生成中的活动摘要（「匹配食材…」）是状态播报，要读得出来 → --text-2 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 </style>

@@ -64,8 +64,9 @@ function openEditor(): void {
 
 <style scoped>
 .item {
-  gap: 12px;
-  padding: 11px 0;
+  /* 复选 / 正文 / 行尾操作三段间距统一 12：正文是主体，两侧各让一档 */
+  gap: var(--gap-md);
+  padding: var(--sp-12) 0;
 }
 
 .item + .item {
@@ -128,7 +129,7 @@ function openEditor(): void {
 
 .title {
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   /* 删除线常驻、颜色透明过渡：完成时划线像手写划过而非硬蹦 */
   text-decoration: line-through;
   text-decoration-color: transparent;
@@ -143,14 +144,15 @@ function openEditor(): void {
 }
 
 .meta {
-  gap: 5px;
-  margin-top: 2px;
+  /* 时刻 / 分类 / 优先级同属一行元信息，用最小呼吸一档 */
+  gap: var(--gap-tight);
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .cat {
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .cat i {
@@ -160,11 +162,11 @@ function openEditor(): void {
 }
 
 .prio {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ops {
-  gap: 8px;
+  gap: var(--gap-sm);
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
@@ -173,7 +175,7 @@ function openEditor(): void {
 .del {
   position: relative;
   color: var(--text-3);
-  padding: 2px;
+  padding: var(--sp-2);
 }
 
 /* 桌面壳：指针精度下 ≥22 才点得住，而行尾这两颗原本是 16 图标 + 2px 内边距 = 20×20
@@ -183,7 +185,7 @@ function openEditor(): void {
    44px 的 ::after 撑着（拇指下限），不该让触屏行去付这一档内边距。 */
 .desk-main .edit,
 .desk-main .del {
-  padding: 4px;
+  padding: var(--sp-4);
 }
 
 /* 行尾编辑/删除：16px 图标 + 2px 内边距 ≈ 20px 见方，命中区纵向外扩到 44

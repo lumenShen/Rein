@@ -18,14 +18,16 @@ defineProps<{
 
 <style scoped>
 .qa {
-  gap: 7px;
+  /* 磁贴是「功能入口」：圆角 20（--radius-l），图标与标签上下 8（--gap-sm），
+     上下内距统一 12（原来 12/10 不对称，一排磁贴的标签基线会高低不一） */
+  gap: var(--gap-sm);
   width: 100%;
-  padding: 12px 0 10px;
+  padding: var(--sp-12) 0;
   border-radius: var(--radius-l);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 

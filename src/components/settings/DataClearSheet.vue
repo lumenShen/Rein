@@ -184,7 +184,7 @@ async function execute(): Promise<void> {
   <SheetModal :open="open" title="清除软件数据" @close="emit('close')">
     <!-- ① 选档 -->
     <div v-if="step === 'choose'" class="steps">
-      <p class="lead t-3">选一档要清除的深度。每一档只清自己声明的范围，都不可撤销——下一步会先给你看完整清单。</p>
+      <p class="lead t-2">选一档要清除的深度。每一档只清自己声明的范围，都不可撤销——下一步会先给你看完整清单。</p>
       <div class="card sub rows">
         <button
           v-for="s in SCOPES"
@@ -196,7 +196,7 @@ async function execute(): Promise<void> {
         >
           <span class="col ftxt">
             <b :class="{ danger: s.id === 'factory' }">{{ s.title }}</b>
-            <em class="t-3">{{ s.desc }}</em>
+            <em class="t-2">{{ s.desc }}</em>
           </span>
           <i class="tick" aria-hidden="true"><Check :size="14" :stroke-width="3" /></i>
         </button>
@@ -217,7 +217,7 @@ async function execute(): Promise<void> {
           :data-testid="`data-clear-item-${it.key}`"
         >
           <span>{{ it.label }}</span>
-          <span class="t-3 pnum">{{ itemText(it) }}</span>
+          <span class="t-2 pnum">{{ itemText(it) }}</span>
         </div>
       </div>
       <!-- 长按确认前最要紧的结论：继承正文字号（比明细行更大），数字等宽加粗右对齐 -->
@@ -234,10 +234,10 @@ async function execute(): Promise<void> {
     <div v-else-if="step === 'done' && report" class="steps done">
       <div class="done-ic"><Check :size="22" :stroke-width="2.5" /></div>
       <b>已清除<span v-if="report.freedBytes > 0">，释放 <span class="num">{{ humanBytes(report.freedBytes) }}</span></span></b>
-      <p v-if="report.failures.length" class="t-3 fail-note">
+      <p v-if="report.failures.length" class="t-2 fail-note">
         有 {{ report.failures.length }} 个文件正被占用没能删除（不影响数据，下次清除会再试）：{{ report.failures.join('；') }}
       </p>
-      <p v-if="preview?.restartsApp" class="t-3" data-testid="data-clear-restarting">应用即将重启以完成清理…</p>
+      <p v-if="preview?.restartsApp" class="t-2" data-testid="data-clear-restarting">应用即将重启以完成清理…</p>
       <button v-else class="primary" data-testid="data-clear-done" @click="emit('close')">完成</button>
     </div>
 
@@ -283,8 +283,8 @@ async function execute(): Promise<void> {
 }
 
 .lead {
-  margin-bottom: 10px;
-  line-height: 1.6;
+  margin-bottom: var(--gap-md);
+  line-height: var(--lh-body);
 }
 
 /* 行间细线，首行不留线（与设置页 .rows 同一条分组规则） */
@@ -296,9 +296,10 @@ async function execute(): Promise<void> {
 .scope {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 10px 2px;
+  min-height: var(--row-h);
+  padding: var(--sp-8) var(--sp-2);
   text-align: left;
   color: inherit;
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -313,12 +314,12 @@ async function execute(): Promise<void> {
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .ftxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ftxt b.danger {
@@ -328,7 +329,7 @@ async function execute(): Promise<void> {
 .ftxt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  line-height: 1.55;
+  line-height: var(--lh-caption);
 }
 
 .tick {
@@ -351,20 +352,21 @@ async function execute(): Promise<void> {
 
 /* 清单行：左标签右数值；这一类为空时整行淡显（仍列出——「将失去什么」要如实报全） */
 .list {
-  padding: 2px 12px;
+  padding: var(--sp-2) var(--pad-inline);
 }
 
 .pitem {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--gap-md);
+  min-height: var(--row-h);
+  padding: 0;
   font-size: var(--fs-subhead);
 }
 
 .pitem.zero {
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
 
 .pnum {
@@ -373,22 +375,23 @@ async function execute(): Promise<void> {
 }
 
 .total {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   text-align: right;
-  /* 结论行：字号继承 body（17px，比明细行更大），只提字重与等宽数字 */
-  font-weight: 600;
+  /* 结论行：比明细行大一档（16 对 14），只提字重与等宽数字 */
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
 }
 
 .total b {
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 /* 警示块：danger-soft 底，正文仍读得清的文字红（--danger-strong） */
 .warn {
   display: flex;
-  gap: 9px;
-  margin-top: 12px;
-  padding: 11px 12px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--danger-soft);
   color: var(--danger-strong);
@@ -397,42 +400,57 @@ async function execute(): Promise<void> {
 
 .warn-ic {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 .warn-body p + p {
-  margin-top: 4px;
+  margin-top: var(--gap-tight);
 }
 
 .warn-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  line-height: 1.6;
+  gap: var(--gap-tight);
+  line-height: var(--lh-body);
 }
 
+/* 返回上一步：视觉是一枚 12px 的文字链（约 17 高），命中区撑到 44。
+   它是这一步唯一的返回口，摸不到就只能关掉整个抽屉重来。 */
 .back {
+  position: relative;
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  margin-bottom: 10px;
+  gap: var(--gap-tight);
+  margin-bottom: var(--gap-md);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
+.back::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+}
+
 /* 长按确认钮：实底危险红；进度层走 transform（scaleX）不重排 */
+/* 底栏主操作钮：高 40（--control-md），圆角走按钮档 20，文字 14 Medium */
 .hold {
   position: relative;
   overflow: hidden;
   width: 100%;
-  padding: 13px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--danger);
-  color: #fff;
+  color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   user-select: none;
   -webkit-user-select: none;
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -463,14 +481,15 @@ async function execute(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
-  padding: 13px;
-  border-radius: var(--radius-m);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -483,20 +502,16 @@ async function execute(): Promise<void> {
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
+  animation: rein-spin 0.9s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+
 
 /* 完成页：居中报告 */
 .done {
   align-items: center;
-  gap: 8px;
-  padding-top: 26px;
+  gap: var(--gap-sm);
+  padding-top: var(--sp-24);
   text-align: center;
 }
 
@@ -511,14 +526,15 @@ async function execute(): Promise<void> {
 }
 
 .done b {
-  font-size: var(--fs-headline);
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-semibold);
 }
 
 .fail-note {
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .done .primary {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 </style>

@@ -175,6 +175,8 @@ onBeforeUnmount(() => {
 
 <template>
   <nav ref="dockEl" class="dock" aria-label="主导航">
+    <!-- 图标 24 / 标签 10-11 Medium / 图标与标签 2：底部页签的规格（原生三块玻璃
+         与画质预览页的标本共用这份，所以图标尺寸也由装配层给，调用处不再各写 21/22） -->
     <GlassDockAssembly
       :items="dockItems"
       :active="String(route.name ?? '')"
@@ -198,7 +200,7 @@ onBeforeUnmount(() => {
           @contextmenu.prevent
           @click="onLeftClick"
         >
-          <component :is="item.icon" :size="21" :stroke-width="active ? 2.4 : 1.9" />
+          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
         </button>
       </template>
@@ -208,13 +210,13 @@ onBeforeUnmount(() => {
           class="dock-tab glow-layer"
           :class="{ active }"
         >
-          <component :is="item.icon" :size="22" :stroke-width="active ? 2.4 : 1.9" />
+          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
         </RouterLink>
       </template>
       <template #right="{ item, active }">
         <RouterLink :to="{ name: item.id }" class="dock-slot glow-layer" :class="{ active }">
-          <component :is="item.icon" :size="21" :stroke-width="active ? 2.4 : 1.9" />
+          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
         </RouterLink>
       </template>

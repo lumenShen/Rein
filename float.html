@@ -1,0 +1,35 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  class="float-win"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <!-- 浮窗是固定尺寸的系统小窗（bar 430×92 / blob 64×64 / confirm 430×172），
+         不需要也不该让页面自己缩放或滚动 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta
+      name="color-scheme"
+      content="light dark"
+    />
+    <!-- 浮窗没有站点图标：给一个空的 data URI，避免 WebView 请求 /favicon.ico
+         拿到 404 而在控制台留下一条错误（这一页要求可无异常地独立打开） -->
+    <link
+      rel="icon"
+      href="data:,"
+    />
+    <title>Rein 浮窗</title>
+  </head>
+  <body>
+    <!-- 与主入口（index.html 的 #app）分开的挂载点：两个入口共用一个 vite 配置，
+         但各自挂各自的根组件 -->
+    <div id="float-app"></div>
+    <script
+      type="module"
+      src="/src/float/main.ts"
+    ></script>
+  </body>
+</html>

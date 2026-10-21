@@ -160,20 +160,22 @@ function openDetail(c: ProcessToolCall): void {
 .tool-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
   min-width: 0;
 }
 
 /* 单行：图标 + 「做了什么」描述 + 状态 + 抽屉箭头。
-   描述列 flex:1 + min-width:0，其余列 flex:none —— 任何内容都不会横向溢出 */
+   描述列 flex:1 + min-width:0，其余列 flex:none —— 任何内容都不会横向溢出。
+   整行是打开详情抽屉的按钮，高度按热区下限 44 给（原先 4 的内距只有 ~25 高）。 */
 .tool-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
   min-width: 0;
-  padding: 3px 4px;
-  margin: 0 -4px;
+  min-height: var(--hit-min);
+  padding: var(--sp-4);
+  margin: 0 calc(-1 * var(--gap-tight));
   border: none;
   border-radius: var(--radius-s);
   background: transparent;
@@ -194,28 +196,34 @@ function openDetail(c: ProcessToolCall): void {
   }
 }
 
+/* 触屏没有 hover，按压态必须自己给：底色与悬停同档，另有全局 scale(0.96) */
+.tool-item:active {
+  background: var(--surface-2);
+}
+
 .tool-icon {
   flex: none;
   width: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
-/* 描述：工具短名 + 目标，随宽度自然换行；长串（URL/哈希）任意位置断行 */
+/* 描述：工具短名 + 目标，随宽度自然换行；长串（URL/哈希）任意位置断行。
+   这是「这一步做了什么」，属于要读的信息 → --text-2 */
 .tool-desc {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-caption);
-  line-height: 1.5;
-  color: var(--text-3);
+  line-height: var(--lh-body);
+  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 
 .tool-name {
-  font-weight: 500;
-  color: var(--text-2);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
 .tool-target::before {
@@ -226,20 +234,22 @@ function openDetail(c: ProcessToolCall): void {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
+/* 失败是「这一步没成」的状态词：实底档 --danger 当文字对比度不够，
+   文字一律走 strong 档（tokens 里 --*-strong 的用途就是这一条） */
 .tool-status.error {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .tool-chevron {
   flex: none;
   display: inline-flex;
-  color: var(--text-3);
-  opacity: 0.45;
+  color: var(--text-2);
+  opacity: var(--disabled-opacity);
   transition:
     opacity var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);

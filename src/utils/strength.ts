@@ -3,7 +3,10 @@
  * 输入是 workout_sets 的查询行（含热身组），输出按「次训练」聚合的做组序列。
  */
 
+import { fmtKg } from './format'
 import type { StrengthSetRecord } from '@/types'
+
+export { fmtKg }
 
 export interface StrengthDay {
   workoutId: number
@@ -32,9 +35,4 @@ export function aggregateStrengthDays(rows: StrengthSetRecord[]): StrengthDay[] 
     }
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.workoutId - b.workoutId)
-}
-
-/** 重量显示：整数不带小数，62.5 保留一位 */
-export function fmtKg(v: number): string {
-  return Number.isInteger(v) ? String(v) : v.toFixed(1)
 }

@@ -34,6 +34,7 @@ import StatusChip from '@/components/common/StatusChip.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { useToast } from '@/composables/useToast'
 import { gatewayService } from '@/services/gatewayService'
+import { fmtRelativeTime } from '@/utils/format'
 import {
   GATEWAY_SCOPE_LABELS,
   type GatewayAuditEntry,
@@ -203,18 +204,7 @@ function scopesText(c: GatewayClient): string {
 }
 
 function fmtSeen(iso: string): string {
-  const ms = Date.parse(iso)
-  if (Number.isNaN(ms)) return '—'
-  const diff = Date.now() - ms
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
-  return new Date(ms).toLocaleString('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return fmtRelativeTime(iso, '—')
 }
 
 /** 最后活跃时间；「在线」本身由行首图标章 + 胶囊承载，不挤进这句话 */
@@ -268,10 +258,10 @@ onUnmounted(() => {
   <section class="card d-full" data-testid="settings-external-access">
     <header class="row between ghead">
       <h2 class="gtitle">外部访问</h2>
-      <span class="t-3">{{ stateHint }}</span>
+      <span class="t-2">{{ stateHint }}</span>
     </header>
 
-    <p class="pnote t-3">
+    <p class="pnote t-2">
       让这台电脑上的其它程序（桌面客户端、小组件）读写在 Rein 里的日程、番茄钟与运动数据。
       每个程序连上来都要你当面批一次，只拿到你勾的那几项权限；下面随时可以撤销。
     </p>
@@ -281,7 +271,7 @@ onUnmounted(() => {
         <i class="fic" :class="{ on: enabled }"><Power :size="17" /></i>
         <span class="col ftxt">
           <b>对外服务</b>
-          <em class="t-3">{{ enabled ? '正在监听，外部程序可以连' : '默认关闭，不监听任何端口' }}</em>
+          <em class="t-2">{{ enabled ? '正在监听，外部程序可以连' : '默认关闭，不监听任何端口' }}</em>
         </span>
         <ToggleSwitch v-model="toggleChoice" label="对外服务" :disabled="busy" data-testid="gateway-toggle-enabled" />
       </div>
@@ -291,7 +281,7 @@ onUnmounted(() => {
         <span class="col ftxt">
           <b v-if="port !== null" class="num">端口 {{ port }}</b>
           <b v-else>端口未监听</b>
-          <em class="t-3">{{ portHint }}</em>
+          <em class="t-2">{{ portHint }}</em>
         </span>
       </div>
     </div>
@@ -300,7 +290,7 @@ onUnmounted(() => {
     <div class="segwrap" data-testid="gateway-bind-mode">
       <SegmentedControl v-model="bindChoice" :options="BIND_OPTIONS" />
     </div>
-    <p class="pnote t-3">
+    <p class="pnote t-2">
       「仅本机」只绑 127.0.0.1：这台电脑上的程序才连得上；网页（带着 Origin 的浏览器连接）在握手阶段就被拒掉。
     </p>
 
@@ -320,7 +310,7 @@ onUnmounted(() => {
         <i class="fic on"><KeyRound :size="17" /></i>
         <span class="col ftxt">
           <b>配对令牌</b>
-          <em class="t-3">
+          <em class="t-2">
             {{
               bindMode === 'lan'
                 ? '外部程序第一次连接时必须带上它。仅本机设置页可见，别外传。'
@@ -366,8 +356,8 @@ onUnmounted(() => {
             <StatusChip>{{ c.grant === 'always' ? '始终允许' : '本次会话' }}</StatusChip>
             <StatusChip v-if="c.scopes.length">{{ c.scopes.length }} 项权限</StatusChip>
           </span>
-          <em class="t-3">{{ scopesText(c) }}</em>
-          <em class="t-3">{{ seenText(c) }}</em>
+          <em class="t-2">{{ scopesText(c) }}</em>
+          <em class="t-2">{{ seenText(c) }}</em>
         </span>
         <button
           type="button"
@@ -384,7 +374,7 @@ onUnmounted(() => {
 
     <template v-if="blocked.length > 0">
       <h3 class="stitle">被拦下的程序</h3>
-      <p class="pnote t-3">
+      <p class="pnote t-2">
         你拒绝过、或撤销过授权、或连续忽略进入静默的程序会列在这里。点「解除」让它回到未记录状态
         —— 下次再连会重新询问。
       </p>
@@ -398,8 +388,8 @@ onUnmounted(() => {
           <i class="fic"><Ban :size="17" /></i>
           <span class="col ftxt">
             <b>{{ b.name || '未命名程序' }}</b>
-            <em class="t-3">{{ blockedReason(b) }}</em>
-            <em v-if="b.ip" class="t-3">来自 {{ b.ip }}</em>
+            <em class="t-2">{{ blockedReason(b) }}</em>
+            <em v-if="b.ip" class="t-2">来自 {{ b.ip }}</em>
           </span>
           <button
             type="button"
@@ -427,7 +417,7 @@ onUnmounted(() => {
 被拦下来的来源列在下方「被拦下的来源」，可以在那里一键加白。"
       />
     </h3>
-    <p class="pnote t-3">
+    <p class="pnote t-2">
       只有精确等于下列字符串的来源能被网页客户端连入（区分大小写，不支持通配）。
     </p>
     <div class="addrow row">
@@ -483,7 +473,7 @@ onUnmounted(() => {
 
     <template v-if="blockedOrigins.length > 0">
       <h3 class="stitle">被拦下的来源</h3>
-      <p class="pnote t-3">
+      <p class="pnote t-2">
         这些来源在握手阶段被拒（403，已记进下面的访问记录）。「加入白名单」即放行它的连接
         —— 放行不等于免检：它照样要过配对令牌与授权弹窗。
       </p>
@@ -526,7 +516,7 @@ onUnmounted(() => {
       </button>
     </h3>
     <div class="audit-note row">
-      <p class="pnote t-3">每次调用与每次被拒都记一行，只读成功不记。</p>
+      <p class="pnote t-2">每次调用与每次被拒都记一行，只读成功不记。</p>
       <!-- 记录边界（参数挑字段、截断、大字段不入表）是后端存储实现，收进说明入口 -->
       <InfoHint
         title="访问记录记什么"
@@ -557,7 +547,7 @@ onUnmounted(() => {
             <!-- 结果提到行首胶囊（配行首图标章）；方法标识只显示中文 scope 名 -->
             <StatusChip :tone="a.decision === 'allowed' ? 'ok' : 'danger'">{{ auditResult(a) }}</StatusChip>
           </b>
-          <em class="t-3">{{ auditWhat(a) }}</em>
+          <em class="t-2">{{ auditWhat(a) }}</em>
           <em v-if="a.detail" class="t-3 detail">{{ a.detail }}</em>
         </span>
       </div>
@@ -566,46 +556,55 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.gtitle,
-.stitle {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--text-2);
+/* 卡片级分区标题：18 Medium（Subtitle_L），与设置主页同一档 —— 一页里「对外服务 /
+   授权记录」这些区块要读得出是「一节」，而不是一条批注。 */
+.gtitle {
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
+/* 卡片内部的小节标题降一档：16 Semibold 与 18 Medium 拉开层级，
+   否则同屏两级标题一样大，读不出谁包含谁 */
 .stitle {
-  margin-top: 16px;
+  margin-top: var(--gap-lg);
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
 }
 
 /* 小节标题行带说明入口的：? 推到行尾，与标题同行（落点约定见 InfoHint 注释） */
 .stitle.row {
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .stitle.row .info-hint {
   margin-left: auto;
 }
 
-/* 卡头与下面那口浅井之间恒为 4px（与设置页其它分区同一条节奏） */
+/* 卡头与下面那口浅井之间：标题与内容间隔 8（与设置页其它分区同一条节奏） */
 .ghead + .card.sub {
-  margin-top: 4px;
+  margin-top: var(--gap-sm);
 }
 
 .pnote {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
-  line-height: 1.7;
+  line-height: var(--lh-body);
 }
 
 .segwrap {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 /* 行组：图标章 + 标题/说明 + 尾部控件（与设置页其它分区的格内行同构） */
+/* 双行行：走 64 的双行列表档（34 图标章 + 16 标题 + 12 说明），
+   行间边界由 1px 分隔线画，不再叠上下内距 */
 .frow {
   width: 100%;
-  gap: 11px;
-  padding: 10px 0;
+  gap: var(--gap-md);
+  padding: 0;
+  min-height: var(--row-h-double);
   text-align: left;
   color: inherit;
 }
@@ -618,7 +617,7 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   background: var(--surface-2);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .fic.on {
@@ -629,12 +628,12 @@ onUnmounted(() => {
 .ftxt {
   flex: 1;
   min-width: 0;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .ftxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .ftxt em {
@@ -650,8 +649,8 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 2px;
+  gap: var(--gap-sm);
+  margin-top: var(--sp-2);
 }
 
 /* 行间细线，首行不留线 */
@@ -661,60 +660,83 @@ onUnmounted(() => {
 
 /* 局域网风险提示：说的是「数据可能被谁拿走」，用危险色，别做成一句可有可无的注脚 */
 .warn {
-  margin-top: 10px;
-  gap: 8px;
+  margin-top: var(--gap-md);
+  gap: var(--gap-sm);
   align-items: flex-start;
-  padding: 10px 12px;
-  border-radius: var(--radius-s);
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m-nest);
   background: var(--danger-soft);
   color: var(--danger-strong);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .warn-ico {
   flex: none;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
 }
 
 .warn b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .warn em {
   font-style: normal;
 }
 
+/* 行尾小按钮：高 28（--control-sm），左右 12，胶囊，12 Medium。
+   视觉保持 28，命中区撑到 44（规范：可点元素热区 ≥44）—— 行高 64，
+   上下各外扩 8 不会压到相邻行。 */
+.revoke,
+.copy,
+.unblock {
+  position: relative;
+}
+
+.revoke::after,
+.copy::after,
+.unblock::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+}
+
 .revoke {
   flex: none;
-  padding: 7px 13px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--danger-soft);
   color: var(--danger-strong);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
 .paircard {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 /* 复制按钮：中性色，与「撤销」的红色区分开 */
 .copy {
   flex: none;
-  padding: 7px 13px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
 /* 令牌串：等宽、可选中、长串换行，别被 ellipsis 吞掉尾部 */
 .paircode {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
   font-family: var(--font-mono, ui-monospace, monospace);
   color: var(--text-2);
@@ -729,12 +751,13 @@ onUnmounted(() => {
 /* 「被拦下」的解除按钮：中性色（不是破坏性操作） */
 .unblock {
   flex: none;
-  padding: 7px 13px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -744,23 +767,31 @@ onUnmounted(() => {
 
 /* 「允许的网页来源」输入行：输入框 + 添加 */
 .addrow {
-  margin-top: 10px;
-  gap: 8px;
+  margin-top: var(--gap-md);
+  gap: var(--gap-sm);
 }
 
 .input {
   flex: 1;
   min-width: 0;
-  padding: 9px 13px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   border: 0.5px solid var(--line);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-caption);
+  font-size: var(--fs-subhead);
 }
 
 .input::placeholder {
   color: var(--text-3);
+}
+
+/* 「添加」是输入行的提交键：与输入框同高（40），不再是一个 30px 的小胶囊 */
+.addrow .copy {
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
+  font-size: var(--fs-callout);
 }
 
 /* Origin / clientId 这类机器串：等宽、可选中；长串换行别被 ellipsis 吞掉尾部 */
@@ -784,30 +815,44 @@ onUnmounted(() => {
   overflow: visible;
   text-overflow: clip;
   word-break: break-all;
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* 审计行主标题：截断 ID + 结果胶囊同一行，长 ID 不把胶囊顶出行外 */
 .audit-who {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 /* 审计标题右侧的刷新（外部调用不推事件，只能手动拉） */
 .refresh {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding: 3px 9px;
+  gap: var(--gap-tight);
+  margin-left: var(--gap-sm);
+  min-height: var(--chip-h);
+  padding: var(--sp-2) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+/* 视觉 22px 不变，热区撑到 44：刷新是审计区唯一的手动更新入口 */
+.refresh::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 16px);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
 }
 
 /* 可见按压态（STANDARDS §4）：四枚行尾按钮同一档缩放 */
@@ -829,7 +874,7 @@ onUnmounted(() => {
 
 /* 记录边界的一行结论 + 说明入口：入口推到行尾 */
 .audit-note {
-  gap: 8px;
+  gap: var(--gap-sm);
   align-items: center;
 }
 

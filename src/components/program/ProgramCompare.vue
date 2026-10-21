@@ -237,12 +237,13 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 <style scoped>
 .cmp {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-md);
 }
 
 .pod {
-  padding: 14px 15px;
-  border-radius: var(--radius-l);
+  /* 与 ProgramConstraints 的 .pod 同一档：内距 16、半径 16 */
+  padding: var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
 }
 
@@ -250,22 +251,25 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--gap-sm);
+  /* 标题行与内容 8 */
+  margin-bottom: var(--gap-sm);
 }
 
 .pod-head b {
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  /* 与 ProgramConstraints / WrapupPage 的顶层 .pod-head 同一档（Subtitle_M 16）：
+     三处「一组方案条件」的容器标题此前这里小一号，读起来像次级说明 */
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-bold);
 }
 
 .pill {
-  padding: 3px 10px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   white-space: nowrap;
 }
 
@@ -277,7 +281,7 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 .explain {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* 矩阵表 */
@@ -288,7 +292,7 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 
 .matrix th,
 .matrix td {
-  padding: 8px 4px;
+  padding: var(--sp-8) var(--sp-4);
   text-align: center;
   font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
@@ -301,7 +305,7 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 .matrix .row-label {
   text-align: left;
   color: var(--text-3);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   width: 72px;
   min-width: 66px;
   font-size: var(--fs-micro);
@@ -309,13 +313,15 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 }
 
 .matrix thead th {
-  padding-bottom: 6px;
+  /* 列头本身就是可点的选列控件：纵向内距交给 .col-hit 的 44 命中区，
+     th 只留底部 6，表头不再是一行 17px 高的「文字」 */
+  padding: 0 var(--sp-4) var(--sp-6);
   border-bottom: 0.5px solid var(--line);
 }
 
 .matrix tbody td {
   border-bottom: 0.5px solid var(--line);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .matrix tbody tr:last-child td {
@@ -325,7 +331,7 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 .matrix td.on,
 .matrix th.on {
   background: var(--accent-soft);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -339,14 +345,18 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 }
 
 .matrix tr.strong td {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-size: var(--fs-subhead);
 }
 
 .col-hit {
   width: 100%;
+  min-height: var(--hit-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   transition:
     color var(--dur-fast) var(--ease-standard),
@@ -355,7 +365,7 @@ const hasUnnamedDay = computed(() => (selPlan.value?.days ?? []).some((d) => !d.
 
 th.on .col-hit {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 不可用档：压暗只落在列头按钮上（禁用态浓度走令牌），
@@ -365,21 +375,21 @@ th.off .col-hit {
 }
 
 .off-tag {
-  margin-top: 3px;
+  margin-top: var(--sp-4);
 }
 
 /* 强度预览网格 */
 .grid {
   display: grid;
-  gap: 5px;
+  gap: var(--gap-tight);
 }
 
 /* 网格图例：缩写 → 课程名（11px + --text-3，一行铺开） */
 .grid-legend {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-8);
   display: flex;
   flex-wrap: wrap;
-  gap: 3px 10px;
+  gap: var(--gap-tight) var(--sp-10);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -387,7 +397,7 @@ th.off .col-hit {
 .gl-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 /* 缩写键：仿格子本身的底色，图例与网格对得上 */
@@ -401,14 +411,14 @@ th.off .col-hit {
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .week-row {
   display: grid;
   grid-template-columns: 44px 1fr 36px;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .wlabel {
@@ -424,20 +434,20 @@ th.off .col-hit {
 
 .wtotal.hot {
   color: var(--warn);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .cells {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .wd {
   text-align: center;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  padding-bottom: 2px;
+  padding-bottom: var(--sp-2);
 }
 
 .cell {
@@ -447,7 +457,7 @@ th.off .col-hit {
   align-items: center;
   justify-content: center;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   background: var(--surface-2);
   color: var(--text-3);
 }
@@ -473,7 +483,7 @@ th.off .col-hit {
 .cell.l3 {
   background: var(--c-exercise);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .cell.rest {
@@ -484,19 +494,26 @@ th.off .col-hit {
 
 /* 预览视图的档位切换 chips：紧贴标题，不可用档不可点 */
 .tier-pick {
-  margin-bottom: 12px;
+  margin-bottom: var(--gap-md);
   display: flex;
-  gap: 7px;
+  /* 档位选择是一组无边界胶囊：8 */
+  gap: var(--gap-sm);
 }
 
 .chip {
+  position: relative;
   flex: 1;
-  padding: 8px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 档位切换是常规按钮档：视觉 40，命中区由 ::after 补到 44 */
+  min-height: var(--control-md);
+  padding: var(--sp-8) 0;
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -505,11 +522,18 @@ th.off .col-hit {
     transform var(--dur-fast) var(--ease-standard);
 }
 
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
+  border-radius: var(--radius-full);
+}
+
 .chip.on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .chip.off {
@@ -518,12 +542,13 @@ th.off .col-hit {
 
 .primary {
   width: 100%;
-  padding: 13px 0;
-  border-radius: var(--radius-s);
+  padding: var(--sp-12) 0;
+  /* 页脚主按钮走按钮档 20 */
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition:
     opacity var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);

@@ -4,6 +4,7 @@ import { Plus } from 'lucide-vue-next'
 
 import { CATEGORY_META, DESKTOP_MIN } from '@/config/domain'
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useZoomWheel } from '@/composables/useZoomWheel'
 import { minToHHmm, nowMin, todayStr, weekDates } from '@/utils/date'
 import { durationOf, layoutDayBlocks, titleLinesFor } from '@/utils/timelineLayout'
 import type { StackGroup } from '@/utils/timelineLayout'
@@ -187,15 +188,7 @@ const pool = computed(() =>
  */
 const isDesk = useMediaQuery(`(min-width: ${DESKTOP_MIN}px)`)
 
-function zoom(factor: number): void {
-  px.value = Math.min(Math.max(px.value * factor, MIN_PX), MAX_PX)
-}
-
-function onWheel(e: WheelEvent): void {
-  if (!e.ctrlKey && !e.metaKey) return
-  e.preventDefault()
-  zoom(e.deltaY > 0 ? 1 / 1.15 : 1.15)
-}
+const { onWheel } = useZoomWheel(px, MIN_PX, MAX_PX)
 
 /** 进入锚定：今天看现在附近，否则看最早安排或 8 点 */
 function scrollToAnchor(): void {
@@ -561,7 +554,7 @@ const HHMM = minToHHmm
 .wk {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 窄屏：表头 + 时间线 + 池 同轴横向滚动（620px 下限），宽屏单列铺满 */
@@ -612,7 +605,7 @@ const HHMM = minToHHmm
   text-align: right;
   /* 当下时刻是时间线的定位词，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--danger);
 }
 
@@ -680,8 +673,8 @@ const HHMM = minToHHmm
 .dh {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  padding: 7px 8px;
+  gap: var(--gap-tight);
+  padding: var(--sp-8);
   border: 0;
   background: transparent;
   font: inherit;
@@ -701,7 +694,7 @@ const HHMM = minToHHmm
 
 .dh .n {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -729,7 +722,7 @@ const HHMM = minToHHmm
 
 .dh .cnt.full {
   color: var(--ok);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 列与块 */
@@ -762,8 +755,8 @@ const HHMM = minToHHmm
   height: 100%;
   display: flex;
   align-items: flex-start;
-  gap: 5px;
-  padding: 3px 6px;
+  gap: var(--gap-tight);
+  padding: var(--sp-4) var(--sp-6);
   border-radius: var(--radius-s);
   overflow: hidden;
   background: color-mix(in srgb, var(--blk-cat) 15%, var(--surface));
@@ -809,7 +802,7 @@ const HHMM = minToHHmm
   min-width: 0;
   /* 块内标题就是待办本身，是这一屏最该读的东西 */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   line-height: var(--blk-lh, 16px);
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -822,7 +815,7 @@ const HHMM = minToHHmm
   flex: none;
   width: 12px;
   height: 12px;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
   border-radius: 50%;
   border: 1.5px solid var(--line-strong);
   background: transparent;
@@ -842,7 +835,7 @@ const HHMM = minToHHmm
   top: calc(100% + 1px);
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-tight);
   /* 块下的开始时刻（「09:00」）是日程的定位信息：原先 9px 是为了塞进矮块，
      提到 --fs-caption（12px）后仍收在块外那一行，line-height: 1 保住不撑高块 */
   font-size: var(--fs-caption);
@@ -854,7 +847,7 @@ const HHMM = minToHHmm
 
 .bmin.live {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .stk .card.face {
@@ -868,11 +861,11 @@ const HHMM = minToHHmm
   pointer-events: auto;
   cursor: pointer;
   border: 0;
-  padding: 1px 5px;
+  padding: var(--sp-2) var(--sp-4);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--text-1) 10%, transparent);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
@@ -897,14 +890,14 @@ const HHMM = minToHHmm
 .pool {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: var(--gap-sm);
   /* 与上方块区网格（56px 刻度栏 + 6px 右缘）对齐 */
   margin: 0 6px 0 56px;
 }
 
 .pcol {
   min-height: 34px;
-  padding: 5px 6px;
+  padding: var(--sp-6);
   border-radius: var(--radius-s);
   background: var(--surface-2);
 }
@@ -916,15 +909,15 @@ const HHMM = minToHHmm
 .pitems {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .pchip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   max-width: 100%;
-  padding: 3px 7px;
+  padding: var(--sp-2) var(--sp-8);
   border: 0.5px solid var(--line);
   border-radius: var(--radius-full);
   background: var(--surface);
@@ -957,7 +950,7 @@ const HHMM = minToHHmm
   white-space: nowrap;
   /* 堆叠面板里的条目标题 */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .padd {

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { ChevronRight, MessageCircle, ListTodo, Play } from 'lucide-vue-next'
 
 import InfoHint from '@/components/common/InfoHint.vue'
+import { fmtMmSs } from '@/utils/format'
 
 /**
  * 时间脊 —— 语音记录的唯一时间原语。
@@ -146,8 +147,7 @@ const rulerTicks = computed(() => {
 })
 
 function fmt(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms, { padMinutes: true })
 }
 
 /** 把注记挂到对应句子的时间点上；同句多条合并成一个锚点 */
@@ -373,6 +373,9 @@ function onAxisClick(e: MouseEvent): void {
 
 /* 定位游标（播放头 / 录制头）：一条竖线。它是这块区域里唯一的竖线，
    用来回答「现在在哪」。实时生长时给一点呼吸 —— 不是装饰光晕，是「它在动」。 */
+/* 刻度 / 块 / 播放头的圆角是**图形几何**（2px 线、3px 细块、4.5px 缩放后的描环），
+   不是界面间距，故保留原值 —— 换成 4/8 的令牌会把 10px 高的色块切成两头圆、
+   把 1.5px 的缝吃掉。 */
 .mhead {
   position: absolute;
   width: 2px;
@@ -434,7 +437,7 @@ function onAxisClick(e: MouseEvent): void {
   top: 0;
   width: 4px;
   height: 4px;
-  margin-left: -2px;
+  margin-left: calc(-1 * var(--sp-2));
   border-radius: 50%;
   background: var(--led-shopping);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-1) 22%, transparent);
@@ -453,13 +456,13 @@ function onAxisClick(e: MouseEvent): void {
 .spine {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .lanes {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .lane-row,
@@ -467,14 +470,14 @@ function onAxisClick(e: MouseEvent): void {
 .axis {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .lane-name {
   flex: none;
   width: 34px;
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -509,7 +512,7 @@ function onAxisClick(e: MouseEvent): void {
   top: 5px;
   bottom: 5px;
   min-width: 3px;
-  padding: 0 8px;
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-xs);
   overflow: hidden;
   text-align: left;
@@ -557,7 +560,7 @@ function onAxisClick(e: MouseEvent): void {
   display: flex;
   align-items: center;
   justify-content: space-evenly;
-  gap: 2px;
+  gap: var(--sp-2);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--text-3) 22%, transparent);
 }
@@ -623,7 +626,7 @@ function onAxisClick(e: MouseEvent): void {
 .legend {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-12);
   padding-left: 44px;
   font-size: var(--fs-micro);
   color: var(--text-2);
@@ -636,7 +639,7 @@ function onAxisClick(e: MouseEvent): void {
 .legend span {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
 }
 
 /* 编码规则留在图例里：caption + text-2 —— 它回答「这张图在编码什么」，是必须读的一句 */
@@ -674,7 +677,7 @@ function onAxisClick(e: MouseEvent): void {
 .strip {
   position: relative;
   height: 18px;
-  margin-bottom: 4px;
+  margin-bottom: var(--sp-4);
   cursor: crosshair;
 }
 
@@ -731,9 +734,9 @@ function onAxisClick(e: MouseEvent): void {
 .tl {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 11px 8px;
-  margin: 0 -8px;
+  gap: var(--gap-md);
+  padding: var(--sp-12) var(--sp-8);
+  margin: 0 calc(-1 * var(--sp-8));
   border-radius: var(--radius-s);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-standard);
@@ -763,9 +766,12 @@ function onAxisClick(e: MouseEvent): void {
 
 .tl .who {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 0 6px;
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--led-shopping) 12%, transparent);
   color: var(--text-1);
@@ -775,7 +781,7 @@ function onAxisClick(e: MouseEvent): void {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-callout);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-1);
 }
 
@@ -808,15 +814,16 @@ function onAxisClick(e: MouseEvent): void {
   }
 }
 
+/* 行内小徽章 15px：圆角走最小一档（4） */
 .ipin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 15px;
   height: 15px;
-  margin-left: 5px;
+  margin-left: var(--sp-4);
   vertical-align: -2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--led-shopping) 16%, transparent);
   color: var(--text-1);
 }
@@ -829,8 +836,8 @@ function onAxisClick(e: MouseEvent): void {
 .silence {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 5px 8px 5px 0;
+  gap: var(--gap-md);
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) 0;
 }
 
 /* 折叠掉的那段空场有多长，是这一行唯一的读数：时间戳抬到 caption + text-2，
@@ -844,9 +851,12 @@ function onAxisClick(e: MouseEvent): void {
 
 /* 标签保留胶囊形态：surface-2 底 + text-2 字，当「折叠静默」的形态标记 */
 .slabel {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  padding: 2px 9px;
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -854,8 +864,8 @@ function onAxisClick(e: MouseEvent): void {
 .pinbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 10px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-10);
   font-size: var(--fs-micro);
   color: var(--text-3);
 }
@@ -864,16 +874,10 @@ function onAxisClick(e: MouseEvent): void {
   display: inline-block;
   width: 2px;
   height: 13px;
-  margin-left: 3px;
+  margin-left: var(--sp-4);
   vertical-align: -2px;
   background: var(--led-shopping);
-  animation: caret 1s steps(2) infinite;
-}
-
-@keyframes caret {
-  50% {
-    opacity: 0;
-  }
+  animation: rein-caret-blink 1s steps(2) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -49,16 +49,18 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
 <style scoped>
 .fnb {
   position: fixed;
-  top: calc(var(--safe-top) + 8px);
+  /* 顶部浮条离安全区 8：与抽屉/浮条避让的同一档 */
+  top: calc(var(--safe-top) + var(--gap-sm));
   left: 50%;
   transform: translateX(-50%);
   /* 低于 GrabFloatBar 的 80：两条同时在时把上位让给抢课监视器 */
   z-index: 78;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--gap-sm);
   width: min(calc(var(--frame-max) - 24px), calc(100vw - 24px));
-  padding: 9px 12px;
+  /* 浮条：上下 10 + 两行 12/12 ≈ 44 高，左右 12 */
+  padding: var(--sp-10) var(--pad-inline);
   border-radius: var(--radius-l);
   color: var(--text-1);
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -80,12 +82,13 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
 .lines {
   flex: 1;
   min-width: 0;
-  gap: 1px;
+  /* 标题与副行：主次文本上下 2 */
+  gap: var(--gap-text);
 }
 
 .t {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.2px;
   white-space: nowrap;
   overflow: hidden;
@@ -94,7 +97,7 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
 
 .b {
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -118,7 +121,8 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
 .cls::after {
   content: '';
   position: absolute;
-  inset: -9px;
+  /* 26 的视觉钮要撑到 44 命中区：外扩 10（9 不是 4/8 体系，10 也够到 46） */
+  inset: calc(-1 * var(--sp-10));
 }
 
 .cls:active {

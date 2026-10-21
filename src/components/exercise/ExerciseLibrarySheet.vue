@@ -322,21 +322,21 @@ async function removeCustom(): Promise<void> {
 
 <style scoped>
 .titlerow {
-  gap: 10px;
+  gap: var(--sp-10);
   align-items: center;
 }
 
 .name {
   font-size: var(--fs-title2);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .badge {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 3px 10px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   /* 「自建 / 已隐藏」是来源标签，不是类型字章：文字走中性色，
      色相留在 soft 底的色块上（色彩配额，STANDARDS §4） */
@@ -350,18 +350,18 @@ async function removeCustom(): Promise<void> {
 }
 
 .sub {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-footnote);
   color: var(--text-2);
 }
 
 /* 小节标题行：右侧留帮助入口位（sec-hint 用 margin-left:auto 顶到行尾） */
 .sec {
-  margin: 18px 0 10px;
+  margin: var(--sp-18) 0 var(--sp-10);
   display: flex;
   align-items: center;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
   color: var(--text-3);
 }
@@ -374,7 +374,7 @@ async function removeCustom(): Promise<void> {
 .steps {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
   padding-left: 0;
   list-style: none;
   counter-reset: step;
@@ -382,9 +382,9 @@ async function removeCustom(): Promise<void> {
 
 .steps li {
   position: relative;
-  padding-left: 26px;
+  padding-left: var(--sp-26);
   font-size: var(--fs-footnote);
-  line-height: 1.65;
+  line-height: var(--lh-body);
   color: var(--text-1);
   counter-increment: step;
 }
@@ -401,14 +401,14 @@ async function removeCustom(): Promise<void> {
   background: var(--c-exercise-soft);
   color: var(--text-1);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 18px;
   text-align: center;
 }
 
 .secsub {
-  margin-left: 8px;
-  font-weight: 500;
+  margin-left: var(--sp-8);
+  font-weight: var(--fw-medium);
   letter-spacing: 0;
 }
 
@@ -417,34 +417,34 @@ async function removeCustom(): Promise<void> {
 .curvebox {
   border-radius: var(--radius-m);
   background: var(--surface-2);
-  padding: 14px 12px 10px;
+  padding: var(--sp-14) var(--sp-12) var(--sp-10);
 }
 
 .advicecard {
-  padding: 13px 14px;
+  padding: var(--sp-12) var(--sp-14);
 }
 
 .adviceline {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 「今日状态 ×…」是次要行：系数只微调重量，不能和重量建议同字号并列 */
 .advicestate {
-  margin-top: 4px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .advicewhy {
-  margin-top: 5px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .lastline {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
@@ -453,13 +453,13 @@ async function removeCustom(): Promise<void> {
 .stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .cell {
   background: var(--surface-2);
   border-radius: var(--radius-m);
-  padding: 11px 14px;
+  padding: var(--sp-10) var(--sp-14);
 }
 
 .cell em {
@@ -477,45 +477,45 @@ async function removeCustom(): Promise<void> {
 
 .cell b {
   display: block;
-  margin-top: 1px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .cell i {
   font-style: normal;
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   font-size: var(--fs-micro);
   color: var(--text-3);
-  margin-left: 1px;
+  margin-left: var(--sp-2);
 }
 
 .tips {
   font-size: var(--fs-callout);
   color: var(--text-1);
-  line-height: 1.7;
+  line-height: var(--lh-body);
   white-space: pre-line;
 }
 
 /* 操作区：程序页 .cap 胶囊语言（描边白底、危险项红字），居中收成一排 */
 .ops {
-  margin-top: 18px;
+  margin-top: var(--sp-18);
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .op {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 16px;
+  gap: var(--gap-tight);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 

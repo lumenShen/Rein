@@ -67,6 +67,7 @@ import { shareInbox } from '@/system/shareInbox'
 import type { SendImage } from '@/stores/ai'
 import type { VoiceMemo } from '@/types'
 import { fmtDateCn, toDateStr } from '@/utils/date'
+import { fmtMmSs } from '@/utils/format'
 import type { AiMessage, AiDocMeta, KbEmbeddingMode, KbEntry, MealType } from '@/types'
 
 /** AI 页：拍照直识别（可编辑卡片 + 草稿箱）/ 文字记饮食 / 数据工具对话。 */
@@ -460,8 +461,7 @@ function looksLikeMarkdown(text: string): boolean {
 }
 
 function fmtVoiceDur(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms)
 }
 
 function send(): void {
@@ -1058,7 +1058,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
             ref="inputEl"
             v-model="draft"
             rows="1"
-            :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : '吃了什么？例如：一个鸡蛋和一碗米饭'"
+            :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : '吃了什么？例如：一碗米饭'"
             @keydown.enter.exact.prevent="send"
             @input="autoGrow"
           />
@@ -1179,7 +1179,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
      输入条底边因此落在 Dock 顶上方 10px
      （间距不变量：AI 输入栏底→底栏顶 = --cb-gap，见 scripts/e2e-layout-guard.mjs）。
      悬浮运动条停靠在底部时写入的 --wbar-reserve 一并计进来。 */
-  --cb-gap: 10px;
+  --cb-gap: var(--sp-10);
   /* 底栏（输入条）底边到视口底的距离。移动端让开 Dock；--wbar-reserve 是
      悬浮运动条停靠底部时由组件写入的高度预留，一并计进来，否则两者会叠。 */
   --cb-bottom: calc(var(--dock-top) + var(--cb-gap) + var(--wbar-reserve, 0px));
@@ -1227,12 +1227,12 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 引用块（气泡内）：强调改走整面 accent soft tint，不再靠左边框（side-tab 收编） */
 .qblock {
   max-width: 82%;
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   background: var(--accent-soft);
   border-radius: var(--radius-m);
   color: var(--text-1);
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1245,9 +1245,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 引用条（输入条上方）：悬浮的一小块，底走 --surface-translucent ——
    它和芯片不同，下面没有玻璃垫着，太薄的底会被背后的正文压穿。 */
 .quote-bar {
-  gap: 8px;
-  padding: 7px 10px;
-  margin-bottom: 6px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-12);
+  margin-bottom: var(--gap-sm);
   border-radius: var(--radius-m);
   background: var(--surface-translucent);
 }
@@ -1302,7 +1302,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 多图：两列网格 */
 .photo-bubble.multi {
   flex-wrap: wrap;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .photo-bubble.multi img {
@@ -1314,9 +1314,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .doc-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
   max-width: 86%;
-  padding: 9px 12px;
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -1328,7 +1328,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 }
 
 .dc-name {
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   font-size: var(--fs-footnote);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1346,7 +1346,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: var(--gap-tight) var(--gap-sm);
 }
 
 /* AI 挂出的文件卡片列：跟着消息列左对齐（.msg-col 的 align-items 已经管了），
@@ -1356,7 +1356,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: var(--gap-tight);
   width: 100%;
   max-width: 100%;
 }
@@ -1420,8 +1420,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   display: none;
 }
 
+/* 气泡之间 8：同一屏里每条消息的独立性靠这条固定节奏读出来 */
 .msg {
-  margin-bottom: 10px;
+  margin-bottom: var(--gap-sm);
   display: flex;
   /* 长按期间的按压反馈。只换底色不缩放：消息行是通栏容器，
      transform 会把正文宽度一起改掉 */
@@ -1458,7 +1459,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .msg-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-sm);
   max-width: 82%;
 }
 
@@ -1474,14 +1475,16 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   max-width: 100%;
 }
 
-/* 气泡 */
+/* 气泡：内距 12（竖向）/ 16（横向），行高走正文档。
+   overflow-wrap 兜住长串（URL / 路径 / 哈希）：气泡是定宽列，长串不能把它撑出横向滚动。 */
 .bubble {
   max-width: 82%;
-  padding: 9px 14px;
+  padding: var(--sp-12) var(--sp-16);
   border-radius: var(--radius-l);
   font-size: var(--fs-subhead);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .msg.user .bubble {
@@ -1493,7 +1496,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .msg.assistant .bubble {
   background: var(--surface);
   box-shadow: var(--shadow-card);
-  border-bottom-left-radius: 6px;
+  border-bottom-left-radius: var(--radius-xs);
 }
 
 /* 流式打字光标与打字点（仅流式占位气泡） */
@@ -1501,20 +1504,16 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   display: inline-block;
   width: 2px;
   height: 1em;
-  margin-left: 2px;
+  margin-left: var(--sp-2);
   vertical-align: -0.12em;
   background: var(--text-2);
-  animation: caret-blink 1s steps(2, start) infinite;
-}
-
-@keyframes caret-blink {
-  50% { opacity: 0; }
+  animation: rein-caret-blink 1s steps(2, start) infinite;
 }
 
 .tdots {
   display: inline-flex;
-  gap: 4px;
-  padding: 2px 0;
+  gap: var(--gap-tight);
+  padding: var(--sp-2) 0;
 }
 
 .tdots i {
@@ -1547,15 +1546,15 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   max-width: 360px;
   background: var(--surface);
   box-shadow: var(--shadow-card);
-  border-radius: var(--radius-l);
-  border-bottom-left-radius: 6px;
-  padding: 14px;
+  border-radius: var(--radius-m);
+  border-bottom-left-radius: var(--radius-xs);
+  padding: var(--pad-card);
 }
 
 .parse-title {
   font-size: var(--fs-footnote);
-  font-weight: 700;
-  margin-bottom: 8px;
+  font-weight: var(--fw-bold);
+  margin-bottom: var(--gap-sm);
 }
 
 /* 食物草稿箱 */
@@ -1567,15 +1566,16 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .drow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 0;
+  gap: var(--gap-md);
+  padding: 0;
+  min-height: var(--row-h-double);
 }
 
 /* 编辑入口铺满整行：行本身不再是 click 目标，键盘焦点与读屏都落在这颗按钮上 */
 .drow-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-md);
   flex: 1;
   min-width: 0;
   text-align: left;
@@ -1589,7 +1589,8 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   width: 46px;
   height: 46px;
   flex: none;
-  border-radius: var(--radius-m);
+  /* 缩略图走小尺寸容器档 8，不跟母卡抢 16 */
+  border-radius: var(--radius-s);
   object-fit: cover;
   background: var(--surface-2);
 }
@@ -1598,7 +1599,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .dinfo {
@@ -1607,14 +1608,15 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 
 .dtitle {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .dmeta {
-  margin-top: 1px;
+  /* 主次文本上下 2：标题与下面那行时间/项数走语义间隔 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -1646,27 +1648,28 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 }
 
 .meal {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 /* 解析卡的两个去向：存草稿（次要）/ 加入记录（主操作）。
    两个都排右侧、主操作在最后 —— 与弹层里 FoodParseSheet 的那条同一条约定。 */
 .actions {
-  margin-top: 12px;
-  gap: 8px;
+  margin-top: var(--gap-md);
+  gap: var(--gap-sm);
   justify-content: flex-end;
 }
 
 .stash {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 10px 16px;
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
-  font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .stash:disabled {
@@ -1675,44 +1678,47 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 
 /* 匹配情况说明：卡面上要读出来的原因，不用 --text-3（见模板注释） */
 .parse-hint {
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .commit {
-  padding: 10px 18px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-20);
   border-radius: var(--radius-full);
   background: var(--ok);
   color: var(--on-accent);
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
 }
 
 .committed {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-sm);
   font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--ok);
+  font-weight: var(--fw-semibold);
+  /* 状态词当文字用：实底档 --ok 压白底只有 ~2.2:1，走 --ok-strong */
+  color: var(--ok-strong);
 }
 
 /* 分析卡 */
 .a-title {
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent);
-  margin-bottom: 6px;
+  margin-bottom: var(--gap-tight);
 }
 
 .a-body {
   font-size: var(--fs-subhead);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* 「快捷操作」药丸（.chips / .chip）已随那两颗 chip 一起撤掉，样式不再有引用。 */
@@ -1721,8 +1727,8 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .attach-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 2px 8px;
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-2) var(--sp-8);
 }
 
 .attach-chip {
@@ -1736,7 +1742,8 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-m);
+  /* 图片走小圆角档 8（不是母卡的 16） */
+  border-radius: var(--radius-s);
   background: var(--surface-2);
 }
 
@@ -1766,15 +1773,15 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 待发送文档芯片（文档卡 + 内嵌图勾选网格） */
 .doc-attach {
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .doc-chip {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--pad-inline);
   border-radius: var(--radius-m);
   /* 待发送文档芯片也是悬浮的一块：与引用条同档的底（下面没有玻璃垫着） */
   background: var(--surface-translucent);
@@ -1785,7 +1792,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .doc-imgs {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .doc-img {
@@ -1810,7 +1817,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   font-size: var(--fs-caption);
   color: var(--text-2);
   text-align: center;
-  padding: 2px 0 3px;
+  padding: var(--sp-2) 0 var(--sp-4);
 }
 
 .doc-img.on img {
@@ -1839,15 +1846,15 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .doc-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 语音轮气泡（用户侧，点开语音会话回看纪要/重放） */
 .voice-bub {
   max-width: 82%;
-  padding: 9px 13px;
+  padding: var(--sp-12) var(--sp-16);
   border-radius: var(--radius-l);
   border-bottom-right-radius: var(--radius-xs);
   background: var(--accent);
@@ -1855,48 +1862,49 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .voice-bub .vb-head {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   opacity: 0.92;
 }
 
 .voice-bub .vb-txt {
   font-size: var(--fs-subhead);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .voice-bub .vb-go {
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 /* @纪要引用 chips */
 .memo-refs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 2px 8px;
+  gap: var(--gap-sm);
+  padding: 0 var(--sp-2) var(--sp-8);
 }
 
 .memo-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--gap-sm);
   border-radius: var(--radius-full);
   /* 纪要芯片也浮在正文上：底色取主色的 16% 并与 --surface-translucent 合成，
      而不是 12% 的主色直接铺在半透明层上（那样正文会透上来） */
   background: color-mix(in srgb, var(--accent) 16%, var(--surface-translucent));
   color: var(--accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   max-width: 70%;
   overflow: hidden;
   white-space: nowrap;
@@ -1929,14 +1937,17 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 }
 
 /* 输入条内部：底与描边由 GlassSurface 给（`.cbar`），这里只排布控件 ——
-   8px 内边距 + 40px 圆钮 = 56px 高，与 Dock 的 58px 同档。 */
+   8px 内边距 + 40px 圆钮 = 56px 高，与 Dock 的 58px 同档。
+   （圆钮 40 是**尺寸**几何，与 34 的通用图标钮不同档：输入条要贴着 Dock 的
+   58px 读成同一条底栏，缩到 34 就成了「细一号的输入框」。） */
 .inbar {
   width: 100%;
-  gap: 8px;
-  padding: 8px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8);
 }
 
 .cam {
+  position: relative;
   width: 40px;
   height: 40px;
   flex: none;
@@ -1954,6 +1965,21 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
     transform var(--dur-fast) var(--ease-standard);
 }
 
+/* 输入条三颗圆钮的视觉是 40，热区补到 44：外扩 2px 落在 8px 间距里，
+   不会互相压住，也不改输入条 56px 的高度。 */
+.cam::after,
+.vbtn::after,
+.send::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .cam:active {
   background: color-mix(in srgb, var(--text-1) 16%, transparent);
 }
@@ -1961,6 +1987,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 语音输入钮（与 .cam 同配方）。按住说话是持续手势：
    touch-action 关掉滚动/长按的浏览器默认处理，长按不弹系统菜单也不起滚动 */
 .vbtn {
+  position: relative;
   width: 40px;
   height: 40px;
   flex: none;
@@ -1992,8 +2019,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   outline: none;
   background: transparent;
   resize: none;
+  /* 22px 是行盒几何（5 行 × 22 = 110 的 max-height 跟它同源），不是间距 */
   line-height: 22px;
-  padding: 9px 0;
+  padding: var(--sp-8) 0;
   max-height: 110px; /* 5 行 × 22px */
   overflow-y: auto;
   scrollbar-width: none;
@@ -2012,6 +2040,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 }
 
 .send {
+  position: relative;
   width: 40px;
   height: 40px;
   flex: none;

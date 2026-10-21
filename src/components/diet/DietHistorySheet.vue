@@ -322,7 +322,7 @@ async function onDelete(): Promise<void> {
 
 <style scoped>
 .hist {
-  padding-bottom: 8px;
+  padding-bottom: var(--gap-sm);
 }
 
 /* ---------- 日选栏：Dock 栏目风格 ----------
@@ -347,10 +347,12 @@ async function onDelete(): Promise<void> {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 -18px;
+  gap: var(--gap-sm);
+  /* 这里是「全宽出血」而不是页面留白：负 margin 与侧内距都取 --pad-sheet
+     （抽屉内容区的左右内距），两边永远同源，抽屉内距改档时不会错位 */
+  margin: 0 calc(-1 * var(--pad-sheet));
   background: var(--surface);
-  padding: 4px 18px 10px;
+  padding: var(--gap-tight) var(--pad-sheet) var(--sp-10);
 }
 
 /* 玻璃档（高画质及以上）：条**整条什么都不画** —— 底色透明，连整宽的模糊也不挂。
@@ -398,6 +400,7 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 
 /* 侧钮：Dock 两侧那两块独立圆玻璃的几何（直径 ≈ 药丸高），翻周用 */
 .dock-side {
+  position: relative;
   width: 38px;
   height: 38px;
   flex: none;
@@ -411,6 +414,13 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
   box-shadow: var(--shadow-thumb);
 }
 
+/* 38 的翻周钮命中区补到 44：两侧各扩 3，与中间药丸隔 8，不会互相吃掉 */
+.dock-side::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+
 .dock-side:disabled {
   opacity: var(--disabled-opacity);
 }
@@ -421,8 +431,9 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  padding: 3px;
+  /* 格间 2（同一容器内最小缝），容器内距 4 */
+  gap: var(--gap-text);
+  padding: var(--gap-tight);
   border-radius: var(--radius-full);
   background: var(--glass-fill);
   border: 1px solid var(--line);
@@ -434,9 +445,10 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
-  padding: 4px 0 5px;
+  /* 竖排三行（数字 / 周几 / 摄入痕迹）：上 4、下 6 */
+  padding: var(--gap-tight) 0 var(--sp-6);
   border-radius: var(--radius-full);
   color: var(--text-3);
   transition:
@@ -450,8 +462,9 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 
 .dd {
   font-size: var(--fs-headline);
-  font-weight: 700;
-  line-height: 1.15;
+  font-weight: var(--fw-bold);
+  /* 数字用展示级紧行高，药丸高度靠它压住 */
+  line-height: var(--lh-display);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
@@ -459,8 +472,9 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 .dw {
   /* 周几标签是「哪天练了」的读法依据，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
-  line-height: 1.1;
+  font-weight: var(--fw-semibold);
+  /* 与数字同一档紧行高：三行竖排总高不因这行多出 2px */
+  line-height: var(--lh-display);
 }
 
 .mbar {
@@ -496,10 +510,11 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 .ovcard {
   display: block;
   width: 100%;
-  margin-top: 10px;
-  padding: 16px;
+  margin-top: var(--gap-md);
+  padding: var(--pad-card);
   text-align: left;
-  border-radius: var(--radius-xl);
+  /* 抽屉里的白卡是卡片层级：16（32 是半模态自己的圆角） */
+  border-radius: var(--radius-m);
   background: var(--sheet-card-fill);
   box-shadow: var(--sheet-card-shadow);
 }
@@ -508,20 +523,22 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 .ovgo {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 /* 餐次小节 */
 .meal {
-  margin-top: 16px;
+  /* 餐次小节之间 16（有明显边界的区块） */
+  margin-top: var(--gap-lg);
 }
 
 .mhead {
   display: flex;
   align-items: center;
-  gap: 9px;
+  /* 餐次图标与名称：图标与文字左右 8 */
+  gap: var(--gap-sm);
 }
 
 .mic {
@@ -536,24 +553,26 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 
 .mhead b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .ksum {
   margin-left: auto;
   font-size: var(--fs-caption);
-  color: var(--text-3);
-  font-weight: 600;
+  /* 这一餐的总热量是要读的数 → --text-2 */
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
 }
 
 /* 记录行：高频列表，不加过渡 */
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--gap-md);
   width: 100%;
-  margin-top: 7px;
-  padding: 11px 14px;
+  /* 行与行之间 8；行本身是卡片式条目：内距 12/16 */
+  margin-top: var(--gap-sm);
+  padding: var(--sp-12) var(--pad-card);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   text-align: left;
@@ -564,12 +583,12 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 .rname {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   white-space: nowrap;
@@ -578,21 +597,23 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 
 .rsub {
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  /* 份量与克数是这条记录的可核对依据 → --text-2 */
+  color: var(--text-2);
 }
 
 /* 行内指标格：本笔四大指标占当日目标（颜色留在条上，数字走中性） */
 .nutgrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 8px;
+  /* 四格指标：格间 8，与明细文字之间 8 */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
 }
 
 .ncell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--gap-tight);
   min-width: 0;
 }
 
@@ -600,16 +621,16 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 4px;
-  /* 营养素名 + 数值，是要读的数，不吃 11px */
+  gap: var(--gap-tight);
+  /* 营养素名 + 数值，是要读的数，不吃 11px、也不落 --text-3 */
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-3);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
   white-space: nowrap;
 }
 
 .nval {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -636,7 +657,7 @@ html[data-perf]:not([data-perf='low']) .dock-pill {
 .rkcal {
   flex: none;
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 </style>

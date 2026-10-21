@@ -224,7 +224,7 @@ async function save(): Promise<void> {
 <style scoped>
 .field {
   display: block;
-  padding: 10px 0;
+  padding: var(--sp-10) 0;
 }
 
 .field + .field {
@@ -233,26 +233,26 @@ async function save(): Promise<void> {
 
 .flabel {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: var(--sp-6);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .fsub {
-  margin-left: 8px;
-  font-weight: 500;
+  margin-left: var(--sp-8);
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 /* 肌群芯片按部位分组（39 键平铺太长） */
 .mgroup + .mgroup {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 .ghead {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: var(--sp-4);
   font-size: var(--fs-micro);
   letter-spacing: 1px;
   color: var(--text-3);
@@ -261,7 +261,7 @@ async function save(): Promise<void> {
 .field input,
 .field textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   font-size: var(--fs-body);
@@ -270,7 +270,7 @@ async function save(): Promise<void> {
 
 .field textarea {
   resize: vertical;
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .field input::placeholder,
@@ -279,7 +279,7 @@ async function save(): Promise<void> {
 }
 
 .chips {
-  gap: 7px;
+  gap: var(--sp-6);
   flex-wrap: wrap;
 }
 
@@ -287,13 +287,13 @@ async function save(): Promise<void> {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 13px;
+  gap: var(--gap-tight);
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -305,7 +305,7 @@ async function save(): Promise<void> {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 档位文字（主攻/辅助/稳定）不用 opacity 压层级：它在 --text-2 上再乘 0.75，
@@ -313,7 +313,7 @@ async function save(): Promise<void> {
    层级靠字号（micro）/ 字重（700）区分；选中态实色继承 --on-accent。 */
 .chip b {
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .chip.on b {
@@ -322,9 +322,9 @@ async function save(): Promise<void> {
 
 .save {
   width: 100%;
-  margin-top: 16px;
-  gap: 7px;
-  padding: 13px 0;
+  margin-top: var(--sp-16);
+  gap: var(--sp-6);
+  padding: var(--sp-12) 0;
   /* 通栏主操作统一胶囊：另一个 `.primary`（MuscleCatchupSheet）本就是 --radius-full，
      同一角色两个形状是命名同族、形状分道。iOS 的通栏主操作也是胶囊。
      （决策见 docs/exercise-quality-review-2026-10-17.md §8 D5） */
@@ -332,7 +332,7 @@ async function save(): Promise<void> {
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .save:disabled {

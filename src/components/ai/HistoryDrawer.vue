@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { MessageSquarePlus, X } from 'lucide-vue-next'
 
 import { useAiStore } from '@/stores/ai'
+import { fmtSameDayTime } from '@/utils/format'
 
 /** 历史记录抽屉：会话列表（最新置顶）+ 新对话；点击切换会话。 */
 defineProps<{ open: boolean }>()
@@ -12,13 +13,7 @@ const ai = useAiStore()
 
 /** 更新时间展示：今天 HH:mm，否则 MM-DD HH:mm */
 function fmtTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  return sameDay ? hm : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}`
+  return fmtSameDayTime(iso)
 }
 
 const list = computed(() => ai.chats)
@@ -121,35 +116,46 @@ function onMask(): void {
   right: 0;
   bottom: 0;
   z-index: 111;
-  width: min(320px, 86vw);
+  /* 抽屉宽按 HarmonyOS 规格 480，手机上再由 86vw 收进屏内（430 宽时仍是 370） */
+  width: min(480px, 86vw);
   --glass-fill: color-mix(in srgb, var(--surface) 70%, transparent);
-  border-radius: var(--radius-l) 0 0 var(--radius-l);
+  /* 顶层浮层圆角 32（桌面令牌降为 24）：贴右缘，只圆左侧两角 */
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
   display: flex;
   flex-direction: column;
   padding: var(--safe-top) 0 0;
 }
 
 .dk-head {
-  padding: 16px 14px 10px;
-  gap: 8px;
+  padding: var(--sp-16) var(--pad-sheet) var(--gap-md);
+  gap: var(--gap-sm);
 }
 
 .dk-head h2 {
-  font-size: var(--fs-headline);
-  font-weight: 700;
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-bold);
   flex: 1;
   min-width: 0;
 }
 
 .dk-new {
-  gap: 5px;
-  padding: 7px 12px;
+  position: relative;
+  gap: var(--gap-tight);
+  min-height: var(--control-sm);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   flex: none;
+}
+
+/* 28 的小按钮热区上下补到 44（右侧关闭钮已有自己的 44 热区，横向不扩） */
+.dk-new::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .dk-close {
@@ -175,20 +181,22 @@ function onMask(): void {
 .dk-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 10px calc(var(--safe-bottom) + 14px);
+  padding: var(--sp-4) var(--sp-12) calc(var(--safe-bottom) + var(--sp-16));
   scrollbar-width: none;
 }
 
 .dk-item {
   width: 100%;
   text-align: left;
-  padding: 12px 12px;
-  margin-bottom: 6px;
-  border-radius: var(--radius-m);
+  min-height: var(--row-h-double);
+  padding: var(--pad-card-tight);
+  margin-bottom: var(--gap-sm);
+  border-radius: var(--radius-m-nest);
   background: var(--surface-2);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: center;
+  gap: var(--gap-text);
 }
 
 /* 选中项：文字用 `--accent-strong` 而不是 `--accent`。
@@ -211,8 +219,8 @@ function onMask(): void {
 
 .dk-title {
   font-size: var(--fs-subhead);
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-subtitle);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

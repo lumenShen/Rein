@@ -176,7 +176,9 @@ const lanes = computed<Lane[]>(() => {
     {
       id: 'gate',
       title: '全局闸门',
-      hint: '任意两次请求之间的最小间隔 —— 上面每段等待都排在它后面',
+      // 第二半句（「上面每段等待都排在它后面」）由下面的 .foot 承担：
+      // 这一行要容得下 10px 的正文，长句会撞上右端的刻度标签
+      hint: '任意两次请求之间的最小间隔',
       span: spanE,
       marks: [{ at: v.minIntervalMs, label: `${fmtMs(v.minIntervalMs)}` }],
       segs: [{ key: 'minIntervalMs', text: '最小间隔', ms: v.minIntervalMs, tone: 'accent' }],
@@ -274,7 +276,7 @@ const rateWord = computed(() =>
     >
       <g v-for="({ lane, placed }, li) in board" :key="lane.id" :transform="`translate(0 ${li * LANE_H})`">
         <text class="lane-title" :x="PAD" y="11">{{ lane.title }}</text>
-        <text class="lane-hint" :x="PAD" y="21">{{ lane.hint }}</text>
+        <text class="lane-hint" :x="PAD" y="23">{{ lane.hint }}</text>
         <text class="lane-scale num" :x="W - PAD" y="11" text-anchor="end">
           满宽 = {{ fmtMs(lane.span) }}
         </text>
@@ -283,7 +285,7 @@ const rateWord = computed(() =>
 
         <g v-for="m in lane.marks" :key="m.label">
           <line class="mark" :x1="markX(lane, m.at)" :y1="26" :x2="markX(lane, m.at)" :y2="64" />
-          <text class="mark-label" :x="markX(lane, m.at) + 3" y="24">{{ m.label }}</text>
+          <text class="mark-label" :x="markX(lane, m.at) + 3" y="27">{{ m.label }}</text>
         </g>
 
         <g
@@ -326,29 +328,29 @@ const rateWord = computed(() =>
 
 <style scoped>
 .wrap {
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-10);
 }
 
 .top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .top b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .rate {
   font-size: var(--fs-micro);
-  font-weight: 700;
-  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   font-variant-numeric: tabular-nums;
 }
@@ -370,8 +372,8 @@ const rateWord = computed(() =>
 
 .sub {
   font-size: var(--fs-micro);
-  line-height: 1.45;
-  margin: 3px 0 4px;
+  line-height: var(--lh-caption);
+  margin: var(--sp-4) 0 var(--sp-4);
   color: var(--text-2);
 }
 
@@ -382,24 +384,25 @@ const rateWord = computed(() =>
   overflow: visible;
 }
 
-/* SVG 里的文字用 class 上色：`fill="var(--x)"` 这种写法不会被解析 */
+/* SVG 里的文字用 class 上色：`fill="var(--x)"` 这种写法不会被解析。
+   字号一律走阶梯：图内最小 10（--fs-micro），8px 在手机上是一层灰雾 ——
+   刻度是**数字**，读不出来这张图就白画了。 */
 .lane-title {
   fill: var(--text-1);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
 }
 
-/* 图里的三种小字（提示 / 刻度 / 引导线标签）都在 8px —— 这个尺寸上已经没有
-   留「层次」的余地了，全部给到可读的那一档，层次交给字重与字号
-   （.lane-title 是 9.5px/700）。刻度是**数字**，读不出来这张图就白画了。 */
+/* 图里的三种小字（提示 / 刻度 / 引导线标签）都在 10px —— 这是字号下限，
+   层次交给字重与颜色（标题 12 / 700），不再靠「再小一号」分档 */
 .lane-hint {
   fill: var(--text-2);
-  font-size: 8px;
+  font-size: var(--fs-micro);
 }
 
 .lane-scale {
   fill: var(--text-2);
-  font-size: 8px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
 
@@ -416,7 +419,7 @@ const rateWord = computed(() =>
 
 .mark-label {
   fill: var(--text-2);
-  font-size: 8px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
 
@@ -454,8 +457,8 @@ const rateWord = computed(() =>
 
 .seg-text {
   fill: var(--on-accent);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
 }
 
 .leader {
@@ -469,14 +472,14 @@ const rateWord = computed(() =>
 
 .seg-label {
   fill: var(--text-2);
-  font-size: 8.5px;
-  font-weight: 600;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 
 .seg-label.hot {
   fill: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 没在调的那几段淡下去：一眼看出这次动的是谁 */
@@ -486,8 +489,8 @@ const rateWord = computed(() =>
 
 .foot {
   font-size: var(--fs-micro);
-  line-height: 1.5;
-  margin-top: 4px;
+  line-height: var(--lh-body);
+  margin-top: var(--sp-4);
   color: var(--text-2);
 }
 

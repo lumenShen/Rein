@@ -117,9 +117,9 @@ function onClick(ev: MouseEvent): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   height: 100%;
-  padding: 10px 8px;
+  padding: var(--sp-12) var(--sp-8);
   border-radius: var(--radius-m);
   text-align: center;
   cursor: default;
@@ -148,7 +148,7 @@ function onClick(ev: MouseEvent): void {
 }
 
 .tile.cut {
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
 
 .tile.over {
@@ -167,8 +167,8 @@ function onClick(ev: MouseEvent): void {
 /* 多选态勾选框：落在缩略图左上角，与图标右下角的 🔒 徽章错开 */
 .ck {
   position: absolute;
-  left: -4px;
-  top: -4px;
+  left: calc(-1 * var(--sp-4));
+  top: calc(-1 * var(--sp-4));
   width: 18px;
   height: 18px;
   border-radius: var(--radius-full);
@@ -189,7 +189,7 @@ function onClick(ev: MouseEvent): void {
 .cap {
   width: 100%;
   font-size: var(--fs-footnote);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-1);
   /* 两行截断：文件名普遍比一个格子宽，一行会让「报告2026-10-07 早」这类名字全变成省略号 */
   display: -webkit-box;
@@ -200,13 +200,13 @@ function onClick(ev: MouseEvent): void {
 }
 
 .tile.sel .cap {
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .sub {
   width: 100%;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

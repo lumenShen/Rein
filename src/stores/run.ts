@@ -3,8 +3,8 @@
  *
  * 落盘复用 workout_sessions（plan_id = RUN_PLAN_ID），与训练课共用同一套
  * 「active 行 = 未正常结束」不变量：只有保存/放弃（结束键 + 二级确认）
- * 会关闭会话；其余一切离开方式按异常中断处理，恢复时强制进入暂停态，
- * 由用户核对后续跑。
+ * 会关闭会话；其余一切离开方式按异常中断处理，恢复时**自动接续**上一段跑步
+ * （轨迹、时长、距离、暂停桶全部继承，只给一次气泡提醒，不再弹核对卡）。
  *
  * 采集真源（契约 A，唯一判定 tracking_status.native）：
  *  · Android（native=true）：原生前台服务是唯一真源——时长/距离/配速/轨迹都从
@@ -28,6 +28,9 @@ import { defineStore } from 'pinia'
 
 import { estimateRunKcal } from '@/config/domain'
 import { sessionService } from '@/services/sessionService'
+import { fmtClock, fmtPace } from '@/utils/format'
+
+export { fmtClock, fmtPace }
 import { FALLBACK_LIVE, trackingService } from '@/services/trackingService'
 import { useToast } from '@/composables/useToast'
 import { useExerciseStore } from '@/stores/exercise'
@@ -56,6 +59,8 @@ export type GpsStatus = 'off' | 'acquiring' | 'active' | 'unavailable'
 
 /** 无新被接受 fix 超过它 → 瞬时配速置 null（同一张表：runGate.PACE_STALE_SEC） */
 const PACE_STALE_MS = PACE_STALE_SEC * 1000
+/** 回前台后的看门狗宽限：先 drain 原生快照，再允许用「无新 fix」判定降级 */
+const NATIVE_RESUME_GRACE_MS = 20_000
 /** 轨迹落盘抽稀上限（点）：控制 state_json 体积（800 点 ≈ 2 小时跑步） */
 const MAX_SNAPSHOT_POINTS = 800
 /** 抽稀时间桶：5s 内只留最后一个点 */
@@ -200,8 +205,6 @@ export const useRunStore = defineStore('run', () => {
   const gapNotice = ref<{ ms: number; atMs: number; creditedM: number; creditedMs: number } | null>(
     null,
   )
-  /** 恢复/继续后的一次性提示（savedMs=快照保留时长，points=取回的轨迹点数） */
-  const resumeNotice = ref<{ atMs: number; savedMs: number; points: number } | null>(null)
 
   /** 响应式时钟：running 时 250ms 一跳，驱动所有时间派生值 */
   const nowTick = ref(Date.now())
@@ -244,6 +247,8 @@ export const useRunStore = defineStore('run', () => {
   let watchdogStartWall = 0
   let watchdogLastFixMs = 0
   let watchdogLastFixWall = 0
+  /** 上一拍看门狗的实际墙钟：周期被冻结后（熄屏/后台）用它识别「这一拍不可信」 */
+  let watchdogLastRunWall = 0
   /** native 自动暂停段是否在记账（live 只给状态，墙钟按轮询增量累计） */
   let apLiveCounted = false
   let lastLivePollWall = 0
@@ -260,6 +265,15 @@ export const useRunStore = defineStore('run', () => {
   let hiddenAtMs = 0
   let hiddenAtDistanceM = 0
   let hiddenAtElapsedMs = 0
+  /**
+   * 回前台后的看门狗宽限期（epoch ms）。
+   *
+   * WebView 被 onPause/熄屏冻结时，JS 定时器停摆，lastFixAt 会停在冻结前的时刻；
+   * 若醒来立刻用「60s 无新 fix」判定，会把一个仍在正常采集的原生服务误降级到 web
+   * （且降级单向不回退）——用户看到的就是「熄屏一次后永远没有定位」。
+   * 醒后先 drain 原生快照，再给一段宽限，期间只看「轮询后是否仍有新 fix」。
+   */
+  let resumeGraceUntil = 0
 
   /* ---------- 落盘节奏 ---------- */
 
@@ -689,9 +703,36 @@ export const useRunStore = defineStore('run', () => {
     watchdogStartWall = Date.now()
     watchdogLastFixMs = 0
     watchdogLastFixWall = 0
+    watchdogLastRunWall = 0
     watchdogTimer = setInterval(() => {
       if (source.value !== 'native') return
       const now = Date.now()
+      // 定时器本应是 5s 一拍；若这一拍隔了 >12s，说明页面被冻结/限流过，
+      // 这段墙钟不能用来判「60s 无新 fix」。先宽限，再恢复判定 ——
+      // 这个判据不依赖 visibilitychange 与定时器的先后顺序。
+      const tickGap = watchdogLastRunWall > 0 ? now - watchdogLastRunWall : 0
+      watchdogLastRunWall = now
+      if (tickGap > 12_000) {
+        watchdogStartWall = now
+        watchdogLastFixWall = now
+        watchdogLastFixMs = lastFixAt.value
+        resumeGraceUntil = Math.max(resumeGraceUntil, now + NATIVE_RESUME_GRACE_MS)
+        return
+      }
+      // 页面不可见时 JS 定时器会被冻结/限流：这段墙钟不能算作「原生没在吐点」。
+      // 熄屏前后 lastFixAt 本来就停在冻结前，拿它判 60s 会把健康的前台服务误降级，
+      // 而降级是单向的 —— 这正是「熄屏一次后永远无定位」的来源。
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        watchdogStartWall = now
+        watchdogLastFixWall = now
+        return
+      }
+      // 回前台宽限：onVisibility 已发起 drain，等首轮 poll 落地再恢复判定
+      if (now < resumeGraceUntil) {
+        watchdogStartWall = now
+        watchdogLastFixWall = now
+        return
+      }
       // 手动暂停期间原生本就不吐新 fix：两个窗口都顺延，别把「用户按了暂停」判成采集失败
       if (phase.value !== 'running') {
         watchdogStartWall = now
@@ -735,6 +776,8 @@ export const useRunStore = defineStore('run', () => {
    */
   async function degradeNative(reason: string): Promise<void> {
     if (nativeDegraded.value || nativeServiceDown.value) return
+    // 页面不可见时绝不降级：JS 的「多久没 fix」在后台没有可信的墙钟
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
     nativeDegraded.value = true
     stopWatchdog()
     stopNativePoll()
@@ -828,13 +871,16 @@ export const useRunStore = defineStore('run', () => {
     return out
   }
 
-  /** B7 异步刷新：400ms 重试到 lines>0（≤5 次）——读到空是「还在写」，不是「没有」 */
-  async function takeTrack(runId: string): Promise<{ lines: number; data: string }> {
+  /** B7 异步刷新：400ms 重试到 lines>0（默认 ≤5 次）——读到空是「还在写」，不是「没有」 */
+  async function takeTrack(
+    runId: string,
+    attempts = 5,
+  ): Promise<{ lines: number; data: string }> {
     let chunk = { lines: 0, data: '' }
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < attempts; i++) {
       chunk = await trackingService.trackTake(runId)
       if (chunk.lines > 0) break
-      await sleep(400)
+      if (i < attempts - 1) await sleep(400)
     }
     return chunk
   }
@@ -844,11 +890,11 @@ export const useRunStore = defineStore('run', () => {
    * 原生段整体以文件为准；文件时间轴之后仍在内存里的点（降级后 web 那一段）接尾。
    * 空结果不覆盖已有轨迹（尚未写入 / 还未交付）。
    */
-  async function mergeNativeTrackFile(runId: string): Promise<number> {
+  async function mergeNativeTrackFile(runId: string, attempts = 5): Promise<number> {
     if (!runId) return 0
     let chunk: { lines: number; data: string }
     try {
-      chunk = await takeTrack(runId)
+      chunk = await takeTrack(runId, attempts)
     } catch (e) {
       console.warn('[run] 轨迹取回失败', e)
       return 0
@@ -881,6 +927,18 @@ export const useRunStore = defineStore('run', () => {
 
   /* ---------- 切后台 / 回前台 ---------- */
 
+  /** 后台空窗提示：墙钟取真实离线时长，入账量取「回来时」的读数 */
+  function reportHiddenGap(fromWall: number, nowWall: number): void {
+    const ms = nowWall - fromWall
+    if (ms <= 15_000) return
+    gapNotice.value = {
+      ms,
+      atMs: nowWall,
+      creditedM: Math.max(0, distanceM.value - hiddenAtDistanceM),
+      creditedMs: Math.max(0, elapsedMs.value - hiddenAtElapsedMs),
+    }
+  }
+
   function onVisibility(): void {
     if (typeof document === 'undefined') return
     if (document.visibilityState === 'hidden') {
@@ -891,23 +949,25 @@ export const useRunStore = defineStore('run', () => {
       void persist() // 立即落盘：后台被系统杀掉最多丢这一次
       return
     }
-    if (hiddenAtMs > 0) {
-      const now = Date.now()
-      const ms = now - hiddenAtMs
-      if (ms > 15_000) {
-        gapNotice.value = {
-          ms,
-          atMs: now,
-          creditedM: Math.max(0, distanceM.value - hiddenAtDistanceM),
-          creditedMs: Math.max(0, elapsedMs.value - hiddenAtElapsedMs),
-        }
-      }
-      hiddenAtMs = 0
-    }
+    const hiddenFrom = hiddenAtMs
+    hiddenAtMs = 0
     nowTick.value = Date.now()
     if (source.value === 'native') {
-      void pollNativeLive() // 回前台立即 drain：冻结期间的 push 全丢了
+      // 先把「回前台宽限」立起来，再 drain：poll 返回前 lastFixAt 必然还是冻结前的旧值，
+      // 看门狗若在这一拍跑，会把健康原生服务误判成 60s 无 fix（降级不可逆）。
+      resumeGraceUntil = Date.now() + NATIVE_RESUME_GRACE_MS
+      watchdogStartWall = Date.now()
+      watchdogLastFixWall = Date.now()
+      watchdogLastRunWall = Date.now()
+      watchdogLastFixMs = lastFixAt.value
+      // 空窗提示要等 drain 落地再算：冻结期间原生仍在记录，入账量必须以最新快照为准，
+      // 否则会把「后台补记了 400m」写成「已补记 0m」。
+      void pollNativeLive().finally(() => {
+        if (hiddenFrom > 0) reportHiddenGap(hiddenFrom, Date.now())
+      })
       if (phase.value === 'running') void mergeNativeTrackFile(startedAtIso.value) // 文件兜底
+    } else if (hiddenFrom > 0) {
+      reportHiddenGap(hiddenFrom, Date.now())
     }
     void persist()
   }
@@ -920,10 +980,6 @@ export const useRunStore = defineStore('run', () => {
 
   function clearGapNotice(): void {
     gapNotice.value = null
-  }
-
-  function clearResumeNotice(): void {
-    resumeNotice.value = null
   }
 
   /* ---------- 流程 ---------- */
@@ -990,7 +1046,7 @@ export const useRunStore = defineStore('run', () => {
     if (existing) {
       if (existing.planId === RUN_PLAN_ID) {
         await applyRecord(existing)
-        return 'conflict' // 已恢复为暂停态，页面直接展示
+        return 'conflict' // 已接续/恢复到进行中的跑步，页面直接展示
       }
       courseConflict.value = true
       return 'conflict'
@@ -1073,6 +1129,7 @@ export const useRunStore = defineStore('run', () => {
     pauseCause.value = null
     webMarkBrk = true // 手动暂停也是轨迹断点
     gate.setManualPaused(false)
+    startTimers() // 恢复/自动接续都要把响应式时钟与周期落盘重新挂上
     void trackingService.setKeepalive(true) // 恢复跑同样需要前台保活
     void (async () => {
       await ensureNativeCap()
@@ -1093,8 +1150,10 @@ export const useRunStore = defineStore('run', () => {
           segStartedMs = Date.now()
           await nativeRunBegin(baseMs, baseM)
           await trackingService.runPhase('running')
-          resumeNotice.value = { atMs: Date.now(), savedMs: baseMs, points: trackPoints.value.length }
         } else {
+          // 服务还活着：重新接上拉取与看门狗（applyRecord 会先 stopWatchdog，
+          // 不复挂的话恢复后原生再静默失败就没人兜底了）
+          startWatchdog()
           startNativePoll()
           await trackingService.runPhase('running')
         }
@@ -1254,6 +1313,7 @@ export const useRunStore = defineStore('run', () => {
     nativeMergeCutoffMs = null
     nativeLastLat = 0
     nativeLastLon = 0
+    watchdogLastRunWall = 0
     apLiveCounted = false
     pauseCause.value = null
     manualPauseMs.value = 0
@@ -1270,19 +1330,19 @@ export const useRunStore = defineStore('run', () => {
     gaps.value = []
     jumpCount.value = 0
     gapNotice.value = null
-    resumeNotice.value = null
     finalKmSnap.value = null
     trackDrain = null
     pointLastT = 0
     runStartedAtMs.value = 0
     hiddenAtMs = 0
+    resumeGraceUntil = 0
     manualPausedWallMs = 0
     phase.value = 'idle'
   }
 
   /* ---------- 中断恢复 ---------- */
 
-  /** RunPage 挂载时调用：恢复进行中的跑步会话（强制暂停态） */
+  /** 恢复到进行中的跑步会话（进程被杀 / 冷启动） */
   async function hydrateFromServer(): Promise<boolean> {
     courseConflict.value = false
     let rec: SessionRecord | null
@@ -1342,20 +1402,47 @@ export const useRunStore = defineStore('run', () => {
     nowTick.value = Date.now()
     stopTimers()
     stopGps()
-    // 恢复强制暂停：被打断的当前段丢弃（时间不补），用户核对后续跑
+    stopWatchdog()
+    stopNativePoll()
+    manualPausedWallMs = 0
+    hiddenAtMs = 0
+    // 快照里的 phase 是进程死亡前最后一次落盘时的相位：
+    //  · running → 用户当时还在跑，恢复后自动接续（不弹卡、不询问）；
+    //  · paused  → 用户主动按过暂停，恢复后保持暂停；
+    //  · summary → 已经跑完待保存，原样进总结页。
+    const interruptedRunning = s.phase === 'running'
     phase.value = s.phase === 'summary' ? 'summary' : 'paused'
     pauseCause.value = phase.value === 'paused' ? 'manual' : null
-    // 闸门以快照为基线重建（续跑距离/时长不回 0）；暂停态下手动相位置位
-    gate = newGate(accumMs.value, distanceM.value)
-    if (phase.value === 'paused') gate.setManualPaused(true)
     webMarkBrk = false
     webLastFixT = 0
-    // 原生轨迹文件是本轮轨迹的完整记录：后台取回合并（空结果不覆盖快照轨迹；桌面为无害空操作）。
-    // 不 await：恢复核对卡的数字来自快照，不该为一次文件读取等 2s。
-    void mergeNativeTrackFile(rec.startedAt).then((got) => {
-      if (got > 0 && sessionId.value === rec.id)
-        resumeNotice.value = { atMs: Date.now(), savedMs: accumMs.value, points: got }
-    })
+    // 原生轨迹文件是本轮轨迹的完整记录：先取回再 resume，避免新服务开始追加时
+    // 与「读完即删」的交付路径抢同一个文件。恢复场景下文件已写完，2 次重试足够。
+    const got = await mergeNativeTrackFile(rec.startedAt, 2).catch(() => 0)
+    if (got > 0) {
+      trackDecimated.value = false // 文件是完整轨迹，后续快照可以重新抽稀
+      const lastT = trackPoints.value.reduce((m, p) => Math.max(m, p.t ?? 0), 0)
+      pointLastT = lastT
+      // 快照每 10s 落一次，文件里的最后一个点可能更新：用它把时长补到真实值，
+      // 避免恢复后凭空少掉最后一段（距离仍以快照/原生 live 为准）。
+      if (lastT > accumMs.value) {
+        accumMs.value = lastT
+        nativeElapsedMs.value = Math.max(nativeElapsedMs.value, lastT)
+      }
+    }
+    // 闸门以最终基线重建（续跑距离/时长不回 0）；暂停态下手动相位置位
+    gate = newGate(accumMs.value, distanceM.value)
+    if (phase.value === 'paused') gate.setManualPaused(true)
+    if (phase.value === 'paused') {
+      if (interruptedRunning) {
+        resume()
+        useToast().toast(
+          got > 0 ? `已接续上次跑步 · ${got} 个轨迹点已恢复` : '已接续上次跑步 · 从上次记录继续',
+          { duration: 3000 },
+        )
+        return
+      }
+      useToast().toast('已恢复上次跑步 · 保持暂停', { duration: 3000 })
+    }
   }
 
   /* ---------- 自动暂停开关落盘 ---------- */
@@ -1422,7 +1509,6 @@ export const useRunStore = defineStore('run', () => {
     jumpCount,
     jitterCorrections,
     gapNotice,
-    resumeNotice,
     autoPauseOn,
     autoPausePaceSec,
     // 流程
@@ -1439,22 +1525,5 @@ export const useRunStore = defineStore('run', () => {
     startGps,
     coastedMs,
     clearGapNotice,
-    clearResumeNotice,
   }
 })
-
-/** 配速格式化：378 → 6'18"（先取整避免出现 6'60"） */
-export function fmtPace(secPerKm: number): string {
-  const t = Math.round(secPerKm)
-  return `${Math.floor(t / 60)}'${String(t % 60).padStart(2, '0')}"`
-}
-
-/** 时长格式化：3785 → 1:03:05；75 → 01:15 */
-export function fmtClock(sec: number): string {
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = sec % 60
-  const mm = String(m).padStart(2, '0')
-  const ss = String(s).padStart(2, '0')
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
-}

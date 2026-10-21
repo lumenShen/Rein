@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronRight, Loader2, TriangleAlert, Zap } from 'lucide-
 
 import { notifyGrabResult } from '@/services/notifyService'
 import GlassFilter from '@/components/common/GlassFilter.vue'
+import { useLiquidGlass } from '@/composables/useLiquidGlass'
 import { liquidGlass } from '@/system/perf'
 import { grabStatusMeta, useCourseSelectStore } from '@/stores/courseSelect'
 
@@ -32,12 +33,7 @@ const router = useRouter()
    `url(#…)`，底 / 受光边 / 光学层继续由 `.glass-surface` 那套令牌给。滤镜定义在
    common/GlassFilter.vue，量尺默认是父元素（这条 HUD 自己）。
    与那三条浮条不同的是：这条是**顶部胶囊**、不参与拖拽，只有进出场的位移。 */
-const glassFilterId = `glass-filter-${Math.random().toString(36).slice(2, 10)}`
-const glassStyle = computed<Record<string, string> | undefined>(() => {
-  if (!liquidGlass.value) return undefined
-  const filter = `url(#${glassFilterId}) saturate(var(--glass-sat))`
-  return { backdropFilter: filter, WebkitBackdropFilter: filter }
-})
+const { glassFilterId, glassStyle } = useLiquidGlass()
 
 const now = ref(Date.now())
 let tick: ReturnType<typeof setInterval> | null = null
@@ -362,9 +358,11 @@ const spoken = computed(() => {
   z-index: 80;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--gap-sm);
   max-width: min(calc(var(--frame-max) - 24px), calc(100vw - 24px));
-  padding: 8px 12px;
+  /* 浮条统一一档：高 44（--hit-min）、左右 16，与参照里的「进行中」胶囊同高 */
+  min-height: var(--hit-min);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   color: var(--text-1);
   transition: transform var(--dur-fast) var(--ease-standard);
@@ -380,7 +378,7 @@ const spoken = computed(() => {
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -388,7 +386,7 @@ const spoken = computed(() => {
 .txt-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   flex: 1;
   min-width: 0;
 }
@@ -397,7 +395,7 @@ const spoken = computed(() => {
 .st {
   flex: none;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -408,7 +406,7 @@ const spoken = computed(() => {
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -425,12 +423,12 @@ const spoken = computed(() => {
 .cd {
   flex: none;
   font-size: var(--fs-title3);
-  font-weight: 700;
-  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-title);
   color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: 1px 10px;
+  padding: var(--sp-2) var(--sp-12);
 }
 
 .ico {

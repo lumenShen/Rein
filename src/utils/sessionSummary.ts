@@ -26,14 +26,12 @@
  * 容量缺失时不该显示 0 kg。上层据此选择不渲染，而不是渲染出一个假的 0。
  */
 
+import { fmtKg } from './format'
 import { estimateOneRepMax } from './trainingAdvice'
 import { SCORE_GROUP_OF, SCORE_GROUPS, type ActivationMap, type Level, type MuscleKey, type ScoreGroupKey } from '@/config/muscles'
 import type { PlanExerciseKind, SessionSetSlot, StrengthLastWeight, StrengthSetRecord } from '@/types'
 
-/** 重量显示：整数不带小数，62.5 保留一位 */
-export function fmtKg(v: number): string {
-  return Number.isInteger(v) ? String(v) : v.toFixed(1)
-}
+export { fmtKg }
 
 /**
  * 一组做组记录的容量（kg）= 重量 × 次数 —— **全端唯一一份口径**。

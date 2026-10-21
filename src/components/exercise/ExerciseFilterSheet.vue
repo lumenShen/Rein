@@ -159,7 +159,7 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
 <style scoped>
 .field {
   display: block;
-  padding: 10px 0;
+  padding: var(--sp-10) 0;
 }
 
 .field + .field {
@@ -168,27 +168,30 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
 
 .flabel {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: var(--sp-6);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 .fsub {
-  margin-left: 8px;
-  font-weight: 500;
+  margin-left: var(--sp-8);
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
+/* 清除肌群是**可点文字**：字号下限 12（规则 3），不再落 10px 的 Caption_M。
+   它是这一行里的次要动作，视觉高度随标签行走；不补伪元素热区 ——
+   正下方就是肌群胶囊组，外扩会抢 chip 的点击（同 D10 的取舍）。 */
 .clear {
-  margin-left: 8px;
-  font-size: var(--fs-micro);
+  margin-left: var(--sp-8);
+  font-size: var(--fs-caption);
   color: var(--accent);
 }
 
 .rowline {
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .hint {
@@ -197,18 +200,18 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
 }
 
 .chips {
-  gap: 7px;
+  gap: var(--sp-6);
   flex-wrap: wrap;
 }
 
 /* 与动作库页/方案向导同一套 chips：描边白底，选中实底 accent */
 .chip {
-  padding: 7px 13px;
+  padding: var(--sp-6) var(--sp-12);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
   transition:
     background var(--dur-fast) var(--ease-standard),
@@ -220,34 +223,37 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .mgroup + .mgroup {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 .ghead {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: var(--sp-4);
   font-size: var(--fs-micro);
   letter-spacing: 1px;
   color: var(--text-3);
 }
 
 .footer {
-  gap: 10px;
-  margin-top: 14px;
+  gap: var(--sp-10);
+  margin-top: var(--sp-14);
 }
 
-/* 重置 = 程序页 .cap 胶囊；完成 = .primary 主按钮（accent 实底） */
+/* 重置 = 程序页 .cap 胶囊；完成 = .primary 主按钮（accent 实底）。
+   两颗同为页脚动作，高度统一取热区下限 44（规则 5）：
+   原来「重置」视觉 ~33 高，「完成」~44，并排时一颗明显矮一截。 */
 .reset {
-  padding: 8px 16px;
+  min-height: var(--hit-min);
+  padding: var(--sp-8) var(--sp-16);
   border-radius: var(--radius-full);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -257,7 +263,8 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
 
 .done {
   flex: 1;
-  padding: 13px 0;
+  min-height: var(--hit-min);
+  padding: var(--sp-12) 0;
   /* 注释自称「完成 = .primary 主按钮」，那就得与真正的 .primary 同形状（胶囊）——
      从前它是 --radius-s 的圆角矩形，与 MuscleCatchupSheet 的 .primary 分道。
      （决策见 docs/exercise-quality-review-2026-10-17.md §8 D5） */
@@ -265,6 +272,6 @@ const chipsOf = (keys: string[], labels: Record<string, string>) =>
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 </style>

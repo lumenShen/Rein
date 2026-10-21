@@ -8,7 +8,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { providerNickname } from '@/ai/providerCatalog'
+import { kindCounts, providerNickname } from '@/ai/providerCatalog'
 import { providerService } from '@/services/providerService'
 import type {
   AiModelPrefs,
@@ -167,14 +167,8 @@ export const useProvidersStore = defineStore('ai-providers', () => {
     return allModels.value.filter((r) => r.model.kind === kind)
   }
 
-  /** 提供商卡片摘要：按类别计数 */
-  function summaryOf(p: AiProvider): { kind: ProviderModelKind; count: number }[] {
-    const map = new Map<ProviderModelKind, number>()
-    for (const m of p.models) map.set(m.kind, (map.get(m.kind) ?? 0) + 1)
-    return [...map.entries()]
-      .map(([kind, count]) => ({ kind, count }))
-      .sort((a, b) => b.count - a.count)
-  }
+  /** 提供商卡片摘要：按类别计数（口径在 providerCatalog，模型页与这里共用） */
+  const summaryOf = kindCounts
 
   return {
     adapters,

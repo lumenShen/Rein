@@ -195,21 +195,22 @@ const trendEmpty = computed(() =>
 .stats {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  /* 数字 / 预算 / 占比 / 趋势是四个区块：16（有明显边界），24 在这张卡里会散开 */
+  gap: var(--gap-lg);
 }
 
 .nums {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .num-cell em {
   display: block;
   font-style: normal;
-  /* 「本月支出」是三个格子的字段名，不吃 11px */
+  /* 「本月支出」是三个格子的字段名，是要读的信息 → 不吃 11px、也不落 --text-3 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 字段名色点：6px。支出/收入两格的色相只留在这里（色点），数字本身回中性 */
@@ -217,35 +218,51 @@ const trendEmpty = computed(() =>
   width: 6px;
   height: 6px;
   border-radius: var(--radius-full);
-  margin-right: 5px;
+  margin-right: var(--gap-tight);
   vertical-align: 0.1em;
 }
 
 .num-cell b {
   display: block;
-  margin-top: 3px;
+  /* 字段名与数值：主次文本上下 2~4，取 4 让 18px 数值不贴着 12px 小帽 */
+  margin-top: var(--gap-tight);
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 h3 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
-  margin-bottom: 8px;
+  /* 区块标题与内容 8 */
+  margin-bottom: var(--gap-sm);
 }
 
 /* 「调整 / 设置预算」是按钮标签：中性色（色彩配额，STANDARDS §4）。
    原为 danger / accent 两档彩字，且基色那条从没有生效过（预算区那颗才是真的链接）——
    两档合成一个 --text-2，冗余覆写删掉。 */
 .link {
-  padding: 4px 10px;
+  /* 小胶囊按钮：高走 --chip-h 24（与同排的 StatusChip 同高）、左右 10（12 字两字宽，
+     10 已不贴边）。原来是 26 的松手高度，和「已超支」那颗差 2px 错基线。 */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
+}
+
+/* 它是这张卡里唯一能进预算设置的入口：视觉 24，热区竖向各扩 10 → 44。
+   横向不扩（「设置预算」本身已 68 宽），避免压到左边的「已超支」胶囊。 */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-10)) 0;
 }
 
 .track {
@@ -274,13 +291,14 @@ h3 {
 }
 
 .bmeta {
-  margin-top: 7px;
+  /* 预算条与下方说明：8 */
+  margin-top: var(--gap-sm);
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .bmeta b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -296,7 +314,8 @@ h3 {
 .share-body {
   display: flex;
   align-items: center;
-  gap: 14px;
+  /* 占比环与右侧图例之间 12：它们是同一区块里的两块，不是两个区块 */
+  gap: var(--gap-md);
 }
 
 .donut {
@@ -321,15 +340,16 @@ h3 {
 
 .donut-center em {
   font-style: normal;
-  /* 环心小帽（占比最高的分类名）是字段名，不吃 11px */
+  /* 环心小帽（占比最高的分类名）是字段名，要读 → --text-2 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .donut-center b {
-  margin-top: 1px;
+  /* 分类名与占比数字：主次文本上下 2 */
+  margin-top: var(--gap-text);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .legend {
@@ -337,13 +357,15 @@ h3 {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  /* 图例行之间 8：它们是一组并列项 */
+  gap: var(--gap-sm);
 }
 
 .legend li {
   display: flex;
   align-items: center;
-  gap: 7px;
+  /* 色点与名称：图标与文字左右 8 */
+  gap: var(--gap-sm);
   font-size: var(--fs-footnote);
 }
 
@@ -357,31 +379,35 @@ h3 {
 }
 
 .pct {
-  color: var(--text-3);
+  /* 占比是这张图要传达的数字，不能落 --text-3 */
+  color: var(--text-2);
 }
 
 .legend b {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .dot {
   width: 8px;
   height: 8px;
   flex: none;
-  border-radius: 50%;
+  /* 正圆走 --radius-full，不写裸 50% */
+  border-radius: var(--radius-full);
   display: inline-block;
-  margin-right: 5px;
+  margin-right: var(--gap-tight);
 }
 
 .dot-in {
-  margin-left: 10px;
+  /* 两枚色点并排（支出/收入）之间 10 */
+  margin-left: var(--sp-10);
 }
 
 /* 趋势柱 */
 .trend-body {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
+  /* 六列月份：4 是同组最小值，再大柱子就挤不进一格 */
+  gap: var(--gap-tight);
   align-items: end;
 }
 
@@ -389,30 +415,31 @@ h3 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  /* 柱组与月份刻度：4 */
+  gap: var(--gap-tight);
 }
 
+/* 按钮盒原本贴着柱体走（两根 7px 柱 + 2 间隙 = 16px 宽），而一列有 52px ——
+   六根柱子一屏，只有中间一条 16px 的点按缝：指针点不准，触屏更点不到（热区要 44）。
+   整列交给按钮：宽度吃满、柱体用 justify-content 居中，**视觉一格不动**
+   （实测盒中心 = 列中心），可点面从 16×72 变成 52×72。
+   原先只限桌面壳（22 是指针精度的下限），但手机的热区下限是 44、比指针更严 ——
+   两档都铺满列宽，手机与桌面同一块可点面。 */
 .bars {
   display: flex;
   align-items: flex-end;
-  gap: 2.5px;
-  height: 72px;
-}
-
-/* 桌面壳：按钮盒原本贴着柱体走（两根 7px 柱 + 2.5 间隙 = 实测 16.5px 宽），
-   而一列有 52px —— 六根柱子一屏，只有中间一条 16.5px 的点按缝，指针精度下点不准。
-   整列交给它：宽度吃满、柱体用 justify-content 居中，**视觉一格不动**
-   （实测盒中心 = 列中心），可点面从 16.5×72 变成 52×72。
-   只限桌面壳：22 是指针精度的下限，手机上是触屏那套（命中区、排布都另算），不动。 */
-.desk-main .bars {
+  /* 两根柱之间的缝是图表几何：2.5 → 令牌最小档 2，肉眼与「同一根柱的两半」无异 */
+  gap: var(--gap-text);
   width: 100%;
   justify-content: center;
+  height: 72px;
 }
 
 /* 趋势柱：切月频率极低，柱高直接落位不参与过渡（height 动画触发 layout） */
 .bars i {
   width: 7px;
-  border-radius: 4px 4px 2px 2px;
+  /* 柱顶用最小圆角档：4 落在 7px 宽的柱上已经读作「圆头」，与下面的轴齐平 */
+  border-radius: var(--radius-xs);
 }
 
 .bars .ex {
@@ -432,13 +459,13 @@ h3 {
 }
 
 .m-lbl {
-  /* 六个月柱下的月份刻度 */
+  /* 六个月柱下的月份刻度：定位依据，要读 → --text-2 */
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .m-lbl.now {
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 </style>

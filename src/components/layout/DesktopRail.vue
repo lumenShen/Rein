@@ -83,7 +83,11 @@ const route = useRoute()
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 18px 0 20px;
+  /* 上下内距取同一档 20（原来 18/20 不对称）；整列间距 8（--gap-sm）——
+     图标轨里每一格之间是「无边界的一组」，此前下方三格（命令面板 / 信息栏 / 我）
+     完全没有间距，挤成一条竖带 */
+  padding: var(--sp-20) 0;
+  gap: var(--gap-sm);
   z-index: 50;
 }
 
@@ -91,13 +95,14 @@ const route = useRoute()
   width: 26px;
   height: 26px;
   flex: none;
-  margin-bottom: 22px;
+  /* 品牌标与导航簇分开 12（加上 .rail 的 gap 8 共 20，原来是一条 22 的裸边距） */
+  margin-bottom: var(--sp-12);
   border-radius: var(--radius-xs);
   background: conic-gradient(from 210deg, var(--c-intake), var(--c-exercise), var(--c-balance), var(--c-intake));
 }
 
 .navs {
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 /* 图标轨的可读性问题：64px 里只放得下图标，而「课表 / 记账 / 健康方案」这几个
@@ -123,15 +128,16 @@ const route = useRoute()
 .ric::after {
   content: attr(data-label);
   position: absolute;
-  left: calc(100% + 10px);
+  left: calc(100% + var(--sp-12));
   top: 50%;
   translate: 0 -50%;
-  padding: 5px 10px;
+  /* 悬停标签：4×10 内距（吸附自 5 上下），是真标签的尺寸而不是按钮 */
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-s);
   background: color-mix(in srgb, var(--text-1) 88%, transparent);
   color: var(--bg);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -177,7 +183,9 @@ const route = useRoute()
 /* 信息栏收起后这颗钮保持「关」的读数：只有描边色差，不做位移 ——
    开关状态不该让导航轨的节奏跳一下。 */
 .insp {
-  margin-bottom: 2px;
+  /* 信息栏钮与下面的「我」之间再挪 2：与上面 .rail 的 gap 8 一起，
+     把「壳层开关」和「页面导航」分成两簇 */
+  margin-bottom: var(--sp-2);
 }
 
 .insp.on {

@@ -472,7 +472,9 @@ onBeforeUnmount(() => {
   flex: none;
   display: flex;
   justify-content: center;
-  padding: 9px 0 5px;
+  /* 把手距顶 8（--sp-8），把手与标题行之间 4：两档都在 4/8 体系里，
+     原来 9/5 是手感值，顶距比规范多 1、下距又多 1，标题行整体被推低两格 */
+  padding: var(--sp-8) 0 var(--gap-tight);
   cursor: grab;
   touch-action: none;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
@@ -498,8 +500,9 @@ onBeforeUnmount(() => {
 }
 
 .grabber {
-  width: 36px;
-  height: 5px;
+  /* 半模态把手规格 32×4 圆角全圆：36×5 在 32 圆角的顶边上显得比圆角还宽一档 */
+  width: 32px;
+  height: 4px;
   border-radius: var(--radius-full);
   background: var(--line-strong);
 }
@@ -508,13 +511,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 18px 6px;
+  /* 标题与右侧按钮是两组，分开 12（--gap-md）；左右 16 与页面 / 弹层同线 */
+  gap: var(--gap-md);
+  padding: var(--sp-4) var(--pad-sheet) var(--sp-8);
   flex: none;
 }
 
+/* 关闭钮与可选动作钮：同一组内无边界 → 8 */
 .head .actions {
-  gap: 8px;
+  gap: var(--gap-sm);
   flex: none;
 }
 
@@ -523,8 +528,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--fs-headline);
-  font-weight: 700;
+  /* 半模态标题 Title_S 20 Bold（文档组件配方），比卡片标题高一档 */
+  font-size: var(--fs-title2);
+  font-weight: var(--fw-bold);
 }
 
 .close {
@@ -551,7 +557,8 @@ onBeforeUnmount(() => {
    底下是实底而不是被切掉的半行字 */
 .foot {
   flex: none;
-  padding: 10px 18px calc(14px + var(--safe-bottom));
+  /* 底部操作区四边 16（--pad-sheet 同档）：按钮组与上边线的距离和左右留白一致 */
+  padding: var(--sp-16) var(--pad-sheet) calc(var(--sp-16) + var(--safe-bottom));
   border-top: 0.5px solid var(--line);
   background: var(--surface);
 }
@@ -563,7 +570,8 @@ onBeforeUnmount(() => {
   /* 垂直手势交给组件决策（先调高度后滚动），横向不拦截 */
   touch-action: pan-y;
   overscroll-behavior: contain;
-  padding: 4px 18px 16px;
+  /* 内容区左右 16（--pad-sheet），头上 4 承接标题行、底下 16 给最后一块内容呼吸 */
+  padding: var(--sp-4) var(--pad-sheet) var(--sp-16);
 }
 
 /* 进出同路径：都走底部 */

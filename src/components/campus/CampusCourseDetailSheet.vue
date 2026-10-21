@@ -585,47 +585,50 @@ const notes = computed(() => {
 .detail {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  /* 半模态内部块之间 12（参照：块与块之间 12，靠嵌套浅井分层、不用分割线） */
+  gap: var(--gap-md);
 }
 
 .hero {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-l);
-  background: var(--surface-2);
+  gap: var(--gap-sm);
+  /* 内部块配方：radius 16 + padding 12 + 浅井底 */
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m);
+  background: var(--surface-inset);
 }
 
 .hero-name {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  line-height: 1.28;
+  line-height: var(--lh-title);
   word-break: break-all;
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  /* 同一组胶囊内 4（参照的胶囊分组配方） */
+  gap: var(--gap-tight);
 }
 
 .chip {
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   /* --accent 压 --surface-2 只有 4.27:1，浅底上的文字蓝得用 strong 档 */
   color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: 2px 9px;
+  padding: var(--sp-2) var(--sp-10);
 }
 
 /* 起止时刻：抽屉里最大的一个数字，它回答「几点到几点」 */
 .when {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-8);
   flex-wrap: wrap;
 }
 
@@ -637,42 +640,43 @@ const notes = computed(() => {
 
 .when-time {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: var(--lh-title);
 }
 
 .when-span {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   background: var(--surface);
   border-radius: var(--radius-full);
-  padding: 1px 8px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 .quick {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  /* 组内 4、行间 12：一排「谁在教 / 在哪 / 多少人」的细项 */
+  gap: var(--gap-tight) var(--gap-md);
 }
 
 .qi {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* 地点：找教室是打开这个抽屉最常见的理由，所以给它一整块 */
 .where {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: var(--sp-10);
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface);
 }
@@ -692,13 +696,13 @@ const notes = computed(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 3px 8px;
+  gap: var(--sp-4) var(--sp-8);
   min-width: 0;
 }
 
 .where-txt b {
   font-size: var(--fs-headline);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
@@ -707,7 +711,7 @@ const notes = computed(() => {
   font-size: var(--fs-micro);
   font-style: normal;
   color: var(--text-3);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* ══════════════ 容量 ══════════════ */
@@ -715,7 +719,7 @@ const notes = computed(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 4px 10px;
+  gap: var(--sp-4) var(--sp-10);
 }
 
 .cap-row {
@@ -769,7 +773,7 @@ const notes = computed(() => {
   grid-column: 1 / -1;
   justify-self: end;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -781,22 +785,22 @@ const notes = computed(() => {
 .sec {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .sec h4 {
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
   letter-spacing: 0.04em;
-  padding: 0 2px;
+  padding: 0 var(--sp-2);
 }
 
 /* 标题行带说明入口的：? 贴到行右端，与标题同行居中 */
 .sec h4.row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .sec h4.row .info-hint {
@@ -807,16 +811,16 @@ const notes = computed(() => {
 .axis {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 11px 12px 9px;
-  border-radius: var(--radius-l);
-  background: var(--surface-2);
+  gap: var(--gap-tight);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m);
+  background: var(--surface-inset);
 }
 
 .axis-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .axis-k {
@@ -827,13 +831,13 @@ const notes = computed(() => {
 
 .axis-v {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .cells {
   display: flex;
-  gap: 3px;
+  gap: var(--sp-4);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -854,7 +858,7 @@ const notes = computed(() => {
 
 /* 上午 / 下午之间留一道缝：分界是读数的一部分，不能只靠序号 4→5 隐含 */
 .cell.split {
-  margin-left: 7px;
+  margin-left: var(--sp-8);
 }
 
 .cells.thin .cell {
@@ -863,7 +867,7 @@ const notes = computed(() => {
 }
 
 .cell.on {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--on-accent);
   background: var(--accent);
 }
@@ -882,7 +886,7 @@ const notes = computed(() => {
 .tiles {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .tile {
@@ -891,8 +895,8 @@ const notes = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 11px 6px 9px;
+  gap: var(--sp-2);
+  padding: var(--sp-12) var(--sp-6) var(--sp-10);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -904,8 +908,8 @@ const notes = computed(() => {
 
 .tile-v {
   font-size: var(--fs-title2);
-  font-weight: 700;
-  line-height: 1.15;
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-display);
   color: var(--text-1);
 }
 
@@ -918,11 +922,12 @@ const notes = computed(() => {
 .owner {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: var(--radius-l);
+  /* 抽屉内的一组行：容器 16，行与行之间 1px 分隔线（下面那条） */
+  border-radius: var(--radius-m);
   overflow: hidden;
   background: var(--line);
 }
@@ -930,8 +935,8 @@ const notes = computed(() => {
 .owner li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--sp-8);
+  padding: var(--sp-10) var(--sp-12);
   background: var(--surface-2);
   min-width: 0;
 }
@@ -945,7 +950,7 @@ const notes = computed(() => {
   min-width: 0;
   font-size: var(--fs-caption);
   color: var(--text-1);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
   word-break: break-all;
 }
 
@@ -953,10 +958,10 @@ const notes = computed(() => {
 .bar-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: var(--radius-l);
-  background: var(--surface-2);
+  gap: var(--gap-sm);
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m);
+  background: var(--surface-inset);
 }
 
 .stack {
@@ -974,7 +979,7 @@ const notes = computed(() => {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: var(--sp-4) var(--sp-12);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -983,7 +988,7 @@ const notes = computed(() => {
 .legend li {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-4);
   font-size: var(--fs-micro);
   color: var(--text-2);
 }
@@ -996,18 +1001,18 @@ const notes = computed(() => {
 
 .legend b {
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* ══════════════ 长文本 ══════════════ */
 .notes {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-m);
   overflow: hidden;
   background: var(--line);
 }
@@ -1015,8 +1020,8 @@ const notes = computed(() => {
 .notes li {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 9px 12px;
+  gap: var(--sp-2);
+  padding: var(--sp-10) var(--sp-12);
   background: var(--surface-2);
 }
 
@@ -1028,7 +1033,7 @@ const notes = computed(() => {
 .note-v {
   font-size: var(--fs-caption);
   color: var(--text-1);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   word-break: break-all;
 }
 
@@ -1036,10 +1041,10 @@ const notes = computed(() => {
 .disclosure {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 2px;
+  gap: var(--sp-6);
+  padding: 0 var(--sp-2);
   font-size: var(--fs-micro);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: 0.04em;
   color: var(--text-3);
 }
@@ -1054,18 +1059,18 @@ const notes = computed(() => {
 
 .disclosure-n {
   margin-left: auto;
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   letter-spacing: 0;
 }
 
 .codes {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-m);
   overflow: hidden;
   background: var(--line);
 }
@@ -1073,8 +1078,8 @@ const notes = computed(() => {
 .codes li {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: var(--sp-10);
+  padding: var(--sp-8) var(--sp-12);
   background: var(--surface-2);
 }
 
@@ -1088,7 +1093,7 @@ const notes = computed(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   word-break: break-all;
 }
@@ -1096,19 +1101,19 @@ const notes = computed(() => {
 .src {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  line-height: 1.55;
-  padding: 0 2px;
+  line-height: var(--lh-body);
+  padding: 0 var(--sp-2);
 }
 
 /* ══════════════ 骨架 ══════════════ */
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-12);
 }
 
 .sk {
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-m);
   background: linear-gradient(
     100deg,
     var(--surface-2) 30%,
@@ -1154,27 +1159,27 @@ const notes = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 40px 20px;
+  gap: var(--sp-14);
+  padding: var(--sp-40) var(--sp-20);
 }
 
 .fail-msg {
   font-size: var(--fs-callout);
   color: var(--text-2);
   text-align: center;
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .retry {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--on-accent);
   background: var(--accent);
   border-radius: var(--radius-full);
-  padding: 9px 22px;
+  padding: var(--sp-10) var(--sp-22);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 

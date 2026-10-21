@@ -282,8 +282,9 @@ onBeforeUnmount(() => {
   color: var(--text-1);
   overflow: hidden;
   /* 安全区：本层铺满窗口，贴边控件要避开刘海 / 手势带 */
-  padding: calc(var(--safe-top) + 12px) calc(var(--safe-right) + 12px)
-    calc(var(--safe-bottom) + 12px) calc(var(--safe-left) + 12px);
+  /* 安全区外再留一格 12：贴边控件不压在刘海/手势带上 */
+  padding: calc(var(--safe-top) + var(--sp-12)) calc(var(--safe-right) + var(--sp-12))
+    calc(var(--safe-bottom) + var(--sp-12)) calc(var(--safe-left) + var(--sp-12));
 }
 
 /* ---------- 层级 1 · 沉浸 ---------- */
@@ -298,7 +299,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  /* 状态行 / 读数 / 提示气泡三块：16（区块之间），读数本身仍是这一屏的主角 */
+  gap: var(--gap-lg);
 }
 
 /* 三段式读数：数字中性、分隔冒号染相位色（冒号色由行内 style 给） */
@@ -306,7 +308,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -319,21 +321,23 @@ onBeforeUnmount(() => {
 }
 
 .cap {
-  margin-bottom: 8px;
+  margin-bottom: var(--gap-sm);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
 /* 提示气泡：中性三级字，不与读数抢视线 */
 .hint {
   max-width: min(80vw, 320px);
-  padding: 8px 14px;
+  /* 提示气泡：上下 8、左右 16 */
+  padding: var(--gap-sm) var(--pad-card);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--surface-2) 72%, transparent);
-  color: var(--text-3);
+  /* 操作提示是要照着做的一句话，退到 --text-3 会看不清 */
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  line-height: 1.35;
+  line-height: var(--lh-caption);
   text-align: center;
 }
 
@@ -363,13 +367,13 @@ onBeforeUnmount(() => {
 }
 
 .corner.tl {
-  top: calc(var(--safe-top) + 12px);
-  left: calc(var(--safe-left) + 12px);
+  top: calc(var(--safe-top) + var(--sp-12));
+  left: calc(var(--safe-left) + var(--sp-12));
 }
 
 .corner.tr {
-  top: calc(var(--safe-top) + 12px);
-  right: calc(var(--safe-right) + 12px);
+  top: calc(var(--safe-top) + var(--sp-12));
+  right: calc(var(--safe-right) + var(--sp-12));
 }
 
 /* 强制模式开：实底橙 + 反色图标（与主按钮同一套「实底档」用法） */
@@ -381,13 +385,14 @@ onBeforeUnmount(() => {
 /* 贴左缘、垂直居中的控制簇：一列圆角微透明按钮 */
 .cluster {
   position: absolute;
-  left: calc(var(--safe-left) + 12px);
+  left: calc(var(--safe-left) + var(--sp-12));
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  /* 一列圆钮之间 6（紧邻同族），容器内距 8 */
+  gap: var(--sp-6);
+  padding: var(--gap-sm);
   border-radius: var(--radius-l);
   background: color-mix(in srgb, var(--surface-2) 64%, transparent);
   border: 1px solid var(--line);
@@ -436,7 +441,8 @@ onBeforeUnmount(() => {
 .todo {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 28px);
+  /* 底部待办行：离安全区 28（页面底边距同一档） */
+  bottom: calc(var(--safe-bottom) + var(--sp-28));
   transform: translateX(-50%);
   max-width: min(84vw, 560px);
   font-size: var(--fs-subhead);
@@ -486,28 +492,30 @@ onBeforeUnmount(() => {
 
 /* ---------- 强制模式说明条（SheetModal 插槽内容） ---------- */
 .sheet-copy {
-  margin: 4px 0 8px;
+  margin: var(--gap-tight) 0 var(--gap-sm);
   font-size: var(--fs-subhead);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .sheet-acts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* 说明条里的按钮组：纵向 8（半模态配方） */
+  gap: var(--gap-sm);
 }
 
 .primary {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 13px;
-  border-radius: var(--radius-m);
+  /* 主按钮高 40 档（12 上下 + 14 字），圆角取按钮档 20 */
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -516,12 +524,12 @@ onBeforeUnmount(() => {
 }
 
 .ghost {
-  padding: 11px;
-  border-radius: var(--radius-m);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--surface-2);
   color: var(--text-1);
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ---------- 减弱动效 ---------- */

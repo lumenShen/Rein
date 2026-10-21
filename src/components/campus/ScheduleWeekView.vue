@@ -281,7 +281,8 @@ watch(() => props.anchor, scrollToToday)
   height: calc(
     100dvh - var(--safe-top) - var(--tabbar-h) - var(--safe-bottom) - var(--wbar-reserve, 0px) - 236px
   );
-  border-radius: var(--radius-l);
+  /* 内容容器档 16：这张网格与日 / 月视图的卡面同层，20 会把它抬到按钮层级 */
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   user-select: none;
@@ -361,8 +362,8 @@ watch(() => props.anchor, scrollToToday)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 4px 2px;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-2);
 }
 
 .corner {
@@ -370,7 +371,7 @@ watch(() => props.anchor, scrollToToday)
   z-index: 4;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -382,8 +383,8 @@ watch(() => props.anchor, scrollToToday)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 6px 2px;
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-2);
 }
 
 /* 「今天」的定位器：一条 accent 短线钉在表头顶缘。表头是冻结的，横滚到哪它都跟着 ——
@@ -402,22 +403,22 @@ watch(() => props.anchor, scrollToToday)
 
 .dow {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
-  line-height: 1.1;
+  line-height: var(--lh-display);
 }
 
 .dnum {
   font-size: var(--fs-micro);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: var(--lh-display);
 }
 
 .wk {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  line-height: 1.1;
+  line-height: var(--lh-display);
 }
 
 .day.today .dow {
@@ -426,23 +427,23 @@ watch(() => props.anchor, scrollToToday)
 
 .day.today .dnum {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* ---------- 左侧时间列 ---------- */
 .t1 {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: var(--lh-display);
 }
 
 .t2 {
   font-size: var(--fs-micro);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: var(--lh-display);
 }
 
 /* 节次区间只是时间柱的补充读数（主角是上下两端实际上课时间）：
@@ -451,7 +452,7 @@ watch(() => props.anchor, scrollToToday)
 .unit {
   font-size: var(--fs-micro);
   color: var(--text-3);
-  line-height: 1.1;
+  line-height: var(--lh-display);
 }
 
 /* ---------- 课程格 ---------- */
@@ -459,14 +460,14 @@ watch(() => props.anchor, scrollToToday)
    （见下面两条 `@container`）。高度由网格行轨给出（`minmax(56px, N fr)`，与内容无关），
    所以这里的 `contain: size` 不会让行轨跟着内容长 —— 与加它之前的行为一致。 */
 .slot {
-  padding: 2px;
+  padding: var(--sp-2);
   display: flex;
   container-type: size;
 }
 
 .blocks {
   display: flex;
-  gap: 2px;
+  gap: var(--sp-2);
   flex: 1;
   min-width: 0;
 }
@@ -478,8 +479,8 @@ watch(() => props.anchor, scrollToToday)
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1px;
-  padding: 3px 5px;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-4);
   border-radius: var(--radius-s);
   /* 课程色整面 soft tint（课表三视图同一档浓度：与日视图 .row、月视图 .chip 同画法），
      不再靠 3px 左边框（side-tab 收编） */
@@ -495,26 +496,27 @@ watch(() => props.anchor, scrollToToday)
   position: absolute;
   top: 2px;
   right: 2px;
-  padding: 0 5px;
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-full);
   font-size: var(--fs-micro);
-  font-weight: 700;
-  line-height: 1.3;
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-title);
 }
 
+/* soft 底上的文字走 strong 档：--warn / --accent 当文字色压在同名浅底上不够读 */
 .hd.off {
-  color: var(--warn);
+  color: var(--warn-strong);
   background: color-mix(in srgb, var(--warn) 16%, var(--surface));
 }
 
 .hd.makeup {
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
 /* 有角标时给课名留出右边距，避免长课名的首行压到角标上 */
 .blk.has-hd .name {
-  padding-right: 13px;
+  padding-right: var(--sp-14);
 }
 
 .blk:focus-visible {
@@ -532,9 +534,9 @@ watch(() => props.anchor, scrollToToday)
    两行课名要 62px 内容高度 → 72px 起；三行 → 100px 起。 */
 .name {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
-  line-height: 1.15;
+  line-height: var(--lh-display);
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -558,26 +560,29 @@ watch(() => props.anchor, scrollToToday)
    而「去哪儿上课」恰恰是看课表时最常找的那一个读数 */
 .meta {
   font-size: var(--fs-micro);
-  line-height: 1.1;
+  line-height: var(--lh-display);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 教师比地点重一档（谁上决定要不要去），层级靠灰度差，不引入色相 */
+/* 教师与教室都是「去不去 / 去哪儿」的直接依据，同用 --text-2；
+   层级由字号与顺序承担，不靠把某一行压到读不出的灰 */
 .meta.tch {
   color: var(--text-2);
 }
 
+/* 教室是「现在去哪儿上课」的答案，属于必须读出来的信息：
+   --text-3 的 3.6:1 在 10px 上不够，提到 --text-2 并与教师同档 */
 .meta.room {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .more {
   align-self: center;
   font-size: var(--fs-micro);
   color: var(--text-3);
-  font-weight: 600;
-  padding: 0 2px;
+  font-weight: var(--fw-semibold);
+  padding: 0 var(--sp-2);
 }
 </style>

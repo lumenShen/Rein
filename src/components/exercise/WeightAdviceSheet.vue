@@ -197,18 +197,19 @@ const lastDateShort = computed(() => {
 <style scoped>
 /* ---------- 白卡：与练够分抽屉同一套承载（tokens.css 的 --sheet-card-*） ---------- */
 .scard {
-  padding: 16px;
-  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
+  /* 与练够分抽屉的白卡同档：卡片 16，容器才是 32 */
+  border-radius: var(--radius-m);
   background: var(--sheet-card-fill);
   box-shadow: var(--sheet-card-shadow);
 }
 
 .scard + .scard {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
 }
 
 .scard:first-child {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
 }
 
 .row {
@@ -223,17 +224,17 @@ const lastDateShort = computed(() => {
 /* ---------- 1. 建议 ---------- */
 .hero-name {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .htag {
-  padding: 3px 9px 3px 18px;
+  padding: var(--sp-4) var(--sp-8) var(--sp-4) var(--sp-18);
   border-radius: var(--radius-full);
   position: relative;
   /* 「今日建议」是这块的结论标签，不吃 11px */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   /* 绿字压浅灰底实测只有约 2.7:1，读不清 —— 文字回 --text-1，
      语义交给左侧那枚绿点（与逐动作明细行 .expr 徽标同一处理） */
   color: var(--text-1);
@@ -247,22 +248,22 @@ const lastDateShort = computed(() => {
   top: 50%;
   width: 5px;
   height: 5px;
-  margin-top: -2.5px;
+  margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
   background: var(--c-exercise-deep);
 }
 
 .hero-score {
-  margin-top: 6px;
+  margin-top: var(--sp-6);
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .big {
   /* 展示级读数走令牌：44px 就是 --fs-display-l 这一档，
      桌面壳整体降一档字号阶梯时这处要跟随 */
   font-size: var(--fs-display-l);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -1.5px;
   color: var(--text-1);
   line-height: 1.05;
@@ -270,15 +271,15 @@ const lastDateShort = computed(() => {
 
 .unit {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .band {
-  padding: 4px 11px;
+  padding: var(--sp-4) var(--sp-10);
   border-radius: var(--radius-full);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   background: var(--surface-2);
 }
@@ -286,8 +287,8 @@ const lastDateShort = computed(() => {
 /* RIR 点阵：实心 = 有效次数，空心 = 留的余力 */
 .rirdots {
   display: flex;
-  gap: 5px;
-  margin-top: 12px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-12);
 }
 
 .rirdot {
@@ -304,7 +305,7 @@ const lastDateShort = computed(() => {
 }
 
 .rircap {
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -312,7 +313,7 @@ const lastDateShort = computed(() => {
 /* ---------- 通用块头 ---------- */
 .bhead h3 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -324,12 +325,12 @@ const lastDateShort = computed(() => {
 
 /* ---------- 2. 计算链：竖线把四个数字节点串成因果 ---------- */
 .chain {
-  margin-top: 14px;
+  margin-top: var(--sp-14);
 }
 
 .cnode {
   position: relative;
-  padding: 0 0 18px 34px;
+  padding: 0 0 var(--sp-18) var(--sp-32);
 }
 
 /* 节点间连线：最后一个节点不画 */
@@ -340,12 +341,12 @@ const lastDateShort = computed(() => {
   top: 24px;
   bottom: 2px;
   width: 2px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--line);
 }
 
 .cnode:last-child {
-  padding-bottom: 2px;
+  padding-bottom: var(--sp-2);
 }
 
 .cnode:last-child::before {
@@ -364,38 +365,38 @@ const lastDateShort = computed(() => {
   background: var(--surface-2);
   /* 节点序号圆点：12px 就是 --fs-caption 这一档，走令牌不写死 */
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
 }
 
 .ntop {
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .ntit {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .ndate {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .nval {
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
   white-space: nowrap;
 }
 
 .ncap {
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
@@ -413,16 +414,16 @@ const lastDateShort = computed(() => {
 
 /* 因子条：低于 1.0 刻度线的就是今天拖后腿的那项 */
 .fbars {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-6);
 }
 
 .fbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .flab {
@@ -460,7 +461,7 @@ const lastDateShort = computed(() => {
   top: -3px;
   bottom: -3px;
   width: 1.5px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--text-3);
   opacity: 0.45;
 }
@@ -470,7 +471,7 @@ const lastDateShort = computed(() => {
   width: 42px;
   text-align: right;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -479,49 +480,49 @@ const lastDateShort = computed(() => {
 }
 
 .fwrap {
-  margin-top: 7px;
+  margin-top: var(--sp-6);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--warn-strong);
 }
 
 .mnote {
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-3);
 }
 
 /* ---------- 3. 名词 ---------- */
 .terms {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .term {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .term dt {
   flex: none;
   width: 46px;
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
 .term dd {
   flex: 1;
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .empty {
-  padding: 24px 2px;
+  padding: var(--sp-24) var(--sp-2);
   text-align: center;
   font-size: var(--fs-footnote);
   color: var(--text-3);

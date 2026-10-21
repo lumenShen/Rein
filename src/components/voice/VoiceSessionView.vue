@@ -30,6 +30,7 @@ import TimeSpine from './TimeSpine.vue'
 import VoiceMemosSheet from './VoiceMemosSheet.vue'
 import type { useAiStore } from '@/stores/ai'
 import { useToast } from '@/composables/useToast'
+import { fmtMmSs } from '@/utils/format'
 import {
   SETTLE_MS,
   cancelSession,
@@ -94,8 +95,7 @@ const router = useRouter()
 /* ---------- 计时 ---------- */
 
 function fmtMs(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  return fmtMmSs(ms)
 }
 
 /* ---------- 转写视图 ---------- */
@@ -791,18 +791,19 @@ onBeforeUnmount(() => {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: calc(var(--safe-top) + 8px) var(--page-pad-x) 8px;
+  gap: var(--gap-sm);
+  padding: calc(var(--safe-top) + var(--sp-8)) var(--page-pad-x) var(--sp-8);
 }
 
 .vs-toprow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 34px;
+  gap: var(--gap-md);
+  min-height: var(--control-icon);
 }
 
 .vs-tbtn {
+  position: relative;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -815,14 +816,28 @@ onBeforeUnmount(() => {
   color: var(--text-2);
 }
 
+/* 顶栏两颗入口（收起 / 全部纪要）视觉 34，命中区补到 44：
+   它们是这一屏唯一常驻的导航钮，触屏上不该点空 */
+.vs-tbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--sp-6)) calc(-1 * var(--sp-6));
+  border-radius: inherit;
+}
+
+.vs-tbtn.wide::after {
+  /* 宽版本身已超过 44，只在纵向补：横向不再外扩，避免压到中段状态簇 */
+  inset: calc(-1 * var(--sp-6)) 0;
+}
+
 .vs-tbtn.wide {
   width: auto;
   border-radius: var(--radius-full);
-  padding: 0 12px;
-  gap: 5px;
+  padding: 0 var(--sp-12);
+  gap: var(--gap-tight);
   display: inline-flex;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--text-2);
 }
 
@@ -836,7 +851,7 @@ onBeforeUnmount(() => {
   flex: 1;
   text-align: center;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -846,9 +861,9 @@ onBeforeUnmount(() => {
 .vs-title small {
   display: block;
   font-size: var(--fs-caption);
-  font-weight: 600;
-  color: var(--text-3);
-  margin-top: 1px;
+  font-weight: var(--fw-medium);
+  color: var(--text-2);
+  margin-top: var(--gap-text);
 }
 
 /* ----- 录音态的状态簇：波形 + 状态词 + 计时器 ----- */
@@ -858,12 +873,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: var(--gap-sm);
 }
 
 .vs-live .vl-t {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   letter-spacing: -0.2px;
 }
 
@@ -877,7 +892,7 @@ onBeforeUnmount(() => {
 /* 计时器是这一刻的主角：字重轻、字距收紧、等宽数字，与波形一起读成「仪表」 */
 .vs-live .vl-time {
   font-size: var(--fs-title3);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   letter-spacing: -0.6px;
   font-variant-numeric: tabular-nums;
 }
@@ -944,7 +959,7 @@ onBeforeUnmount(() => {
 .vs-subrow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
   min-height: 15px;
 }
 
@@ -986,7 +1001,7 @@ onBeforeUnmount(() => {
 .vs-subtxt {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   /* 11px 的说明文字要能读：--text-3 在白底上只有 3.6:1，这一档提到 --text-2 */
   color: var(--text-2);
 }
@@ -1002,14 +1017,14 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 0 var(--page-pad-x) calc(var(--safe-bottom) + 30px);
+  gap: var(--sp-14);
+  padding: 0 var(--page-pad-x) calc(var(--safe-bottom) + var(--sp-28));
   text-align: center;
 }
 
 .recover {
   width: 100%;
-  padding: 12px 14px;
+  padding: var(--sp-12) var(--sp-14);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -1022,17 +1037,27 @@ onBeforeUnmount(() => {
 
 .rec-acts {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--sp-8);
+  margin-top: var(--sp-10);
 }
 
 .rbtn {
+  position: relative;
   flex: 1;
-  height: 34px;
+  /* 常规按钮高 40（HarmonyOS 控件规范）：原先 34 比同屏其它主操作矮一档 */
+  min-height: var(--control-md);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+}
+
+/* 40 → 44：恢复提示里的两颗按钮一左一右，各补 2px 纵向热区，横向不重叠 */
+.rbtn::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--gap-text)) 0;
+  border-radius: inherit;
 }
 
 .rbtn.primary {
@@ -1066,7 +1091,7 @@ onBeforeUnmount(() => {
 
 .ready-cap {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -1080,7 +1105,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px var(--page-pad-x) 10px;
+  padding: var(--sp-6) var(--page-pad-x) var(--sp-10);
   scrollbar-width: none;
 }
 
@@ -1089,7 +1114,7 @@ onBeforeUnmount(() => {
 }
 
 .tr-empty {
-  padding: 26px 2px;
+  padding: var(--sp-26) var(--sp-2);
   font-size: var(--fs-footnote);
 }
 
@@ -1098,7 +1123,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px var(--page-pad-x) calc(var(--safe-bottom) + 20px);
+  padding: var(--sp-10) var(--page-pad-x) calc(var(--safe-bottom) + var(--sp-20));
   scrollbar-width: none;
 }
 
@@ -1108,8 +1133,8 @@ onBeforeUnmount(() => {
 
 .vm-head {
   display: flex;
-  gap: 10px;
-  padding: 2px 2px 12px;
+  gap: var(--sp-10);
+  padding: var(--sp-2) var(--sp-2) var(--sp-12);
 }
 
 .vm-ic {
@@ -1131,41 +1156,42 @@ onBeforeUnmount(() => {
 
 .vm-t b {
   font-size: var(--fs-body);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
   display: block;
-  line-height: 1.35;
+  line-height: var(--lh-title);
 }
 
 .vm-t em {
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
   display: block;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
 }
 
 /* 时长是这一屏的主数值：title3 + 等宽，与其余三个元数据分形 */
 .vm-t em.vm-dur {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-2);
   letter-spacing: -0.3px;
-  margin-top: 3px;
+  margin-top: var(--sp-4);
 }
 
 /* 重放条：可交互控件 → 卡片 */
 .player {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: var(--gap-md);
+  padding: var(--sp-8) var(--sp-12);
   background: var(--surface);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
 }
 
 .pl-btn {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1177,9 +1203,21 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
+/* 32 的播放钮命中区补到 44（播放器条内距 8，外扩 6 仍落在条内） */
+.pl-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
 .pl-cur,
 .pl-dur {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: var(--fs-caption);
   color: var(--text-2);
   flex: none;
@@ -1221,10 +1259,10 @@ onBeforeUnmount(() => {
 .seg {
   position: relative;
   display: flex;
-  margin-top: 12px;
+  margin-top: var(--sp-12);
   background: var(--surface-2);
   border-radius: var(--radius-s);
-  padding: 2px;
+  padding: var(--sp-2);
 }
 
 .seg .sthumb {
@@ -1249,22 +1287,22 @@ onBeforeUnmount(() => {
   flex: 1;
   height: 28px;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   border-radius: var(--radius-xs);
 }
 
 .seg button.on {
   color: var(--text-1);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 整理中（轻提示行，无卡片壳） */
 .proc {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 2px;
+  gap: var(--sp-10);
+  padding: var(--sp-16) var(--sp-2);
 }
 
 .spin {
@@ -1285,7 +1323,7 @@ onBeforeUnmount(() => {
 
 .proc b {
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   display: block;
 }
 
@@ -1297,29 +1335,29 @@ onBeforeUnmount(() => {
 
 /* 总结（平铺 + Markdown） */
 .ov-sec {
-  margin-top: 14px;
+  margin-top: var(--gap-lg);
 }
 
 .ov-sec > h5 {
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   /* 小节标题是必须读出来的结构信息：走 --text-2（4.9:1），不吃 --text-3 的微字档 */
   color: var(--text-2);
   letter-spacing: 0.5px;
-  margin-bottom: 2px;
+  margin-bottom: var(--gap-text);
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 小结标题只留标题本身：句数与时长已由上方纪要头卡给出，h5 里不再挂 em
    （原 `.ov-sec > h5 em` 规则随之删除 —— 三个小节标题现在都是纯文本） */
 .sum-li {
   display: flex;
-  gap: 8px;
-  padding: 8px 0;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) 0;
   font-size: var(--fs-subhead);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 .sum-li + .sum-li {
@@ -1330,10 +1368,10 @@ onBeforeUnmount(() => {
   flex: none;
   width: 17px;
   height: 17px;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   border-radius: var(--radius-xs);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1365,39 +1403,40 @@ onBeforeUnmount(() => {
 
 .sub {
   font-style: normal;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
   display: block;
-  margin-top: 1px;
+  margin-top: var(--gap-text);
 }
 
 .cite {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  margin-left: 4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--sp-4);
+  margin-left: var(--sp-4);
   border-radius: var(--radius-full);
   vertical-align: 2px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  /* 11px 是字号阶梯的下限；原先 9.5px 是阶梯外的裸值，点击目标也跟着偏小 */
-  font-size: var(--fs-micro);
-  font-weight: 800;
+  /* 交互文字不小于 12（HarmonyOS 文本排版下限）：原先 10px 是微字档，
+     引用角标是**可点的**，不能落在说明文字那一档 */
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
 }
 
 /* 待办行卡 */
 .todo-li {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 10px 12px;
+  gap: var(--gap-md);
+  padding: var(--sp-10) var(--sp-12);
   background: var(--surface);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  margin-top: 8px;
+  margin-top: var(--gap-sm);
 }
 
 .todo-li .cb {
@@ -1417,53 +1456,54 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-footnote);
-  font-weight: 600;
-  line-height: 1.45;
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-body);
 }
 
 .todo-li .tt em {
   font-style: normal;
   display: block;
   font-size: var(--fs-caption);
-  color: var(--text-3);
-  font-weight: 500;
-  margin-top: 1px;
+  color: var(--text-2);
+  font-weight: var(--fw-regular);
+  margin-top: var(--gap-text);
 }
 
 .todo-li .wbtn {
   flex: none;
-  height: 26px;
-  padding: 0 11px;
+  height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--accent-soft);
-  color: var(--accent);
+  /* soft 底上的文字走 strong 档（STANDARDS §4） */
+  color: var(--accent-strong);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
 }
 
 .done-mark {
   color: var(--ok);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
   flex: none;
 }
 
 /* 底部操作（平铺按钮组） */
 .acts-flat {
   display: flex;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-lg);
 }
 
 .acts-flat button {
   flex: 1;
-  height: 40px;
+  height: var(--control-md);
   border-radius: var(--radius-full);
-  font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-medium);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gap-sm);
 }
 
 .acts-flat .commit {
@@ -1484,7 +1524,7 @@ onBeforeUnmount(() => {
 .mini-wave {
   display: inline-flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--sp-2);
   height: 12px;
 }
 
@@ -1511,41 +1551,41 @@ onBeforeUnmount(() => {
 
 /* 转文字页 */
 .tr-sec {
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* 11px 的说明文字用 --text-3 只有约 2.3:1，读不清；提到 --text-2（≈4.9:1） */
 .vs-hint {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-top: 8px;
+  margin-top: var(--sp-8);
 }
 
 /* ===== 底部控制（统一操作语言） ===== */
 .foot {
   flex: none;
-  padding: 10px var(--page-pad-x) calc(var(--safe-bottom) + 14px);
+  padding: var(--sp-10) var(--page-pad-x) calc(var(--safe-bottom) + var(--sp-14));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .vbar {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--sp-10);
 }
 
 .vb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--sp-6);
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.2px;
   color: var(--text-1);
   transition: transform var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard),
@@ -1560,7 +1600,7 @@ onBeforeUnmount(() => {
 
 .vb.wide {
   height: var(--vbar-h);
-  padding: 0 20px;
+  padding: 0 var(--sp-20);
 }
 
 /* 玻璃里的按钮**撑满玻璃**：正圆与胶囊的几何都由玻璃那一层给。
@@ -1650,9 +1690,9 @@ onBeforeUnmount(() => {
 .kbd-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   width: 100%;
-  padding: 8px;
+  padding: var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -1662,10 +1702,11 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-subhead);
-  padding-left: 8px;
+  padding-left: var(--sp-8);
 }
 
 .kb-send {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1674,7 +1715,19 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
+}
+
+/* 32 的发送钮命中区补到 44（键盘条本身 ~48 高，外扩的 6 落在条内） */
+.kb-send::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--hit-min);
+  height: var(--hit-min);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 
 /* 禁用浓度全站同一档（tokens.css），不再各写各的裸值 */
@@ -1686,12 +1739,12 @@ onBeforeUnmount(() => {
   width: 100%;
   max-height: 160px;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: var(--sp-10) var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
   font-size: var(--fs-footnote);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 @media (prefers-reduced-motion: reduce) {

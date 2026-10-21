@@ -87,12 +87,13 @@ const emit = defineEmits<{
 .bar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .finder {
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--gap-sm);
+  min-height: var(--control-md);
+  padding: 0 var(--sp-16);
   border-radius: var(--radius-m);
   background: var(--surface-2);
 }
@@ -105,21 +106,32 @@ const emit = defineEmits<{
 
 /* 声明 + 计数整体贴左：flex-wrap 让窄屏时计数自然落到下一行，仍从最左开始 */
 .flags {
-  gap: 8px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
   justify-content: flex-start;
 }
 
+/* 筛选开关是**可点控件**，不是静态标签：视觉按小按钮档 28（--control-sm），
+   热区再用 ::after 上下各补 8 撑到 44。两颗之间横向只隔 8，所以命中区只纵向外扩，
+   不会把相邻那颗的点击吃进来（与 ModelListSheet 的 .act 同一条做法）。 */
 .flag {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: var(--gap-tight);
+  min-height: var(--control-sm);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
+}
+
+.flag::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .flag.on {

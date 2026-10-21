@@ -67,43 +67,56 @@ function pick(value: string): void {
 
 .card-wrap {
   position: fixed;
-  bottom: calc(var(--dock-top) + 12px);
+  /* 离底栏一个卡片间距（--gap-md）：面板像停在 Dock 上方的一叠卡片 */
+  bottom: calc(var(--dock-top) + var(--gap-md));
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: calc(var(--frame-max) - 24px);
+  /* 两侧各留 12：动作面板与手机 / 桌面同一条页边距节奏 */
+  width: calc(100% - var(--sp-24));
+  max-width: calc(var(--frame-max) - var(--sp-24));
   z-index: 111;
   background: var(--surface);
-  border-radius: var(--radius-l);
-  padding: 8px;
+  /* 与 SheetModal / 更新弹窗同层同圆角：顶层浮层统一 32（--radius-xl）；
+     内距也回到同一档 16（--pad-sheet）—— 此前 8 是这一族里唯一的例外，
+     面板边缘与行高亮底之间看起来比抽屉紧一档 */
+  border-radius: var(--radius-xl);
+  padding: var(--pad-sheet);
   box-shadow: var(--shadow-float);
 }
 
 .title {
   text-align: center;
   font-size: var(--fs-footnote);
-  font-weight: 600;
-  color: var(--text-3);
-  padding: 10px 0 6px;
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  /* 说明行：上边由面板的 16 内距承担，这里只补下方 8，与下面的行拉开一档
+     （--text-3 只有 3.6:1，而这一行常常就是「请选择要保存到哪里」，读到才能选对） */
+  padding: 0 0 var(--sp-8);
 }
 
 .opt {
   width: 100%;
-  height: 50px;
-  border-radius: var(--radius-m);
+  /* 菜单 / 操作面板行高 48（--row-h）、圆角 20（--radius-l）、左右 16：
+     与设置行、菜单项同一档，此前 50 / 16 是两套各写各的 */
+  height: var(--row-h);
+  padding: 0 var(--pad-row);
+  border-radius: var(--radius-l);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-medium);
   color: var(--text-1);
 }
 
+/* 危险操作是**文字**：实底档 --danger 压在白底上只有约 3.5:1，按 tokens.css 的
+   色彩契约（实底档给填充 / 图标，文字走 --*-strong）换成 --danger-strong */
 .opt.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .opt.cancel {
-  margin-top: 6px;
+  /* 取消与上面的选项是两组按钮 → 间隔 8（无边界那档） */
+  margin-top: var(--gap-sm);
   border-top: 0.5px solid var(--line);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-l);
 }
 
 .as-mask-enter-active,

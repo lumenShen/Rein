@@ -416,41 +416,45 @@ onBeforeUnmount(() => {
    与上一块（HomeFooter 的 .hf）的 14px 间距：全站卡间距靠 `.card + .card` 相邻选择器，
    这里隔着 .hf 那层包装够不到，得自己给——与 .hf 的做法一致。 */
 .tfeed {
-  margin-top: 14px;
+  /* 与上一块（HomeFooter）同档卡间距 12：全站卡间距靠 .card + .card，隔了包装够不到 */
+  margin-top: var(--gap-md);
 }
 
 .tfeed-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  /* 卡头标题与右侧动作是一组无边界控件：8 */
+  gap: var(--gap-sm);
 }
 
 .tfeed-head h2 {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
 .tfeed-list {
-  margin: 6px 0 0;
+  /* 卡内标题与内容之间 8（再大一档会让这组行读成独立区块） */
+  margin: var(--gap-sm) 0 0;
   padding: 0;
   list-style: none;
 }
 
 /* 组头：小一号的灰标签，自己当分隔线（所以组内第一行不再画上边框） */
 .tfeed-gsep {
-  padding: 12px 0 2px;
+  padding: var(--gap-md) 0 var(--gap-text);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-3);
 }
 
 .tfeed-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 0;
+  gap: var(--gap-md);
+  /* 双行行（标题 + meta）：12 上下 + 两行文本 ≈ 64 档 */
+  padding: var(--sp-12) 0;
 }
 
 .tfeed-row + .tfeed-row {
@@ -500,7 +504,7 @@ onBeforeUnmount(() => {
 .tfeed-title {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   /* 长标题截断；行不做换行，列表高度才稳定（一行 ≈ 52px，批大小按它算） */
   white-space: nowrap;
   overflow: hidden;
@@ -523,8 +527,8 @@ onBeforeUnmount(() => {
 .tfeed-meta {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 2px;
+  gap: var(--gap-tight);
+  margin-top: var(--gap-text);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
@@ -532,7 +536,7 @@ onBeforeUnmount(() => {
 .tfeed-cat {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
 }
 
 .tfeed-cat i {
@@ -542,14 +546,14 @@ onBeforeUnmount(() => {
 }
 
 .tfeed-end {
-  margin-top: 12px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--text-3);
 }
 
 .tfeed-end button {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .tfeed-sentinel {

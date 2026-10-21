@@ -35,3 +35,10 @@
 # startRead / startWrite / deleteRecord（modules/healthsync 的 call_static_method）。
 # 漏了它的后果和前两个一样，只是触发点更靠后：点「立即同步」才闪退。
 -keep class com.gozaoo.rein.HealthConnectBridge { *; }
+# GlobalFloatBridge：Rust 经 JNI 反射调 enable / disable / requestPermission / update /
+# setForm / onAppForeground / snapshot / takeAction（modules/float 的 call_static_method）。
+# 漏了它 = 系统浮窗开关一拨就闪退（NoSuchMethodError），且只在 release 包复现。
+-keep class com.gozaoo.rein.GlobalFloatBridge { *; }
+# GlobalFloatService：前台服务由 manifest 按类名实例化，且经 GlobalFloatBridge 静态实例
+# 转发 update / setForm / 前台态（同 RunTrackingService 的保留理由）。
+-keep class com.gozaoo.rein.GlobalFloatService { *; }

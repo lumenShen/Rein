@@ -140,15 +140,15 @@ const name = computed(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
+  gap: var(--gap-tight) var(--gap-md);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-bottom: 8px;
+  margin-bottom: var(--gap-sm);
 }
 
 .meta b {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow-wrap: anywhere;
 }
@@ -156,35 +156,36 @@ const name = computed(() => {
 .lead {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
-  margin-bottom: 12px;
+  line-height: var(--lh-body);
+  margin-bottom: var(--gap-md);
   overflow-wrap: anywhere;
 }
 
 .block {
-  margin-bottom: 16px;
+  /* 表单分组之间 16（表单项上下同一档） */
+  margin-bottom: var(--gap-lg);
 }
 
 .block h3 {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
-  margin-bottom: 7px;
+  margin-bottom: var(--gap-sm);
 }
 
 .hint {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--gap-sm);
   font-size: var(--fs-caption);
   color: var(--text-2);
-  line-height: 1.5;
-  margin-top: 6px;
+  line-height: var(--lh-body);
+  margin-top: var(--gap-sm);
 }
 
 .hint svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--gap-text);
 }
 
 .acts {
@@ -196,13 +197,15 @@ const name = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 13px;
-  border-radius: var(--radius-m);
+  gap: var(--gap-sm);
+  /* 表单主按钮：高 40、圆角 20 */
+  min-height: var(--control-md);
+  padding: var(--sp-12);
+  border-radius: var(--radius-l);
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-callout);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 

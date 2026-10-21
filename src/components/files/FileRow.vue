@@ -253,13 +253,14 @@ function onClick(ev: MouseEvent): void {
   height: 100%;
 }
 
+/* 行内：图标 + 名称列 + 元数据列。行是列表**内**的一块，圆角收到 8 那档 */
 .hit {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--gap-sm);
   height: 100%;
-  padding: 0 10px;
-  border-radius: var(--radius-m);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-s);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -289,7 +290,7 @@ function onClick(ev: MouseEvent): void {
 }
 
 .row.cut .hit {
-  opacity: 0.45;
+  opacity: var(--disabled-opacity);
 }
 
 .row.over .hit {
@@ -325,14 +326,14 @@ function onClick(ev: MouseEvent): void {
 .name-col {
   display: flex;
   align-items: baseline;
-  gap: 5px;
+  gap: var(--gap-sm);
   flex: 1;
   min-width: 0;
 }
 
 .name-col b {
   font-size: var(--fs-body);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -340,7 +341,7 @@ function onClick(ev: MouseEvent): void {
 }
 
 .row.sel .name-col b {
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .name-col small {
@@ -399,7 +400,8 @@ function onClick(ev: MouseEvent): void {
 
 .rename {
   width: 100%;
-  padding: 5px 8px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-s);
   background: var(--surface-2);
   box-shadow: inset 0 0 0 1.5px var(--accent);
@@ -409,7 +411,7 @@ function onClick(ev: MouseEvent): void {
 
 .err {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   color: var(--danger-strong);
   font-size: var(--fs-caption);
 }

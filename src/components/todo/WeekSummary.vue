@@ -99,12 +99,13 @@ const insight = computed(() => {
 
 <style scoped>
 .ws {
-  padding: 16px 18px;
+  /* 卡片内距统一 16（原 18 是两边各多 2 的手感值） */
+  padding: var(--pad-card);
 }
 
 .head h2 {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .range {
@@ -115,8 +116,9 @@ const insight = computed(() => {
 .body {
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin-top: 12px;
+  /* 环与柱状图是两块并列的读图区，间距比卡内区块大一档 */
+  gap: var(--sp-20);
+  margin-top: var(--gap-md);
 }
 
 .ring {
@@ -131,13 +133,13 @@ const insight = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: var(--gap-text);
 }
 
 .lab b {
   /* 环心完成率是周总结的主读数：用阶梯上的 --fs-title2，不写裸值 20px */
   font-size: var(--fs-title2);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 .lab span {
@@ -154,23 +156,24 @@ const insight = computed(() => {
 .cap {
   /* 「按天完成率」是图表标题 */
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .bars {
   display: flex;
   align-items: flex-end;
-  gap: 7px;
+  gap: var(--gap-sm);
   height: 52px;
-  margin: 8px 0 4px;
+  margin: var(--gap-sm) 0 var(--gap-tight);
 }
 
 .bars i {
   flex: 1;
   height: 100%;
   transform-origin: bottom center;
-  border-radius: 4px 4px 2px 2px;
+  /* 柱顶两角走超小圆角档，柱底 2 仍收一点，柱子才像「立」在轴上 */
+  border-radius: var(--radius-xs) var(--radius-xs) var(--sp-2) var(--sp-2);
   background: var(--accent-soft);
   transition: transform var(--dur-base) var(--ease-standard);
 }
@@ -181,7 +184,7 @@ const insight = computed(() => {
 
 .days {
   display: flex;
-  gap: 7px;
+  gap: var(--gap-sm);
   /* 柱状图下的周几刻度，与 .cap（图表标题）同档 */
   font-size: var(--fs-caption);
   color: var(--text-3);
@@ -193,12 +196,12 @@ const insight = computed(() => {
 }
 
 .insight {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
   font-size: var(--fs-footnote);
-  line-height: 1.55;
+  line-height: var(--lh-body);
   color: var(--text-1);
   background: var(--surface-2);
   border-radius: var(--radius-s);
-  padding: 8px 11px;
+  padding: var(--sp-8) var(--pad-inline);
 }
 </style>

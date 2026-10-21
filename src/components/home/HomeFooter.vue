@@ -781,15 +781,16 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 与现状同一套土壤：卡片铺在页面底色上、14px 网格；这里不包一张大卡 */
+/* 与现状同一套土壤：卡片铺在页面底色上、12px 卡片网格；这里不包一张大卡 */
 .hf {
   position: relative;
-  /* 与上方主页画布卡的 14px：全站卡间距靠 `.card + .card` 相邻选择器，
+  /* 与上方主页画布卡的间距走 --gap-md(12)：全站卡间距靠 `.card + .card` 相邻选择器，
      这里隔着这层包装够不到，得自己给 —— 漏了就是两张圆角卡贴死（2026-10-04 用户实测抓到） */
-  margin-top: 14px;
+  margin-top: var(--gap-md);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  /* 课程条 / 记录域 / 状态格 / 工具行是四张同级卡：卡与卡 12 一档，与页面其余卡流同节奏 */
+  gap: var(--gap-md);
   color: var(--text-1);
   font-size: var(--fs-caption);
 }
@@ -808,8 +809,12 @@ onMounted(() => {
 .hf-course {
   display: block;
   width: 100%;
-  padding: 12px 16px 11px;
-  border-radius: var(--radius-l);
+  /* 卡内距 12/16/12：与下面两张状态卡同档（同级卡内距必须一致），上下收一档是因为
+     这一条只有两行字，16 会把它撑成一块空板 */
+  padding: var(--pad-card-tight) var(--pad-card);
+  /* 它和 HomeCanvas 的白卡是同一层级的东西（在流的内容面），圆角取卡片的 16；
+     20 是按钮 / 功能入口那一档，用在这里会让首页每块卡各走一套圆角 */
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -818,18 +823,19 @@ onMounted(() => {
 .hf-c2 {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  /* 同行内相邻信息（课程名 / 状态 / 剩余）：无边界控件 8 */
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .hf-c1 b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .hf-next {
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .hf-live {
@@ -863,7 +869,7 @@ onMounted(() => {
   margin-left: auto;
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--danger-strong);
   font-variant-numeric: tabular-nums;
 }
@@ -872,7 +878,7 @@ onMounted(() => {
   margin-left: auto;
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -883,8 +889,9 @@ onMounted(() => {
 .hf-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 0 9px;
+  gap: var(--gap-sm);
+  /* 与上下两行文字的间距取同一档 8：进度条是这一行的附属，不是独立区块 */
+  margin: var(--gap-sm) 0;
 }
 
 .hf-track {
@@ -915,8 +922,8 @@ onMounted(() => {
 
 /* ---------- 记录域（吃 / 练） ---------- */
 .hf-zone {
-  padding: 11px 14px 12px;
-  border-radius: var(--radius-l);
+  padding: var(--pad-card-tight) var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -924,17 +931,17 @@ onMounted(() => {
 .hf-z1 {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .hf-zk {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 .hf-zk svg {
@@ -943,24 +950,25 @@ onMounted(() => {
 
 .hf-zv {
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
 
 /* 主事实与弱项分数之间的那枚点：小一号、退一档灰，别跟数字抢 */
 .hf-zsep {
-  margin: 0 4px;
+  margin: 0 var(--gap-tight);
   font-size: var(--fs-footnote);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   color: var(--text-3);
 }
 
 /* 「未练」没有分数可给 —— 一枚中性小字即可，灰点（hs0）已经表过态 */
 .hf-idle {
-  margin-left: 1px;
+  /* 「未练」紧贴分数后的状态位：1px 没有任何可读差异，归零即可 */
+  margin-left: 0;
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -979,14 +987,14 @@ onMounted(() => {
   display: inline-block;
   width: 1px;
   height: 9px;
-  margin: 0 6px;
+  margin: 0 var(--sp-6);
   background: var(--line-strong);
   vertical-align: -1px;
 }
 
 /* 「约 N 分钟」：副行里唯一的主数值，提到 --text-2 并加 .num（等宽） */
 .zn-main {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -1042,21 +1050,24 @@ onMounted(() => {
 .hf-members {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  /* 成员胶囊是一组无边界控件：组内 8、与上方数据行之间 12（卡内区块） */
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 .hf-member {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  /* 成员钮：纵向补到 44（上面是主要动作区，横向不外扩，免得挤到旁边的成员） */
-  padding: 11px 11px;
+  gap: var(--gap-tight);
+  /* 成员钮：纵向补到 44（上面是主要动作区，横向不外扩，免得挤到旁边的成员）。
+     12px 内边距 + 12px 字仍不到 44，44 由显式 min-height 兜住。 */
+  min-height: var(--hit-min);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -1095,16 +1106,26 @@ onMounted(() => {
 .hf-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  /* 两格状态卡是并排的同级卡：卡间距 12 */
+  gap: var(--gap-md);
+}
+
+/* 320 档：两格各只剩 138px，钱格的「钱 + ¥…」在 7 位金额时会把数字挤出卡外。
+   收到一列后每格通栏，金额与说明都有完整一行可用（430 仍保持并排）。 */
+@media (max-width: 359px) {
+  .hf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .hf-fact {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  /* 格内「键值行 → 脚注」是卡内两个小层：8 */
+  gap: var(--gap-sm);
   min-width: 0;
-  padding: 11px 14px 12px;
-  border-radius: var(--radius-l);
+  padding: var(--pad-card-tight) var(--pad-card);
+  border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
 }
@@ -1112,17 +1133,17 @@ onMounted(() => {
 .hf-f1 {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--gap-sm);
   min-width: 0;
 }
 
 .hf-fk {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -1132,20 +1153,24 @@ onMounted(() => {
 
 .hf-fv {
   margin-left: auto;
+  min-width: 0;
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  /* 金额位数多时在格内收住，不把卡片撑出页面 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 单位后缀（「大卡」「分钟」）压在 display 级大数旁边，是装饰性微字，按规定可留在
    11px 档；同行真正承载信息的 .hf-fk / .hf-fn / .hf-zn 已全部提到 --fs-caption */
 .hf-fv em {
-  margin-left: 2px;
+  margin-left: var(--sp-2);
   font-style: normal;
   font-size: var(--fs-micro);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
@@ -1159,7 +1184,7 @@ onMounted(() => {
 
 /* 「N 段番茄」：本格的主事实，提到 --text-2 + .num；待办条数降为脚注 */
 .hf-fn .fn-main {
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -1172,7 +1197,7 @@ onMounted(() => {
 .hf-focus-open {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-sm);
   width: 100%;
   min-width: 0;
   border-radius: var(--radius-m);
@@ -1183,8 +1208,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-text);
 }
 
 .hf-focus-note {
@@ -1197,20 +1222,22 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
+  /* 工具胶囊一组无边界控件：横向组内 8，换行后行距同档 */
+  gap: var(--gap-sm);
 }
 
 .hf-chip {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   /* 工具钮：同上，纵向补到 44 */
-  padding: 11px 12px;
+  min-height: var(--hit-min);
+  padding: 0 var(--pad-inline);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   white-space: nowrap;
 }

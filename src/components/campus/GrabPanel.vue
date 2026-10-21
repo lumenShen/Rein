@@ -18,10 +18,12 @@ import {
 } from 'lucide-vue-next'
 
 import GrabResult from '@/components/campus/GrabResult.vue'
+import { useTwoStepConfirm } from '@/composables/useTwoStepConfirm'
 import { campusService } from '@/services/campusService'
-import { grabStatusMeta, idOf, useCourseSelectStore } from '@/stores/courseSelect'
+import { grabStatusMeta, useCourseSelectStore } from '@/stores/courseSelect'
 import type { GrabPreflight, GrabTask } from '@/types'
 import { askAiForGrabRescue } from '@/utils/campusAi'
+import { grabTaskTitle, groupGrabSquads } from '@/utils/grab'
 
 /**
  * 抢课任务单面板 —— 引擎的仪表盘。
@@ -264,23 +266,8 @@ function formatCountdown(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
-/**
- * 任务行的标题。
- *
- * `lessonName` 里存的是**这个班怎么和同门课其他班区分**（引擎写进去的，
- * 项目名优先）—— 体育课 8 个项目的课程名全都叫「大学体育1」，
- * 只写课程名，用户看着自己排的 8 条任务认不出哪条是羽毛球。
- *
- * 但它**只在真有新信息时才拼上去**：教学班名常常以课程名开头
- * （「大学体育1-花江校区-26级（3院…）」），那种情况下再拼一遍只是把标题撑长。
- */
-function title(t: GrabTask): string {
-  const course = t.courseName?.trim()
-  const label = t.lessonName?.trim()
-  if (!course) return label || `教学班 ${idOf(t.lessonId)}`
-  if (!label || label === course || label.startsWith(course)) return course
-  return `${course} · ${label}`
-}
+/** 任务行标题：命名规矩在 utils/grab（任务行 / 结果行 / 志愿组共用一份） */
+const title = grabTaskTitle
 
 /**
  * 「这一秒为什么没在打」——等待中的任务要有这句话。
@@ -331,36 +318,17 @@ function chipOf(t: GrabTask): { label: string; tone: string } {
  * 移除是**两步**的：这些行是「抢到了什么」的唯一本地记录，
  * 一次误触就把它删掉不值 —— 尤其它离「重试 / 取消」只有 4px。
  */
-const pendingRemove = ref<number | null>(null)
-let removeTimer: number | null = null
-
+const { pending: pendingRemove, ask } = useTwoStepConfirm()
 function askRemove(id: number): void {
-  if (removeTimer != null) window.clearTimeout(removeTimer)
-  if (pendingRemove.value === id) {
-    pendingRemove.value = null
-    void act(id, 'remove')
-    return
-  }
-  pendingRemove.value = id
-  removeTimer = window.setTimeout(() => (pendingRemove.value = null), 4000)
+  ask(id, () => void act(id, 'remove'))
 }
 
 /* ---------------- 志愿组 ----------------
  * 组内是**互斥备选**：一次只主攻当前志愿，中选后其余自动取消。所以组要看成一个
  * 整体来渲染 —— 散在列表里的话，「为什么第 2 志愿一直不动」就没人答得上来。
  */
-const squads = computed(() => {
-  const byKey = new Map<string, { key: string; name: string; members: GrabTask[] }>()
-  for (const t of tasks.value) {
-    const k = t.groupKey?.trim()
-    if (!k) continue
-    const g = byKey.get(k) ?? { key: k, name: t.groupName?.trim() || '志愿组', members: [] }
-    g.members.push(t)
-    byKey.set(k, g)
-  }
-  for (const g of byKey.values()) g.members.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-  return [...byKey.values()]
-})
+/* 面板要展示已取消的成员（任务单历史），选课页的「加入某一组」只要活着的组 */
+const squads = computed(() => groupGrabSquads(tasks.value, { includeCancelled: true }))
 
 /** 不在任何组里的任务，照旧平铺 */
 const loose = computed(() => tasks.value.filter((t) => !t.groupKey?.trim()))
@@ -660,23 +628,25 @@ function handToAi(): void {
 <style scoped>
 .card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 卡片档 16：这几张是页面级的内容容器，32 是半模态的层级；
+     用 32 会让一屏卡片看起来比弹出的抽屉还高一层 */
+  border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-md);
 }
 
 .head {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 10px;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-10);
 }
 
 .title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-callout);
   color: var(--text-1);
 }
@@ -687,11 +657,11 @@ function handToAi(): void {
 
 .live {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: 1px 8px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 /* 阶段陈述：这块板上最该被读到的一行 —— 15px 正文级，而不是 12px 的元信息 */
@@ -699,11 +669,11 @@ function handToAi(): void {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--sp-4);
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* 没有倒计时时，这句话就是主角：抬到 headline 级 */
@@ -715,16 +685,16 @@ function handToAi(): void {
 .cd-label {
   font-size: var(--fs-caption);
   color: var(--text-2);
-  margin-top: 2px;
+  margin-top: var(--sp-2);
 }
 
 /* 主数字：整页最大的字。倒计时是决定成败的那个量，它比教务的钟更该抢眼 ——
    早先这里是 15px/--text-2，比旁边的钟还弱，正好把权重放反了 */
 .cd-big {
   font-size: var(--fs-display-s);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
-  line-height: 1.05;
+  line-height: var(--lh-display);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
@@ -743,20 +713,20 @@ function handToAi(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0 6px;
+  gap: 0 var(--sp-6);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
 .engine {
-  gap: 0 4px;
+  gap: 0 var(--sp-4);
   align-items: flex-start;
 }
 
 .engine svg {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   color: var(--warn-strong);
 }
 
@@ -766,17 +736,18 @@ function handToAi(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-top: 2px;
+  gap: var(--sp-6) var(--sp-8);
+  margin-top: var(--sp-2);
 }
 
 .pf-go {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 30px;
-  padding: 5px 10px;
+  gap: var(--sp-4);
+  /* 小号按钮一档 28；命中区由 ::after 撑到 44 */
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-10);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-full);
   background: transparent;
@@ -786,11 +757,11 @@ function handToAi(): void {
 }
 
 /* 命中区纵向撑到 44：它是 T-1 分钟最可能被按的那颗按钮，
-   而它视觉上只有 30 高（横向不外扩：右边紧挨着自检结论那句话） */
+   而它视觉上只有 28 高（横向不外扩：右边紧挨着自检结论那句话） */
 .pf-go::after {
   content: '';
   position: absolute;
-  inset: -7px 0;
+  inset: -8px 0;
 }
 
 .pf-go:disabled {
@@ -802,29 +773,31 @@ function handToAi(): void {
   font-size: var(--fs-caption);
 }
 
+/* 结论文字是正文，不是填充色：实底档 --ok / --danger 压白底不够 4.5:1，
+   与全库 soft 底上的状态词同一条规则，走 strong 档 */
 .pf-sum.ok {
-  color: var(--ok);
+  color: var(--ok-strong);
 }
 
 .pf-sum.bad {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .pf-list {
   list-style: none;
-  margin: 4px 0 0;
+  margin: var(--sp-4) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-4);
 }
 
 .pf-list li {
   display: flex;
-  gap: 6px;
+  gap: var(--sp-6);
   align-items: flex-start;
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .pf-list li .col {
@@ -850,12 +823,13 @@ function handToAi(): void {
   text-align: center;
 }
 
+/* 自检的 ✓ / ✕ 是文字字形（不是 SVG 图标）：同一条「实底档不当文字色」 */
 .pf-list li.ok .pf-mark {
-  color: var(--ok);
+  color: var(--ok-strong);
 }
 
 .pf-list li.bad .pf-mark {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 /* T-0 前后换形态：整块板染色 + 描边，余光里也能看出「正在出手」 */
@@ -882,9 +856,9 @@ function handToAi(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0 5px;
+  gap: 0 var(--sp-4);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
   color: var(--text-2);
 }
 
@@ -894,11 +868,11 @@ function handToAi(): void {
 
 .win.on {
   color: var(--accent-strong);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .win b {
-  font-weight: 700;
+  font-weight: var(--fw-bold);
 }
 
 /* 读屏专用文本：可见的那个大数字每秒都变，不能让它当 live region */
@@ -928,68 +902,79 @@ function handToAi(): void {
 .warn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--warn-strong);
-  line-height: 1.4;
-  margin-top: 4px;
+  line-height: var(--lh-caption);
+  margin-top: var(--sp-4);
 }
 
 .fault {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-6);
   flex-wrap: wrap;
   font-size: var(--fs-caption);
   color: var(--warn-strong);
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   border-radius: var(--radius-m);
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  line-height: 1.45;
+  padding: var(--sp-8) var(--sp-10);
+  margin-bottom: var(--sp-10);
+  line-height: var(--lh-caption);
 }
 
 .fix {
-  font-weight: 700;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  /* 小号按钮一档；命中区由 ::after 补到 44（下面两条横幅里的唯一出路） */
+  min-height: var(--control-sm);
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
   margin-left: auto;
+}
+
+.fix::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 /* 被教务拒绝的请求：警告色但**给出路**（交 AI / 重新排队），不做成死路一条的红条 */
 .rejected {
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   border-radius: var(--radius-m);
-  padding: 8px 10px;
-  margin-bottom: 10px;
+  padding: var(--sp-8) var(--sp-10);
+  margin-bottom: var(--sp-10);
 }
 
 .rl {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--sp-6);
   font-size: var(--fs-caption);
   color: var(--warn-strong);
-  line-height: 1.45;
+  line-height: var(--lh-caption);
 }
 
 /* 被教务拒绝的那句原话：它是「为什么停了」的唯一直接证据 */
 .why {
   font-size: var(--fs-caption);
-  margin-top: 4px;
-  line-height: 1.45;
+  margin-top: var(--sp-4);
+  line-height: var(--lh-caption);
   word-break: break-word;
   color: var(--text-2);
 }
 
 .rejected .acts {
-  gap: 14px;
-  margin-top: 6px;
+  gap: var(--sp-14);
+  margin-top: var(--sp-6);
 }
 
 /* 这一块里的按钮有自己的排布，别继承 .fix 的「推到右边」 */
 .rejected .fix {
   margin-left: 0;
-  min-height: 32px;
+  min-height: var(--control-sm);
 }
 
 /* 窗口监听：没有任务时也要让人看到「它还在盯着」，否则关掉页面就等于什么都没发生。
@@ -998,8 +983,8 @@ function handToAi(): void {
 .listen-line {
   font-size: var(--fs-caption);
   color: var(--accent-strong);
-  line-height: 1.5;
-  padding: 4px 0;
+  line-height: var(--lh-body);
+  padding: var(--sp-4) 0;
 }
 
 .list {
@@ -1011,15 +996,15 @@ function handToAi(): void {
 .squad {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0 4px;
+  gap: var(--sp-6);
+  padding: var(--sp-8) 0 var(--sp-4);
   font-size: var(--fs-caption);
   color: var(--text-2);
 }
 
 .squad b {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--text-1);
 }
 
@@ -1030,24 +1015,24 @@ function handToAi(): void {
 /* 组内的行往右缩一格，一眼看出「这些是一伙的」。
    2px 等于没缩 —— 组头与成员在视觉上连成一片，志愿组的边界只能靠读文字才知道。 */
 .squad + .task {
-  padding-left: 14px;
+  padding-left: var(--sp-14);
 }
 
 .ord {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-full);
-  padding: 1px 7px;
+  padding: var(--sp-2) var(--sp-8);
 }
 
 .task {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 0;
+  gap: var(--sp-10);
+  padding: var(--sp-10) 0;
 }
 
 .task + .task {
@@ -1056,17 +1041,17 @@ function handToAi(): void {
 
 .body {
   min-width: 0;
-  gap: 2px;
+  gap: var(--sp-2);
 }
 
 .line1 {
-  gap: 6px;
+  gap: var(--sp-6);
   min-width: 0;
 }
 
 .name {
   font-size: var(--fs-subhead);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   overflow: hidden;
   white-space: nowrap;
@@ -1075,7 +1060,7 @@ function handToAi(): void {
 
 .meta {
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1089,8 +1074,8 @@ function handToAi(): void {
 .chip {
   flex: none;
   font-size: var(--fs-caption);
-  font-weight: 700;
-  padding: 1px 8px;
+  font-weight: var(--fw-bold);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   /* 中性档徽标（已取消 / 待命）也是**状态词**，不是装饰 ——
@@ -1129,14 +1114,14 @@ function handToAi(): void {
   flex: none;
   /* 16px 而不是 12px：每个按钮的命中区外扩 7px，相邻两个才不会互相压住
      （重合成 14px 时「取消」会偷走「暂停」的边缘，那比按钮小更糟） */
-  gap: 16px;
+  gap: var(--sp-16);
 }
 
 .op {
   position: relative;
   width: 30px;
   height: 30px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1168,10 +1153,10 @@ function handToAi(): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  /* 行距留 18：每颗按钮的命中区纵向各外扩 6px，折行之后相邻两行才不会互相吃掉 */
-  gap: 18px 14px;
-  padding-top: 10px;
-  margin-top: 4px;
+  /* 行距留 18：每颗按钮的命中区纵向各外扩 7px，折行之后相邻两行才不会互相吃掉 */
+  gap: var(--sp-18) var(--sp-14);
+  padding-top: var(--sp-10);
+  margin-top: var(--sp-4);
   border-top: 0.5px solid var(--line);
 }
 
@@ -1181,17 +1166,17 @@ function handToAi(): void {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 7px 0;
+  gap: var(--sp-4);
+  padding: var(--sp-8) 0;
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--accent-strong);
 }
 
 .link::after {
   content: '';
   position: absolute;
-  inset: -6px -4px;
+  inset: -7px -4px;
 }
 
 .link.t-3 {

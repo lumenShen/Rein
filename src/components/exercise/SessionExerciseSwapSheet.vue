@@ -106,9 +106,9 @@ function metaOf(e: (typeof candidates.value)[number]): string {
 
 <style scoped>
 .searchrow {
-  gap: 7px;
+  gap: var(--sp-6);
   height: 38px;
-  padding: 0 12px;
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-3);
@@ -123,18 +123,18 @@ function metaOf(e: (typeof candidates.value)[number]): string {
 
 /* 结论胶囊贴在搜索框下：规则全文已收进标题栏 InfoHint，这行只留结论 */
 .tags {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
   display: flex;
 }
 
 .list {
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 .cand {
   width: 100%;
-  gap: 2px;
-  padding: 10px 2px;
+  gap: var(--gap-text);
+  padding: var(--sp-10) var(--sp-2);
   text-align: left;
   border-radius: var(--radius-s);
 }
@@ -145,7 +145,7 @@ function metaOf(e: (typeof candidates.value)[number]): string {
 
 .cname {
   font-size: var(--fs-callout);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 .cmeta {
@@ -156,7 +156,7 @@ function metaOf(e: (typeof candidates.value)[number]): string {
 }
 
 .empty {
-  padding: 34px 0;
+  padding: var(--sp-32) 0;
   text-align: center;
   font-size: var(--fs-caption);
   color: var(--text-3);

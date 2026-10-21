@@ -60,7 +60,7 @@ function iconStyle(p: PluginSpec): Record<string, string> {
           </i>
           <span class="col ptxt">
             <b>{{ row.plugin.name }}</b>
-            <em class="t-3">{{ row.plugin.desc }}</em>
+            <em class="t-2">{{ row.plugin.desc }}</em>
           </span>
           <ToggleSwitch
             :model-value="features.isEnabled(row.plugin.id)"
@@ -115,16 +115,24 @@ function iconStyle(p: PluginSpec): Record<string, string> {
 
 <style scoped>
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
+     这里只剩页头与内容之间那一档呼吸 */
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
+/* 清单卡的内距走卡片档 16，上下收到 4：行的呼吸已经由行高给足，
+   再多一层内距会把首行推得离卡头太远 */
 .plist {
-  padding: 6px 20px;
+  padding: var(--sp-4) var(--pad-card);
 }
 
+/* 开关行：双行列表档 64。36 的图标章 + 16 的模块名 + 12 的说明叠起来约 44，
+   48 会让上下两行贴到发丝线上，64 才是「一行装得下两行字」的那档。
+   行间边界交给 1px 分隔线（--line），不再靠内距撑。 */
 .prow {
-  gap: 12px;
-  padding: 11px 0;
+  gap: var(--gap-md);
+  padding: 0;
+  min-height: var(--row-h-double);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
@@ -133,9 +141,10 @@ function iconStyle(p: PluginSpec): Record<string, string> {
 }
 
 /* 子模块：缩进 + 引导线。行内分隔线改挂到引导线上，避免两条线并排 */
+/* 子模块缩进一格：与父行「图标 36 + 间距 12」的文本起点对齐，读数才读得出从属 */
 .prow.sub {
-  margin-left: 14px;
-  padding-left: 14px;
+  margin-left: var(--sp-16);
+  padding-left: var(--sp-16);
   border-top: 0;
   position: relative;
 }
@@ -177,12 +186,12 @@ function iconStyle(p: PluginSpec): Record<string, string> {
 .ptxt {
   flex: 1;
   min-width: 0;
-  gap: 2px;
+  gap: var(--gap-text);
 }
 
 .ptxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
 }
 
 /* 状态胶囊只占内容宽：.col 默认 stretch 会把软底撑满整列 */
@@ -193,34 +202,36 @@ function iconStyle(p: PluginSpec): Record<string, string> {
 .namerow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-text-inline);
 }
 
 .ptxt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* 「子模块」标记：中性底 + 次级文字色，不用强调色抢注意力 */
+/* 「子模块」标记：行内小胶囊，不占 24 的角标高（它跟模块名同一基线），
+   左右 8 是「标签贴文字」那一档，上下 2 把胶囊压在行高内 */
 .tag {
   font-style: normal;
   font-size: var(--fs-micro);
-  font-weight: 600;
-  padding: 1px 6px;
+  font-weight: var(--fw-medium);
+  padding: var(--sp-2) var(--sp-8);
   border-radius: var(--radius-full);
   color: var(--text-2);
   background: var(--surface-2);
 }
 
 .note {
-  margin: 14px 4px 0;
+  margin: var(--gap-lg) var(--sp-4) 0;
 }
 
 .note p {
-  margin-top: 6px;
+  margin-top: var(--gap-sm);
   font-size: var(--fs-caption);
-  line-height: 1.6;
+  line-height: var(--lh-body);
 }
 
 /* ---------- 桌面（≥ --desk-min 时壳层才渲染 .desk-main，所以这里不用写断点） ----------

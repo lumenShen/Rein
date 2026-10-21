@@ -698,7 +698,10 @@ interface RowData {
   items?: FileItem[]
 }
 
-const LIST_ROW_H = 52
+/** 单行列表行高：48 = 控件规范的列表行档（48/56/64/72/96）。
+ *  FileRow 是「18 图标 + 16 名称 + 12 元信息同基线」的单行结构，48 正好；
+ *  此前的 52 不在任何一档上，一屏还会少排一行。 */
+const LIST_ROW_H = 48
 const HEADER_ROW_H = 34
 
 /** 画廊强制大档（它就是「大图块」这个视图） */
@@ -2770,7 +2773,7 @@ defineExpose({ refresh, navigate, path })
 .fx {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 /* ---------- 手机端工具条：只留 上一步 / 搜索 / 添加 / 更多 ---------- */
@@ -2778,8 +2781,8 @@ defineExpose({ refresh, navigate, path })
 /* 窄屏取消换行：四样东西必须一行装下，谁换行谁把列表顶出屏外 */
 .bar.mbar {
   flex-wrap: nowrap;
-  gap: 5px;
-  padding: 6px 7px;
+  gap: var(--sp-4);
+  padding: var(--sp-6) var(--sp-8);
 }
 
 /* ---------- 底部悬浮 dock（虚拟文件系统导航 + 按需功能栏） ---------- */
@@ -2794,9 +2797,9 @@ defineExpose({ refresh, navigate, path })
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   min-height: 46px;
-  padding: 6px;
+  padding: var(--sp-6);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--surface) 86%, transparent);
   backdrop-filter: blur(18px) saturate(150%);
@@ -2814,10 +2817,10 @@ defineExpose({ refresh, navigate, path })
 .fseg {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--sp-4);
   flex: 1;
   min-width: 0;
-  padding: 3px;
+  padding: var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -2827,12 +2830,12 @@ defineExpose({ refresh, navigate, path })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   min-width: 0;
-  padding: 8px 10px;
+  padding: var(--sp-8) var(--sp-10);
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -2847,7 +2850,7 @@ defineExpose({ refresh, navigate, path })
 .facts {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-4);
   flex: 1;
   min-width: 0;
 }
@@ -2858,12 +2861,12 @@ defineExpose({ refresh, navigate, path })
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 44px;
-  padding: 6px 4px;
+  padding: var(--sp-6) var(--sp-4);
   border-radius: var(--radius-m);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   white-space: nowrap;
 }
@@ -2883,7 +2886,7 @@ defineExpose({ refresh, navigate, path })
 
 .fact.done {
   flex: none;
-  padding: 8px 12px;
+  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--on-accent);
@@ -2896,9 +2899,10 @@ defineExpose({ refresh, navigate, path })
   height: 68px;
 }
 
+/* 工具条：内部控件之间 8（无边界），外框内距 8 */
 .bar {
-  gap: 6px;
-  padding: 7px 9px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8);
   border-radius: var(--radius-m);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -2906,7 +2910,7 @@ defineExpose({ refresh, navigate, path })
 }
 
 .bar.sizing {
-  padding: 5px 9px;
+  padding: var(--sp-4) var(--sp-8);
 }
 
 /* 拖放规则收进行尾 InfoHint，工具条本身只留「图标」+ 小/中/大 */
@@ -2922,7 +2926,7 @@ defineExpose({ refresh, navigate, path })
 .icon {
   position: relative;
   flex: none;
-  padding: 6px;
+  padding: var(--sp-6);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -2953,10 +2957,11 @@ defineExpose({ refresh, navigate, path })
 .find {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   flex: 1;
   min-width: 150px;
-  padding: 5px 10px;
+  min-height: var(--control-sm);
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
@@ -2974,9 +2979,9 @@ defineExpose({ refresh, navigate, path })
 .clear {
   position: relative;
   flex: none;
-  padding: 2px;
+  padding: var(--sp-2);
   border-radius: var(--radius-full);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* 清空搜索：13px 图标 + 2px 内距只有约 17px，是整条工具栏里最难点的钮。
@@ -2990,14 +2995,14 @@ defineExpose({ refresh, navigate, path })
 .seg {
   display: inline-flex;
   flex: none;
-  padding: 2px;
+  padding: var(--sp-2);
   border-radius: var(--radius-full);
   background: var(--surface-2);
 }
 
 .segb {
   position: relative;
-  padding: 4px 10px;
+  padding: var(--sp-4) var(--sp-12);
   border-radius: var(--radius-full);
   font-size: var(--fs-caption);
   color: var(--text-2);
@@ -3022,7 +3027,7 @@ defineExpose({ refresh, navigate, path })
   top: -4px;
   right: -4px;
   min-width: 18px;
-  padding: 0 4px;
+  padding: 0 var(--sp-4);
   border-radius: var(--radius-full);
   background: var(--danger);
   color: var(--on-accent);
@@ -3030,7 +3035,7 @@ defineExpose({ refresh, navigate, path })
      提到 caption 一档，章子跟着从 14 长到 18 */
   font-size: var(--fs-caption);
   font-style: normal;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   line-height: 18px;
   text-align: center;
 }
@@ -3042,14 +3047,15 @@ defineExpose({ refresh, navigate, path })
 .newfolder {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--gap-sm);
+  padding: var(--sp-12);
 }
 
 .newfolder input {
   flex: 1;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: var(--control-md);
+  padding: 0 var(--sp-12);
   border-radius: var(--radius-m);
   background: var(--surface-2);
   color: var(--text-1);
@@ -3057,12 +3063,15 @@ defineExpose({ refresh, navigate, path })
 }
 
 .crumbs {
-  gap: 4px;
+  gap: var(--gap-tight);
   flex-wrap: wrap;
 }
 
 .crumb {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-10);
   border-radius: var(--radius-full);
   font-size: var(--fs-footnote);
   color: var(--text-2);
@@ -3078,30 +3087,31 @@ defineExpose({ refresh, navigate, path })
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
 }
 
 .crumb.cur {
   background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 700;
+  /* soft 底上的文字走 --accent-strong（实底档 --accent 在该底上不足 4.5:1） */
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
 }
 
 .arcbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--sp-8);
+  padding: var(--sp-8) var(--sp-12);
   font-size: var(--fs-footnote);
 }
 
 .arcbar b {
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .arcbar small {
   display: block;
-  margin-top: 2px;
+  margin-top: var(--sp-2);
   font-size: var(--fs-caption);
 }
 
@@ -3112,7 +3122,7 @@ defineExpose({ refresh, navigate, path })
 }
 
 .arcbar .arc-sep {
-  padding: 0 5px;
+  padding: 0 var(--sp-4);
 }
 
 .arcbar .arc-dim {
@@ -3127,7 +3137,8 @@ defineExpose({ refresh, navigate, path })
 .arcto {
   flex: none;
   width: 150px;
-  padding: 4px 8px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-1);
@@ -3135,15 +3146,16 @@ defineExpose({ refresh, navigate, path })
 }
 
 .tagbar {
-  padding: 5px 9px;
-  gap: 6px;
+  padding: var(--sp-4) var(--sp-8);
+  gap: var(--gap-sm);
 }
 
 .tagchip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
+  gap: var(--gap-tight);
+  min-height: var(--chip-h);
+  padding: 0 var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-2);
@@ -3153,7 +3165,7 @@ defineExpose({ refresh, navigate, path })
 .tagchip i {
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .tagchip.on {
@@ -3173,32 +3185,34 @@ defineExpose({ refresh, navigate, path })
 .banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: var(--gap-sm);
+  padding: var(--sp-8) var(--sp-12);
   font-size: var(--fs-footnote);
 }
 
+/* 分区标题：14 Semibold（工具条/列表里的小节标题），与行标题同档但靠上下留白分层 */
 .sec {
-  padding: 10px 0 2px;
+  padding: var(--sp-10) 0 var(--sp-2);
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .files-sec {
-  padding: 4px 2px 0;
+  padding: var(--sp-4) var(--sp-2) 0;
 }
 
 /* 地标卡片 */
 .card.list {
-  padding: 6px 14px;
+  padding: var(--sp-6) var(--pad-card);
 }
 
 .item {
   width: 100%;
   text-align: left;
-  gap: 10px;
-  padding: 12px 0;
+  gap: var(--gap-md);
+  min-height: var(--row-h);
+  padding: 0;
 }
 
 li + li .item {
@@ -3208,7 +3222,7 @@ li + li .item {
 .item b {
   display: block;
   font-size: var(--fs-body);
-  font-weight: 400;
+  font-weight: var(--fw-regular);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3216,7 +3230,7 @@ li + li .item {
 
 .item small {
   display: block;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-caption);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3242,9 +3256,9 @@ li + li .item {
 
 /* 列头：与 FileRow 的列一一对应（行里图标 18 + gap 10 = 28 的缩进，这里用占位条对齐） */
 .thead {
-  gap: 10px;
-  padding: 0 10px;
-  margin-bottom: -4px;
+  gap: var(--gap-md);
+  padding: 0 var(--sp-12);
+  margin-bottom: calc(-1 * var(--sp-4));
   flex-wrap: nowrap;
 }
 
@@ -3256,10 +3270,10 @@ li + li .item {
 .th {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--gap-tight);
   flex: none;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .th:disabled {
@@ -3288,7 +3302,7 @@ li + li .item {
 .body.withTree {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--sp-8);
   align-items: start;
 }
 
@@ -3303,7 +3317,7 @@ li + li .item {
 }
 
 .galnote {
-  padding: 2px 2px 0;
+  padding: var(--sp-2) var(--sp-2) 0;
   font-size: var(--fs-caption);
 }
 
@@ -3358,23 +3372,23 @@ li + li .item {
 
 .tiles {
   display: grid;
-  gap: 2px;
+  gap: var(--gap-sm);
   height: 100%;
-  padding: 0 4px;
+  padding: 0 var(--sp-8);
 }
 
 .ghead {
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   height: 100%;
-  padding: 0 10px;
+  padding: 0 var(--sp-12);
   border-top: 0.5px solid var(--line);
   background: var(--surface-2);
 }
 
 .gh-label {
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
@@ -3385,8 +3399,8 @@ li + li .item {
 .empty {
   position: absolute;
   inset-inline: 0;
-  top: 28px;
-  padding: 0 14px;
+  top: var(--sp-28);
+  padding: 0 var(--pad-card);
   font-size: var(--fs-footnote);
   text-align: center;
 }
@@ -3398,9 +3412,10 @@ li + li .item {
 .status {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 2px 2px 0;
+  gap: var(--gap-tight) var(--gap-sm);
+  padding: var(--sp-2) var(--sp-2) 0;
   font-size: var(--fs-caption);
+  color: var(--text-2);
 }
 
 .mono {
@@ -3409,34 +3424,34 @@ li + li .item {
 }
 
 .detail {
-  padding: 10px 12px;
+  padding: var(--sp-12);
 }
 
 .dhead {
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .dhead b {
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .dgrid {
   display: grid;
   grid-template-columns: 72px 1fr;
-  gap: 4px 10px;
-  margin-top: 8px;
+  gap: var(--gap-sm) var(--gap-md);
+  margin-top: var(--gap-md);
   font-size: var(--fs-footnote);
 }
 
 .dgrid dt {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 .dgrid.extra {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-6);
   border-top: 0.5px solid var(--line);
 }
 
@@ -3449,14 +3464,14 @@ li + li .item {
 .dgrid dd.attrs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--gap-sm);
   align-items: center;
 }
 
 /* 过滤无果时的出路：跟着空态那句「没有」走，不再另起一张卡片说第二遍 */
 .empty-esc {
   display: block;
-  margin: 10px auto 0;
+  margin: var(--gap-md) auto 0;
 }
 
 /* 状态栏：条目数是主角，选中数是会变的次要项 */
@@ -3465,7 +3480,8 @@ li + li .item {
 }
 
 .btn.tiny {
-  padding: 4px 10px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   font-size: var(--fs-caption);
 }
 

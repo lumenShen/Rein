@@ -320,7 +320,7 @@ const onlineTone = computed(() => {
 .page :deep(.page-header) {
   --ph-stick: 0px;
   --ph-up: 0px;
-  margin-top: 10px;
+  margin-top: var(--sp-10);
 }
 
 /* 只有**按钮**卡吃这一条（在线服务 / 提供商 / 添加 / 语音 / AI 配置）。
@@ -331,14 +331,17 @@ const onlineTone = computed(() => {
 button.card {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: var(--gap-md);
   width: 100%;
-  padding: 13px 14px;
+  /* 双行入口卡：标题 + 一到两行副标，走 64 的双行行高档 */
+  min-height: var(--row-h-double);
+  padding: var(--pad-card-tight) var(--pad-card);
   text-align: left;
 }
 
+/* 卡与卡之间 12（间隔规范「卡片之间 12vp」） */
 .rubber-layer > * + * {
-  margin-top: 10px;
+  margin-top: var(--gap-md);
 }
 
 /* 图标徽章统一 token-soft（与设置页 .fic、同步页 .fic 同一套画法）：
@@ -367,7 +370,7 @@ button.card {
   background: var(--surface-2);
   color: var(--text-2);
   font-size: var(--fs-subhead);
-  font-weight: 800;
+  font-weight: var(--fw-bold);
 }
 
 .ic-add {
@@ -382,19 +385,20 @@ button.card {
 .vt b {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-sm);
   flex-wrap: wrap;
   font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-weight: var(--fw-semibold);
 }
 
 .vt em {
   font-style: normal;
   font-size: var(--fs-caption);
-  color: var(--text-3);
+  /* 副标是「这一项是什么」的唯一说明，落 --text-2 而不是三级灰 */
+  color: var(--text-2);
   display: block;
-  margin-top: 2px;
-  line-height: 1.45;
+  margin-top: var(--gap-text);
+  line-height: var(--lh-caption);
   word-break: break-all;
 }
 
@@ -412,13 +416,17 @@ button.card {
   color: var(--danger);
 }
 
+/* 状态胶囊：高 24（--chip-h）、左右 12、12 Medium —— 与全库角标同一档 */
 .chip,
 .tag {
+  display: inline-flex;
+  align-items: center;
   font-style: normal;
   font-size: var(--fs-caption);
-  font-weight: 800;
+  font-weight: var(--fw-medium);
   border-radius: var(--radius-full);
-  padding: 2px 7px;
+  min-height: var(--chip-h);
+  padding: 0 var(--pad-inline);
 }
 
 .chip-ok {
@@ -448,40 +456,51 @@ button.card {
 
 .v-go {
   flex: none;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-headline);
 }
 
 .prov {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-md);
 }
 
+/* 「提供商」是这一页唯一的分区标题：16 Medium 主色，与下面的卡片标题（14）拉开一级 */
 .sec-head b {
-  font-size: var(--fs-subhead);
-  font-weight: 700;
+  font-size: var(--fs-headline);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
+/* 「全部模型」是分区标题里的文字按钮：视觉 28（--control-sm），
+   热区上下补 8 到 44；它独占标题行右侧，没有相邻可点元素 */
 .mini {
+  position: relative;
+  min-height: var(--control-sm);
   font-size: var(--fs-caption);
-  font-weight: 700;
+  font-weight: var(--fw-medium);
   color: var(--accent);
+}
+.mini::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .pv-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-md);
 }
 
 .pv {
-  gap: 11px;
+  gap: var(--sp-12);
 }
 
 .empty {
   display: block;
-  padding: 8px 14px;
+  padding: var(--pad-card-tight) var(--pad-card);
 }
 
 .add-pv .vt b {

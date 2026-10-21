@@ -693,26 +693,31 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
    .page 管画布留白，.gtitle 是卡内分组标题 —— 两者都是页面私有的 scoped 类，
    全局没有兜底，漏写就会退化成浏览器默认的 h2 大黑标题。 */
 .page {
-  padding: 10px var(--page-pad-x) var(--page-pad-bottom);
+  padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
 }
 
+/* 卡内分区标题：与设置页 / 同步页 / 特征设置同一档 18 Medium（Subtitle_L）。
+   此前是 12/700 的「眉标」写法，同属设置链路却比别的二级页弱一档，
+   读起来像一条批注而不是一节的标题。 */
 .gtitle {
-  font-size: var(--fs-footnote);
-  font-weight: 700;
-  color: var(--text-2);
+  font-size: var(--fs-title3);
+  font-weight: var(--fw-medium);
+  color: var(--text-1);
 }
 
 .rows {
   display: flex;
   flex-direction: column;
-  margin-top: 4px;
+  margin-top: var(--sp-4);
 }
 
 .frow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 0;
+  /* 表单行按单行行高 48（--row-h）：与下方指标行同一档 */
+  min-height: var(--row-h);
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
 }
 
 .frow + .frow {
@@ -733,36 +738,36 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .ftxt {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--gap-text);
   min-width: 0;
   flex: 1;
 }
 
 .ftxt b {
   font-size: var(--fs-body);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
 .ftxt small {
   color: var(--text-3);
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 /* 累计导入 / 回写：两枚胶囊并列，替代原先「·」串成的一句 */
 .cum {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 3px;
+  gap: var(--gap-tight);
+  margin-top: var(--sp-4);
 }
 
 /* 同步规则标题行：整卡收进 InfoHint，只剩一枚「?」在标题右端 */
 .rules-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 .rules-head :deep(.info-hint) {
@@ -772,9 +777,9 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-tight);
   flex: none;
-  padding: 3px 9px;
+  padding: var(--sp-4) var(--sp-8);
   border-radius: var(--radius-full);
   background: var(--surface-2);
   color: var(--text-3);
@@ -783,16 +788,20 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 
 .pill.ok {
   background: var(--ok-soft);
-  color: var(--ok);
+  /* soft 底上的文字走 --ok-strong：实底档 --ok 压在同名 soft 底上只有 1.95:1 */
+  color: var(--ok-strong);
 }
 
+/* 行尾小按钮：高 28（--control-sm 小按钮档），视觉不放大，
+   命中区撑到 44（规范：可点元素热区 ≥44）。行高 48，上下各外扩 8 不叠行。 */
 .act {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   flex: none;
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
   border: none;
   border-radius: var(--radius-full);
   background: var(--surface-2);
@@ -801,36 +810,41 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
   cursor: pointer;
 }
 
+.act::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: var(--hit-min);
+  transform: translateY(-50%);
+}
+
 .act:disabled {
   opacity: var(--disabled-opacity);
   cursor: default;
 }
 
 .spin {
-  animation: spin 900ms linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: rein-spin 900ms linear infinite;
 }
 
 .hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 10px 0 2px;
-  color: var(--warn);
+  gap: var(--sp-6);
+  margin: var(--sp-10) 0 var(--sp-2);
+  /* 这是要读的阻塞原因：--warn 实底档当文字用压在白卡上不足 3:1，走文字档 */
+  color: var(--warn-strong);
   font-size: var(--fs-caption);
 }
 
 .rep {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: var(--sp-6) var(--sp-14);
+  margin-top: var(--sp-10);
+  padding-top: var(--sp-10);
   border-top: 1px solid var(--line);
   color: var(--text-2);
   font-size: var(--fs-caption);
@@ -843,7 +857,7 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .window {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--gap-sm);
 }
 
 /* 竖排里标题块按内容高，不参与纵向伸缩 */
@@ -855,12 +869,12 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
   margin: 0;
   color: var(--text-3);
   font-size: var(--fs-caption);
-  line-height: 1.4;
+  line-height: var(--lh-caption);
 }
 
 .date-input {
   align-self: flex-start;
-  padding: 6px 10px;
+  padding: var(--sp-6) var(--sp-10);
   border: none;
   border-radius: var(--radius-s);
   background: var(--surface-2);
@@ -871,28 +885,31 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 /* ---- 健康数据预览 ---- */
 
 .empty {
-  margin: 8px 0 4px;
+  margin: var(--sp-8) 0 var(--sp-4);
   color: var(--text-3);
   font-size: var(--fs-caption);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 .mgroup + .mgroup {
-  margin-top: 6px;
+  /* 指标组之间 12（卡片间距） */
+  margin-top: var(--gap-md);
 }
 
 .mtitle {
-  margin: 8px 0 2px;
+  margin: var(--sp-8) 0 var(--sp-2);
   font-size: var(--fs-caption);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-3);
 }
 
 .mrow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9px 0;
+  /* 指标行高 48（--row-h），数值等宽右对齐 */
+  min-height: var(--row-h);
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
   cursor: pointer;
 }
 
@@ -912,14 +929,14 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .mtxt {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--gap-text);
   flex: none;
   min-width: 72px;
 }
 
 .mtxt b {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -931,7 +948,7 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .bars {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--gap-text);
   height: 26px;
   flex: 1;
   min-width: 0;
@@ -940,14 +957,14 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 .bar {
   flex: 1;
   max-width: 9px;
-  border-radius: 2px 2px 0 0;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   background: var(--accent);
   opacity: 0.75;
 }
 
 .bar.empty {
   height: 2px !important;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--line);
   opacity: 1;
 }
@@ -956,14 +973,14 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
+  gap: var(--gap-text);
   flex: none;
   min-width: 64px;
 }
 
 .mval b {
   font-size: var(--fs-footnote);
-  font-weight: 600;
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }

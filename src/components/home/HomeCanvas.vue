@@ -184,12 +184,23 @@ function onMove(t: Todo, startMin: number): void {
 
 <style scoped>
 .head h2 {
+  flex: none;
   font-size: var(--fs-title3);
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
 }
 
+/* 320 档：卡内 256px 要放下「标题 + 两级计数 + 详情」，计数是唯一的弹性项。
+   它先截断，标题与「详情」入口都保持完整（计数在池子里还有一份）。 */
+.head {
+  gap: var(--gap-sm);
+}
+
 .head .meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--fs-footnote);
 }
 
@@ -202,7 +213,8 @@ function onMove(t: Todo, startMin: number): void {
   display: inline-block;
   width: 1px;
   height: 10px;
-  margin: 0 2px;
+  /* 行内元素之间最小 4（--gap-tight）：--gap-text(2) 只用于主次文本上下 */
+  margin: 0 var(--gap-tight);
   background: var(--line-strong);
   vertical-align: -1px;
 }
@@ -212,10 +224,11 @@ function onMove(t: Todo, startMin: number): void {
    读起来像布局坏了（低频横滚区没有滚动条可暗示）。 */
 .pool {
   display: flex;
-  gap: 6px;
+  /* 横滑磁贴是一组无边界控件：组内 8 一档（--gap-sm）；与上方正文之间 12 */
+  gap: var(--gap-sm);
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 10px 0 2px;
+  padding: var(--gap-md) 0 var(--gap-text);
   mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
 }
 
@@ -240,7 +253,8 @@ function onMove(t: Todo, startMin: number): void {
    渐隐的实现只有一份，在滚动容器身上。（2026-10-02 按用户意见移除重复遮罩） */
 .cwrap {
   height: 216px;
-  margin-top: 10px;
+  /* 画布视窗与上方标题同属卡内区块：12 */
+  margin-top: var(--gap-md);
 }
 
 /* CanvasTimeline 的 .ctl/.scroll 都是 height:100% 链，视窗高度从这里给 */
@@ -252,20 +266,32 @@ function onMove(t: Todo, startMin: number): void {
 .meals {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
 }
 
 /* 卡头右侧：两级计数 + 「详情 ›」胶囊。
    计数主项是灰的次要信息（tabular 数字），次项再浅一档，胶囊是可点的去处 ——
    形态差异本身就说明了「哪个能点」，不靠颜色大小去抢。 */
 .hright {
-  gap: 8px;
+  /* 计数与「详情」胶囊是一组无边界控件：8 */
+  gap: var(--gap-sm);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 语气与尺寸在 PillChip.vue（tone="action" = 强调色 + 700），这里只留「不被压扁」。
+   PillChip 的视觉高 24，卡头这枚「详情」是这一屏进 /todos 的唯一入口：
+   用伪元素把命中区补到 44，视觉高度不动，卡头也不会被撑高。 */
+.hright .detail {
+  position: relative;
   flex: none;
 }
 
-/* 语气与尺寸在 PillChip.vue（tone="action" = 强调色 + 700），这里只留「不被压扁」 */
-.hright .detail {
-  flex: none;
+.hright .detail::after {
+  content: '';
+  position: absolute;
+  inset: -10px 0;
+  border-radius: var(--radius-full);
 }
 </style>
