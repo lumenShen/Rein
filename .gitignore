@@ -67,6 +67,7 @@ resources/anatomy/meshes/
 # exercises-dataset 的下载原件（12.9 MB，可复现）与评审草稿：
 # 用 scripts/import-dataset.mjs --src <路径> 生成 scripts/catalog/dataset.mjs（生成物入库）
 resources/_dataset/
+
 resources/_review/
 
 # 视觉审查/浏览器自动化本地产物（一次性快照与截图，不入库）
@@ -74,6 +75,7 @@ resources/_review/
 .tmp-critique/
 .tmp-dbg/
 .playwright-cli/
+.tmp/
 # 整改前后的对照截图（本地随手拍的 before/after，不入库）
 /post/
 # Windows 保留名的落盘产物在子目录里也会出现（`/nul` 只管根目录）
