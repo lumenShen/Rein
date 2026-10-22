@@ -26,24 +26,25 @@ import type { ActivationMap } from '@/config/muscles'
 import type { StrengthSetRecord } from '@/types'
 
 /**
- * 沉浸模式 · 训练总结（summary 阶段的内容区）。
+ * 沉浸模式 · 训练总结（summary 阶段的内容区）——「成绩单」版式。
  *
- * 从前这块只有三行：emoji + 课程名 + 一行总量（n/N 组 · 总容量 · 用时 · 大卡），
- * 底下 780px 全空。同样的 480 kg，5 组 × 96 与 2 组 × 240 的训练含义完全不同，
- * 只给总量等于什么都没说。这里按 `utils/sessionSummary` 的三层口径铺开：
+ * 回答三个问题，按阅读次序铺开：
+ *   1. **做得全不全**（组格条 + 完成环）：条上每格一组、按状态着色，
+ *      「分母去哪了」一眼可读；环给完成率的仪式感读数。
+ *      口径与 store 严格一致：只有真正登记的正式组计分子，跳过仍占分母，
+ *      激活热身组两边都不进（条上也不画）。
+ *   2. **练得怎么样**（容量大数字 + 三格 + 进步 + 逐动作明细）：
+ *      总容量是力量训练的灵魂数字，升为全宽 display 档；最高组、PR 增量
+ *      各升一档。PR 两级可信度（即时 / 历史校正）必须在视觉与文字上分得开。
+ *   3. **下次怎么走**（肌群 + 下次建议）+ 唯一的输入项（体感三档）。
  *
- *   1. **完成环** —— 一眼看清做了多少，以及跳过的组去了哪（分母不变、分子不计）。
- *   2. **四项指标** —— 容量 / 用时 / 消耗 / 每组耗时。总容量已是老面孔，
- *      每组耗时是新的：它把"用时"从课时长度变成节奏信息（练得快 = 密度高）。
- *   3. **进步** —— 重量与估算 1RM 的增量，**先出即时判定（对比上次，零请求）**，
- *      历史回来后由 `mergeHistoryPr` 覆盖为真历史 PR。两种可信度视觉上必须分得开
- *      （即时档空心标记、校正档实心），否则等于骗用户那个数一直是准的。
- *   4. **逐动作明细** —— 每一行的「最高组」是力量训练真正的信息量所在。
- *   5. **肌群** + **下次建议** —— 收口：今天练了什么、下次怎么走。
+ * ⚠️ 卡片材质**必须在组件内自给自足**：从前这里的 `.blockcard` 引用的是
+ * 宿主 SessionOverlay 的 scoped 类 —— scoped 选择器跨组件不生效，
+ * 明细 / 肌群 / 建议三块实际从没渲染出卡片（无底无内距无圆角），本次一并修复。
  *
- * 排版约束：这一屏在 932 高的视口里装不下，所以它是**可滚动**的（宿主 .scrollbody
- * 已有滚动与渐隐）。首屏必须完整装下「环 + 指标 + 进步」—— 这三块是"这次怎么样"
- * 的答案，其余是"细节与下一步"，滚下去看。
+ * 排版约束：932 高的视口装不下全部内容，页面可滚动（宿主 .scrollbody 已有滚动
+ * 与渐隐）。首屏要装下「条 + 环 + 指标 + 进步」—— 这是"这次怎么样"的答案，
+ * 其余是"细节与下一步"，滚下去看。
  */
 const s = useSessionStore()
 
@@ -68,6 +69,7 @@ const { toast } = useToast()
  * 保存一份已知是错的记录，或放弃整节课（把已做的一起丢掉）。而 store 的 `redoLastSet`
  * 本来就能从任何相位回退（它没有 phase 门槛），缺的只是这个入口。
  * 回退成功即 phase 离开 summary，本组件随之卸载、沉浸页回到做组界面。
+ * 它是**纠错路径不是成绩内容**：降为文字链（44 热区不变），不再与成绩抢视觉权重。
  */
 function undoLastSet(): void {
   if (!s.redoLastSet()) {
@@ -85,6 +87,21 @@ const completion = computed(() => {
   for (const e of s.plan?.exercises ?? []) extra += s.effSets(e) - e.sets
   return buildCompletion(s.courseSlots, Math.max(0, extra))
 })
+
+/**
+ * 组格条：每格一组的全课结构（不含热身组 —— 热身不进分母，条上也不画）。
+ * done = 绿；skipped = 灰；current/pending = 描边（summary 正常流里不该出现，
+ * 但快照恢复等路径的防御分支保持可读，不空白）。
+ */
+const band = computed(() =>
+  s.courseSlots
+    .filter((slot) => !slot.warmup)
+    .map((slot) => (slot.state === 'done' ? 'done' : slot.state === 'skipped' ? 'skipped' : 'rest')),
+)
+
+const bandLabel = computed(
+  () => `全课 ${completion.value.total} 组：完成 ${completion.value.done} 组，跳过 ${completion.value.skipped} 组`,
+)
 
 /* ---------- 成绩层 ---------- */
 
@@ -198,26 +215,26 @@ const bwReps = computed(() =>
   rows.value.reduce((sum, r) => sum + (r.topWeightKg == null ? r.totalReps : 0), 0),
 )
 
-const stats = computed(() => {
-  // 只有自重时把「次」扶正成主指标
+/** 主数字：只有自重时把「次」扶正（量纲跟着换），否则是 kg 容量 */
+const heroStat = computed(() => {
   const repsMain = kgVolume.value <= 0 && bwReps.value > 0
-  return [
-    {
-      key: 'vol',
-      label: repsMain ? '总次数' : '总容量',
-      value: repsMain ? String(bwReps.value) : kgVolume.value > 0 ? fmtKg(kgVolume.value) : '—',
-      unit: repsMain ? '次' : kgVolume.value > 0 ? 'kg' : '',
-    },
-    { key: 'time', label: '用时', value: String(s.durationMin), unit: '分' },
-    { key: 'kcal', label: '消耗', value: String(s.estimateKcalValue), unit: 'kcal' },
-    {
-      key: 'rate',
-      label: '每组耗时',
-      value: rhythm.value.secPerSet != null ? String(rhythm.value.secPerSet) : '—',
-      unit: rhythm.value.secPerSet != null ? '秒' : '',
-    },
-  ]
+  return {
+    label: repsMain ? '总次数' : '总容量',
+    value: repsMain ? String(bwReps.value) : kgVolume.value > 0 ? fmtKg(kgVolume.value) : '—',
+    unit: repsMain ? '次' : kgVolume.value > 0 ? 'kg' : '',
+  }
 })
+
+const sideStats = computed(() => [
+  { key: 'time', label: '用时', value: String(s.durationMin), unit: '分' },
+  { key: 'kcal', label: '消耗', value: String(s.estimateKcalValue), unit: 'kcal' },
+  {
+    key: 'rate',
+    label: '每组耗时',
+    value: rhythm.value.secPerSet != null ? String(rhythm.value.secPerSet) : '—',
+    unit: rhythm.value.secPerSet != null ? '秒' : '',
+  },
+])
 
 /* ---------- 逐动作行 ---------- */
 
@@ -318,81 +335,70 @@ function prDeltaText(p: PrRow): string {
 
 <template>
   <div class="sumpane col">
-    <!-- 完成环：分子只算真正登记的正式组；跳过仍占分母（口径与 store 一致） -->
+    <!-- 组格条：每格一组（热身不画 —— 它不进分母）。跳过的组灰格留在原位，
+         「分母去哪了」不用读文字就看得见。 -->
+    <div v-if="completion.total > 0" class="band" role="img" :aria-label="bandLabel">
+      <i v-for="(st, i) in band" :key="i" class="seg" :class="st" aria-hidden="true" />
+    </div>
+    <!-- 条下的状态行：完成状态（ok/warn 胶囊）+ 跳过 / 加练 / 热身三个解释标签。
+         这行只说「.qualifier」，完成率与 n/N 由环说，不在同一屏说两遍。 -->
+    <div class="bandcap">
+      <StatusChip :tone="completion.earlyEnd ? 'warn' : 'ok'" size="sm">
+        {{ completion.earlyEnd ? '提前结束' : '全程完成' }}
+      </StatusChip>
+      <span v-if="completion.skipped > 0" class="sumtag">跳过 {{ completion.skipped }} 组</span>
+      <span v-if="completion.extra > 0" class="sumtag">加练 {{ completion.extra }} 组</span>
+      <span v-if="completion.warmups > 0" class="sumtag">热身 {{ completion.warmups }} 组</span>
+    </div>
+
+    <!-- 完成环：分子只算真正登记的正式组；环内 83% + n/N 组是完成率的唯一读数 -->
     <div class="hero col center">
       <RingProgress
         v-if="completion.ratio !== null"
         :value="completion.ratio"
         color-var="--c-exercise"
-        :size="132"
-        :stroke="11"
+        :size="100"
+        :stroke="10"
       >
         <b class="num heropct">{{ Math.round(completion.ratio * 100) }}%</b>
         <span class="herosub num">{{ completion.done }}/{{ completion.total }} 组</span>
       </RingProgress>
       <div v-else class="herofallback num">—</div>
-      <!-- 完成状态挨着完成环：它与环里的 N/N 组说的是同一件事，从前还写在副标题行里，
-           同一事实一屏出现两遍（这里是它唯一的落脚处） -->
-      <p class="herostat">
-        <StatusChip :tone="completion.earlyEnd ? 'warn' : 'ok'" size="sm">
-          {{ completion.earlyEnd ? '提前结束' : '全程完成' }}
-        </StatusChip>
-      </p>
       <h1 class="sumtitle">{{ s.plan?.name }}完成</h1>
-      <!-- 副标题行只留日期与训练类型：日期降为次要说明，类型交给中性胶囊 ——
-           完成状态已并入环旁，不再在这行第三次重复 -->
+      <!-- 副标题行：日期降为次要说明，训练类型交给中性胶囊 -->
       <p class="sumsub">
         <span class="sumdate">{{ fmtDateCn(todayStr()) }}</span>
         <StatusChip v-if="s.plan?.workoutType" tone="neutral" size="sm">{{ s.plan.workoutType }}</StatusChip>
       </p>
-      <!-- 跳过 / 加练 / 热身：把「分母去哪了」讲清楚，否则 2/19 只会让人困惑 -->
-      <p v-if="completion.skipped > 0 || completion.extra > 0 || completion.warmups > 0" class="sumtags">
-        <span v-if="completion.skipped > 0" class="sumtag">跳过 {{ completion.skipped }} 组</span>
-        <span v-if="completion.extra > 0" class="sumtag">加练 {{ completion.extra }} 组</span>
-        <span v-if="completion.warmups > 0" class="sumtag">热身 {{ completion.warmups }} 组</span>
-      </p>
       <!-- 回头路：总结页是终态，但「少做一组 / 最后一组记错」时旧界面只剩保存错的那份
-           或放弃整节课。放在完成环紧跟处，因为它回答的正是环上那个 n/N 带来的第一疑问。 -->
+           或放弃整节课。降为文字链 —— 它是纠错路径，不该和成绩抢视觉权重；
+           热区仍是 44（--hit-min），点得中。 -->
       <button v-if="completion.done > 0" type="button" class="undo" @click="undoLastSet">
         <RotateCcw :size="14" /> 撤销最后一组，继续训练
       </button>
     </div>
 
-    <!-- 四项指标 -->
+    <!-- 指标：主数字（总容量 / 总次数）独占全宽 display 档 —— 力量训练的灵魂数字
+         不该和「消耗 6 kcal」同档平铺；用时 / 消耗 / 每组耗时三格一行。 -->
     <div class="statgrid">
-      <div v-for="st in stats" :key="st.key" class="stat">
+      <div class="stat stat-hero">
+        <span class="stlabel">{{ heroStat.label }}</span>
+        <b class="stval num">{{ heroStat.value }}<i v-if="heroStat.unit" class="stunit">{{ heroStat.unit }}</i></b>
+        <!-- 配重与自重混在同一节：kg 容量只统计真配重，自重的次数单独报一行（合并会得出
+             「重量 + 次数」这种不存在的量纲） -->
+        <p v-if="kgVolume > 0 && bwReps > 0" class="stnote">
+          另有自重 <span class="num">{{ bwReps }}</span> 次（不计入 kg 容量）
+        </p>
+      </div>
+      <div v-for="st in sideStats" :key="st.key" class="stat">
         <span class="stlabel">{{ st.label }}</span>
         <b class="stval num">{{ st.value }}<i v-if="st.unit" class="stunit">{{ st.unit }}</i></b>
       </div>
     </div>
 
-    <!-- 训练后体感：练够分「体感」维度的输入，也是这一屏唯一需要用户动手的一格。
-         三枚**等权**且不预设高亮 —— 默认选中任何一档都是替他回答；
-         再点一次可以取消（记 null），跳过不影响保存：宁可这条没有，也不要编一个值。 -->
-    <div class="feelrow">
-      <span class="feellabel">这次练得怎么样？</span>
-      <div class="feelopts">
-        <button
-          v-for="o in FEEL_OPTIONS"
-          :key="o.value"
-          type="button"
-          class="feelopt"
-          :class="{ on: s.postFeeling === o.value }"
-          :aria-pressed="s.postFeeling === o.value"
-          @click="toggleFeeling(o.value)"
-        >
-          {{ o.label }}
-        </button>
-      </div>
-    </div>
-    <!-- 配重与自重混在同一节：kg 容量只统计真配重，自重的次数单独报一行（合并会得出
-         「重量 + 次数」这种不存在的量纲） -->
-    <p v-if="kgVolume > 0 && bwReps > 0" class="stnote t-3">
-      另有自重 <span class="num">{{ bwReps }}</span> 次（不计入 kg 容量）
-    </p>
-
-    <!-- 进步：即时判定先出，历史回来后 mergeHistoryPr 覆盖为真纪录 -->
-    <section v-if="prTitle" class="blockcard prcard">
+    <!-- 进步：即时判定先出，历史回来后 mergeHistoryPr 覆盖为真纪录。
+         情绪高点：标题带奖杯标记，增量升为 callout 档。 -->
+    <section v-if="prTitle" class="sumcard prcard">
       <h3 class="prtitle">
         <Trophy :size="15" />
         {{ prTitle }}
@@ -404,30 +410,34 @@ function prDeltaText(p: PrRow): string {
             p.kind === 'weight'
               ? `${fmtKg(p.value)} kg`
               : p.kind === 'reps'
-                ? `${p.value} 次（单组最多）`
-                : `估算极限（1RM）${fmtKg(p.value)} kg`
+                ? `单组最多 ${p.value} 次`
+                : `1RM ${fmtKg(p.value)} kg`
           }}
         </span>
         <span class="prdelta num" :class="{ verified: isVerified(p) }">{{ prDeltaText(p) }}</span>
       </div>
     </section>
 
-    <!-- 逐动作明细：最高组是力量训练真正的信息量（不是最后一组） -->
-    <section v-if="detailRows.length" class="blockcard">
+    <!-- 逐动作明细：两行式（行首 名字+PR 徽标 与 最高组结论；行尾 组数·容量）。
+         最高组是力量训练真正的信息量（不是最后一组），主数值档。 -->
+    <section v-if="detailRows.length" class="sumcard">
       <h3>逐动作明细</h3>
       <div v-for="d in detailRows" :key="d.r.exId" class="exrow">
-        <span class="exname">{{ d.r.name }}</span>
-        <span class="exmain num">{{ d.main }}</span>
-        <!-- 最高组是这一行的结论：升为主数值（title3 + --text-1），
-             总容量降为 caption 次要说明 —— 从前两个数同字档，读起来像同一件事的两种写法 -->
-        <b v-if="d.top" class="extop num">{{ d.top }}</b>
-        <span v-else class="extop-none">{{ d.topNote }}</span>
-        <span v-if="d.hasPr" class="expr">{{ d.prLabel }}</span>
+        <div class="exhead">
+          <span class="exname">{{ d.r.name }}</span>
+          <span v-if="d.hasPr" class="expr">{{ d.prLabel }}</span>
+          <!-- 最高组是这一行的结论：主数值档（title3 + --text-1）。
+               占位说明（非力量 / 未做 / 无重量记录）刻意留在小字档 ——
+               它不是成绩，写成大字会与真正的最重组抢层级 -->
+          <b v-if="d.top" class="extop num">{{ d.top }}</b>
+          <span v-else class="extop-none">{{ d.topNote }}</span>
+        </div>
+        <p class="exmain num">{{ d.main }}</p>
       </div>
     </section>
 
     <!-- 肌群：已折叠到评估组（胸/背/肩…），档位取组内最大值 -->
-    <section v-if="muscles.length" class="blockcard">
+    <section v-if="muscles.length" class="sumcard">
       <h3>本次练到的肌群</h3>
       <div class="musrow">
         <span v-for="m in muscles" :key="m.group" class="muschip" :class="`lv${m.level}`">
@@ -436,10 +446,31 @@ function prDeltaText(p: PrRow): string {
       </div>
     </section>
 
-    <!-- 下次建议：只给一个具体的数 -->
-    <section v-if="nextHint" class="blockcard hintcard">
-      <h3>下次建议</h3>
-      <p>{{ nextHint }}</p>
+    <!-- 收口：下次建议（只给一个具体的数）+ 体感三档（这一屏唯一需要动手的一格）。
+         两件事同属「下次怎么走」，合进一张卡；三枚**等权**且不预设高亮 ——
+         默认选中任何一档都是替他回答；再点一次可以取消（记 null），
+         跳过不影响保存：宁可这条没有，也不要编一个值。 -->
+    <section class="sumcard tailcard">
+      <template v-if="nextHint">
+        <h3>下次建议</h3>
+        <p class="tailhint">{{ nextHint }}</p>
+      </template>
+      <div class="feelblock" :class="{ divided: !!nextHint }">
+        <span class="feellabel">这次练得怎么样？</span>
+        <div class="feelopts">
+          <button
+            v-for="o in FEEL_OPTIONS"
+            :key="o.value"
+            type="button"
+            class="feelopt"
+            :class="{ on: s.postFeeling === o.value }"
+            :aria-pressed="s.postFeeling === o.value"
+            @click="toggleFeeling(o.value)"
+          >
+            {{ o.label }}
+          </button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -448,6 +479,8 @@ function prDeltaText(p: PrRow): string {
 /* ---------- 版式 ----------
    **不复用 SessionOverlay 的 .pane**：scoped 选择器跨组件不生效，
    挂了也是死类名（那一层还要 centre 居中，与这一屏的可滚动版式冲突）。
+   卡片材质（.sumcard）在**本组件内定义** —— 从前引用宿主的 .blockcard
+   是死类，三张卡从没渲染出材质（教训写在本文件头注释）。
 
    高度写法踩过两次，都表现为「内容看着都在，末段被 Dock 压住且划不动」：
      · `flex: 1` —— 在 `display:flex; flex-direction:column` 的包裹层里，
@@ -478,33 +511,110 @@ function prDeltaText(p: PrRow): string {
   }
 }
 
+/* ---------- 卡片材质（本地自给，不再依赖宿主 scoped 类） ---------- */
+
+.sumcard {
+  width: 100%;
+  border-radius: var(--radius-m);
+  padding: var(--pad-card);
+  display: flex;
+  flex-direction: column;
+  /* 标题与内容之间 8（卡内标题与内容 8） */
+  gap: var(--gap-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.sumcard h3 {
+  font-size: var(--fs-footnote);
+  font-weight: var(--fw-bold);
+  color: var(--text-2);
+  letter-spacing: 0.4px;
+}
+
+/* ---------- 组格条 ---------- */
+
+.band {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  /* 30+ 组的课每格会很窄：圆角 4 在 2px 格上仍是圆的，窄格也不毛糙 */
+}
+
+.seg {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 6px;
+  border-radius: var(--radius-xs);
+}
+
+.seg.done {
+  background: var(--c-exercise);
+}
+
+/* 跳过：中性灰且半透明 —— 它「仍在分母里但没做」，不该和背景融为一体，
+   也不该抢过绿格。用 text-3 调透明度而不是 surface 系：这一屏的底是玻璃，
+   surface 系白格在浅灰底上几乎读不出来（暗色同理）。 */
+.seg.skipped {
+  background: color-mix(in srgb, var(--text-3) 45%, transparent);
+}
+
+/* current / pending（正常流不会出现，快照恢复等路径的防御态）：描边空格 */
+.seg.rest {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px var(--line-strong);
+}
+
+.bandcap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-6);
+  margin-top: var(--sp-2);
+}
+
+.sumtag {
+  font-size: var(--fs-micro);
+  /* --text-1 而不是 --text-2：--surface-2 是**分段控件底**，
+     --text-2 压它实测只有 2.93:1（亮）/ 1.19:1（暗）。
+     这三个标签是「分母去哪了」的文字解释，不能读不清。 */
+  color: var(--text-1);
+  background: var(--surface-2);
+  border-radius: var(--radius-full);
+  padding: var(--sp-4) var(--sp-8);
+}
+
 /* ---------- 完成环 ---------- */
 
 .hero {
   gap: var(--gap-sm);
-  padding: var(--sp-8) 0 var(--sp-4);
+  padding: var(--sp-4) 0 0;
 }
 
 .heropct {
-  /* 沉浸层单屏读数档（与 SessionOverlay 的休息倒数 / 计时同一条刻度），
-     值与原裸值一致：30px */
+  /* 沉浸层单屏读数档（与 SessionOverlay 的休息倒数 / 计时同一条刻度） */
   font-size: var(--fs-readout-sm);
   font-weight: var(--fw-bold);
   line-height: 1;
   letter-spacing: -0.5px;
 }
 
+.heropct + .herosub,
+.herofallback {
+  /* 环内两行读数：主读数与副读数上下只留 2（--gap-text） */
+  margin-top: var(--gap-text);
+}
+
 .herosub {
   font-size: var(--fs-footnote);
   color: var(--text-2);
-  /* 主次文本上下只留 2（--gap-text）：它紧贴在完成环读数下面，属于同一条读数。 */
-  margin-top: var(--gap-text);
 }
 
 /* ratio 为 null（无任何组位）时的占位：保持与环同高，避免整块塌下去 */
 .herofallback {
-  width: 132px;
-  height: 132px;
+  width: 100px;
+  height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -514,7 +624,7 @@ function prDeltaText(p: PrRow): string {
 }
 
 .sumtitle {
-  font-size: var(--fs-large-title);
+  font-size: var(--fs-title1);
   font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   text-align: center;
@@ -535,137 +645,76 @@ function prDeltaText(p: PrRow): string {
   color: var(--text-3);
 }
 
-/* 完成状态：挨着完成环，与环里 N/N 组同源 —— 形态用 ok/warn 胶囊 */
-.herostat {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--sp-2);
-}
-
-.sumtags {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--sp-6);
-  margin-top: var(--sp-2);
-}
-
-/* 「撤销最后一组」：总结页唯一的回头路，是**次按钮** —— 描边白底 + 中性字，
-   不与底簇那颗实底「保存训练」抢焦点。高度取 44：它是这屏唯一的次要操作，也要点得中。 */
+/* 「撤销最后一组」：文字链形态 —— 无边框无底，44 热区不变；
+   按压时给一层中性底作反馈。 */
 .undo {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-6);
-  /* 命中区直接引用 --hit-min（44），不再写一个裸数字：
-     它是这一屏唯一的次要操作，视觉可以小、热区必须够。 */
   min-height: var(--hit-min);
-  margin-top: var(--sp-14);
-  padding: 0 var(--sp-18);
+  margin-top: var(--sp-2);
+  padding: 0 var(--sp-14);
+  border: 0;
   border-radius: var(--radius-full);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
+  background: transparent;
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   color: var(--text-2);
 }
 
-.sumtag {
-  font-size: var(--fs-micro);
-  /* --text-1 而不是 --text-2：--surface-2 是**分段控件底**，
-     --text-2 压它实测只有 2.93:1（亮）/ 1.19:1（暗）。
-     这三个标签是「分母去哪了」的唯一解释，不能读不清。 */
-  color: var(--text-1);
+.undo:active {
   background: var(--surface-2);
-  border-radius: var(--radius-full);
-  padding: var(--sp-4) var(--sp-8);
 }
 
-/* ---------- 四项指标 ---------- */
+/* ---------- 指标 ---------- */
 
 .statgrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap-sm);
 }
 
-/* 自重单独报的那一行：不占指标格（否则会被读成与「总容量」同单位的第五格），
-   只在配重与自重混在同一节课时出现 */
-.stnote {
-  margin-top: var(--sp-8);
-  padding-left: var(--sp-2);
-  font-size: var(--fs-caption);
-}
-
-/* ---------- 训练后体感 ---------- */
-
-.feelrow {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-10);
-  margin-top: var(--sp-12);
-}
-
-.feellabel {
-  flex: none;
-  font-size: var(--fs-caption);
-  color: var(--text-2);
-}
-
-.feelopts {
-  display: flex;
-  flex: 1;
-  gap: var(--sp-6);
-}
-
-/* 三枚等权（flex:1 一样宽）：视觉上就暗示「没有更正确的答案」。
-   命中区 44px 直接撑高 —— 这一屏唯一需要动手的一格，不该是 28px 的小胶囊；
-   这一行上下没有相邻控件，撑高不会造成误触。 */
-.feelopt {
-  flex: 1;
-  /* 同上：三枚体感胶囊的热区走 --hit-min，与 .undo 同一档。 */
-  min-height: var(--hit-min);
-  padding: 0 var(--sp-6);
-  border: 0.5px solid var(--line);
-  border-radius: var(--radius-full);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-caption);
-}
-
-/* 选中态：accent-soft 底 + accent-strong 字（与 AddWorkoutSheet 的 .gtag 同一对令牌，
-   明暗双态实测 4.62 / 5.34）。用「白字压 accent」暗色下只有 3.65:1。 */
-.feelopt.on {
-  background: var(--accent-soft);
-  border-color: var(--accent-soft);
-  color: var(--accent-strong);
-  font-weight: var(--fw-semibold);
-}
-
-.stat {
-  background: var(--surface-2);
+/* 主数字卡：全宽独占，白卡材质（不是灰砖）—— 它是这一屏的成绩主角 */
+.stat-hero {
+  grid-column: 1 / -1;
+  background: var(--surface);
   border-radius: var(--radius-m);
-  padding: var(--sp-8) var(--sp-8);
-  min-width: 0;
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-12) var(--pad-card);
 }
 
 .stlabel {
   display: block;
-  font-size: var(--fs-micro);
-  /* 四格数值的标签名（容量 / 用时 / 消耗 / 每组耗时）是**要读的**：读不出标签，
+  font-size: var(--fs-footnote);
+  /* 数值的标签名（容量 / 用时 / 消耗 / 每组耗时）是**要读的**：读不出标签，
      下面那个数就只是一个没有名字的数字。tokens.css 的契约写得很直白——
      「凡是必须读出来的信息都不该放在 --text-3」。 */
   color: var(--text-2);
-  /* 四个字标签在 1/4 屏宽里不折行 */
+  /* 四个字标签在窄格里不折行 */
   white-space: nowrap;
 }
 
 .stval {
   display: block;
-  /* 19px = --fs-title3 */
   font-size: var(--fs-title3);
   font-weight: var(--fw-semibold);
   margin-top: var(--sp-2);
   letter-spacing: -0.3px;
+}
+
+/* 主数字升到 display 档：8360 kg 与「消耗 6」不是同一层级的数 */
+.stat-hero .stval {
+  font-size: var(--fs-display-s);
+  font-weight: var(--fw-bold);
+  margin-top: var(--sp-4);
+}
+
+/* 自重单独报的那一行：不占指标格（否则会被读成与「总容量」同单位的第五格），
+   只在配重与自重混在同一节课时出现；住在主数字卡内，紧贴着它解释 */
+.stnote {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-caption);
+  color: var(--text-2);
 }
 
 .stunit {
@@ -676,13 +725,21 @@ function prDeltaText(p: PrRow): string {
   margin-left: var(--sp-2);
 }
 
+/* 三格副指标：灰砖（surface-2 是分段控件底，砖与主卡的白面拉开材质层级） */
+.stat:not(.stat-hero) {
+  background: var(--surface-2);
+  border-radius: var(--radius-m-nest);
+  padding: var(--sp-8) var(--sp-10);
+  min-width: 0;
+}
+
 /* ---------- 进步 ---------- */
 
 /**
  * 进步卡的绿底只留极淡的一层（--c-exercise-soft 合到 surface，约 0.09 alpha），
  * **不承载任何文字** —— 「绿字压绿底」在 sRGB 里无论怎么调都到不了 4.5:1
  * （实测亮色最好的组合只有 3.7:1，暗色 2.3:1；绿与绿的两端亮度天然拉不开）。
- * 所以语义交给标题前那枚绿环标记，标题与数值用 --text-1 / --text-2，
+ * 所以语义交给标题前那枚奖杯图标，标题与数值用 --text-1 / --text-2，
  * 对比度由文字色自己保证。绿底的作用只是「这块是好事」的分区暗示。
  */
 .prcard {
@@ -694,29 +751,20 @@ function prDeltaText(p: PrRow): string {
   align-items: center;
   gap: var(--sp-6);
   /* 标题用 --text-1：它是这一屏唯一的「好消息」分区标题，
-     但绿字压绿底不达标（见上），所以语义靠左侧绿环而不是文字颜色。 */
+     但绿字压绿底不达标（见上），所以语义靠左侧奖杯而不是文字颜色。 */
   color: var(--text-1);
-}
-
-/* 绿环标记：语义锚点，尺寸 8px 足够读出「这是一块好消息」 */
-.prtitle::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--c-exercise);
 }
 
 .prrow {
   display: flex;
   align-items: baseline;
   gap: var(--gap-sm);
+  padding: var(--sp-2) 0;
 }
 
 .prname {
-  width: 88px;
-  flex: none;
+  flex: 1.1;
+  min-width: 0;
   font-size: var(--fs-subhead);
   color: var(--text-1);
   overflow: hidden;
@@ -727,16 +775,19 @@ function prDeltaText(p: PrRow): string {
 .prval {
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-subhead);
+  font-size: var(--fs-caption);
   color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 增量是这一行的结论：升为 callout 档（14 semibold）——
+   从前它挤在行尾 12px 小字里，最值得炫耀的数读起来最费劲 */
 .prdelta {
   flex: none;
-  font-size: var(--fs-footnote);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
 
@@ -762,16 +813,31 @@ function prDeltaText(p: PrRow): string {
 
 /* ---------- 逐动作明细 ---------- */
 
+/* 两行式：行首「名字 + PR 徽标 + 最高组结论」，行尾「组数 · 容量」。
+   从前三段挤一行、88px 固定名列在窄屏截断动作名；两行后名字有整行可用。 */
 .exrow {
   display: flex;
+  flex-direction: column;
+  gap: var(--gap-text);
+  padding: var(--sp-10) 0;
+}
+
+.exrow + .exrow {
+  border-top: 0.5px solid var(--line);
+}
+
+.exhead {
+  display: flex;
   align-items: baseline;
-  gap: var(--gap-sm);
+  gap: var(--gap-text-inline);
+  min-width: 0;
 }
 
 .exname {
-  width: 88px;
-  flex: none;
+  flex: 1;
+  min-width: 0;
   font-size: var(--fs-subhead);
+  font-weight: var(--fw-medium);
   color: var(--text-1);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -779,13 +845,9 @@ function prDeltaText(p: PrRow): string {
 }
 
 .exmain {
-  flex: 1;
-  min-width: 0;
+  margin: 0;
   font-size: var(--fs-caption);
   color: var(--text-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 最高组：这一行的结论，主数值档（title3 + --text-1）。
@@ -893,9 +955,59 @@ function prDeltaText(p: PrRow): string {
   background: var(--text-3);
 }
 
-/* ---------- 下次建议 ---------- */
+/* ---------- 收口：下次建议 + 体感 ---------- */
 
-.hintcard p {
+.tailhint {
+  margin: 0;
   color: var(--text-1);
+  font-size: var(--fs-subhead);
+  line-height: var(--lh-body);
+}
+
+/* 体感块：卡内分区。上一节存在（下次建议）时用细线分隔 ——
+   输入项与结论在同一张卡里，靠分隔线而不是两张卡。 */
+.feelblock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+}
+
+.feelblock.divided {
+  border-top: 0.5px solid var(--line);
+  padding-top: var(--sp-10);
+  margin-top: var(--sp-2);
+}
+
+.feellabel {
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+.feelopts {
+  display: flex;
+  gap: var(--sp-6);
+}
+
+/* 三枚等权（flex:1 一样宽）：视觉上就暗示「没有更正确的答案」。
+   命中区 44px 直接撑高 —— 这一屏唯一需要动手的一格，不该是 28px 的小胶囊；
+   卡内独立分区，撑高不会造成误触。 */
+.feelopt {
+  flex: 1;
+  min-height: var(--hit-min);
+  padding: 0 var(--sp-6);
+  border: 0.5px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+}
+
+/* 选中态：accent-soft 底 + accent-strong 字（与 AddWorkoutSheet 的 .gtag 同一对令牌，
+   明暗双态实测 4.62 / 5.34）。用「白字压 accent」暗色下只有 3.65:1。 */
+.feelopt.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
 }
 </style>

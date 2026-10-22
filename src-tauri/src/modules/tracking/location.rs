@@ -15,7 +15,6 @@
 //! （1s 间隔、500ms 最小间隔）；旧系统直接请求 GPS，GPS 关闭时退回 NETWORK。所有回调
 //! 都投递到主线程，Rust 侧只做一次静态调用转发，不阻塞定位回调。
 
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
 
 use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
@@ -34,8 +33,6 @@ struct LocationState {
 }
 
 static STATE: Mutex<Option<LocationState>> = Mutex::new(None);
-/// 最近一次回调的 Location.time（墙钟毫秒）；只用于诊断，不参与判定。
-static LAST_FIX_MS: AtomicI64 = AtomicI64::new(0);
 
 fn clear_error(env: &mut JNIEnv<'_>) {
   let _ = env.exception_clear();
@@ -344,29 +341,35 @@ fn start(env: &mut JNIEnv<'_>, service: &JObject<'_>) -> Result<(), String> {
       format!("构造 RustLocationListener 失败：{e}")
     })?;
 
+  // 先建全局引用、后注册：若注册成功后再建引用失败（仅 OOM 可能），系统侧注册会留下
+  // 一个 STATE 永远摸不到的孤儿（stop() 看 None 直接 no-op），GPS 常开到进程死。
+  // 反过来先建引用，任何失败点都还没碰 LocationManager，收尾干净。
+  let manager_ref = env.new_global_ref(&manager).map_err(|e| {
+    clear_error(env);
+    format!("新建 LocationManager 全局引用失败：{e}")
+  })?;
+  let listener_ref = env.new_global_ref(&listener).map_err(|e| {
+    clear_error(env);
+    format!("新建 LocationListener 全局引用失败：{e}")
+  })?;
+
   let sdk = sdk_int(env).unwrap_or(24);
-  let registered = if sdk >= 31 && has_provider(env, &manager, "fused") {
-    request_fused(env, service, &manager, &listener)
+  let registered = if sdk >= 31 && has_provider(env, manager_ref.as_obj(), "fused") {
+    request_fused(env, service, manager_ref.as_obj(), listener_ref.as_obj())
   } else {
-    request_legacy(env, &manager, &listener)
+    request_legacy(env, manager_ref.as_obj(), listener_ref.as_obj())
   };
   if !registered {
     // fused 失败时再给 GPS 一次机会（部分 ROM 注册了 fused 但不接受该重载）。
-    if !request_legacy(env, &manager, &listener) {
+    if !request_legacy(env, manager_ref.as_obj(), listener_ref.as_obj()) {
       return Err("requestLocationUpdates 失败（fused/GPS 均不可用）".into());
     }
   }
 
-  let manager = env.new_global_ref(&manager).map_err(|e| {
-    clear_error(env);
-    format!("新建 LocationManager 全局引用失败：{e}")
-  })?;
-  let listener = env.new_global_ref(&listener).map_err(|e| {
-    clear_error(env);
-    format!("新建 LocationListener 全局引用失败：{e}")
-  })?;
-  *state = Some(LocationState { manager, listener });
-  LAST_FIX_MS.store(0, Ordering::Relaxed);
+  *state = Some(LocationState {
+    manager: manager_ref,
+    listener: listener_ref,
+  });
   eprintln!(
     "[tracking] Rust 定位已启动（sdk={sdk}, interval={}ms, min={}ms）",
     UPDATE_INTERVAL_MS, MIN_UPDATE_INTERVAL_MS
@@ -433,7 +436,13 @@ pub extern "system" fn Java_com_gozaoo_rein_RunTrackingService_nativeRestartLoca
   mut env: JNIEnv,
   service: JObject,
 ) -> jboolean {
-  let _ = stop(&mut env);
+  // removeUpdates 失败时旧注册可能还挂着，而 state 已被 take 成 None——后续所有
+  // stop() 都会 no-op，再叠加新注册就是双路投递（距离/步数翻倍）。返回 0 交回
+  // Kotlin 的重试节奏（屏幕事件/看门狗重试），不在旧注册生死未卜时往上叠。
+  if !stop(&mut env) {
+    eprintln!("[tracking] Rust 定位重注册中止：removeUpdates 失败");
+    return 0;
+  }
   match start(&mut env, &service) {
     Ok(()) => 1,
     Err(e) => {
@@ -460,7 +469,6 @@ pub extern "system" fn Java_com_gozaoo_rein_RustLocationListener_nativeOnLocatio
   has_alt_acc: jboolean,
   provider: JString,
 ) {
-  LAST_FIX_MS.store(t, Ordering::Relaxed);
   let provider_obj: JObject = provider.into();
   if let Err(e) = env.call_static_method(
     "com/gozaoo/rein/RunTrackingService",

@@ -360,7 +360,7 @@ async function main() {
     const reach = await evalJS(`(() => {
       const sb = document.querySelector('.scrollbody')
       sb.scrollTop = sb.scrollHeight
-      const cards = [...document.querySelectorAll('.sumpane .blockcard')]
+      const cards = [...document.querySelectorAll('.sumpane .sumcard')]
       const last = cards[cards.length - 1]
       const dock = document.querySelector('.ctrl-dock')
       const r = {

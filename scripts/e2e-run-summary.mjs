@@ -378,6 +378,15 @@ async function main() {
     /* ---------- S7. 恢复 GPS 距离 + 截图 ---------- */
     await setKm('4.00')
     ok('S7a 改回 GPS 距离后分段表回来', (await evalJS(`document.querySelectorAll('.splitcell').length`)) === 4)
+    // setKm 的 focus 会把滚动容器带下去（输入框滚进视野），终图前回滚 + 失焦：
+    // 不然标题被卷出抽屉顶，截图看起来像「标题没了」。
+    await evalJS(`(() => {
+      const pane = document.querySelector('.pane')
+      if (pane) pane.scrollTop = 0
+      document.querySelector('.distfield input')?.blur()
+      return true
+    })()`)
+    await sleep(300)
     await shoot('run-summary')
 
     /* ---------- S8. 版式：末段够得到 + 无横向溢出 ---------- */

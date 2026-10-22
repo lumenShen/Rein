@@ -1220,7 +1220,6 @@ function bumpKm(delta: number): void {
              所以这一屏取消居中（align-items/justify-content 覆盖回 flex-start）——
              居中会把顶部一截顶出可滚范围，用户以为没有更多内容。 -->
         <div class="rubber-layer sumlayer" data-rubber-content>
-          <span class="doneemoji">🏃</span>
           <p class="donetitle">跑步完成</p>
           <!-- 结论单独一行（这一屏最该被读到的一句），日期与目标降为次要行 -->
           <div class="donemeta">
@@ -2285,22 +2284,22 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 }
 
 /* 总结 */
-.doneemoji {
-  font-size: var(--fs-display-l);
-}
-
+/* 头部不再用 emoji：大标题直接开口，与力量总结页同一套语言
+   （title1 标题 + caption 元信息行）。44px 的 emoji 在卡片化版式里
+   是信息量为零的占位，还把标题往下顶了一截。 */
 .donetitle {
-  font-size: var(--fs-large-title);
+  font-size: var(--fs-title1);
   font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
 }
 
 /* 总结屏副行：完成状态是结论，单独一行加粗；日期与目标降为次要行 ——
-   从前同字号同字重「·」串一行，最该读到的结论混在日期与目标里 */
+   从前同字号同字重「·」串一行，最该读到的结论混在日期与目标里。
+   与标题同左对齐（头部是一段左起的开场白，结论行居中会与标题错位） */
 .donemeta {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--gap-text);
   margin-bottom: var(--sp-4);
 }
@@ -2324,6 +2323,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    整屏像蒙了层脏 —— 半透明的深色压在浅底上必然发灰，与它下层是什么无关。 */
 
 .sumpane {
+  /* 取消滚动容器自身的居中：.pane 带 .center（justify-content:center），
+     内容超高时居中溢出会把顶部顶进**不可滚动区**（scrollTop 够不到）——
+     旧版这一截吃掉的是 emoji，头部改短后轮到标题被整个卷出去。
+     内层 .rubber-layer 自带 flex:1，内容不足一屏时仍由它撑满并保持观感。 */
+  justify-content: flex-start;
   padding-bottom: calc(30px + var(--safe-bottom));
 }
 
@@ -2353,13 +2357,14 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   }
 }
 
+/* 四格指标与力量总结页同一套语言：灰砖面（--surface-2）、嵌套圆角 12、
+   左对齐（标签在上、读数在下）—— 从前白卡描边居中的「表单格」观感就来自这里。 */
 .sumstat {
-  background: var(--surface);
-  border: 0.5px solid var(--line);
-  border-radius: var(--radius-m);
-  padding: var(--sp-8) var(--sp-6);
+  background: var(--surface-2);
+  border-radius: var(--radius-m-nest);
+  padding: var(--sp-8) var(--sp-10);
   min-width: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .sslabel {
@@ -2381,7 +2386,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .ssval {
   display: block;
-  font-size: var(--fs-headline);
+  /* 与力量总结页的副指标格同一档（title3）：四屏两页的「一格数字」是一条刻度 */
+  font-size: var(--fs-title3);
   font-weight: var(--fw-semibold);
   margin-top: var(--sp-2);
   color: var(--text-1);
@@ -2414,7 +2420,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   /* 总结页的卡片与 .sumstat / .pace 同一档圆角 16，不再混用 20。 */
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-card);
-  padding: var(--sp-12) var(--sp-14);
+  /* 卡内距与力量总结页同一档（--pad-card 16）：两页卡片是同一套材质 */
+  padding: var(--pad-card);
   display: flex;
   flex-direction: column;
   gap: var(--gap-sm);
@@ -2422,7 +2429,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 .sumcard h3 {
   font-size: var(--fs-footnote);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   letter-spacing: 0.4px;
   color: var(--text-2);
   text-align: left;

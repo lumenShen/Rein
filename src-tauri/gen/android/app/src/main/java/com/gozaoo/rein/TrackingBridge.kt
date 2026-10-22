@@ -82,7 +82,7 @@ object TrackingBridge {
       if (mode == RunTrackingService.MODE_SPECIAL_USE) RunTrackingService.MODE_SPECIAL_USE
       else RunTrackingService.MODE_LOCATION
     requestNotifyPermission(app)
-    if (m == RunTrackingService.MODE_SPECIAL_USE || hasLocationPermission(app)) {
+    if (m == RunTrackingService.MODE_SPECIAL_USE || hasFineLocationPermission(app)) {
       main.post { RunTrackingService.start(app, serviceIntent(app, m)) }
       return
     }
@@ -121,7 +121,7 @@ object TrackingBridge {
         .putExtra(RunTrackingService.EXTRA_EXIT_SEC, exitSecPerKm)
         .putExtra(RunTrackingService.EXTRA_BASE_ELAPSED, baselineElapsedMs)
         .putExtra(RunTrackingService.EXTRA_BASE_DIST, baselineDistanceM)
-    if (!hasLocationPermission(app)) {
+    if (!hasFineLocationPermission(app)) {
       pendingRequest = true
       pendingRun = intent
       main.post { requestLocationPermission() }
@@ -209,11 +209,13 @@ object TrackingBridge {
     return stored
   }
 
-  /** [定位权限已授予, 弹窗待答, 通知权限已授予]，供 Rust 侧缓存刷新 */
+  /** [定位权限已授予, 弹窗待答, 通知权限已授予]，供 Rust 侧缓存刷新。
+   *  定位位只认 FINE —— 与 Rust `location.rs` start() 同口径；COARSE-only（Android 12+
+   *  弹窗里选「大致位置」）算未授权，前端据此走 web 取点降级，避免服务空转。 */
   @JvmStatic
   fun snapshot(context: Context): BooleanArray {
     val app = context.applicationContext
-    return booleanArrayOf(hasLocationPermission(app), pendingRequest, hasNotifyPermission(app))
+    return booleanArrayOf(hasFineLocationPermission(app), pendingRequest, hasNotifyPermission(app))
   }
 
   /* ---------- 内部 ---------- */
@@ -221,7 +223,9 @@ object TrackingBridge {
   private fun serviceIntent(app: Context, mode: String): Intent =
     Intent(app, RunTrackingService::class.java).putExtra(RunTrackingService.EXTRA_MODE, mode)
 
-  /** 授权结果：有暂存的 run_begin 就按它起服务，否则只拉起保活 */
+  /** 授权结果：有暂存的 run_begin 就按它起服务，否则只拉起保活。
+   *  起服务前再验一次 FINE：弹窗回调的 granted 是 FINE||COARSE，用户选「大致位置」时
+   *  不起采集服务（Rust start() 只认 FINE，起了也是零采集空转）。 */
   private fun grantedNow(activity: ComponentActivity, granted: Boolean) {
     if (!granted) {
       pendingRun = null
@@ -230,11 +234,12 @@ object TrackingBridge {
     val app = activity.applicationContext
     val pending = pendingRun
     pendingRun = null
+    if (!hasFineLocationPermission(app)) return
     if (pending != null) {
       RunTrackingService.start(app, pending)
       return
     }
-    if (hasLocationPermission(app)) RunTrackingService.start(app, serviceIntent(app, pendingMode))
+    RunTrackingService.start(app, serviceIntent(app, pendingMode))
   }
 
   private fun requestLocationPermission() {
@@ -262,9 +267,11 @@ object TrackingBridge {
     launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
   }
 
-  private fun hasLocationPermission(context: Context): Boolean =
-    isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
-      isGranted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+  /** 原生采集只认 FINE：Rust `location.rs` 的 start() 检查的是 ACCESS_FINE_LOCATION，
+   *  「大致位置」(COARSE-only) 在它那里会启动失败。判定必须同口径，否则会出现
+   *  服务在跑、通知在、却零采集的空转状态（Android 12+ 用户可在弹窗里降级授权）。 */
+  private fun hasFineLocationPermission(context: Context): Boolean =
+    isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION)
 
   /** 未授予只影响通知可见性；Android 13 以下视为已授予 */
   private fun hasNotifyPermission(context: Context): Boolean =
