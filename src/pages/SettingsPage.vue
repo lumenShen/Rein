@@ -13,6 +13,7 @@ import PillChip from '@/components/common/PillChip.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { toggleablePlugins } from '@/plugins'
+import { useExercisePrefs, PREP_SEC_MAX, PREP_SEC_MIN } from '@/stores/exercisePrefs'
 import { useFeaturesStore } from '@/stores/features'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useUpdateStore } from '@/stores/update'
@@ -27,11 +28,13 @@ const router = useRouter()
 const pomo = usePomodoroStore()
 const update = useUpdateStore()
 const features = useFeaturesStore()
+const prefs = useExercisePrefs()
 
 /** 番茄钟配置属于「专注」模块、多设备同步属于「同步」模块：模块关掉时整卡收起
  *  （配置项是那个模块的旋钮，模块不在就没有可调的对象 —— 半边留着就是「半关」） */
 const focusOn = computed(() => features.isEnabled('focus'))
 const syncOn = computed(() => features.isEnabled('sync'))
+const sportsOn = computed(() => features.isEnabled('sports'))
 
 /** 番茄钟时长档位快捷预设：不点进专注页也能一键换档（精确手调与休息 / 最长暂停
  *  一起收在专注页的计时设置里，这里只留这条最常用的快捷路径） */
@@ -166,6 +169,31 @@ onMounted(() => {
           <span class="slabel">结束提示音</span>
           <ToggleSwitch v-model="pomo.settings.chime" label="结束提示音" />
         </div>
+      </div>
+    </section>
+
+    <!-- 训练：训练气泡的「准备时长」旋钮。属「运动」模块，模块关掉整卡收起。
+         改完下一组立即生效（气泡在 arm() 时读 prefs.prepSec）；装卸杠铃片这类
+         临时等待由「点气泡暂停」兜着，不必把准备时长调得很大。 -->
+    <section v-if="sportsOn" class="card">
+      <header class="row ghead">
+        <h2 class="gtitle">训练</h2>
+        <span class="hint-slot">
+          <InfoHint title="准备时长说明">
+            <p>每组开始前「准备姿势」的倒计时，给摆姿势、握杠留时间；改完从下一组生效。</p>
+            <p>临时装卸杠铃片，点训练里的气泡可以暂停计时，再点一下继续。</p>
+          </InfoHint>
+        </span>
+      </header>
+      <div class="card sub rows">
+        <NumberStepper
+          v-model="prefs.prepSec"
+          label="准备时长"
+          unit="秒"
+          :step="1"
+          :min="PREP_SEC_MIN"
+          :max="PREP_SEC_MAX"
+        />
       </div>
     </section>
 

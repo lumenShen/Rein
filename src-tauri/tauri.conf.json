@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Rein",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "identifier": "com.gozaoo.rein",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -13,9 +13,9 @@
     "windows": [
       {
         "title": "Rein",
-        "width": 430,
-        "height": 932,
-        "minWidth": 390,
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
         "minHeight": 640,
         "center": true,
         "decorations": false,

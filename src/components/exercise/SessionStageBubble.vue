@@ -27,6 +27,11 @@ import { PREPARE_SEC } from '@/system/motionSpring'
  *
  * 阶段计时全部基于墙钟（performance.now），不做逐帧累加：切到后台再回来时，
  * 秒数 / 次数仍然是准的（与 store 里休息倒计时同一个纪律）。
+ *
+ * 交互：rest 点一下跳过；set 的准备 / 做组点一下**暂停**（装卸杠铃片的等待
+ * 不该吃进节拍），再点继续——暂停时长直接从起点挪走，墙钟不撒谎。到点后
+ * 不给暂停，而且超出预期多久会一直亮在副文案里（「已超 n 秒」）。
+ * 准备时长是用户偏好（stores/exercisePrefs，设置 › 训练可改）。
  */
 
 type Stage = 'prepare' | 'act' | 'due' | 'rest'
@@ -76,6 +81,10 @@ const tone = ref<Tone>('prepare')
 const prepLeft = ref(PREPARE_SEC)
 const repIdx = ref(1)
 const actLeft = ref(0)
+/** 到点后已经超出的秒数（0 = 刚到点，还没超） */
+const dueOver = ref(0)
+/** 用户点气泡暂停了节拍（装卸杠铃片的等待不该吃进准备 / 做组时长） */
+const paused = ref(false)
 
 /* ---------- 文案 ---------- */
 
@@ -84,6 +93,9 @@ const content = computed<BubbleContent>(() => {
     return { tone: 'rest', main: `休息 ${Math.max(0, props.restLeft)} 秒`, sub: '点此跳过' }
   }
   const total = props.warmup ? `热身 ${props.setNo}/${props.totalSets}` : `第 ${props.setNo}/${props.totalSets} 组`
+  if (paused.value) {
+    return { tone: 'rest', main: '已暂停', sub: '点此继续' }
+  }
   if (stage.value === 'prepare') {
     return { tone: 'prepare', main: '准备姿势', sub: `${prepLeft.value} 秒后开始` }
   }
@@ -94,7 +106,12 @@ const content = computed<BubbleContent>(() => {
     }
     return { tone: 'act', main: `坚持 ${actLeft.value} 秒`, sub: `共 ${props.setSec} 秒` }
   }
-  return { tone: 'due', main: total, sub: '请结束休息' }
+  // 到点：超出后把超出时长一并亮出来 —— 「你已经在预期之外停了多久」要看得见
+  return {
+    tone: 'due',
+    main: total,
+    sub: dueOver.value > 0 ? `请结束休息 · 已超 ${dueOver.value} 秒` : '请结束休息',
+  }
 })
 
 /** 当前真正显示的内容：交换动画的最后一步才替换，所以与 content 有意不同步 */
@@ -116,6 +133,8 @@ function stopTicker(): void {
 function arm(): void {
   stopTicker()
   mover.invalidate() // 作废还在飞行中的交换回调
+  paused.value = false
+  dueOver.value = 0
   if (props.kind === 'rest') {
     stage.value = 'rest'
     void swap(content.value)
@@ -161,11 +180,48 @@ function tick(): void {
     }
     return
   }
+  // 到点**不停表**：超出多少秒要一直亮着（这正是提醒用户「已非预期地停了多久」的那半句）
   if (stage.value !== 'due') {
     stage.value = 'due'
-    stopTicker()
     void swap(content.value)
+    return
   }
+  const over = Math.floor(actElapsed - setSec)
+  if (over > 0 && over !== dueOver.value) dueOver.value = over
+}
+
+/* ---------- 暂停 / 继续（点气泡） ---------- */
+
+/** 暂停的时刻：恢复时把这一段补回起点，墙钟纪律不破 */
+let pauseAt = 0
+
+/**
+ * 可点 = rest（跳过）或 set 的准备 / 做组（暂停继续）。
+ * 到点后**不给暂停**：超出计时存在的意义就是提醒「已经非预期地停了多久」。
+ */
+const tappable = computed(
+  () => props.kind === 'rest' || (props.kind === 'set' && (stage.value === 'prepare' || stage.value === 'act')),
+)
+
+function togglePause(): void {
+  if (props.kind !== 'set' || stage.value === 'due') return
+  if (paused.value) {
+    startMs += performance.now() - pauseAt
+    paused.value = false
+    stopTicker()
+    timer = window.setInterval(tick, 100)
+    void swap(content.value)
+    return
+  }
+  paused.value = true
+  pauseAt = performance.now()
+  stopTicker()
+  void swap({ tone: 'rest', main: '已暂停', sub: '点此继续' })
+}
+
+function onTap(): void {
+  if (props.kind === 'rest') emit('tap')
+  else togglePause()
 }
 
 /* ---------- 尺寸测量与内容交换（通用方法，见 composables/useContentSwap） ---------- */
@@ -260,6 +316,12 @@ watch([prepLeft, repIdx, actLeft], () => {
   void resize(content.value)
 })
 
+/** 到点后的超出秒数：每整秒宽一次（越超越宽，提醒越来越扎眼是有意的） */
+watch(dueOver, () => {
+  if (stage.value !== 'due' || paused.value) return
+  void resize(content.value)
+})
+
 /** 首帧把尺寸对到真实内容（CSS 里的 width 只是防跳动的近似值） */
 onMounted(() => {
   void mover.sync()
@@ -280,14 +342,14 @@ onBeforeUnmount(() => {
     <div
       ref="bubbleEl"
       class="bubble glass-surface"
-      :class="{ tappable: kind === 'rest' }"
+      :class="{ tappable }"
       :data-tone="tone"
-      :role="kind === 'rest' ? 'button' : 'status'"
+      :role="tappable ? 'button' : 'status'"
       aria-live="off"
-      :tabindex="kind === 'rest' ? 0 : undefined"
+      :tabindex="tappable ? 0 : undefined"
       :aria-label="`${shown.main}，${shown.sub}`"
-      @click="kind === 'rest' && emit('tap')"
-      @keydown.enter="kind === 'rest' && emit('tap')"
+      @click="onTap"
+      @keydown.enter="onTap"
     >
       <i ref="glowEl" class="glow" aria-hidden="true" />
       <div v-if="ghost" ref="ghostEl" class="layer ghost" aria-hidden="true">

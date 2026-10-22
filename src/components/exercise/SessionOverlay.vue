@@ -29,6 +29,7 @@ import SessionGlassButton from '@/components/exercise/SessionGlassButton.vue'
 import SessionSummaryPane from '@/components/exercise/SessionSummaryPane.vue'
 import ReadinessDialog from '@/components/exercise/ReadinessDialog.vue'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
+import { useExercisePrefs } from '@/stores/exercisePrefs'
 import { useSessionStore } from '@/stores/session'
 import { usePressGlow } from '@/composables/usePressGlow'
 import { useScrolled } from '@/composables/useScrolled'
@@ -67,6 +68,8 @@ import type { SwapCandidate } from '@/types'
  * （重量曲线数据源）。只有「结束 → 二级确认」才结束会话。
  */
 const s = useSessionStore()
+/** 训练偏好：准备时长（设置 › 训练可改，气泡下一组立即生效） */
+const prefs = useExercisePrefs()
 const lib = useExerciseLibStore()
 const router = useRouter()
 const { toast } = useToast()
@@ -1499,6 +1502,7 @@ function trapFocus(e: KeyboardEvent): void {
           :set-sec="curSetSec"
           :reps="curReps"
           :rest-left="s.restLeft"
+          :prep-sec="prefs.prepSec"
           :warmup="dockMode === 'warmup'"
           :active="s.phase !== 'summary'"
           @tap="s.skipRest()"
