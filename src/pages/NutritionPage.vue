@@ -7,7 +7,6 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import QuickTile from '@/components/common/QuickTile.vue'
 import SmartAddSheet from '@/components/common/SmartAddSheet.vue'
 import EnergySummary from '@/components/nutrition/EnergySummary.vue'
-import MacroDetailCard from '@/components/nutrition/MacroDetailCard.vue'
 import DietChecksCard from '@/components/nutrition/DietChecksCard.vue'
 import MicrosCard from '@/components/nutrition/MicrosCard.vue'
 import ProgramMenuCard from '@/components/nutrition/ProgramMenuCard.vue'
@@ -72,13 +71,10 @@ const quickOpen = ref(false)
     <!-- 方案生效时的今日菜单：吃什么归营养页；生成按需，未生成回落模板 -->
     <ProgramMenuCard @log="quickOpen = true" />
 
-    <!-- 宏量详解：与左侧「能量与营养」配成一行（两张都是纵向长卡，高度也接近）。
-
-         类别打卡与微量元素**通栏**：微量元素卡展开后有 1300px 高，跟一张 227px 的
-         打卡卡并排，右半边会空出一整屏；它们的内容本来就是「左标签 + 右数值」的
-         宽行，铺满一行反而更好读。 -->
-    <MacroDetailCard class="block-start" />
-    <DietChecksCard class="d-full" />
+    <!-- 种类打卡与微量元素**通栏**：微量元素卡展开后有 1300px 高，跟打卡卡并排，
+         右半边会空出一整屏；它们的内容本来就是「左标签 + 右数值」的宽行，铺满一行
+         反而更好读。宏量数值已由「摄入总览」带进度条呈现，不再单列详解卡。 -->
+    <DietChecksCard class="block-start d-full" />
     <MicrosCard class="d-full" />
 
     <!-- 弹层 -->
@@ -109,8 +105,8 @@ const quickOpen = ref(false)
 }
 
 /* 分组之间 24（施工单 §1「区块之间」）：「今日状态」这一组（快捷入口 / 摄入总览 /
-   今日菜单）与下方「详解」这一组（宏量 / 打卡 / 微量元素）不是同级卡片，
-   12 会让六张卡读成一条没有段落的流水。特指度压过 base.css 的 `.card + .card`。 */
+   今日菜单）与下方「详解」这一组（打卡 / 微量元素）不是同级卡片，
+   12 会让它们读成一条没有段落的流水。特指度压过 base.css 的 `.card + .card`。 */
 .page .block-start {
   margin-top: var(--gap-xl);
 }
