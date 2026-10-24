@@ -88,6 +88,25 @@ body {
   width: 100%;
   max-width: var(--frame-max);
   transform: translateX(-50%);
+  /* 视口比栏宽、光却只有 480 宽时，左右两道竖边是硬切 —— 读起来像背景被裁了一刀
+     （2026-10-24 宽窗截图）。渐隐宽度跟着两侧留白走：视口 ≤ 栏宽时是 0（手机上
+     逐像素不变），留白越宽渐隐越宽，最多 --sp-32。只淡出、不铺满：光仍是「栏的」，
+     两侧的中性底照旧留着。 */
+  --ambient-fade: clamp(0px, calc((100vw - var(--frame-max)) / 2), var(--sp-32));
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--ambient-fade),
+    #000 calc(100% - var(--ambient-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--ambient-fade),
+    #000 calc(100% - var(--ambient-fade)),
+    transparent 100%
+  );
 }
 
 .desk-frame::before {
