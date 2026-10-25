@@ -9,7 +9,7 @@ export const programPlugin = definePlugin({
   name: '健康方案',
   desc: '三档方案基线、日程展开与复盘调参',
   icon: Target,
-  accent: '--accent',
+  accent: '--mod-program',
   toggleable: true,
   defaultEnabled: true,
   routes: ['program', 'program-wrapup'],
@@ -22,7 +22,7 @@ export const programPlugin = definePlugin({
         return active ? `执行中 · v${active.version}` : '三套方案，排进日程'
       },
       icon: Target,
-      ic: { background: 'var(--accent-soft)', color: 'var(--accent)' },
+      ic: { background: 'var(--mod-program-soft)', color: 'var(--mod-program-strong)' },
       order: 80,
       to: { name: 'program' },
     },

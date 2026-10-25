@@ -86,6 +86,19 @@ export const floatStatus = ref<GlobalFloatStatus>({
   visible: false,
 })
 
+/**
+ * 能力 / 开关 / 权限的合并状态短语。
+ * 设置页入口与三级页共用这一份措辞：两处各写一遍，迟早会出现「入口说已开启、
+ * 详情页说未授权」这种自相矛盾的读数。
+ */
+export const floatStateText = computed(() => {
+  if (!isTauri) return '浏览器预览不支持'
+  if (!floatStatus.value.supported) return '本机不支持'
+  if (!floatEnabled.value) return '已关闭'
+  if (!floatStatus.value.permitted) return '未授权'
+  return floatStatus.value.visible ? '浮窗显示中' : '待命'
+})
+
 /** 桌面主窗口是否有焦点（Android 不看这个） */
 const appFocused = ref(true)
 /** 用户点过「关闭」：本次失焦期不再自动弹，主窗口回焦后清除 */

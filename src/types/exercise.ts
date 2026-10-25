@@ -121,6 +121,41 @@ export interface ExerciseRecord {
   lastUsedAt: string | null
 }
 
+/**
+ * 动作详解的覆盖行（迁移 0048）· 与 `config/exerciseGuide.ts` 的 `ExerciseGuide`
+ * 同形状 —— 这里不复用那个接口是为了不把 types 反向依赖到 config
+ * （`exerciseGuide.ts` 已经依赖 `@/types` 的 ExerciseKind，反向再引就成环了）。
+ *
+ * 语义：基线在代码里（内置 81 条），本表只存**被改过的动作**；删行 = 恢复基线。
+ */
+export interface ExerciseGuideOverride {
+  exerciseId: string
+  /** 准备：三条，顺序固定（摆位 → 躯干 → 呼吸/绷紧） */
+  setup: string[]
+  /** 开始：起始位与运动轨迹 */
+  start: string
+  /** 结束：终点、回位与离心要求 */
+  end: string
+  /** 注意：该动作最常见的错误与安全边界（1–3 条） */
+  cautions: string[]
+  /** 一次完整动作循环的建议秒数；0 = 不做次数切分（计时 / 有氧 / 行走类） */
+  repSec: number
+  /** 最后改动者 */
+  updatedBy: 'ai' | 'user'
+  updatedAt: string
+}
+
+/** 覆盖层的写入体（五段必须完整 —— 局部修改由调用方先读再合并） */
+export interface ExerciseGuideInput {
+  exerciseId: string
+  setup: string[]
+  start: string
+  end: string
+  cautions: string[]
+  repSec: number
+  updatedBy?: 'ai' | 'user'
+}
+
 /** 自建动作的新建 / 更新提交体（内置动作提交会被后端拒绝） */
 export interface ExerciseInput {
   id?: string

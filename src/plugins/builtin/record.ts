@@ -18,7 +18,7 @@ export const recordPlugin = definePlugin({
   name: '录音',
   desc: '录音台 · 附加到待办',
   icon: AudioLines,
-  accent: '--led-shopping',
+  accent: '--mod-record',
   toggleable: true,
   defaultEnabled: true,
   routes: ['record'],

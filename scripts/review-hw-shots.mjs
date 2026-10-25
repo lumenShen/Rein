@@ -45,6 +45,7 @@ const ROUTES = [
   ['grab-tasks', '#/campus/grab-tasks'],
   ['knowledge', '#/ai/knowledge'],
   ['features', '#/settings/features'],
+  ['float', '#/settings/float'],
   ['sync', '#/settings/sync'],
   ['update', '#/settings/update'],
   ['record', '#/record'],

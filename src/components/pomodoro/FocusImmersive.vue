@@ -51,9 +51,9 @@ const capText = computed(() =>
   pomo.phase === 'focus' ? `第 ${pomo.completedRounds + 1} 颗番茄` : '休息',
 )
 
-/** 相位色：专注 --cat-work、休息 --cat-general。冒号与环共用它 —— 情绪色只在环与冒号上，
+/** 相位色：专注 --mod-focus-tone、休息 --cat-general。冒号与环共用它 —— 情绪色只在环与冒号上，
  * 数字保持中性（与浮条「色相只落状态点」同一条色彩纪律）。 */
-const phaseColorVar = computed(() => (pomo.phase === 'focus' ? '--cat-work' : '--cat-general'))
+const phaseColorVar = computed(() => (pomo.phase === 'focus' ? '--mod-focus-tone' : '--cat-general'))
 /** 冒号染色：用行内 style 绑到相位色上，省去一份 phase-class 分支 */
 const colonStyle = computed(() => ({ color: `var(${phaseColorVar.value})` }))
 
@@ -378,8 +378,8 @@ onBeforeUnmount(() => {
 
 /* 强制模式开：实底橙 + 反色图标（与主按钮同一套「实底档」用法） */
 .corner.on {
-  background: var(--cat-work);
-  color: var(--on-accent);
+  background: var(--mod-focus);
+  color: var(--on-tone);
 }
 
 /* 贴左缘、垂直居中的控制簇：一列圆角微透明按钮 */

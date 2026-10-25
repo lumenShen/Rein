@@ -191,6 +191,10 @@ pub fn run() {
             modules::exercise_lib::commands::delete_exercise,
             modules::exercise_lib::commands::restore_exercise,
             modules::exercise_lib::commands::set_exercise_favorite,
+            // exercise_lib · 动作详解覆盖层（0048）：内置文案的 AI / 用户改动
+            modules::exercise_lib::guide::list_exercise_guides,
+            modules::exercise_lib::guide::upsert_exercise_guide,
+            modules::exercise_lib::guide::delete_exercise_guide,
             // program（健康方案：持久化 + 单激活 + 日程重排；计算在前端引擎）
             modules::program::commands::program_list,
             modules::program::commands::program_get_active,

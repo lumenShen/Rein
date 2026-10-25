@@ -18,7 +18,7 @@ export const syncPlugin = definePlugin({
   name: '多设备同步',
   desc: '设备间端到端加密同步',
   icon: Cloud,
-  accent: '--cat-class',
+  accent: '--mod-campus',
   toggleable: true,
   defaultEnabled: true,
   routes: ['settings-sync'],

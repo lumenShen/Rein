@@ -22,6 +22,7 @@ import GatewayAuthSheet from '@/components/settings/GatewayAuthSheet.vue'
 import ToastHost from '@/components/common/ToastHost.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { DESKTOP_MIN } from '@/config/domain'
+import { toneForRoute } from '@/config/tones'
 import { campusService } from '@/services/campusService'
 import { gatewayService } from '@/services/gatewayService'
 import { recorder, stopRecording } from '@/system/recorderRuntime'
@@ -273,6 +274,19 @@ watch(
 watch(inspectorOpen, (v) => {
   document.documentElement.dataset.inspector = v ? 'on' : 'off'
 }, { immediate: true })
+
+/* 当前页的模块色调写到 <html>（与 data-shell / data-inspector 同一条做法）：
+   页内的页头、按钮与 **teleport 到 body 的弹层** 都要读同一个 --accent；
+   只包 RouterView 的话，弹层会停在品牌蓝，同一页里两种主色。 */
+watch(
+  () => route.name,
+  (name) => {
+    const tone = toneForRoute(name)
+    if (tone) document.documentElement.dataset.tone = tone
+    else delete document.documentElement.dataset.tone
+  },
+  { immediate: true },
+)
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onDeskKey))
 

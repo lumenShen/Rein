@@ -74,6 +74,7 @@ const GROUP_OF: Record<string, AsideGroup> = {
   me: 'account',
   settings: 'account',
   'settings-features': 'account',
+  'settings-float': 'account',
   'settings-sync': 'account',
   'settings-update': 'account',
   'settings-perf': 'account',

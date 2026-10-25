@@ -55,8 +55,8 @@ const dotClass = computed(() => {
 }
 
 .dot.work {
-  background: var(--cat-work);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--cat-work) 65%, transparent);
+  background: var(--mod-focus-tone);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mod-focus-tone) 65%, transparent);
   animation: rein-breathe var(--dur-pulse) infinite;
 }
 

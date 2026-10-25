@@ -417,7 +417,7 @@ const lastDateShort = computed(() => {
 /* 终点节点：建议重量是整条链的结论，加重 */
 .cnode.final .ndot {
   background: var(--c-exercise-deep);
-  color: var(--on-accent);
+  color: var(--on-tone);
 }
 
 .nval.final {
@@ -465,8 +465,10 @@ const lastDateShort = computed(() => {
   transition: clip-path var(--dur-base) var(--ease-standard);
 }
 
+/* 拖后腿的因子是「该补」的判断，用语义红；不是运动身份橙。
+   正常因子保持橙（只是条的长度在表达数值），低因子才变色。 */
 .ffill.low {
-  background: var(--warn-strong);
+  background: var(--heat-low);
 }
 
 /* 1.0 刻度线：条没够到它 = 这个因子在往下压 */

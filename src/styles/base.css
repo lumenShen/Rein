@@ -349,7 +349,8 @@ button:active,
    整组垫在一口浅井上，与母卡面分出层次。用 .card.sub 而不是另起一个类 —— 它仍然是卡
    （直接挂在 .page 下时，桌面上照样进半栏栅格、照样吃 hover 抬影那套规则），只是**降一档**：
      底   --surface-inset（4% 文字色混透明的浅井；母卡换成玻璃底时它跟着退）
-     圆角 --radius-m-nest 12（比 .card 的 16 收一档，读出「里面那一层」）
+     圆角 --radius-m-nest 12（比 .card 的 16 收一档，读出「里面那一层」；
+        与外卡同圆心的关系见下方 `.card > .card.sub` 那组规则）
      内距 --pad-card-tight 12（比母卡的 16 收一档，与 --gap-md 的卡片间距同源）
      投影 none —— 嵌在卡里的面再压落影，只会把母卡切成两截
    .card.sub 的特指度（0,2,0）压过高画质档的玻璃规则（:where(...) .card，0,1,0），
@@ -360,6 +361,24 @@ button:active,
   border-radius: var(--radius-m-nest);
   box-shadow: none;
   padding: var(--pad-card-tight);
+}
+
+/* 卡内二级组与外卡**同圆心**：外卡圆角 − 组圆角 = 应该留的缝
+   （16 − 12 = 4；桌面 14 − 12 = 2）。组原本贴在内距 16 的内容边缘，
+   所以横向和底部各外扩 12（桌面 14），把这段多出来的内距还给「缝 + 组内距」，
+   组里的文字仍落在卡片的 16 内距上。
+   只作用于卡内最后一个子项：负底边距若落在中间，会把后面的内容一起拽上来。 */
+.card > .card.sub:last-child {
+  margin-inline: calc(-1 * (var(--pad-card) - var(--r-nest-gap)));
+  margin-bottom: calc(-1 * (var(--pad-card) - var(--r-nest-gap)));
+  padding-inline: calc(var(--pad-card) - var(--r-nest-gap));
+}
+
+/* 卡片里只有这一口井时，顶部四个角也要同心：只补上边。
+   内容仍然落在卡片的 16 内距上，井顶与卡顶之间只留 4（桌面 2）。 */
+.card > .card.sub:first-child:last-child {
+  margin-top: calc(-1 * (var(--pad-card) - var(--r-nest-gap)));
+  padding-top: calc(var(--pad-card) - var(--r-nest-gap));
 }
 
 /* ---------- 少量布局工具类 ---------- */

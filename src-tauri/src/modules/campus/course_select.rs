@@ -1056,7 +1056,8 @@ mod tests {
     #[test]
     #[ignore = "打真实教务系统，需要 REIN_GUET_USER / REIN_GUET_PASS"]
     fn live_course_select_chain() {
-        use crate::modules::campus::guet::GuetAdapter;
+        use crate::modules::campus::adapters::base::CampusAdapter;
+        use crate::modules::campus::adapters::supwisdom::SupwisdomAdapter;
 
         let (Ok(user), Ok(pass)) = (
             std::env::var("REIN_GUET_USER"),
@@ -1065,13 +1066,13 @@ mod tests {
             println!("缺少 REIN_GUET_USER / REIN_GUET_PASS，跳过");
             return;
         };
-        let spec = crate::modules::campus::provider::spec("guet-supwisdom-eams5").unwrap();
+        let spec = crate::modules::campus::adapters::provider::spec("guet-supwisdom-eams5").unwrap();
         let host = spec.default_base_url;
 
         // ① 先拿 EAMS 会话（复用课表那套登录）
         let mut session = Session::new(host, CookieJar::default());
         {
-            let mut adapter = GuetAdapter::new(spec, &mut session);
+            let mut adapter = SupwisdomAdapter::new(spec, &mut session);
             let outcome = adapter.login(&user, &pass, "").expect("登录请求要能发出");
             assert!(outcome.ok, "EAMS 登录被拒：{:?}", outcome.message);
         }

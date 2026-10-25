@@ -15,7 +15,7 @@ import { exerciseService } from '@/services/exerciseService'
 import { exerciseLibService } from '@/services/exerciseLibService'
 import { nutritionService } from '@/services/nutritionService'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
-import type { EffortLevel, Intensity, WorkoutType } from '@/types'
+import type { ExerciseRecord, EffortLevel, Intensity, WorkoutType } from '@/types'
 import { endOfMonth, startOfMonth, todayStr } from '@/utils/date'
 import { MUSCLES } from './muscleSchema'
 import { defineTool, hhmmToMin, resolveDate, type AppTool } from './types'
@@ -113,6 +113,53 @@ function kcalFromArgs(
  * 直接复用前端那条映射，别在这里另写一份。
  */
 const effortToIntensityLocal = effortToIntensity
+
+/* ---- 动作详解（0048 覆盖层）：AI 改教学文案 ---- */
+
+/**
+ * 动作定位：id / 精确名 / 别名 → 唯一记录。
+ *
+ * 为什么不要求模型先调 `list_exercises`：那条在 plan 组，而本工具属于 exercise 组 ——
+ * 用户说「深蹲的要点改一下」时，模型手上多半只有动作名。名称在库里唯一（后端 upsert
+ * 会拒绝重名），所以精确名是可靠入口；模糊命中多于一条时如实报出候选让它改口。
+ */
+async function resolveExercise(key: string): Promise<ExerciseRecord> {
+  const lib = useExerciseLibStore()
+  await lib.ensureLoaded()
+  const k = key.trim()
+  if (!k) throw new Error('exercise 不能为空：传动作 id 或动作名（如「杠铃卧推」）')
+  const byId = lib.get(k)
+  if (byId) return byId
+  const exact = lib.list.filter((e) => e.name === k || e.aliases.includes(k))
+  const pool = exact.length
+    ? exact
+    : lib.list.filter((e) => e.name.includes(k) || e.aliases.some((a) => a.includes(k)))
+  if (pool.length === 1) return pool[0]
+  if (pool.length === 0) {
+    throw new Error(`动作库里没有「${k}」。请用库里准确的动作名，或先问清用户说的是哪个动作`)
+  }
+  throw new Error(
+    `「${k}」匹配到 ${pool.length} 个动作：${pool
+      .slice(0, 8)
+      .map((e) => e.name)
+      .join('、')}；请用更准确的名字（或 id）重试`,
+  )
+}
+
+/** 合并后的写入体：省略的段沿用当前生效值（覆盖 ?? 基线） */
+const GUIDE_LINE = '单段 ≤60 字；写「该怎么做/该避开什么」，不要写动作名'
+const GUIDE_SETUP = Type.Array(Type.String(), {
+  description: `准备：恰好 3 条，顺序固定（摆位/握距 → 躯干姿态 → 呼吸与绷紧）。整组替换。${GUIDE_LINE}`,
+})
+const GUIDE_CAUTIONS = Type.Array(Type.String(), {
+  description: `注意：1–3 条，这个动作最容易犯的错与安全边界（界面上只显示前两条）。整组替换。${GUIDE_LINE}`,
+})
+const GUIDE_REP_SEC = Type.Number({
+  description:
+    '一次完整动作循环的秒数（向心 + 离心 + 顶峰停顿，内置多为 2–5）。计时/有氧/行走类给 0 —— 它们的单组时长吃自己的目标秒数。',
+  minimum: 0,
+  maximum: 120,
+})
 
 export const exerciseTools: AppTool[] = [
   defineTool({
@@ -314,6 +361,175 @@ export const exerciseTools: AppTool[] = [
       })
       await useExerciseLibStore().load(true)
       return { ok: true, id: updated.id, name: updated.name, muscles: updated.muscles }
+    },
+  }),
+
+  /* ---- 动作详解（准备 / 轨迹 / 注意 / 节拍）：内置文案的读写 ---- */
+
+  defineTool({
+    name: 'get_exercise_guide',
+    group: 'exercise',
+    label: '读动作详解',
+    description:
+      '读某个动作**当前生效**的详解文案：准备 3 条 / 开始轨迹 / 结束回位 / 注意 1–3 条 / 每次循环秒数，并标明来源（builtin=内置基线未改过，override=已被改过）。改动前必须先读 —— set_exercise_guide 只覆盖你给的段，其余沿用当前值。用户问「这个动作怎么做/要注意什么」也可以用它。',
+    parameters: Type.Object({
+      exercise: Type.String({ description: '动作 id 或动作名（如「杠铃卧推」）' }),
+    }),
+    async execute(args) {
+      const rec = await resolveExercise(args.exercise)
+      const lib = useExerciseLibStore()
+      const source = lib.guideSourceOf(rec.id)
+      const guide = lib.guideFor(rec.id)
+      const ov = lib.guides[rec.id]
+      return {
+        exerciseId: rec.id,
+        name: rec.name,
+        kind: rec.kind,
+        source,
+        guide,
+        updatedBy: ov?.updatedBy ?? null,
+        updatedAt: ov?.updatedAt ?? null,
+        note:
+          guide == null
+            ? '这个动作还没有详解文案（自建动作）。要写就把五段一次给齐。'
+            : source === 'builtin'
+              ? '当前是内置基线。改任意一段即生成覆盖版本，其余段沿用。'
+              : '当前是改过的版本，可用 reset_exercise_guide 恢复内置基线。',
+      }
+    },
+  }),
+
+  defineTool({
+    name: 'set_exercise_guide',
+    group: 'exercise',
+    label: '修改动作详解',
+    description:
+      '改某个动作的详解文案（**内置动作也能改**：改动落在覆盖层，动作库本身不动，可随时恢复基线）。只传要改的段，省略的段沿用当前值；自建动作首次写必须给齐 setup/start/end/cautions。硬约束：setup 恰好 3 条、cautions 1–3 条、单段 ≤60 字、repSec 0–120（计时/有氧给 0）。用户说「这个动作的要点不对 / 按我的情况改注意 / 我膝盖有伤」时用它。改完文案是对所有训练生效的，不是只改这一场。',
+    parameters: Type.Object({
+      exercise: Type.String({ description: '动作 id 或动作名（如「杠铃深蹲」）' }),
+      setup: Type.Optional(GUIDE_SETUP),
+      start: Type.Optional(
+        Type.String({ description: `开始：起始位 + 运动轨迹（向心），一句话。${GUIDE_LINE}` }),
+      ),
+      end: Type.Optional(
+        Type.String({ description: `结束：终点/回位 + 离心要求，一句话。${GUIDE_LINE}` }),
+      ),
+      cautions: Type.Optional(GUIDE_CAUTIONS),
+      repSec: Type.Optional(GUIDE_REP_SEC),
+    }),
+    async execute(args) {
+      const rec = await resolveExercise(args.exercise)
+      const lib = useExerciseLibStore()
+      const cur = lib.guideFor(rec.id)
+      const missing = [
+        !args.setup && 'setup',
+        !args.start && 'start',
+        !args.end && 'end',
+        !args.cautions && 'cautions',
+      ].filter(Boolean) as string[]
+      if (!cur && missing.length > 0 && missing.length < 4) {
+        throw new Error(
+          `「${rec.name}」还没有详解文案（自建动作），首次设置必须五段给齐，缺：${missing.join('、')}`,
+        )
+      }
+      if (!cur && missing.length === 4) {
+        throw new Error(`没有可修改的文案：请提供 setup/start/end/cautions（「${rec.name}」是自建动作）`)
+      }
+      const base = cur ?? { setup: [] as string[], start: '', end: '', cautions: [] as string[], repSec: 0 }
+      const changed: string[] = []
+      if (args.setup) changed.push('setup')
+      if (args.start) changed.push('start')
+      if (args.end) changed.push('end')
+      if (args.cautions) changed.push('cautions')
+      if (args.repSec != null) changed.push('repSec')
+
+      const row = await lib.saveGuide({
+        exerciseId: rec.id,
+        setup: args.setup ?? base.setup,
+        start: args.start ?? base.start,
+        end: args.end ?? base.end,
+        cautions: args.cautions ?? base.cautions,
+        repSec: args.repSec ?? base.repSec,
+        updatedBy: 'ai',
+      })
+      return {
+        ok: true,
+        exerciseId: row.exerciseId,
+        name: rec.name,
+        changed,
+        guide: {
+          setup: row.setup,
+          start: row.start,
+          end: row.end,
+          cautions: row.cautions,
+          repSec: row.repSec,
+        },
+        note: '已生效：动作详情抽屉与训练中的紧凑详解都读这份文案（对所有未来训练生效）。',
+      }
+    },
+  }),
+
+  defineTool({
+    name: 'list_exercise_guides',
+    group: 'exercise',
+    label: '已改过的动作详解',
+    description:
+      '列出被改过详解文案的动作（含改动者与时间）。用户问「我改过哪些动作的要点」时用它；要看某个动作的具体文案用 get_exercise_guide。',
+    parameters: Type.Object({}),
+    async execute() {
+      const lib = useExerciseLibStore()
+      await lib.ensureLoaded()
+      const items = Object.values(lib.guides)
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+        .map((g) => ({
+          exerciseId: g.exerciseId,
+          name: lib.get(g.exerciseId)?.name ?? '（动作已删除）',
+          updatedBy: g.updatedBy,
+          updatedAt: g.updatedAt,
+        }))
+      return {
+        count: items.length,
+        items,
+        message:
+          items.length === 0
+            ? '没有任何动作被改过，全部是内置基线。'
+            : '这些动作的详解是覆盖版本（其余动作仍用内置基线）。',
+      }
+    },
+  }),
+
+  defineTool({
+    name: 'reset_exercise_guide',
+    group: 'exercise',
+    label: '恢复动作详解默认',
+    description:
+      '把某个动作的详解恢复成内置基线（删掉 AI/用户改过的覆盖层）。只在用户明确说「改回原来的 / 恢复默认 / 那条改错了」时用；自建动作重置后就没有详解了。',
+    dangerous: true,
+    parameters: Type.Object({
+      exercise: Type.String({ description: '动作 id 或动作名' }),
+    }),
+    async execute(args) {
+      const rec = await resolveExercise(args.exercise)
+      const lib = useExerciseLibStore()
+      const source = lib.guideSourceOf(rec.id)
+      if (source !== 'override') {
+        return {
+          ok: true,
+          changed: false,
+          exerciseId: rec.id,
+          name: rec.name,
+          message:
+            source === 'builtin' ? '当前就是内置基线，无需恢复。' : '这个动作没有详解文案，无需恢复。',
+        }
+      }
+      await lib.resetGuide(rec.id)
+      return {
+        ok: true,
+        changed: true,
+        exerciseId: rec.id,
+        name: rec.name,
+        message: '已恢复内置基线。',
+      }
     },
   }),
 ]

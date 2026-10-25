@@ -31,22 +31,30 @@ pub fn big_section_of(start_unit: i64) -> i64 {
 
 /// 从同一门课的若干时段里挑出用户点的那个。
 ///
-/// 优先按 `(星期, 起始小节)` 精确命中 —— 同一门课一周可能上多次、地点还不同
-/// （实验课尤其如此），用户点的是课表上哪个格子，就该看到哪个格子的信息。
-/// 退而求其次只按星期，再不行退回第一个：**宁可给出「相近」的信息，也好过空手**。
+/// 命中顺序：`(星期, 起始小节, 教学周)` → `(星期, 起始小节)` → 星期 → 第一个。
+/// **第一个才是精确的那把钥匙**：一门课按周次段拆开、每段换教师换教室是常态
+/// （桂电的健康教育四位老师轮着上），只按「星期 + 节次」命中的话，点第 6 周的格子
+/// 会拿到第 12 周那条的教师 —— 课表格子与详情抽屉对不上，用户看到的就是「信息错了」。
+///
+/// 退路仍然保留：宁可给出「相近」的信息，也好过空手。
 fn pick_activity(
     activities: &[TimetableActivity],
     weekday: Option<i64>,
     start_unit: Option<i64>,
+    week: Option<i64>,
 ) -> Option<&TimetableActivity> {
     if activities.is_empty() {
         return None;
     }
-    let exact = activities.iter().find(|a| {
+    let slot = |a: &&TimetableActivity| {
         weekday.map_or(true, |w| a.weekday == Some(w))
             && start_unit.map_or(true, |u| a.start_unit == Some(u))
-    });
-    if let Some(a) = exact {
+    };
+    let in_week = |a: &&TimetableActivity| week.map_or(false, |w| a.week_indexes.contains(&w));
+    if let Some(a) = activities.iter().filter(slot).find(|a| in_week(a)) {
+        return Some(a);
+    }
+    if let Some(a) = activities.iter().find(slot) {
         return Some(a);
     }
     let by_day = activities
@@ -74,14 +82,16 @@ fn find_arranged<'a>(
 
 /// 把一门课的详情拼出来。
 ///
-/// `lesson_id` 是全校统一的课程标识（就是 `activity.lessonId`）；`weekday` / `start_unit`
-/// 用来在有多个时段时定位到具体那一个，传 `None` 就取该课的第一个时段。
+/// `lesson_id` 是全校统一的课程标识（就是 `activity.lessonId`）；`weekday` / `start_unit` /
+/// `week` 用来在有多个时段时定位到具体那一个（`week` = 用户点的那一格属于第几教学周），
+/// 传 `None` 就取该课的第一个时段。
 pub fn build_course_detail(
     vm: &StudentTableVm,
     semester_name: &str,
     lesson_id: i64,
     weekday: Option<i64>,
     start_unit: Option<i64>,
+    week: Option<i64>,
 ) -> Result<CourseDetail> {
     // 同一门课的全部时段（实验课一周可能分好几次上，地点还不同）
     let mine: Vec<&TimetableActivity> = vm
@@ -97,7 +107,7 @@ pub fn build_course_detail(
 
     // `pick_activity` 要切片，这里借一次临时 Vec 的引用；生命周期只到本函数体内
     let owned: Vec<TimetableActivity> = mine.into_iter().cloned().collect();
-    let activity = pick_activity(&owned, weekday, start_unit)
+    let activity = pick_activity(&owned, weekday, start_unit, week)
         .ok_or_else(|| ReinError::Message("课程详情组装失败：没有可用时段".into()))?;
 
     let arranged = find_arranged(&vm.arranged_lesson_search_vms, activity);
@@ -258,7 +268,7 @@ mod tests {
     #[test]
     fn builds_detail_matching_the_official_page() {
         let vm = english_vm();
-        let d = build_course_detail(&vm, "2026-2027上学期", 319961, Some(3), Some(3)).unwrap();
+        let d = build_course_detail(&vm, "2026-2027上学期", 319961, Some(3), Some(3), None).unwrap();
 
         assert_eq!(d.course_name, "大学英语1");
         assert_eq!(d.lesson_code.as_deref(), Some("2612316"));
@@ -308,22 +318,58 @@ mod tests {
         });
         let vm: StudentTableVm = serde_json::from_value(raw).unwrap();
 
-        let d = build_course_detail(&vm, "2026-2027上学期", 7, Some(5), Some(6)).unwrap();
+        let d = build_course_detail(&vm, "2026-2027上学期", 7, Some(5), Some(6), None).unwrap();
         assert_eq!(d.room.as_deref(), Some("B202"));
         assert_eq!(d.big_section, 3); // 6-7 节 → 第 3 大节
         assert_eq!(d.start_week, Some(3));
         assert_eq!(d.end_week, Some(4));
 
         // 只给星期也能定位
-        let d = build_course_detail(&vm, "2026-2027上学期", 7, Some(1), None).unwrap();
+        let d = build_course_detail(&vm, "2026-2027上学期", 7, Some(1), None, None).unwrap();
         assert_eq!(d.room.as_deref(), Some("A101"));
         assert_eq!(d.big_section, 1);
+    }
+
+    /// 同一门课同一个格子，按**周次段**换教师换教室（桂电的健康教育四位老师轮着上）：
+    /// 点第 6 周那一格要看黄观凤、点第 12 周要看马瑞杰 —— 只按星期/节次定位会一直给同一个。
+    #[test]
+    fn locates_the_exact_session_by_teaching_week() {
+        let mut late = serde_json::json!({
+            "lessonId": 322367, "courseName": "健康教育", "weekday": 4, "startUnit": 6,
+            "endUnit": 7, "startTime": "14:30", "endTime": "16:05", "room": "17311*",
+            "weekIndexes": [11, 12], "teachers": ["马瑞杰"]
+        });
+        let mut early = serde_json::json!({
+            "lessonId": 322367, "courseName": "健康教育", "weekday": 4, "startUnit": 6,
+            "endUnit": 7, "startTime": "14:30", "endTime": "16:05", "room": "17311*",
+            "weekIndexes": [5, 6], "teachers": ["黄观凤"]
+        });
+        // 顺序刻意把「后段」放前面：老实现总取第一个匹配，正好会给出错的教师
+        let vm: StudentTableVm = serde_json::from_value(serde_json::json!({
+            "activities": [late.take(), early.take()]
+        }))
+        .unwrap();
+
+        let d = build_course_detail(&vm, "2026-2027 第一学期", 322367, Some(4), Some(6), Some(6))
+            .unwrap();
+        assert_eq!(d.teachers, vec!["黄观凤".to_string()]);
+        assert_eq!(d.start_week, Some(5));
+        assert_eq!(d.end_week, Some(6));
+
+        let d = build_course_detail(&vm, "2026-2027 第一学期", 322367, Some(4), Some(6), Some(12))
+            .unwrap();
+        assert_eq!(d.teachers, vec!["马瑞杰".to_string()]);
+
+        // 给了一个不在任何周次段里的周次（比如学期末的空周）：退回按格子定位，不许空手
+        let d = build_course_detail(&vm, "2026-2027 第一学期", 322367, Some(4), Some(6), Some(19))
+            .unwrap();
+        assert_eq!(d.course_name, "健康教育");
     }
 
     #[test]
     fn missing_lesson_is_an_error_not_a_blank_page() {
         let vm = english_vm();
-        assert!(build_course_detail(&vm, "2026-2027上学期", 999999, None, None).is_err());
+        assert!(build_course_detail(&vm, "2026-2027上学期", 999999, None, None, None).is_err());
     }
 
     /// 实验课判定靠**实际学时**，不靠课程名 —— 独立设置的实验课看名字认不出来。

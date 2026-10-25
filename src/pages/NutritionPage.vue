@@ -47,19 +47,19 @@ const quickOpen = ref(false)
          浅井只负责把它们读成「一组快捷入口」，而不是三张互不相干的卡。 -->
     <ul class="card sub quick">
       <li>
-        <QuickTile label="记饮食" icon-bg="color-mix(in srgb, var(--c-intake) 12%, transparent)" icon-color="var(--c-intake)" @click="quickOpen = true">
+        <QuickTile label="记饮食" icon-bg="var(--mod-nutrition-soft)" icon-color="var(--mod-nutrition-strong)" @click="quickOpen = true">
           <Camera :size="20" />
         </QuickTile>
       </li>
       <li>
-        <!-- --warn-soft 与手写 rgba 同值同色相；--cat-study 是待办分类色里的学习紫，
-             图标本色就在 soft 底上，不另起一份 rgba -->
-        <QuickTile label="改目标" icon-bg="var(--warn-soft)" icon-color="var(--warn)" @click="router.push('/nutrition/adjust')">
+        <!-- 改目标属于「方案」域（目标值就是一套计划参数），用方案青绿；
+             不借 --warn 橙 —— 运动模块已占橙，同一屏两个橙会被读成同一件事 -->
+        <QuickTile label="改目标" icon-bg="var(--mod-program-soft)" icon-color="var(--mod-program-strong)" @click="router.push('/nutrition/adjust')">
           <SlidersHorizontal :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="AI 助手" icon-bg="var(--accent-soft)" icon-color="var(--cat-study)" @click="router.push('/ai')">
+        <QuickTile label="AI 助手" icon-bg="var(--mod-ai-soft)" icon-color="var(--mod-ai-strong)" @click="router.push('/ai')">
           <Sparkles :size="20" />
         </QuickTile>
       </li>
@@ -97,11 +97,15 @@ const quickOpen = ref(false)
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--gap-sm);
-  /* 三格是同一个浅井里的三枚磁贴：内距收到 12（二级分组面）、圆角 12。
-     base.css 的 .card.sub 还是上一版手感（20 圆角 / 14 内距）—— 页面上只有这一处
-     用到它，就在这里按施工单的口径收口，不去动共享样式。 */
+  /* 桌面上它是两栏栅格的一项：默认 stretch 会跟着同排的「摄入总览」一起拉高，
+     三枚磁贴下面剩出一大块空灰卡。快捷入口的高度由内容决定。 */
+  align-self: start;
+  /* 三格是同一个浅井里的三枚磁贴：内距 12。
+     外框圆角 = 磁贴圆角（--radius-l）+ 组内距（12）——
+     这样磁贴的弧线与外框平行，而不是「12 的外框里装 16/20 的磁贴」（内圈比外圈还圆）。
+     手机 20+12=32，桌面 16+12=28。 */
   padding: var(--pad-card-tight);
-  border-radius: var(--radius-m-nest);
+  border-radius: calc(var(--radius-l) + var(--pad-card-tight));
 }
 
 /* 分组之间 24（施工单 §1「区块之间」）：「今日状态」这一组（快捷入口 / 摄入总览 /

@@ -32,7 +32,7 @@
 | 源 | 地址 | 清单签名 | 说明 |
 | --- | --- | --- | --- |
 | Rein 在线服务 | `http://47.100.36.179:8787/updates/latest.json` | 有 | 自建，国内直连快；明文 http 但安装包签名仍是硬校验 |
-| GitHub Release | `https://github.com/gozaoo-coder/Rein/releases/latest/download/latest.json` | 有 | 官方出口，海外/备份路径 |
+| GitHub Release | `https://github.com/lumenShen/Rein/releases/latest/download/latest.json` | 有 | 官方出口，海外/备份路径 |
 
 行为细节：
 
@@ -89,7 +89,7 @@ git tag v0.2.1 && git push origin v0.2.1
 curl -X POST http://47.100.36.179:8787/admin/api/mirror \
   -H "Authorization: Bearer $REIN_UPDATE_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"channel":"stable","manifestUrl":"https://github.com/gozaoo-coder/Rein/releases/latest/download/latest.json","signatureUrl":"https://github.com/gozaoo-coder/Rein/releases/latest/download/latest.json.sig"}'
+  -d '{"channel":"stable","manifestUrl":"https://github.com/lumenShen/Rein/releases/latest/download/latest.json","signatureUrl":"https://github.com/lumenShen/Rein/releases/latest/download/latest.json.sig"}'
 ```
 
 镜像来的版本 URL 被改写过，清单签名不再成立 —— 服务端会**不带**清单签名发布它，
@@ -116,7 +116,7 @@ curl -X POST http://47.100.36.179:8787/admin/api/mirror \
     },
     "android-aarch64": { "…": "…" }
   },
-  "x-rein": { "generator": "rein-release", "source": "server", "repo": "gozaoo-coder/Rein" }
+  "x-rein": { "generator": "rein-release", "source": "server", "repo": "lumenShen/Rein" }
 }
 ```
 

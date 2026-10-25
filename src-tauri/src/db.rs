@@ -1684,6 +1684,102 @@ BEGIN
 END;
 "#;
 
+/// 0048 · 动作详解的**覆盖层**（让 AI / 用户能改内置动作的教学文案）。
+///
+/// `config/exerciseGuide.ts` 是内置 81 个动作教学内容的基线（准备 3 条 / 开始 / 结束 /
+/// 注意 2 条 / 每次循环秒数），编译进前端包。AI 需要能改它：同一个深蹲，膝盖有旧伤的
+/// 人该看到的「注意」不是通用那两条。因此基线与改动必须分开存：
+///
+/// 1. **基线不入库**：81 × 5 段文案存进 SQLite 只是把同一份内容放两处，且内置动作的
+///    内容列每次启动都被 `seed_exercises` 覆盖式刷新 —— 改动没有落脚点。
+/// 2. **只存差异**：表里只有「被改过的动作」一行，删行 = 恢复基线，回滚天然成立。
+/// 3. **不挂 exercises 表列**：`seed_exercises` 的 `ON CONFLICT DO UPDATE` 会刷内容列，
+///    `favorite` / `hidden` 能作为列活下来是因为它们被显式排除在覆盖列表外；guide 是
+///    五段文案，塞列里就是给表加 5 列 JSON，还会让「恢复基线」变成「写回默认值」。
+///
+/// 外键指向 `exercises`：自建动作真删时覆盖层跟着走；内置动作只隐藏、不触发级联，
+/// 所以「隐藏再恢复」不会丢用户的改动。
+const MIGRATION_0048: &str = r#"
+CREATE TABLE exercise_guides (
+  exercise_id TEXT PRIMARY KEY REFERENCES exercises(id) ON DELETE CASCADE,
+  setup       TEXT NOT NULL DEFAULT '[]',
+  start_text  TEXT NOT NULL DEFAULT '',
+  end_text    TEXT NOT NULL DEFAULT '',
+  cautions    TEXT NOT NULL DEFAULT '[]',
+  rep_sec     INTEGER NOT NULL DEFAULT 0,
+  updated_by  TEXT NOT NULL DEFAULT 'ai',
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"#;
+
+/// 0049 · 课表时段的身份里补上「哪几周」。
+///
+/// 0021 的唯一键是 `(account, semester, course, weekday, start_unit, start_time)` ——
+/// 它假设「同一门课、同一个星期几、同一个节次」只可能有一条记录。实测桂电教务并非如此：
+/// 一门课在同一个位置会按**周次段**拆成多条（教师 / 教室也跟着段变）。真实样本：
+///
+/// ```text
+/// 健康教育 17311*  周二 6-7 节 14:30  5~7 周 黄观凤 / 8~9 韦雪军 / 10~11 杨雁 / 12 马瑞杰
+/// 大学生心理健康  周五 8-9 节 16:30  3~5 周 信科421308 / 6~12 周 02109Y
+/// ```
+///
+/// 旧键把这几条并成一条：后到的那条覆盖前一条的 `weeks` / `room` / `teachers`，
+/// 于是课表上只剩一个周次段（常常正好不含本周）、教师张冠李戴 —— 用户看到的
+/// 「课表与实际不符」就是这条唯一键造成的。所以身份必须带上周次集合。
+///
+/// SQLite 不能在原地改表级 UNIQUE，只能重建表（`migrate` 为此在迁移窗口里关掉外键，
+/// 否则 `DROP TABLE` 的隐式 DELETE 会撞上 `todos.course_session_id`）。
+/// 顺手补上 `teachers` 列：**同一个周次段换了教师，课表上也该换** —— 教师原先只存在
+/// 课程级（`campus_courses.teachers`），一门课多个周次段就只剩最后一个写入者，
+/// 于是「这周明明是黄观凤，App 显示马瑞杰」。
+///
+/// 老行的 `weeks_key` 直接落成 JSON 原文：它不是规范形，下一次同步就会把整学期的时段
+/// 按新键重写一遍（`delete_stale_sessions` 顺手清掉这些老行），不需要在这里猜。
+///
+/// 同时写下 [`SESSIONS_NEED_RESYNC`] 标记：老库里被并掉的那些周次段**只能靠一次真同步
+/// 补回来**，前端看到标记会替用户跑那一次（见 `pages/SchedulePage.vue`）。
+const MIGRATION_0049: &str = r#"
+CREATE TABLE campus_sessions_v2 (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER NOT NULL REFERENCES campus_accounts(id) ON DELETE CASCADE,
+  semester_id INTEGER NOT NULL REFERENCES campus_semesters(id) ON DELETE CASCADE,
+  course_id   INTEGER NOT NULL REFERENCES campus_courses(id) ON DELETE CASCADE,
+  weekday     INTEGER NOT NULL,
+  start_unit  INTEGER NOT NULL,
+  end_unit    INTEGER NOT NULL,
+  start_time  TEXT NOT NULL,
+  end_time    TEXT NOT NULL,
+  weeks       TEXT NOT NULL,
+  weeks_key   TEXT NOT NULL DEFAULT '',
+  weeks_str   TEXT,
+  room TEXT,
+  building TEXT,
+  campus TEXT,
+  teachers TEXT,
+  UNIQUE(account_id, semester_id, course_id, weekday, start_unit, start_time, weeks_key)
+);
+
+INSERT INTO campus_sessions_v2
+  (id, account_id, semester_id, course_id, weekday, start_unit, end_unit, start_time, end_time,
+   weeks, weeks_key, weeks_str, room, building, campus, teachers)
+SELECT s.id, s.account_id, s.semester_id, s.course_id, s.weekday, s.start_unit, s.end_unit,
+       s.start_time, s.end_time, s.weeks, COALESCE(s.weeks, ''), s.weeks_str, s.room, s.building,
+       s.campus,
+       -- 老库只有课程级教师（同一门课的最后一次写入者），先按它兜底；
+       -- 下一次同步会用「这一节实际上是谁上」覆盖掉
+       (SELECT c.teachers FROM campus_courses c WHERE c.id = s.course_id)
+FROM campus_sessions s;
+
+DROP TABLE campus_sessions;
+ALTER TABLE campus_sessions_v2 RENAME TO campus_sessions;
+
+CREATE INDEX idx_campus_sessions_semester ON campus_sessions(account_id, semester_id);
+CREATE INDEX idx_campus_sessions_course ON campus_sessions(course_id);
+
+INSERT INTO app_meta (key, value) VALUES ('campus.sessions_need_resync', '1')
+  ON CONFLICT(key) DO UPDATE SET value = '1';
+"#;
+
 const MIGRATIONS: &[&str] = &[
     MIGRATION_0001,
     MIGRATION_0002,
@@ -1732,6 +1828,8 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_0045,
     MIGRATION_0046,
     MIGRATION_0047,
+    MIGRATION_0048,
+    MIGRATION_0049,
 ];
 
 /// 通用键值元数据（`app_meta`）读写 —— 全应用**唯一一份**这条 SQL。
@@ -2005,9 +2103,89 @@ mod tests {
 
     /// 0046：智能添加抽屉重复落库留下的历史重复行要被清掉；保留口径是
     /// 「同组优先已完成，否则最早」，且课表派生 / 方案 / 重复实例三类来源行一律不碰。
+    /// 0049 要重建 `campus_sessions`（改表级 UNIQUE），这是本库唯一一次「带外键的重建」：
+    /// `DROP TABLE` 的隐式 DELETE 会撞上 `todos.course_session_id`，所以 `migrate` 在迁移
+    /// 窗口里关外键。这条测试盯三件事：行不丢、派生行的引用仍有效、新的唯一键真的生效。
     #[test]
-    fn migration_0046_dedupes_history_and_keeps_completions() {
+    fn migration_0049_rebuilds_sessions_and_keeps_derived_rows() {
         let conn = Connection::open_in_memory().unwrap();
+        // 跟生产同一条顺序：连接先开外键（`tune`），再跑迁移。
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+        apply_through(&conn, 48); // 停在 0049 之前，模拟升级前的库
+        conn.execute_batch(
+            "INSERT INTO campus_accounts (id, system_kind, base_url, login_name, created_at, updated_at) \
+               VALUES (1, 'guet-supwisdom-eams5', 'https://x', '2600', 't', 't');
+             INSERT INTO campus_semesters (id, account_id, remote_id, name, start_date, end_date, \
+               week_start_on_sunday, total_weeks, is_current) \
+               VALUES (1, 1, 321, '2026-2027 第一学期', '2026-09-14', '2027-01-24', 0, 19, 1);
+             INSERT INTO campus_courses (id, account_id, semester_id, remote_lesson_id, course_name, teachers) \
+               VALUES (1, 1, 1, 322367, '健康教育', '[\"马瑞杰\"]');
+             INSERT INTO campus_sessions (id, account_id, semester_id, course_id, weekday, start_unit, \
+               end_unit, start_time, end_time, weeks, weeks_str) \
+               VALUES (1, 1, 1, 1, 4, 6, 7, '14:30', '16:05', '[5,6]', '5~6');
+             INSERT INTO todos (id, title, date, start_min, duration_min, category, priority, status, \
+               created_at, course_session_id) \
+               VALUES (1, '健康教育', '2026-10-22', 870, 95, 'class', 0, 'done', 't', 1);",
+        )
+        .unwrap();
+
+        migrate_for_test(&conn).unwrap();
+
+        let (weeks, key, teachers): (String, String, Option<String>) = conn
+            .query_row(
+                "SELECT weeks, weeks_key, teachers FROM campus_sessions WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(weeks, "[5,6]", "行必须原样搬过来");
+        assert!(!key.is_empty(), "老行也要有一个 weeks_key，否则新唯一键形同虚设");
+        assert_eq!(
+            teachers.as_deref(),
+            Some("[\"马瑞杰\"]"),
+            "教师先从课程级兜底，等下一次同步再换成时段级"
+        );
+
+        // 派生行引用的还是同一个会话 id —— 重建没有把用户打过卡的记录甩掉
+        let linked: i64 = conn
+            .query_row("SELECT course_session_id FROM todos WHERE id = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(linked, 1);
+
+        // 外键必须被还原（否则后面所有级联删除会静默失效）
+        let fk: i64 = conn
+            .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(fk, 1, "迁移窗口结束后要打开外键");
+
+        // 新唯一键：同一格子、不同周次段可以并存；同周次段重复插入必须被拒
+        conn.execute(
+            "INSERT INTO campus_sessions (account_id, semester_id, course_id, weekday, start_unit, \
+             end_unit, start_time, end_time, weeks, weeks_key) \
+             VALUES (1, 1, 1, 4, 6, 7, '14:30', '16:05', '[7,8]', '7,8')",
+            [],
+        )
+        .expect("不同周次段应能并存");
+        assert!(
+            conn.execute(
+                "INSERT INTO campus_sessions (account_id, semester_id, course_id, weekday, start_unit, \
+                 end_unit, start_time, end_time, weeks, weeks_key) \
+                 VALUES (1, 1, 1, 4, 6, 7, '14:30', '16:05', '[7,8]', '7,8')",
+                [],
+            )
+            .is_err(),
+            "同周次段重复应被唯一键挡住"
+        );
+
+        // 顺手把「需要重同步」的标记留下：被并掉的那些周次只能靠一次真同步补回来
+        let flag = meta_get(&conn, "campus.sessions_need_resync");
+        assert_eq!(flag.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn migration_0046_dedupes_history_and_keeps_completions() {        let conn = Connection::open_in_memory().unwrap();
         // 本测试只验证去重谓词，不关心外键：派生行 / 方案行仅作为「不该被碰」的样本，
         // 不必真去建出校园课次与方案那一整条链。
         conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
@@ -2074,16 +2252,28 @@ fn migrate(conn: &Connection) -> Result<()> {
         [],
         |r| r.get(0),
     )?;
-    for (i, sql) in MIGRATIONS.iter().enumerate() {
-        let version = (i + 1) as i64;
-        if version <= current {
-            continue;
+
+    // 迁移窗口里关掉外键：**改表级约束只能重建表**（0049 就是这么干的），而 SQLite 的
+    // `DROP TABLE` 会先做一次隐式 `DELETE FROM`，`todos.course_session_id` 这种没有级联
+    // 的子行会让它直接报 FOREIGN KEY constraint failed。这是 SQLite 官方推荐的改表姿势。
+    // 位置有讲究：pragma 在事务内是**空操作**，而每条迁移都被包在 BEGIN…COMMIT 里，
+    // 所以必须在循环外、进 BEGIN 之前设；跑完（无论成败）都要还原，否则这个连接后面的
+    // 级联删除会静默失效（`tune` 那条注释里的坑）。
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
+    let outcome = (|| -> Result<()> {
+        for (i, sql) in MIGRATIONS.iter().enumerate() {
+            let version = (i + 1) as i64;
+            if version <= current {
+                continue;
+            }
+            conn.execute_batch(&format!(
+                "BEGIN; {sql}; INSERT INTO schema_migrations(version) VALUES ({version}); COMMIT;"
+            ))?;
         }
-        conn.execute_batch(&format!(
-            "BEGIN; {sql}; INSERT INTO schema_migrations(version) VALUES ({version}); COMMIT;"
-        ))?;
-    }
-    Ok(())
+        Ok(())
+    })();
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    outcome
 }
 
 #[cfg(test)]

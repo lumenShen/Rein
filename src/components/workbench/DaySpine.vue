@@ -124,7 +124,7 @@ const events = computed<SpineEvent[]>(() => {
       label: '番茄 · 专注',
       sub: `${s.focusMin} 分钟`,
       value: null,
-      colorVar: 'var(--cat-work)',
+      colorVar: 'var(--mod-focus-tone)',
       icon: Timer,
     })
   }
@@ -137,7 +137,7 @@ const events = computed<SpineEvent[]>(() => {
       label: pomo.phase === 'focus' ? '专注进行中' : '休息中',
       sub: pomo.displayTime,
       value: null,
-      colorVar: 'var(--cat-work)',
+      colorVar: 'var(--mod-focus-tone)',
       icon: Timer,
       live: true,
     })

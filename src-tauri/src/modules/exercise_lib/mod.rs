@@ -5,8 +5,12 @@
 //! - **自建动作**（`is_custom=1`）可改可删。
 //! - 课程条目以 `exerciseId` 引用本表；重量曲线以 `workout_sets.exercise_id` 聚合。
 //!   名称 → id 的解析与存量数据回填见 `resolve.rs`。
+//! - 动作详解（准备 / 轨迹 / 注意 / 节拍）的基线在 `config/exerciseGuide.ts`，
+//!   改动落 `exercise_guides` 覆盖表（迁移 0048，见 `guide.rs`）—— 与内置动作的内容列
+//!   分开，所以对「内置只读」没有破例：文案被改的是覆盖层，种子的覆盖式刷新不会碰它。
 
 pub mod commands;
+pub mod guide;
 pub mod models;
 pub mod muscles;
 pub mod resolve;

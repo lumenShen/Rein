@@ -22,7 +22,7 @@ import { usePomodoroStore } from '@/stores/pomodoro'
 import { todayStr } from '@/utils/date'
 
 /**
- * 桌面主页 · 便当总览：能量三环磁贴 + 待办 + 番茄/AI + 快捷入口 + 饮食/记账/运动概览。
+ * 桌面主页 · 便当总览：能量与营养磁贴 + 待办 + 番茄/AI + 快捷入口 + 饮食/记账/运动概览。
  *
  * 布局不再是写死的 12 栏命名区域，而是「稳定 id 的独立项 + 一份可持久化的顺序/尺寸」
  * （顺序、尺寸、拖动、落盘、键盘替代路径都在 composables/useBentoLayout）。
@@ -161,7 +161,7 @@ const mealChips = computed(() =>
         <!-- AI 入口 -->
         <section v-else-if="c.id === 'ai'" class="card b-surf b-ai">
           <div class="row" style="gap: var(--sp-10)">
-            <i class="qic" style="background: color-mix(in srgb, var(--cat-study) 14%, transparent); color: var(--cat-study)"><Sparkles :size="19" /></i>
+            <i class="qic" style="background: var(--mod-ai-soft); color: var(--mod-ai-strong)"><Sparkles :size="19" /></i>
             <div class="col">
               <b style="font-size: var(--fs-headline)">AI 助手</b>
               <span class="t-3" style="font-size: var(--fs-caption); font-weight: var(--fw-semibold)">提问 · 拍照记饮食 · 生成周计划</span>
@@ -177,8 +177,8 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-food'"
           class="b-surf"
           label="记饮食"
-          icon-bg="color-mix(in srgb, var(--c-intake) 12%, transparent)"
-          icon-color="var(--c-intake)"
+          icon-bg="var(--mod-nutrition-soft)"
+          icon-color="var(--mod-nutrition-strong)"
           @click="quickOpen = true"
         >
           <Camera :size="20" />
@@ -187,8 +187,8 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-workout'"
           class="b-surf"
           label="记运动"
-          icon-bg="var(--c-exercise-soft)"
-          icon-color="var(--c-exercise-deep)"
+          icon-bg="var(--mod-sports-soft)"
+          icon-color="var(--mod-sports-strong)"
           @click="workoutOpen = true"
         >
           <Dumbbell :size="20" />
@@ -197,8 +197,8 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-focus'"
           class="b-surf"
           label="专注"
-          icon-bg="color-mix(in srgb, var(--cat-work) 12%, transparent)"
-          icon-color="var(--cat-work)"
+          icon-bg="var(--mod-focus-soft)"
+          icon-color="var(--mod-focus-strong)"
           @click="startFocus"
         >
           <Timer :size="20" />
@@ -207,8 +207,8 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-ai'"
           class="b-surf"
           label="问 AI"
-          icon-bg="color-mix(in srgb, var(--cat-study) 14%, transparent)"
-          icon-color="var(--cat-study)"
+          icon-bg="var(--mod-ai-soft)"
+          icon-color="var(--mod-ai-strong)"
           @click="router.push({ name: 'ai' })"
         >
           <Sparkles :size="20" />
@@ -225,14 +225,14 @@ const mealChips = computed(() =>
             @keydown.enter.prevent="router.push({ name: 'ledger' })"
             @keydown.space.prevent="router.push({ name: 'ledger' })"
           >
-            <i class="qic"><Wallet :size="21" /></i>
+            <i class="qic" style="background: var(--mod-ledger-soft); color: var(--mod-ledger-strong)"><Wallet :size="21" /></i>
             <div class="col" style="gap: var(--gap-text); min-width: 0">
               <b>记账</b>
               <!-- 支出与预算各占一行（各自 nowrap）：挤在一行时「预算」会被右栏类目拦腰折断 -->
               <span class="num t-2" style="white-space: nowrap">本月支出 ¥{{ fmtCents(ledger.monthExpenseCents) }}</span>
               <span class="num t-2" style="white-space: nowrap">预算已用 {{ budgetPct }}%</span>
               <div class="mtrack" style="margin-top: var(--gap-sm); max-width: 300px">
-                <i :style="{ width: budgetPct + '%', background: 'var(--accent)' }" />
+                <i :style="{ width: budgetPct + '%', background: 'var(--mod-ledger-tone)' }" />
               </div>
             </div>
             <div class="col" style="margin-left: auto; align-items: flex-end; gap: var(--gap-tight); flex: none">
@@ -260,7 +260,7 @@ const mealChips = computed(() =>
             @keydown.enter.prevent="router.push({ name: 'sports' })"
             @keydown.space.prevent="router.push({ name: 'sports' })"
           >
-            <i class="qic" style="background: var(--c-exercise-soft); color: var(--c-exercise-deep)"><Dumbbell :size="21" /></i>
+            <i class="qic" style="background: var(--mod-sports-soft); color: var(--mod-sports-strong)"><Dumbbell :size="21" /></i>
             <div class="col" style="gap: var(--gap-text); min-width: 0">
               <b class="nowrap">本周运动</b>
               <span class="t-2 nowrap">已练 <span class="num">{{ weekWorkoutCount }}</span> 次 · <span class="num">{{ exercise.weekMinutes }}</span> 分钟</span>
@@ -290,7 +290,7 @@ const mealChips = computed(() =>
             @keydown.enter.prevent="historyOpen = true"
             @keydown.space.prevent="historyOpen = true"
           >
-            <i class="qic"><Utensils :size="21" /></i>
+            <i class="qic" style="background: var(--mod-nutrition-soft); color: var(--mod-nutrition-strong)"><Utensils :size="21" /></i>
             <div class="col" style="gap: var(--sp-6); min-width: 0">
               <b>今日饮食</b>
               <span class="num t-2">
@@ -567,21 +567,40 @@ const mealChips = computed(() =>
   display: none;
 }
 
+/* 宏量井吃掉卡片下半段的剩余高度：hero 与待办同跨两行（≈690 高），
+   只靠内容排版会在中段留一大块白洞。井成为一块纵向结构，
+   三行宏量在井内均匀分布；行本身仍按内容高度，不再被压成 8px。 */
+.t-hero :deep(.well) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .t-hero :deep(.macros) {
   flex: 1 1 auto;
+  min-height: 0;
   margin-top: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--pad-card-tight);
-  border-radius: var(--radius-m-nest);
-  background: var(--surface-inset);
+  /* 浅井由外层的 .well 提供；这里再套一层同色同圆角的井，
+     只会多出一圈 12px 的假内距（审计时被识别为「井里还有一口井」）。
+     行自己吸收高度，内容在行内垂直居中。 */
 }
 
-/* 一行宏量 = 标签 + 数值同一行、条在下方整行跨满：
-   行高随卡片剩余高度伸缩，条也就不必再压成 8px 的细线 */
+/* 一行宏量 = 标签 + 数值同一行、条在下方整行跨满。
+   行高随卡片剩余高度伸缩，但**不能低于内容高度**：
+   `.macros` 是自动高度的 flex 列，旧版 basis 0 + min-height 0 会让每行塌到 8px，
+   三行叠在一起。中段空间由宏量井吸收，行本身只负责不压扁内容。 */
+/* 三行宏量在拉高的井里各占一段：一道极细的分隔线把「空」变成节奏，
+   否则三枚读数会像漂在一块灰面上。只作用于 hero，营养页的短井不加线。 */
+.t-hero :deep(.mc + .mc) {
+  border-top: 0.5px solid var(--line);
+}
+
 .t-hero :deep(.mc) {
   flex: 1 1 0;
-  min-height: 0;
+  /* 行可以长高，但不能低于内容高度（min-content）——
+     旧版写 min-height:0，行被压成 8px，三行叠在一起。 */
+  min-height: min-content;
   display: grid;
   grid-template-columns: 1fr auto;
   align-content: center;

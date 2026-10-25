@@ -11,7 +11,7 @@
 //!
 //! ## 两个域都检测
 //!
-//! 本科教务挂着两个域名，但**它们不是同一套系统**（见 super::provider 的说明）：
+//! 本科教务挂着两个域名，但**它们不是同一套系统**（见 adapters::provider 的说明）：
 //! bkjwtest 是本文打通的树维 EAMS5，bkjw 是另一套 ASP.NET + ExtJS 桌面 + CAS 登录。
 //! 所以「两个域都检测」不是冗余重试，而是**分别探明各是什么**：
 //! 哪个域真的提供开课查询、哪个域连路径都不存在，都要说清楚。
@@ -23,7 +23,7 @@ use crate::error::{ReinError, Result};
 
 use super::http::{CookieJar, Session};
 use super::models::{LessonSearchHit, LessonSearchPage, LessonSearchQuery, SchoolDomainProbe};
-use super::provider::{self, SchoolSystemSpec};
+use super::adapters::provider::{self, SchoolSystemSpec};
 
 /// 单页条数。教务自己也是 20（见 queryPage__=1,20），保持同量级最不容易触发风控。
 pub const DEFAULT_PAGE_SIZE: i64 = 20;
@@ -56,7 +56,7 @@ impl<'a> LessonSearchClient<'a> {
     /// 树维那一套接口表。开课查询**只有树维这条系统有路** ——
     /// 正方（如广西科技大学）的接口表里没有它，这里就明确报错，
     /// 而不是拿空路径打出去换回一个登录页 HTML。
-    fn endpoints(&self) -> Result<super::provider::Eams5Endpoints> {
+    fn endpoints(&self) -> Result<provider::Eams5Endpoints> {
         self.spec.endpoints.eams5.ok_or_else(|| {
             ReinError::Message(format!(
                 "{} 的正方教务系统没有「全校开课查询」接口，本应用暂不支持",
@@ -72,12 +72,12 @@ impl<'a> LessonSearchClient<'a> {
     }
 
     /// 开课查询入口页。**只取学期列表**：页面里的 var semesters = JSON.parse('…')
-    /// 与课表页是同一份形状，所以复用 super::guet 的解析。
+    /// 与课表页是同一份形状，所以复用 adapters::supwisdom 的解析。
     pub fn semesters(&mut self) -> Result<Vec<super::models::RemoteSemester>> {
         let path = self.endpoints()?.lesson_search_page_for(self.biz_type_id()?);
         let resp = self.session.get(&path)?;
         guard(&resp, "打开全校开课查询")?;
-        super::guet::parse_semesters(&resp.text())
+        super::adapters::supwisdom::parse_semesters(&resp.text())
     }
 
     /// 打开查询页面（带学生标识），确认这条路真的通。

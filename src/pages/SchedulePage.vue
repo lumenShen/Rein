@@ -131,6 +131,8 @@ const detail = ref<{
   lessonId: number | null
   weekday: number
   startUnit: number
+  /** 这一格的教学周：同一门课按周次段换教师时，抽屉要跟着格子走 */
+  week: number
   name: string
   local: CourseDetail
 } | null>(null)
@@ -140,6 +142,7 @@ function openDetail(e: ScheduleEntry): void {
     lessonId: store.courses.find((c) => c.id === e.session.courseId)?.remoteLessonId ?? null,
     weekday: e.session.weekday,
     startUnit: e.session.startUnit,
+    week: e.week,
     name: e.session.courseName,
     local: store.localCourseDetail(e),
   }
@@ -165,9 +168,30 @@ async function onSync(): Promise<void> {
   }
 }
 
+/**
+ * 老库自愈（v0.7.4）。
+ *
+ * 修之前「同一门课 + 同一个星期几 + 同一个节次」只存得下一条：桂电会把一门课按**周次段**
+ * 拆成多条（教师、教室跟着段走），后写的那条把先写的周次/教师覆盖掉 —— 课表上就少课、
+ * 教师张冠李戴。被并掉的那些周次**只能从教务重新拉一遍**才补得回来，所以后端在迁移时
+ * 留了个标记（`needsResync`），这里替用户跑那一次；同步落库后标记自动清掉，再来就只有一遍。
+ *
+ * 三条自律：
+ * 1. **只做一次**：标记是后端的，跑成功就没了，不存在反复联网；
+ * 2. **不挡渲染**：现有课表先画出来，同步在后台跑，结束后 `onSync` 自己重读；
+ * 3. **失败不弹框**：没网 / 会话过期且没存密码时标记留着，下次进页面再试，
+ *    用户不该为一次自愈看一眼对话框。
+ */
+async function healLegacyData(): Promise<void> {
+  if (!store.view?.needsResync || !store.hasAccount || store.syncing) return
+  toast.toast('课表按教务的新规则重新同步中…')
+  await onSync()
+}
+
 onMounted(async () => {
   await store.init()
   await reload()
+  await healLegacyData()
 })
 
 watch([view, anchor], reload)
@@ -273,10 +297,14 @@ watch([view, anchor], reload)
            放在这里而不是只留在「课表配置」里：这两个是**学期尺度**的东西
            （培养方案看四年、抢课看这一两周），用户想起它们的时候多半正看着课表，
            而不是在配置页里找开关。
-           「选课 · 抢课」是课表的**子模块**且默认关闭，所以入口跟着开关走。 -->
-      <nav class="links">
+           「选课 · 抢课」是课表的**子模块**且默认关闭，所以入口跟着开关走；
+           两个入口都按教务系统的能力位显隐（正方那套没有这两个接口）。 -->
+      <nav
+        v-if="store.capabilities.program || (features.isEnabled('campus-grab') && store.capabilities.courseSelect)"
+        class="links"
+      >
         <button
-          v-if="features.isEnabled('campus-grab')"
+          v-if="features.isEnabled('campus-grab') && store.capabilities.courseSelect"
           class="link-row"
           @click="router.push({ name: 'campus-course-select' })"
         >
@@ -287,7 +315,7 @@ watch([view, anchor], reload)
           </span>
           <ChevronRight :size="16" class="t-3" />
         </button>
-        <button class="link-row" @click="router.push({ name: 'campus-program' })">
+        <button v-if="store.capabilities.program" class="link-row" @click="router.push({ name: 'campus-program' })">
           <i class="pic prog"><GraduationCap :size="17" /></i>
           <span class="col flex-1">
             <b>培养方案与学分</b>
@@ -306,6 +334,7 @@ watch([view, anchor], reload)
       :lesson-id="detail?.lessonId ?? null"
       :weekday="detail?.weekday ?? null"
       :start-unit="detail?.startUnit ?? null"
+      :week="detail?.week ?? null"
       :fallback-course-name="detail?.name ?? ''"
       :local-detail="detail?.local ?? null"
       @close="detail = null"

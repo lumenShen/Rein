@@ -150,11 +150,16 @@ const tableTitle = computed(() => {
   return '时差影响与档位耐受度'
 })
 
+/**
+ * 曲线上四条质量带的底色：这是「好 / 一般 / 差」的判断，
+ * 用与练够分同一套语义色阶（绿 → 琥珀 → 红），**不用模块橙**。
+ * 否则 good 与 warn 会落在相邻的橙区，四条带里有两片分不开。
+ */
 const bandFill = (tone: CurveBand['tone']): string => {
-  if (tone === 'best') return 'var(--ok)'
-  if (tone === 'good') return 'var(--c-exercise)'
-  if (tone === 'warn') return 'var(--warn)'
-  return 'var(--danger)'
+  if (tone === 'best') return 'var(--heat-full)'
+  if (tone === 'good') return 'var(--heat-enough)'
+  if (tone === 'warn') return 'var(--heat-near)'
+  return 'var(--heat-low)'
 }
 
 const bandX = (b: CurveBand): number => xOf(b.from)

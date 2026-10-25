@@ -361,7 +361,7 @@ pub struct TimetableResponse {
     pub student_table_vms: Vec<StudentTableVm>,
 }
 
-/// 课表页面上刮下来的变量（`GuetAdapter::fetch_page_vars` 的产物）。
+/// 课表页面上刮下来的变量（`SupwisdomAdapter::fetch_page_vars` 的产物）。
 #[derive(Debug, Clone, Default)]
 pub struct PageVars {
     pub semesters: Vec<RemoteSemester>,
@@ -604,6 +604,9 @@ pub struct CampusCourse {
 }
 
 /// 上课时段 —— 课表渲染的基本单位（`campus_sessions` + 所属课程的展平）。
+///
+/// **一个时段 = 课 + 星期几 + 节次 + 哪几周**。周次是身份的一部分：同一门课会在同一个
+/// 星期几、同一个节次上按周次段拆成多条，教师与教室跟着段走（见迁移 0049）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CampusSession {
@@ -623,6 +626,8 @@ pub struct CampusSession {
     // 展平的课程字段（避免前端二次 join）
     pub course_name: String,
     pub course_code: Option<String>,
+    /// **这一节**由谁上。按周轮换教师的课（如健康教育）每位教师只在自己那几周出现，
+    /// 所以它优先于课程级那份并集。
     pub teachers: Vec<String>,
     pub credits: Option<f64>,
     pub course_type: Option<String>,
@@ -687,6 +692,9 @@ pub struct ScheduleView {
     pub time_slots: Vec<TimeSlot>,
     /// 该学期的全部课程（用于「课程清单」与配置页统计）
     pub courses: Vec<CampusCourse>,
+    /// 库里的时段是**旧规则**写下的（迁移 0049 之前，同一门课同一时段的多个周次段被并掉了），
+    /// 需要一次真同步才能补回来。页面看到它就跑一次同步 —— 用户不必知道发生了什么。
+    pub needs_resync: bool,
 }
 
 // ─────────────────────────── 选课（course-selection-api） ───────────────────────────
@@ -1462,7 +1470,7 @@ pub struct CourseSelectStatus {
     /// 当前账号连的是**正式**教务（bkjw）而不是测试域（bkjwtest）。
     ///
     /// 界面据此说一句实话：测试域的风控比正式域松，压出来的速率不能当作正式域的结论
-    /// （见 `provider::is_production_base`）。
+    /// （见 `adapters::provider::is_production_base`）。
     #[serde(default)]
     pub production: bool,
 }
@@ -1781,7 +1789,7 @@ pub struct LessonSearchQuery {
 /// 开课名单里的一行。
 ///
 /// 全部字段带 default：这套接口在选课批次未开时也会返回行，但**字段随教务版本漂移过**
-/// （实测 2026-09 的列名见 provider::LESSON_SEARCH_ASSEMBLE_FIELDS）。
+/// （实测 2026-09 的列名见 adapters::provider::LESSON_SEARCH_ASSEMBLE_FIELDS）。
 /// 宁可缺字段，也不能让整个列表解析失败 —— 一个解析失败会把
 /// 「教务改了一个列名」升级成「这个功能完全不能用」。
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1893,7 +1901,7 @@ pub struct SchoolDomainProbe {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LessonSearchOutcome {
-    /// 两个候选域名的探测结果（顺序即 provider::GUET_DOMAINS）
+    /// 两个候选域名的探测结果（顺序即 adapters::provider::GUET_DOMAINS）
     #[serde(default)]
     pub domains: Vec<SchoolDomainProbe>,
     /// 真正用来查询的域名（None = 两个域都用不了）

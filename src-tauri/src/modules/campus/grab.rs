@@ -5233,7 +5233,8 @@ mod tests {
     #[test]
     #[ignore = "打真实教务系统，需要 REIN_GUET_USER / REIN_GUET_PASS"]
     fn live_clock_skew_estimate() {
-        use crate::modules::campus::guet::GuetAdapter;
+        use crate::modules::campus::adapters::base::CampusAdapter;
+        use crate::modules::campus::adapters::supwisdom::SupwisdomAdapter;
         use crate::modules::campus::http::{CookieJar, Session};
 
         let (Ok(user), Ok(pass)) = (
@@ -5243,11 +5244,11 @@ mod tests {
             println!("缺少 REIN_GUET_USER / REIN_GUET_PASS，跳过");
             return;
         };
-        let spec = crate::modules::campus::provider::spec("guet-supwisdom-eams5").unwrap();
+        let spec = crate::modules::campus::adapters::provider::spec("guet-supwisdom-eams5").unwrap();
         let host = spec.default_base_url;
         let mut session = Session::new(host, CookieJar::default());
         {
-            let mut adapter = GuetAdapter::new(spec, &mut session);
+            let mut adapter = SupwisdomAdapter::new(spec, &mut session);
             let outcome = adapter.login(&user, &pass, "").expect("登录请求要能发出");
             assert!(outcome.ok, "EAMS 登录被拒：{:?}", outcome.message);
         }
@@ -5296,7 +5297,8 @@ mod tests {
     #[test]
     #[ignore = "打真实教务系统，需要 REIN_GUET_USER / REIN_GUET_PASS"]
     fn live_grab_pipeline_resolves_real_lessons() {
-        use crate::modules::campus::guet::GuetAdapter;
+        use crate::modules::campus::adapters::base::CampusAdapter;
+        use crate::modules::campus::adapters::supwisdom::SupwisdomAdapter;
         use crate::modules::campus::http::{CookieJar, Session};
 
         let (Ok(user), Ok(pass)) = (
@@ -5306,11 +5308,11 @@ mod tests {
             println!("缺少 REIN_GUET_USER / REIN_GUET_PASS，跳过");
             return;
         };
-        let spec = crate::modules::campus::provider::spec("guet-supwisdom-eams5").unwrap();
+        let spec = crate::modules::campus::adapters::provider::spec("guet-supwisdom-eams5").unwrap();
         let host = spec.default_base_url;
         let mut session = Session::new(host, CookieJar::default());
         {
-            let mut adapter = GuetAdapter::new(spec, &mut session);
+            let mut adapter = SupwisdomAdapter::new(spec, &mut session);
             let outcome = adapter.login(&user, &pass, "").expect("登录请求要能发出");
             assert!(outcome.ok, "EAMS 登录被拒：{:?}", outcome.message);
         }
@@ -5634,7 +5636,8 @@ mod tests {
     #[ignore = "会真的选上一门课再退掉，只在明确要求时跑"]
     fn live_grab_submit_then_drop() {
         use crate::modules::campus::commands::SelectContext;
-        use crate::modules::campus::guet::GuetAdapter;
+        use crate::modules::campus::adapters::base::CampusAdapter;
+        use crate::modules::campus::adapters::supwisdom::SupwisdomAdapter;
         use crate::modules::campus::http::{CookieJar, Session};
 
         let (Ok(user), Ok(pass)) = (
@@ -5644,11 +5647,11 @@ mod tests {
             println!("缺少 REIN_GUET_USER / REIN_GUET_PASS，跳过");
             return;
         };
-        let spec = crate::modules::campus::provider::spec("guet-supwisdom-eams5").unwrap();
+        let spec = crate::modules::campus::adapters::provider::spec("guet-supwisdom-eams5").unwrap();
         let host = spec.default_base_url;
         let mut session = Session::new(host, CookieJar::default());
         {
-            let mut adapter = GuetAdapter::new(spec, &mut session);
+            let mut adapter = SupwisdomAdapter::new(spec, &mut session);
             let outcome = adapter.login(&user, &pass, "").expect("登录请求要能发出");
             assert!(outcome.ok, "EAMS 登录被拒：{:?}", outcome.message);
         }

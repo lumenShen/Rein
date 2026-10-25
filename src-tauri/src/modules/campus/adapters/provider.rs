@@ -243,6 +243,40 @@ pub struct TermSpec {
     pub week_start_on_sunday: bool,
 }
 
+/// 该校教务系统**实际可用**的功能位。
+///
+/// 声明成数据而不是让前端嗅探登录策略：新厂商接进来时，前端按位显隐入口，
+/// 不用认识「哪家厂商缺什么」。与 `base::CampusAdapter` 的可选能力
+/// （不实现即默认「不支持」）互为印证：这里声明有的，适配器必须实现。
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdapterCapabilities {
+    /// 课程详情（教学班档案：考试类别 / 学时构成 / 容量…）
+    pub course_detail: bool,
+    /// 培养方案与学分完成度
+    pub program: bool,
+    /// 全校开课查询（与选课批次无关的开课名单）
+    pub lesson_search: bool,
+    /// 选课与抢课
+    pub course_select: bool,
+}
+
+/// 树维 EAMS5 全家桶：四个可选能力全部打通。
+const SUPWISDOM_CAPS: AdapterCapabilities = AdapterCapabilities {
+    course_detail: true,
+    program: true,
+    lesson_search: true,
+    course_select: true,
+};
+
+/// 正方 zftal 学生端（2026-09 实测）：课表主线之外没有对应接口。
+const ZFSOFT_CAPS: AdapterCapabilities = AdapterCapabilities {
+    course_detail: false,
+    program: false,
+    lesson_search: false,
+    course_select: false,
+};
+
 /// 一所学校系统的完整声明。
 #[derive(Debug, Clone, Copy)]
 pub struct SchoolSystemSpec {
@@ -261,6 +295,7 @@ pub struct SchoolSystemSpec {
     pub login: LoginStrategy,
     pub endpoints: EndpointSpec,
     pub term: TermSpec,
+    pub capabilities: AdapterCapabilities,
 }
 
 /// 前端选择器用的投影（`campus_systems` 命令的返回项）。
@@ -279,6 +314,8 @@ pub struct SchoolSystemInfo {
     pub biz_type_id: Option<i64>,
     /// 登录过程中可能出现图形验证码，需要 UI 预留验证码输入位
     pub may_require_captcha: bool,
+    /// 该系统实际可用的功能位，前端据此显隐入口（不用认识厂商）
+    pub capabilities: AdapterCapabilities,
 }
 
 /// 桂林电子科技大学 · 本科生教学信息平台学生端。
@@ -334,6 +371,7 @@ macro_rules! guet_spec {
                 biz_type_id: Some(2),
                 week_start_on_sunday: false,
             },
+            capabilities: SUPWISDOM_CAPS,
         }
     };
 }
@@ -387,6 +425,7 @@ const GXUST: SchoolSystemSpec = SchoolSystemSpec {
         // 实测 2026-09-07 ~ 2026-09-13 是第 1 周 —— 周一起算
         week_start_on_sunday: false,
     },
+    capabilities: ZFSOFT_CAPS,
 };
 
 const REGISTRY: &[SchoolSystemSpec] = &[GUET, GXUST];
@@ -441,6 +480,7 @@ pub fn list_info() -> Vec<SchoolSystemInfo> {
             login_strategy: s.login.id(),
             biz_type_id: s.term.biz_type_id,
             may_require_captcha: true,
+            capabilities: s.capabilities,
         })
         .collect()
 }

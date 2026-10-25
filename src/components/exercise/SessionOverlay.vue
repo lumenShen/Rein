@@ -2165,9 +2165,11 @@ function trapFocus(e: KeyboardEvent): void {
      整列最强的反色、信息已足；无限循环还会与形变的 rAF 抢帧。 */
 }
 
+/* 完成 = 语义绿，不跟运动识别橙走：同一屏的 · 汇总条完成格
+   （SessionSummaryPane 的 .seg.done）也是绿，两处对「做完了」用同一个颜色。
+   「✓ 60 kg × 10」是登记值：数值中性色，色相只留在 soft 底色块上。 */
 .wstep.done {
-  background: var(--c-exercise-soft);
-  /* 「✓ 60 kg × 10」是登记值：数值中性色，色相留在 soft 底的色块上（色彩配额，STANDARDS §4） */
+  background: color-mix(in srgb, var(--heat-enough) 14%, transparent);
   color: var(--text-1);
 }
 

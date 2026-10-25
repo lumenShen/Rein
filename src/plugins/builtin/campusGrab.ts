@@ -21,7 +21,7 @@ export const campusGrabPlugin = definePlugin({
   name: '抢课',
   desc: '自动选课 · 窗口监听 · 任务队列',
   icon: Zap,
-  accent: '--cat-class',
+  accent: '--mod-campus',
   toggleable: true,
   defaultEnabled: false,
   parent: 'campus',

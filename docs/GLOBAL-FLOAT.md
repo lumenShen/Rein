@@ -25,7 +25,7 @@
 | 平台 | 实现 | 不可用时 |
 | --- | --- | --- |
 | Windows 桌面 | 第二种 Tauri 窗口（透明 / 无边框 / 置顶 / 不进任务栏 / 不可缩放），内容 = 同一套浮条材质与排版 + 自绘标题栏 | 建窗失败 → `supported: false`，静默回退到程序内浮条（**现有实现一字不改**） |
-| Android | `SYSTEM_ALERT_WINDOW`（「在其他应用上显示」）权限 + 前台服务 + `WindowManager` 原生浮层，样式对齐浮条（圆角 / 半透明底 / 状态点 / 同文案同按钮） | 未授权 / 服务起不来 / API < 23 → `permitted` 或 `supported` 为 false，**仅程序内浮窗**（现有行为），设置页如实说明 |
+| Android | `SYSTEM_ALERT_WINDOW`（「在其他应用上显示」）权限 + 前台服务 + `WindowManager` 原生浮层，样式对齐浮条（圆角 / 半透明底 / 状态点 / 同文案同按钮） | 未授权 / 服务起不来 / API < 23 → `permitted` 或 `supported` 为 false，**仅程序内浮窗**（现有行为），「设置 › 全局浮窗」页如实说明 |
 | 浏览器（`npm run dev`） | 无系统浮窗能力：`supported: false`，全部命令走 mock 返回降级态 | 程序内浮条照旧（现有 e2e 不因此变化） |
 
 **降级铁律**：全局浮窗是**叠加能力**。任何一步失败都不得影响程序内浮条、计时、落库。
@@ -102,7 +102,7 @@ src/components/float/      # 与程序内浮条共用的内容组件与快照构
   snapshot.ts              #   buildFocusSnapshot(pomo) / buildWorkoutSnapshot(rt) / endSheet 文案
 src/system/globalFloat.ts  # 主窗口侧运行时：状态机（显示时机 / 形态 / 关闭抑制）、快照推送、动作执行
 src/services/floatService.ts # IPC 封装（§5.1 命令表）
-src/components/settings/GlobalFloatSection.vue # 设置卡片（开关 / 授权状态 / 说明）
+src/pages/GlobalFloatPage.vue        # 三级设置页（开关 / 授权状态 / 权限开关教程 / 出现与收起）
 src/components/layout/AppTitleBar.vue          # 主窗口自绘标题栏
 src/components/layout/FloatTitleBar.vue        # 浮窗自绘标题栏（紧凑版，复用同一套视觉）
 src/components/layout/WindowResizeHandles.vue  # 无边框窗口的八向缩放热区
@@ -255,7 +255,7 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 ## 8. 扩展路径（不在本轮）
 
 再挂第三个会话（录音 / 语音转写）时：加一条 `kind`、一个内容组件、一个快照构造器；
-显示时机、窗口形态、降级、设置卡片都不用动。
+显示时机、窗口形态、降级、设置页都不用动。
 
 ## 9. 验收
 
@@ -263,7 +263,7 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 2. 桌面：主窗口无系统标题栏；自绘标题栏可拖 / 双击最大化 / 三颗控制钮可用 / 八向可缩放；浅色暗色都正常。
 3. 桌面：专注或训练进行中，主窗口失焦 → 浮窗出现在右下角、置顶、无系统边框、内容与浮条一致；
    主窗口回焦 → 浮窗消失；点击浮窗暂停 / 继续 / 结束（内联确认）/ 打开 / 沉浸都生效。
-4. Android：未授权时设置页如实提示且只有程序内浮条；授权后离开应用出现原生浮层，
+4. Android：未授权时「设置 › 全局浮窗」页如实提示且只有程序内浮条；授权后离开应用出现原生浮层，
    按钮可暂停 / 继续 / 结束；关掉应用内开关 / 会话结束 → 浮层消失。
 5. `npm run contract` / `lint` / `typecheck` / `build` / `cargo clippy -- -D warnings` 全绿。
 6. 浅色 + 暗色截图各一张（STANDARDS §7）。
@@ -271,7 +271,7 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 ## 10. 验证工装
 
 - `scripts/e2e-global-float.mjs`：
-  - mock（浏览器）：设置卡片在场、开关持久化、`supported:false` 降级、无 console 错误、标题栏不出现。
+  - mock（浏览器）：设置入口 → 三级页开关与授权说明在场、开关持久化、`supported:false` 降级、无 console 错误、标题栏不出现。
   - 真机（Tauri + WebView2 远程调试）：标题栏 DOM 与窗口 ex-style（无 `WS_CAPTION`、有 `WS_EX_TOPMOST`）、
     专注开始后失焦 → `float` 窗口出现、DOM 断言（标题栏 / 色点 / 相位 / 读数 / 按钮）、动作回灌、
     回焦隐藏、截图。

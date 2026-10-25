@@ -63,10 +63,10 @@ function onModeChange(value: string): void {
 
 /* ---------- 环内读数 ---------- */
 
-/** 环色：专注相位与正计时都走专注模块自己的 --cat-work；只有「倒计时的休息相位」
+/** 环色：专注相位与正计时都走专注模块自己的 --mod-focus-tone；只有「倒计时的休息相位」
  *  才退回中性的 --cat-general（休息不属于专注，硬塞一支有域语义的彩是错配）。 */
 const ringColorVar = computed(() =>
-  pomo.phase === 'break' && pomo.settings.mode === 'down' ? '--cat-general' : '--cat-work',
+  pomo.phase === 'break' && pomo.settings.mode === 'down' ? '--cat-general' : '--mod-focus-tone',
 )
 
 /**
@@ -550,7 +550,7 @@ function adoptSuggest(): void {
 }
 
 .cdot.live {
-  background: var(--cat-work);
+  background: var(--mod-focus-tone);
   animation: rein-breathe var(--dur-pulse) infinite;
 }
 
@@ -576,7 +576,7 @@ function adoptSuggest(): void {
 .colon {
   /* 分隔符两侧各 2：够把两段数字分开，又不至于让读数散成三段 */
   padding: 0 var(--gap-text);
-  color: var(--cat-work);
+  color: var(--mod-focus-tone);
 }
 
 /* 环内关联待办：做成一颗矮胶囊 —— 环心横向只有 176px 可用，撑满会把读数挤变形 */
@@ -742,7 +742,7 @@ function adoptSuggest(): void {
 }
 
 .sv.work {
-  color: var(--cat-work);
+  color: var(--mod-focus-strong);
 }
 
 .sv.rest {
@@ -773,12 +773,12 @@ function adoptSuggest(): void {
   min-width: 0;
 }
 
-/* 番茄图形：实底走专注域色相（--cat-work），与环、冒号同源 */
+/* 番茄图形：实底走专注域色相（--mod-focus-tone），与环、冒号同源 */
 .tfig {
   width: 20px;
   height: 20px;
   flex: none;
-  color: var(--cat-work);
+  color: var(--mod-focus-tone);
 }
 
 .more {
@@ -827,9 +827,9 @@ function adoptSuggest(): void {
   border: 0.5px solid var(--line-strong);
 }
 
-/* 点亮色随专注 accent（--cat-work），与环、状态点同源 */
+/* 点亮色随专注 accent（--mod-focus-tone），与环、状态点同源 */
 .rdot.on {
-  background: var(--cat-work);
+  background: var(--mod-focus-tone);
   border-color: transparent;
 }
 

@@ -509,22 +509,30 @@ onMounted(async () => {
       </p>
     </section>
 
-    <!-- ④ 培养方案与选课 -->
-    <section v-if="store.account" class="card">
+    <!-- ④ 培养方案与选课（入口按教务系统的能力位显隐，两样都没有的整套隐藏） -->
+    <section
+      v-if="store.account && (store.capabilities.program || store.capabilities.courseSelect)"
+      class="card"
+    >
       <div class="sec-head">
         <BookOpen :size="17" />
         <h2>培养方案与选课</h2>
       </div>
-      <button class="link-row" @click="router.push({ name: 'campus-program' })">
+      <button
+        v-if="store.capabilities.program"
+        class="link-row"
+        @click="router.push({ name: 'campus-program' })"
+      >
         <span>
           查看培养方案与学分完成度
           <em v-if="store.account.totalCredits">已修 {{ store.account.totalCredits }} 学分</em>
         </span>
         <ChevronRight :size="18" />
       </button>
-      <!-- 选课/抢课是课表的子模块（默认关闭）：入口跟着开关走，不再只是一个「开着的页面」 -->
+      <!-- 选课/抢课是课表的子模块（默认关闭）：入口跟着功能开关走；
+           开着但仍不显示，说明这套教务系统没有选课接口（能力位说了算） -->
       <button
-        v-if="features.isEnabled('campus-grab')"
+        v-if="features.isEnabled('campus-grab') && store.capabilities.courseSelect"
         class="link-row"
         @click="router.push({ name: 'campus-course-select' })"
       >
@@ -534,6 +542,9 @@ onMounted(async () => {
         </span>
         <ChevronRight :size="18" />
       </button>
+      <p v-else-if="features.isEnabled('campus-grab')" class="tip">
+        你这所学校的教务系统暂不支持选课直连。
+      </p>
       <p v-else class="tip">
         「选课 · 抢课」是课表的子模块，默认关闭。需要时到「设置 › 打开或关闭功能」里打开。
       </p>

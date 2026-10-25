@@ -1952,7 +1952,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 }
 
 /* 开始跑步：全屏那颗最大的离散控件 —— 走玻璃材质（模板上的 .glass-surface）。
-   3px 绿描边收成 1px 透明边框（受光边由背景渐变画出，硬描边会盖掉它），
+   3px 描边收成 1px 透明边框（受光边由背景渐变画出，硬描边会盖掉它），
    悬停仍翻成实底 —— 那是"确认要开始了"，不该被半透明削弱。
    Play 图标 + 「开始跑步」是图标与标签：文字走 --text-1（色彩配额，STANDARDS §4）。
    原为写死的 #3d7a00 绿（另有一条暗色档覆写翻成 --c-exercise）—— 两档都是
@@ -1980,7 +1980,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 @media (hover: hover) {
   .gobtn:hover {
     background: var(--c-exercise);
-    color: #1a2b00;
+    color: var(--hero-bg);
   }
 }
 
@@ -2496,10 +2496,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 .spup {
   font-size: var(--fs-micro);
   /* 用 --ok-strong 而不是 --c-exercise-deep：
-     后者的注释写着「亮底上的文字绿」，但**暗色档把它覆写成亮绿 #a4f04b**，
-     于是它在亮色档压 --surface-2 只有 2.67:1、暗色档压 --surface-2 只有 1.24:1
-     —— 两边都不够（实测）。--ok-strong 是真正为「底上的绿字」留的一档
-     （亮 #248a3d / 暗 #30d158），三级门槛 3:1 两边都过。
+     后者是模块色的深档（运动橙），用来当「爬升」的文字色会与运动主色撞在
+     同一屏里；--ok-strong 才是为「底上的绿字」留的一档，亮暗两档都过 3:1。
      上箭头「↑」本身已经说明了「爬升」，颜色不承担语义。 */
   color: var(--ok-strong);
 }
@@ -2521,8 +2519,8 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    绿字压绿底在任何组合下都到不了 4.5:1（实测最好 3.7:1），
    所以「哪公里最快」由底色说，不让文字去承担。 */
 .splitcell.fast {
-  background: color-mix(in srgb, var(--c-exercise) 24%, var(--surface));
-  box-shadow: inset 2px 0 0 var(--c-exercise-deep);
+  background: color-mix(in srgb, var(--pace-fast) 18%, var(--surface));
+  box-shadow: inset 2px 0 0 var(--pace-fast);
 }
 
 .splitcell.slow {

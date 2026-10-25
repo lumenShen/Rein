@@ -503,8 +503,12 @@ const aerobicOnlyHint = computed(() => {
   background: var(--c-exercise-deep);
 }
 
+/* 体感是第三条**数据系列**，必须与频率（青）、强度（运动橙）拉开；
+   不能写 --accent-strong —— 它在运动页会被 data-tone 改成运动橙，
+   与 .dim-intensity 变成同一个颜色，三段的构成条就只剩两段。
+   数据系列一律用冻结的品牌蓝（--accent-base），不跟页面色调。 */
 .dim-feeling {
-  background: var(--accent-strong);
+  background: var(--accent-base);
 }
 
 /* ---------- 节点链：与重量建议抽屉（WeightAdviceSheet）同一套视觉语言 ----------
@@ -555,10 +559,11 @@ const aerobicOnlyHint = computed(() => {
   color: var(--text-2);
 }
 
-/* 终点节点：合计是整条链的结论，绿底白字（与重量建议抽屉的「今天建议」同款） */
+/* 终点节点：合计是整条链的结论，运动橙实底 + 反色字（与重量建议抽屉的「今天建议」同款）。
+   前景走 --on-tone（亮色白 / 暗色深墨），不依赖当前页是否带 data-tone。 */
 .cnode.final .ndot {
   background: var(--c-exercise-deep);
-  color: var(--on-accent);
+  color: var(--on-tone);
 }
 
 /* 标题前的小色点：把节点和构成条的段色对上号（点本身回归编号，不再承担配色） */
@@ -762,25 +767,28 @@ const aerobicOnlyHint = computed(() => {
   color: var(--text-1);
 }
 
-/* ---------- 档位实色（低 → 高；0 = 未练）。与 MuscleMap 的图例同源，不带 alpha */
+/* ---------- 档位实色（低 → 高；0 = 未练）。与 MuscleMap 的图例同源，不带 alpha。
+   这里是「练够与否」的语义色阶，不是运动识别橙（见 tokens.css --heat-*）。
+   旧版 lv1/lv2 直接用 --danger / --warn：warn 压白底只有 2.2:1，且与运动橙同相；
+   现在统一走按 3:1 挑过的 heat 档。 */
 .lv0 {
-  background: var(--text-3);
+  background: var(--heat-none);
 }
 
 .lv1 {
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .lv2 {
-  background: var(--warn);
+  background: var(--heat-near);
 }
 
 .lv3 {
-  background: var(--heat-mid);
+  background: var(--heat-enough);
 }
 
 .lv4 {
-  background: var(--c-exercise);
+  background: var(--heat-full);
 }
 
 /* ---------- 5. 计算体系 ---------- */

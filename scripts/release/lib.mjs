@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 export const REPO_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 export const AUTHORS = 'gozaoo <gozaoo@outlook.com>'
-export const GITHUB_REPO = process.env.REIN_GITHUB_REPO ?? 'gozaoo-coder/Rein'
+export const GITHUB_REPO = process.env.REIN_GITHUB_REPO ?? 'lumenShen/Rein'
 
 /** 各平台的清单键名（与 tauri-plugin-updater 的 target 命名一致）。 */
 export const TARGETS = {

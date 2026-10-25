@@ -18,7 +18,7 @@ export const voicePlugin = definePlugin({
   name: '语音',
   desc: '实时转写与 AI 纪要',
   icon: Mic,
-  accent: '--led-shopping',
+  accent: '--mod-record',
   toggleable: true,
   defaultEnabled: true,
   // 语音版式对照页（`?v=3` 直开某一版的设计探索页）也属语音：不认领的话，
@@ -31,8 +31,8 @@ export const voicePlugin = definePlugin({
       sub: '实时转写 · AI 纪要',
       icon: Mic,
       ic: {
-        background: 'color-mix(in srgb, var(--led-shopping) 12%, transparent)',
-        color: 'var(--led-shopping)',
+        background: 'var(--mod-record-soft)',
+        color: 'var(--mod-record-strong)',
       },
       order: 40,
       action: 'voice-session',

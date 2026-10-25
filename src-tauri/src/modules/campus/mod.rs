@@ -1,13 +1,16 @@
 //! 校园教务域：把学校教务系统的课表接进 Rein。
 //!
 //! 分层（自下而上）：
-//! - [`provider`] —— **学校系统选择器**。哪所学校、用哪套登录握手、打哪些接口，全是声明式数据。
-//!   新增一所学校 = 在 `REGISTRY` 里加一条，前端选择器自动出现。
+//! - [`adapters`] —— **教务适配层**（社区共建入口，贡献指南见 `docs/adapters/`）：
+//!   - [`adapters::provider`] —— 学校系统选择器。哪所学校、用哪套登录握手、打哪些接口，
+//!     全是声明式数据。新增一所学校 = 在 `REGISTRY` 里加一条，前端选择器自动出现。
+//!   - [`adapters::base`] —— 适配器统一接口与分派：按 [`adapters::provider::LoginStrategy`]
+//!     把调用转给对应的厂商适配器。
+//!   - [`adapters::supwisdom`] / [`adapters::zfsoft`] —— 两家厂商的适配器：登录握手、
+//!     页面变量解析、课表归一化。前者是树维 Supwisdom EAMS5（桂电在册），
+//!     后者是正方 ZFSoft zftal（广西科技大学在册）。
 //! - [`http`] —— 带 Cookie 会话的 HTTP 层（项目其它域都是一次性请求，没有会话概念）。
 //! - [`dates`] —— 学期口径的换算与命名（周次 ↔ 公历日期、节次 ↔ 时刻、学期显示名）。厂商无关。
-//! - [`adapter`] —— **适配器分派**：按 [`provider::LoginStrategy`] 把调用转给对应的厂商适配器。
-//! - [`guet`] / [`zfsoft`] —— 两家厂商的适配器：登录握手、页面变量解析、课表归一化。
-//!   前者是桂电（树维 Supwisdom EAMS5），后者是广西科技大学（正方 ZFSoft zftal）。
 //! - [`course_select`] —— 选课/抢课子系统（`/course-selection-api`）客户端，鉴权走门户发的 SSO 令牌。
 //! - [`models`] —— 远端 JSON 映射 + 本地落库形状 + IPC 契约。
 //! - [`detail`] —— **课程详情组装**：把一次课表拉取的原始 `vm` 压成前端要的 `CourseDetail`
@@ -29,18 +32,15 @@
 //! 各校作息不一样（有的四十分钟一节、有的一上两节），轴因此是**派生**的而不是写死的节次表；
 //! 没有节次表的学校（树维）自动退化为只用排课区间，绝不插值编时刻。
 
-pub mod adapter;
+pub mod adapters;
 pub mod commands;
 pub mod course_select;
 pub mod dates;
 pub mod detail;
 pub mod grab;
-pub mod guet;
 pub mod holiday;
 pub mod http;
 pub mod lesson_search;
 pub mod matcher;
 pub mod models;
-pub mod provider;
 pub mod rescue;
-pub mod zfsoft;

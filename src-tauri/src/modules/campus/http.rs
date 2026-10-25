@@ -406,7 +406,7 @@ mod tests {
         // 输入刻意用合成值：这两个参数原本是从真实会话里抄下来的（salt 与用户口令），
         // 而「口令不该出现在源码里」这条没有例外 —— 联调走 REIN_GUET_USER/REIN_GUET_PASS。
         // PKCS#1 v1.5 会补齐到 128 字节，所以换任何输入都不影响下面两条断言。
-        let key = super::super::provider::spec("guet-supwisdom-eams5").unwrap();
+        let key = super::super::adapters::provider::spec("guet-supwisdom-eams5").unwrap();
         let public_key = key.login.public_key().expect("树维的公钥写在 spec 里");
         let out = rsa_encrypt_password(
             public_key,

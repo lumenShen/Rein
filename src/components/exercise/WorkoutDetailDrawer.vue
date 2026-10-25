@@ -520,9 +520,9 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
           </div>
           <div v-for="m in muscleReminder.rows" :key="m.group" class="mv-row row">
             <span class="mv-n">{{ m.label }}</span>
-            <span class="mv-barwrap"><i class="mv-bar" :class="{ low: m.score.score < 60 }" :style="{ '--p': `${loadPct(m.score)}%` }" /></span>
+            <span class="mv-barwrap"><i class="mv-bar" :class="m.score.score < 60 ? 'low' : m.score.score < 75 ? 'mid' : 'ok'" :style="{ '--p': `${loadPct(m.score)}%` }" /></span>
             <span class="mv-num num">{{ m.score.score }}<small> 分</small></span>
-            <span class="mv-st" :class="{ low: m.score.score < 60 }">{{ statusLabel(m.score) }}</span>
+            <span class="mv-st" :class="m.score.score < 60 ? 'low' : m.score.score < 75 ? 'mid' : 'ok'">{{ statusLabel(m.score) }}</span>
           </div>
           <p class="mv-note">
             数字 = 本周练够分（0–100，满分即「运动充分」）· 条满格 = 100 分。分数按 频率/强度/体感 加权，间接刺激按激活档位折算，只取本周既有训练记录计算。
@@ -792,8 +792,8 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
   color: var(--text-2);
 }
 
-/* 有不足（练够分 < 60）时提到主字色一档 —— 「N 个仍不足」是数值 + 告警，
-   不再上青色：青色的岗位在下方的不足条上（.mv-bar.low） */
+/* 有不足（练够分 < 60）时提到主字色一档 —— 「N 个仍不足」是数值 + 告警；
+   颜色只落在下方的条上（.mv-bar.low），文字保持中性 */
 .mv-s.low {
   color: var(--text-1);
 }
@@ -827,14 +827,25 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
   width: 100%;
   height: 100%;
   border-radius: var(--radius-full);
-  background: var(--c-exercise);
+  background: var(--heat-enough);
   clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round var(--radius-full));
   transition: clip-path var(--dur-base) var(--ease-standard);
 }
 
-/* 不足（练够分 < 60）才染色提醒，其余保持中性主色 —— 练够与否只分这一条线 */
+/* 练够分条的底与 MuscleMap 同源（红 / 琥珀 / 绿）：
+   < 60 = 红（该补），60–74 = 琥珀（基本够），≥ 75 = 绿（足够）。
+   此前只有「不足」上青色（--c-balance）—— 青是方案/均衡的识别色，不是告警色，
+   与运动橙也没有语义关系；条长已经表达分数，颜色只表达「过没过线」。 */
 .mv-bar.low {
-  background: var(--c-balance);
+  background: var(--heat-low);
+}
+
+.mv-bar.mid {
+  background: var(--heat-near);
+}
+
+.mv-bar.ok {
+  background: var(--heat-enough);
 }
 
 .mv-num {
@@ -858,7 +869,7 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
 }
 
 .mv-st.low {
-  /* 「不足」是告警档名：提到主字色一档（不再上青色，告警的色相在 .mv-bar.low 的条上） */
+  /* 「不足」是告警档名：提到主字色一档，告警色相留在 .mv-bar 上 */
   color: var(--text-1);
 }
 

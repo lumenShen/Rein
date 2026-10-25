@@ -591,7 +591,7 @@ onMounted(() => {
     </button>
 
     <!-- 吃：卡头是今天饮食的事实，卡里是这一族的全部成员（同权） -->
-    <section v-if="eatMembers.length" class="hf-zone" data-testid="hf-zone-eat" style="--tint: var(--c-intake)">
+    <section v-if="eatMembers.length" class="hf-zone" data-testid="hf-zone-eat" style="--tint: var(--mod-nutrition-tone)">
       <header class="hf-z1">
         <i class="hf-zk"><Utensils :size="14" :stroke-width="2.2" />吃</i>
         <b class="hf-zv">{{ eatValue }}</b>
@@ -615,7 +615,7 @@ onMounted(() => {
     </section>
 
     <!-- 练：未练优先于分低，分化定的课一步开练 -->
-    <section v-if="trainMembers.length" class="hf-zone" data-testid="hf-zone-train" style="--tint: var(--accent)">
+    <section v-if="trainMembers.length" class="hf-zone" data-testid="hf-zone-train" style="--tint: var(--mod-sports-tone)">
       <header class="hf-z1">
         <i class="hf-zk"><Dumbbell :size="14" :stroke-width="2.2" />练</i>
         <!-- 得分状态点：五档与肌肉热力图同一份颜色（MuscleMap 图例），未练=灰档、颜色粗分。
@@ -696,7 +696,7 @@ onMounted(() => {
         v-if="focusTool"
         class="hf-fact hf-focus"
         data-testid="hf-fact-focus"
-        style="--tint: var(--cat-work)"
+        style="--tint: var(--mod-focus-tone)"
       >
         <button
           type="button"
@@ -746,7 +746,7 @@ onMounted(() => {
         type="button"
         class="hf-fact pressable"
         data-testid="hf-fact-money"
-        style="--tint: var(--ok-strong)"
+        style="--tint: var(--mod-ledger-tone)"
         @click="runTool(moneyTool)"
       >
         <span class="hf-f1">
@@ -1003,9 +1003,10 @@ onMounted(() => {
   font-size: var(--fs-micro);
 }
 
-/* 练够分状态色：点用肌肉热力图的原色（图例同源），文字取白底可读的 strong/deep 档。
-   两套不能混用 —— --danger 压白底只有 3.55:1，--c-exercise 更是只有 1.6:1，
-   只能当色块；文字一律走 --danger-strong / --warn-strong / --c-exercise-deep。 */
+/* 练够分状态色：点用肌肉热力图的**语义色阶**（图例同源），不跟运动识别橙走。
+   色点只承担「红→琥珀→绿」的档位判断；分数文字一律中性（见下）。
+   --heat-* 是按非文本 3:1 另挑的一阶：旧的 --danger / --warn 压白底只有
+   3.55 / 2.2:1，10px 的点读不出档位。 */
 .hf-heat {
   width: 7px;
   height: 7px;
@@ -1015,23 +1016,23 @@ onMounted(() => {
 }
 
 .hf-heat.hs0 {
-  background: var(--text-3);
+  background: var(--heat-none);
 }
 
 .hf-heat.hs1 {
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .hf-heat.hs2 {
-  background: var(--warn);
+  background: var(--heat-near);
 }
 
 .hf-heat.hs3 {
-  background: var(--heat-mid);
+  background: var(--heat-enough);
 }
 
 .hf-heat.hs4 {
-  background: var(--c-exercise);
+  background: var(--heat-full);
 }
 
 /* 练够分状态色：点用肌肉热力图的原色（图例同源），文字一律中性色。

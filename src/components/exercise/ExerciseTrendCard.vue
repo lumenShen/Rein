@@ -188,7 +188,8 @@ const chart = computed(() => {
   color: var(--text-3);
 }
 
-/* 趋势方向：语义落在这一枚小字上（涨=运动绿，跌=橙），不染整张卡 */
+/* 趋势方向：语义落在这一枚小字上（涨=绿，跌=琥珀），不染整张卡 ——
+   涨跌是判断，不是运动身份，所以不用运动橙（--c-exercise 现在是橙，不能表达"跌"） */
 .slope {
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);

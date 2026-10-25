@@ -7,9 +7,11 @@ import type { ExerciseGuide } from '@/config/exerciseGuide'
  * 动作详解 · 三段式教学块（准备 / 轨迹 / 注意）。
  *
  * 为什么按三段切而不是一段话：组间休息只有几十秒，用户需要的是「现在该摆哪里」
- * 这一层信息，不是完整教程。三段各有固定的颜色语义（准备=蓝、轨迹=运动绿、
- * 注意=橙），但**颜色只落在色点与细条上**，正文一律 --text-1/2 —— 绿字压绿底
+ * 这一层信息，不是完整教程。三段各有固定的颜色语义（准备=蓝、轨迹=运动橙、
+ * 注意=红），但**颜色只落在色点与细条上**，正文一律 --text-1/2 —— 彩字压彩底
  * 永远到不了 4.5:1（STANDARDS §4）。
+ * 准备档的蓝写死 --accent-base：它是**教学语义**，不能被模块页的 data-tone 染成橙色
+ * （否则准备与轨迹同色）。轨迹才属于运动身份；注意用 --danger-strong 与轨迹拉开色相。
  *
  * 两档密度：
  *   full    详情抽屉顶部：三条准备带序号、轨迹两行带箭头、注意两条带竖条
@@ -98,7 +100,7 @@ const cautions = computed(() => (isFull.value ? props.guide.cautions : props.gui
 }
 
 .dot.prep {
-  background: var(--accent);
+  background: var(--accent-base);
 }
 
 .dot.move {
@@ -106,7 +108,7 @@ const cautions = computed(() => (isFull.value ? props.guide.cautions : props.gui
 }
 
 .dot.care {
-  background: var(--warn-strong);
+  background: var(--danger-strong);
 }
 
 /* 准备：序号 + 正文。序号是「摆位/躯干/呼吸」的固定次序，不是装饰 */
@@ -205,7 +207,7 @@ const cautions = computed(() => (isFull.value ? props.guide.cautions : props.gui
   bottom: 4px;
   width: 2px;
   border-radius: var(--radius-xs);
-  background: var(--warn-strong);
+  background: var(--danger-strong);
   opacity: 0.55;
 }
 </style>

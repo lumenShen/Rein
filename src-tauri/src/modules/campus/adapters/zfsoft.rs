@@ -4,7 +4,7 @@
 //! 学校代码 10594），注释里的字段名与字节数都来自线上响应 —— 改接口前先对照注释，
 //! 别凭直觉猜。测验口径：14 个教学班 / 23 条上课时段 / 第 1 周 = 2026-09-07。
 //!
-//! 与树维（`guet.rs`）的关系：**只共用 [`super::dates`] 的学期换算**，抓取逻辑一行不复用 ——
+//! 与树维（`supwisdom.rs`）的关系：**只共用 [`super::super::dates`] 的学期换算**，抓取逻辑一行不复用 ——
 //! 两套系统的登录握手、数据形状、字段命名没有一处相同。硬套一套抽象只会得到
 //! 一堆「树维是 JSON、正方是表单」的分支判断，不如各自写清楚。
 
@@ -16,13 +16,14 @@ use serde_json::Value;
 
 use crate::error::{ReinError, Result};
 
-use super::dates::parse_ymd;
-use super::http::{guard, rsa_encrypt_password_with_key, HttpResponse, Session};
-use super::models::{
+use super::super::dates::parse_ymd;
+use super::super::http::{guard, rsa_encrypt_password_with_key, HttpResponse, Session};
+use super::super::models::{
     lenient_f64, lenient_i64, LoginOutcome, PageVars, RemoteNamed, RemotePeriodSlot,
     RemoteSemester, TimetableActivity, TimetableSnapshot, ZfsoftKbResponse, ZfsoftKbRow,
     ZfsoftSlotRow, ZfsoftWeekRow,
 };
+use super::base::CampusAdapter;
 use super::provider::{SchoolSystemSpec, ZfsoftEndpoints};
 
 /// 登录表单里的固定项。逐字对齐登录页的 `<input type="hidden">` 与表单控件名。
@@ -323,6 +324,7 @@ struct WeekMap {
 
 /* ─────────────────────────── 适配器 ─────────────────────────── */
 
+/// 正方 zftal 适配器：任何声明 `ZfsoftLoginRsa` 登录策略的学校共用这一份实现。
 pub struct ZfsoftAdapter<'a> {
     pub spec: &'static SchoolSystemSpec,
     pub session: &'a mut Session,
@@ -339,8 +341,17 @@ impl<'a> ZfsoftAdapter<'a> {
         })
     }
 
+}
+
+/* ─────────────── 统一接口：`CampusAdapter` 的实现 ─────────────── */
+
+impl<'a> CampusAdapter for ZfsoftAdapter<'a> {
+    fn spec(&self) -> &'static SchoolSystemSpec {
+        self.spec
+    }
+
     /// 会话探针：`GET /xtgl/index_cxYhxxIndex.html`。200 = 仍有效，302 = 被踢回登录页。
-    pub fn probe_session(&mut self) -> Result<bool> {
+    fn probe_session(&mut self) -> Result<bool> {
         let resp = self.session.get(self.spec.login.probe_path())?;
         Ok(resp.is_ok())
     }
@@ -348,7 +359,7 @@ impl<'a> ZfsoftAdapter<'a> {
     /// 取验证码前的会话预热。**正方不需要预热**：`/kaptcha` 本身就会 Set-Cookie，
     /// 而 `csrftoken` 是在真正提交时才现取（见 [`Self::login`]）。
     /// 留这个空实现是为了让命令层不必按学校分叉。
-    pub fn warm_login_session(&mut self) -> Result<()> {
+    fn warm_login_session(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -356,7 +367,7 @@ impl<'a> ZfsoftAdapter<'a> {
     ///
     /// 正方的验证码是 `/kaptcha?time=…`，本身不绑会话（实测匿名也能取到）；
     /// 但提交时必须与取图在同一个会话里，所以这里仍走当前会话。
-    pub fn fetch_captcha(&mut self) -> Result<String> {
+    fn fetch_captcha(&mut self) -> Result<String> {
         let path = format!(
             "{}?time={}",
             self.spec.login.captcha_path(),
@@ -375,7 +386,7 @@ impl<'a> ZfsoftAdapter<'a> {
     /// 页面在提交前还会打一次 `login_logoutAccount.html`（清掉浏览器里遗留的旧会话），
     /// **这里不跟**：我们的会话 jar 每次登录都是新建的（见 `commands::relogin` / `campus_login`），
     /// 它对我们永远是空操作，只会多一次往返。
-    pub fn login(&mut self, login_name: &str, password: &str, captcha: &str) -> Result<LoginOutcome> {
+    fn login(&mut self, login_name: &str, password: &str, captcha: &str) -> Result<LoginOutcome> {
         let login_path = self.spec.login.login_path();
 
         // ① 登录页：csrftoken + 初始会话 Cookie（这两样必须来自同一次响应）
@@ -465,7 +476,7 @@ impl<'a> ZfsoftAdapter<'a> {
     /// （没有日期，落库那一步会把它直接丢掉，界面上看就是「学期没了」）。
     /// 所以只取**所选学年 ±1**，再加调用方指定的那个学期（用户可能翻回很老的学期，
     /// 少了它，选择会静默落到别的学期上 —— 那比报错更糟）。
-    pub fn fetch_page_vars(&mut self, wanted: Option<i64>) -> Result<PageVars> {
+    fn fetch_page_vars(&mut self, wanted: Option<i64>) -> Result<PageVars> {
         let ep = self.endpoints()?;
         let resp = self.session.get(&ep.course_table_page_here())?;
         guard(&resp, "获取课表页面")?;
@@ -529,7 +540,7 @@ impl<'a> ZfsoftAdapter<'a> {
     ///
     /// 三个请求拼出一次完整课表：`kbList`（课程与节次号）+ 节次时间表（节次 → 时刻）
     /// + `xsxx`（学生档案，就在同一个响应里）。
-    pub fn fetch_timetable(&mut self, semester_id: i64) -> Result<TimetableSnapshot> {
+    fn fetch_timetable(&mut self, semester_id: i64) -> Result<TimetableSnapshot> {
         let ep = self.endpoints()?;
         let (xnm, xqm) = decode_semester(semester_id);
         let referer = ep.course_table_page_here();
@@ -600,14 +611,12 @@ impl<'a> ZfsoftAdapter<'a> {
         })
     }
 
-    /// 培养方案：**正方这边没有对应接口**（树维的 `program-info-json` 是它家专有）。
-    /// 明确报错而不是返回空，免得界面显示一张空白页让人以为「教务没数据」。
-    pub fn fetch_program_info(&mut self, _student_id: &str) -> Result<Value> {
-        Err(ReinError::Message(
-            "广西科技大学的正方教务系统没有培养方案接口，本应用暂不支持查看培养方案".into(),
-        ))
-    }
+}
 
+/* 培养方案是可选能力：正方没有对应接口（树维的 `program-info-json` 是它家专有），
+   不实现即落 `CampusAdapter` 的默认「不支持」回执。 */
+
+impl<'a> ZfsoftAdapter<'a> {
     /* ---------------- 内部：三个数据接口 ---------------- */
 
     /// 表单 POST：正方的数据接口全是 `application/x-www-form-urlencoded`，

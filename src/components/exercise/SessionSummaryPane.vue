@@ -548,8 +548,10 @@ function prDeltaText(p: PrRow): string {
   border-radius: var(--radius-xs);
 }
 
+/* 做完 = 语义绿。运动橙是「这是运动」，不是「做完了」；
+   两者绑在一起后，完成格会与「运动身份」同色，和跳过的灰格反而更像一对。 */
 .seg.done {
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 /* 跳过：中性灰且半透明 —— 它「仍在分母里但没做」，不该和背景融为一体，
@@ -736,14 +738,13 @@ function prDeltaText(p: PrRow): string {
 /* ---------- 进步 ---------- */
 
 /**
- * 进步卡的绿底只留极淡的一层（--c-exercise-soft 合到 surface，约 0.09 alpha），
- * **不承载任何文字** —— 「绿字压绿底」在 sRGB 里无论怎么调都到不了 4.5:1
- * （实测亮色最好的组合只有 3.7:1，暗色 2.3:1；绿与绿的两端亮度天然拉不开）。
- * 所以语义交给标题前那枚奖杯图标，标题与数值用 --text-1 / --text-2，
- * 对比度由文字色自己保证。绿底的作用只是「这块是好事」的分区暗示。
+ * 进步卡是「好消息」分区，底只留极淡的一层语义绿（heat-enough 10%），
+ * **不承载任何文字** —— 「绿字压绿底」在 sRGB 里无论怎么调都到不了 4.5:1，
+ * 所以语义交给标题前那枚奖杯图标，标题与数值用 --text-1 / --text-2。
+ * 不用 --c-exercise-soft：那是运动模块的识别橙，不代表「进步」。
  */
 .prcard {
-  background: color-mix(in srgb, var(--c-exercise-soft) 45%, var(--surface));
+  background: color-mix(in srgb, var(--heat-enough) 10%, var(--surface));
 }
 
 .prtitle {
@@ -808,7 +809,7 @@ function prDeltaText(p: PrRow): string {
   height: 5px;
   margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 /* ---------- 逐动作明细 ---------- */
@@ -872,9 +873,8 @@ function prDeltaText(p: PrRow): string {
   /* 走 --fs-micro：11px 是字号阶梯的下限（tokens.css R4），写死 10px 会掉到阶梯之外 ——
      而这一枚恰恰是「这一行有 PR」的唯一文字标记，比别的徽标更不该再小一档。 */
   font-size: var(--fs-micro);
-  /* 徽标不用绿字：--c-exercise-soft 是 alpha 0.2 的软底，绿字压它只有
-     2.53:1（亮）/ 9.51:1（暗）—— 亮色完全不达标，而一个读不清的
-     「PR」徽标比没有更糟（用户会以为那行没被标记）。
+  /* 徽标不用彩色字：语义底是浅绿，绿字压绿底在亮色下只有 2.5:1 ——
+     一个读不清的「PR」徽标比没有更糟（用户会以为那行没被标记）。
      改成 --text-1 压 --surface-2 灰底：两档都过 4.5:1，
      「这一行有 PR」由左侧的绿点承载（见下方 ::before）。 */
   color: var(--text-1);
@@ -893,7 +893,7 @@ function prDeltaText(p: PrRow): string {
   height: 5px;
   margin-top: calc(-1 * var(--sp-2));
   border-radius: 50%;
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 /* ---------- 肌群 ---------- */

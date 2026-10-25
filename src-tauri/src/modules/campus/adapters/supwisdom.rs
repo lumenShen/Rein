@@ -1,17 +1,20 @@
-//! 桂林电子科技大学（树维 Supwisdom EAMS5 学生端）适配器。
+//! 树维（Supwisdom）EAMS5 学生端适配器 —— 在册学校：桂林电子科技大学。
 //!
-//! 这里的每个函数都对应一次实测验证过的真实请求，注释里记的字节数/字段名都来自线上响应，
-//! 改接口时先对照注释确认，别凭直觉猜。
+//! 文件按**厂商**命名而不是按学校：任何部署树维 EAMS5 的学校，在 `provider::REGISTRY`
+//! 里声明一条 `SupwisdomPortalRsa` 登录策略的 spec，即可复用这里的全部实现。
+//! 每个函数都对应一次实测验证过的真实请求（实测口径：桂电 bkjwtest，2026-09），
+//! 注释里记的字节数/字段名都来自线上响应，改接口时先对照注释确认，别凭直觉猜。
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 use crate::error::{ReinError, Result};
 
-use super::http::{guard, rsa_encrypt_password, Session};
-use super::models::{
+use super::super::http::{guard, rsa_encrypt_password, Session};
+use super::super::models::{
     CourseDetail, LoginOutcome, PageVars, RemoteSemester, StudentTableVm, TimetableResponse,
     TimetableSnapshot,
 };
+use super::base::CampusAdapter;
 use super::provider::SchoolSystemSpec;
 
 /// 课表页面里学期列表的入口。真实形状（2026-09 实测）：
@@ -170,12 +173,13 @@ fn login_failure(raw: &str, need_captcha: bool, captcha: &str) -> (String, Optio
     }
 }
 
-pub struct GuetAdapter<'a> {
+/// 树维 EAMS5 适配器：任何声明 `SupwisdomPortalRsa` 登录策略的学校共用这一份实现。
+pub struct SupwisdomAdapter<'a> {
     pub spec: &'static SchoolSystemSpec,
     pub session: &'a mut Session,
 }
 
-impl<'a> GuetAdapter<'a> {
+impl<'a> SupwisdomAdapter<'a> {
     pub fn new(spec: &'static SchoolSystemSpec, session: &'a mut Session) -> Self {
         Self { spec, session }
     }
@@ -195,8 +199,36 @@ impl<'a> GuetAdapter<'a> {
         })
     }
 
+    /// 课表原始 vm（未归一化）。**课表与课程详情共用这一份响应** ——
+    /// 同步走 [`Self::fetch_timetable`]，点开某门课看详情走 [`Self::fetch_course_detail`]，
+    /// 两者看到的是同一次 `print-data` 的数据，不会出现「课表说 51 人、详情说 50 人」。
+    fn fetch_course_table_vm(&mut self, semester_id: i64) -> Result<StudentTableVm> {
+        let path = self.endpoints()?.course_table_print_for(semester_id);
+        let resp = self.session.get(&path)?;
+        guard(&resp, "获取课表数据")?;
+        let raw = resp
+            .json()
+            .map_err(|e| ReinError::Message(format!("课表数据解析失败：{e}")))?;
+        let parsed: TimetableResponse = serde_json::from_value(raw)
+            .map_err(|e| ReinError::Message(format!("课表数据解析失败：{e}")))?;
+
+        parsed
+            .student_table_vms
+            .into_iter()
+            .next()
+            .ok_or_else(|| ReinError::Message("课表数据为空：该学期可能没有排课".into()))
+    }
+}
+
+/* ─────────────── 统一接口：`CampusAdapter` 的实现 ─────────────── */
+
+impl<'a> CampusAdapter for SupwisdomAdapter<'a> {
+    fn spec(&self) -> &'static SchoolSystemSpec {
+        self.spec
+    }
+
     /// 会话探针：`GET /student/home`。200 = 仍有效，302 = 被踢回登录页。
-    pub fn probe_session(&mut self) -> Result<bool> {
+    fn probe_session(&mut self) -> Result<bool> {
         let path = self.spec.login.probe_path();
         let resp = self.session.get(path)?;
         Ok(resp.is_ok())
@@ -206,7 +238,7 @@ impl<'a> GuetAdapter<'a> {
     ///
     /// 树维把验证码答案绑在会话上，所以必须先把会话建起来（`GET salt` 会 Set-Cookie），
     /// 否则「取图」与「提交」落在两个会话里，验证码必然对不上。
-    pub fn warm_login_session(&mut self) -> Result<()> {
+    fn warm_login_session(&mut self) -> Result<()> {
         let salt_path = self.spec.login.salt_path().ok_or_else(|| {
             ReinError::Message(format!("{} 的登录策略里没有盐值地址", self.spec.kind))
         })?;
@@ -222,7 +254,7 @@ impl<'a> GuetAdapter<'a> {
     ///
     /// 必须在**同一个会话**里做：教务把验证码答案绑在会话上，
     /// 换个会话拿图再提交必然对不上。
-    pub fn fetch_captcha(&mut self) -> Result<String> {
+    fn fetch_captcha(&mut self) -> Result<String> {
         let path = format!(
             "{}?d={}",
             self.spec.login.captcha_path(),
@@ -235,7 +267,7 @@ impl<'a> GuetAdapter<'a> {
     }
 
     /// 完整登录握手。步骤与登录页 `submit()` 逐行对应。
-    pub fn login(
+    fn login(
         &mut self,
         login_name: &str,
         password: &str,
@@ -310,7 +342,8 @@ impl<'a> GuetAdapter<'a> {
     /// 刮课表页面上的变量：学期列表（唯一来源）+ bizTypeId。
     ///
     /// 树维没有独立的 `semester-list` 接口（实测 404），学期列表只内嵌在这个页面里。
-    pub fn fetch_page_vars(&mut self) -> Result<PageVars> {
+    /// `wanted` 在树维用不上（学期列表整个就在页面里，无需逐个补周历），仅为统一接口保留。
+    fn fetch_page_vars(&mut self, _wanted: Option<i64>) -> Result<PageVars> {
         let path = self
             .endpoints()?
             .course_table_page_for(self.biz_type_id()?);
@@ -325,28 +358,8 @@ impl<'a> GuetAdapter<'a> {
         Ok(PageVars { semesters })
     }
 
-    /// 课表原始 vm（未归一化）。**课表与课程详情共用这一份响应** ——
-    /// 同步走 [`Self::fetch_timetable`]，点开某门课看详情走 [`Self::fetch_course_detail`]，
-    /// 两者看到的是同一次 `print-data` 的数据，不会出现「课表说 51 人、详情说 50 人」。
-    pub fn fetch_course_table_vm(&mut self, semester_id: i64) -> Result<StudentTableVm> {
-        let path = self.endpoints()?.course_table_print_for(semester_id);
-        let resp = self.session.get(&path)?;
-        guard(&resp, "获取课表数据")?;
-        let raw = resp
-            .json()
-            .map_err(|e| ReinError::Message(format!("课表数据解析失败：{e}")))?;
-        let parsed: TimetableResponse = serde_json::from_value(raw)
-            .map_err(|e| ReinError::Message(format!("课表数据解析失败：{e}")))?;
-
-        parsed
-            .student_table_vms
-            .into_iter()
-            .next()
-            .ok_or_else(|| ReinError::Message("课表数据为空：该学期可能没有排课".into()))
-    }
-
     /// 课表数据（主数据源）。路径里只有 semesterId，不需要额外的 dataId，最稳。
-    pub fn fetch_timetable(&mut self, semester_id: i64) -> Result<TimetableSnapshot> {
+    fn fetch_timetable(&mut self, semester_id: i64) -> Result<TimetableSnapshot> {
         let vm = self.fetch_course_table_vm(semester_id)?;
         Ok(TimetableSnapshot {
             student_id: vm.id.map(|v| v.to_string()),
@@ -365,24 +378,25 @@ impl<'a> GuetAdapter<'a> {
         })
     }
 
-    /// 课程详情：拉一次课表 vm，交给 [`super::detail::build_course_detail`] 组装。
+    /// 课程详情：拉一次课表 vm，交给 [`super::super::detail::build_course_detail`] 组装。
     ///
     /// 之所以**每次实时拉**而不是从库里读：容量 / 已选人数会随选课进程变化，
     /// 缓存下来的「已选 51/52」下一秒就可能变成「52/52」——那正是用户最想知道的。
-    pub fn fetch_course_detail(
+    fn fetch_course_detail(
         &mut self,
         semester_id: i64,
         semester_name: &str,
         lesson_id: i64,
         weekday: Option<i64>,
         start_unit: Option<i64>,
+        week: Option<i64>,
     ) -> Result<CourseDetail> {
         let vm = self.fetch_course_table_vm(semester_id)?;
-        super::detail::build_course_detail(&vm, semester_name, lesson_id, weekday, start_unit)
+        super::super::detail::build_course_detail(&vm, semester_name, lesson_id, weekday, start_unit, week)
     }
 
     /// 培养方案。响应可达 900KB+，调用方负责缓存。
-    pub fn fetch_program_info(&mut self, student_id: &str) -> Result<serde_json::Value> {
+    fn fetch_program_info(&mut self, student_id: &str) -> Result<serde_json::Value> {
         let path = self.endpoints()?.program_info_for(student_id);
         let resp = self.session.get(&path)?;
         guard(&resp, "获取培养方案")?;
@@ -469,13 +483,13 @@ mod tests {
     ///
     /// ```text
     /// $env:REIN_GUET_USER='2600xxxxxx'; $env:REIN_GUET_PASS='...'
-    /// cargo test --lib campus::guet::tests::live -- --ignored --nocapture
+    /// cargo test --lib campus::adapters::supwisdom::tests::live -- --ignored --nocapture
     /// ```
     ///
     /// 凭据只从环境变量读，不进仓库。与 `scripts/voice-*-probe.mjs` 同类：真实站点的探针。
     #[test]
     #[ignore = "打真实教务系统，需要 REIN_GUET_USER / REIN_GUET_PASS"]
-    fn live_guet_roundtrip() {
+    fn live_supwisdom_roundtrip() {
         let (Ok(user), Ok(pass)) = (
             std::env::var("REIN_GUET_USER"),
             std::env::var("REIN_GUET_PASS"),
@@ -486,7 +500,7 @@ mod tests {
         let spec = super::super::provider::spec("guet-supwisdom-eams5").expect("桂电 spec");
         let mut session =
             crate::modules::campus::http::Session::new(spec.default_base_url, Default::default());
-        let mut adapter = GuetAdapter::new(spec, &mut session);
+        let mut adapter = SupwisdomAdapter::new(spec, &mut session);
 
         let login = adapter
             .login(&user, &pass, "")
@@ -497,7 +511,7 @@ mod tests {
         assert!(adapter.probe_session().expect("会话探针"), "会话探针未通过");
         println!("✓ 会话有效");
 
-        let vars = adapter.fetch_page_vars().expect("课表页面解析");
+        let vars = adapter.fetch_page_vars(None).expect("课表页面解析");
         println!("✓ 解析到 {} 个学期", vars.semesters.len());
         let first = &vars.semesters[0];
         println!(

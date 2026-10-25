@@ -15,6 +15,7 @@ import {
 import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import { campusService } from '@/services/campusService'
+import { useCampusStore } from '@/stores/campus'
 import type { CourseDetail, CoursePeriod } from '@/types'
 
 /**
@@ -57,6 +58,13 @@ const props = defineProps<{
   weekday?: number | null
   startUnit?: number | null
   /**
+   * 用户点的那一格属于第几教学周。
+   *
+   * 一门课按周次段拆开、每段换教师换教室是常态（桂电的健康教育四位老师轮着上），
+   * 只给星期 + 节次的话，第 6 周那一格会拉回第 12 周那条的教师 —— 格子与抽屉对不上。
+   */
+  week?: number | null
+  /**
    * 首帧、慢网时先顶上课程名。
    *
    * 抽屉标题已回落成通用词「课程详情」（课名只在正文 hero 出现一次），
@@ -77,6 +85,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
+const campus = useCampusStore()
+
 const detail = ref<CourseDetail | null>(null)
 /** 当前摆着的是本机那份（远端还没回来 / 这条教务根本不支持详情接口） */
 const usingLocal = ref(false)
@@ -86,7 +96,7 @@ const error = ref('')
 let token = 0
 
 async function load(): Promise<void> {
-  const { semesterId, lessonId, weekday, startUnit } = props
+  const { semesterId, lessonId, weekday, startUnit, week } = props
   if (!props.open) return
   const t = ++token
   const local = props.localDetail ?? null
@@ -101,9 +111,16 @@ async function load(): Promise<void> {
     if (!local) error.value = '这门课还没有同步到教务信息，暂时看不了详情'
     return
   }
+  if (!campus.capabilities.courseDetail) {
+    // 这套教务没有课程详情接口（spec 声明的能力位）：本机档案就是最终结果，
+    // 不打那个注定失败的请求，也不把「不支持」当错误亮给用户。
+    loading.value = false
+    if (!local) error.value = '这套教务系统暂不支持课程详情'
+    return
+  }
   loading.value = local === null
   try {
-    const d = await campusService.courseDetail({ semesterId, lessonId, weekday, startUnit })
+    const d = await campusService.courseDetail({ semesterId, lessonId, weekday, startUnit, week })
     if (t !== token) return
     detail.value = d
     usingLocal.value = false
@@ -121,7 +138,7 @@ async function load(): Promise<void> {
 }
 
 watch(
-  () => [props.open, props.semesterId, props.lessonId, props.weekday, props.startUnit] as const,
+  () => [props.open, props.semesterId, props.lessonId, props.weekday, props.startUnit, props.week] as const,
   () => {
     if (!props.open) {
       // 关闭即作废在途请求，并落掉 spinner；detail 留着给离场动画

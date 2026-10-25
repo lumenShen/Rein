@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Eye, EyeOff, Pencil, Star, Trash2 } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
+import ExerciseGuideBlock from '@/components/exercise/ExerciseGuideBlock.vue'
 import ExerciseHistoryPanel from '@/components/exercise/ExerciseHistoryPanel.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import MuscleMap from '@/components/exercise/MuscleMap.vue'
@@ -21,7 +22,10 @@ import type { ExerciseRecord, PlanExercise } from '@/types'
 /**
  * 动作库 · 动作详情。
  * 内容 = 名称与分类 + 激活肌群图 + 今日建议（按库内默认处方 + 历史算） +
- * 重量曲线（按动作库 id）+ 训练参数 + 动作要点 + 自建动作的编辑/删除。
+ * 重量曲线（按动作库 id）+ 训练参数 + 动作详解 + 自建动作的编辑/删除。
+ *
+ * 详解取 store 的合成值（覆盖层 ?? 内置基线），与课程详情抽屉同源；自建动作没写详解
+ * 时才回落库里那句 tips —— 从前这里只有 tips，导致 AI 改过的三段式文案在动作库看不到。
  */
 const props = defineProps<{
   open: boolean
@@ -44,6 +48,13 @@ const confirmDelete = ref(false)
 
 /** 展示用肌群：显式数据优先，空表按动作名兜底（与课程侧口径一致） */
 const shownMuscles = computed(() => libraryMuscles(props.exercise))
+
+/**
+ * 三段式动作详解（准备 / 轨迹 / 注意）。取的是 store 的合成值
+ * （覆盖层 ?? 内置基线），与课程详情抽屉同源 —— 所以 AI 改过的文案在两个入口
+ * 看到的完全一致；自建动作没写详解时返回 null，界面回落下面那句 tips。
+ */
+const guide = computed(() => lib.guideFor(props.exercise?.id))
 
 /** 库内动作 → 建议引擎的输入形状（组数/次数/重量取库内默认处方） */
 function asPlanExercise(e: ExerciseRecord): PlanExercise {
@@ -281,7 +292,13 @@ async function removeCustom(): Promise<void> {
         </div>
       </div>
 
-      <template v-if="exercise.tips">
+      <!-- 详解优先：内置 81 条都有三段式，自建动作只有那一句 tips 才回落下一段 -->
+      <template v-if="guide">
+        <p class="sec">动作详解</p>
+        <ExerciseGuideBlock :guide="guide" />
+      </template>
+
+      <template v-else-if="exercise.tips">
         <p class="sec">动作要点</p>
         <p class="tips">{{ exercise.tips }}</p>
       </template>

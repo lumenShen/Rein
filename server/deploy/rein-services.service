@@ -1,6 +1,6 @@
 [Unit]
 Description=Rein 在线服务（更新分发 + 模型网关预留）
-Documentation=https://github.com/gozaoo-coder/Rein/blob/main/server/README.md
+Documentation=https://github.com/lumenShen/Rein/blob/main/server/README.md
 After=network-online.target
 Wants=network-online.target
 

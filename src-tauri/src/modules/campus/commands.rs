@@ -16,7 +16,7 @@ use tauri::{AppHandle, State};
 use crate::error::{ReinError, Result};
 use crate::state::{AppState, CampusHub, CourseSelectToken, Db, PendingLogin};
 
-use super::adapter::AnyAdapter;
+use super::adapters::base::{AnyAdapter, CampusAdapter};
 use super::course_select::CourseSelectClient;
 use super::dates;
 use super::grab::{self, GrabHub};
@@ -25,7 +25,7 @@ use super::http::{CookieJar, HttpResponse, Session};
 use super::lesson_search::{self, LessonSearchClient};
 use super::matcher;
 use super::models::*;
-use super::provider::{self, SchoolSystemInfo, SchoolSystemSpec};
+use super::adapters::provider::{self, SchoolSystemInfo, SchoolSystemSpec};
 use super::rescue;
 
 const ACCOUNT_COLS: &str = "id, system_kind, base_url, login_name, password, cookies, session_at, \
@@ -58,6 +58,14 @@ fn meta_get(conn: &Connection, key: &str) -> Option<String> {
 fn meta_set(conn: &Connection, key: &str, value: &str) -> Result<()> {
     crate::db::meta_set(conn, key, value)
 }
+
+/// 「库里的课表时段是旧规则写下的，需要一次真同步」的标记键。
+///
+/// 写它的是迁移 0049（`db.rs`，字面量必须与这里一致）：旧唯一键把同一门课同一时段的
+/// 多个周次段并成了一条，被并掉的那些周次**只能从教务重新拉一遍才补得回来**。
+/// 读它的是 `schedule_view_on`（透出 `needsResync`，前端据此替用户跑一次同步），
+/// 清它的是 `campus_sync` 落库成功之后 —— 同步本身会把整学期的时段按新键重写。
+pub(crate) const SESSIONS_NEED_RESYNC: &str = "campus.sessions_need_resync";
 
 /* ─────────────────────────── 账号读写 ─────────────────────────── */
 
@@ -293,7 +301,8 @@ fn occurrence_date(
 
 const SESSION_SELECT: &str = "SELECT s.id, s.course_id, s.weekday, s.start_unit, s.end_unit, \
      s.start_time, s.end_time, s.weeks, s.weeks_str, s.room, s.building, s.campus, \
-     c.course_name, c.course_code, c.credits, c.teachers, c.course_type, c.color \
+     c.course_name, c.course_code, c.credits, COALESCE(s.teachers, c.teachers), c.course_type, \
+     c.color \
      FROM campus_sessions s JOIN campus_courses c ON c.id = s.course_id";
 
 fn session_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CampusSession> {
@@ -1278,6 +1287,181 @@ fn remote_to_local(
     })
 }
 
+/// 周次集合的**规范形**：排序去重后逗号连接（`5,6,7`）。
+///
+/// 它有两个用处，都得是规范形才成立：
+/// 1. 当 `campus_sessions.weeks_key`（时段身份的一部分，见迁移 0049）；
+/// 2. 当 `weeks` 列（JSON）的序列化口径。
+///
+/// 教务给的 `weekIndexes` 顺序不保证稳定，直接拿原文当键，同一条时段会在两次同步之间
+/// 变成两条（旧行被 `delete_stale_sessions` 删掉之前，课表上会短暂重复）。
+fn weeks_key(weeks: &[i64]) -> String {
+    let mut v: Vec<i64> = weeks.iter().copied().filter(|w| *w > 0).collect();
+    v.sort_unstable();
+    v.dedup();
+    v.iter().map(|w| w.to_string()).collect::<Vec<_>>().join(",")
+}
+
+/// 一门课的**一个上课时段**落库，返回 `(教学班 id, 本地课程 id, 本地时段 id)`。
+///
+/// `None` = 这条活动进不了日历（缺周次 / 星期 / 时刻，例如纯考试安排），调用方计入「已跳过」。
+///
+/// **周次必须进唯一键**（`weeks_key`）：桂电同一门课会在同一个星期几、同一个节次上按
+/// 周次段拆成多条，教师与教室跟着段走 —— 实测样本：
+///
+/// ```text
+/// 健康教育 17311*  周二 6-7 节  5~7 周 黄观凤 / 8~9 韦雪军 / 10~11 杨雁 / 12 马瑞杰
+/// 大学生心理健康  周五 8-9 节  3~5 周 信科421308 / 6~12 周 02109Y
+/// ```
+///
+/// 少了这一个维度，后写的那条会把先写的 `weeks` / `room` / `teachers` 覆盖掉，
+/// 课表上只剩一个周次段（常常正好不含本周），教师还张冠李戴 —— 用户报的
+/// 「课表与实际不符」就是它。
+fn persist_activity(
+    conn: &Connection,
+    account_id: i64,
+    semester_id: i64,
+    act: &TimetableActivity,
+) -> Result<Option<(i64, i64, i64)>> {
+    let Some(lesson_id) = act.lesson_id else {
+        return Ok(None);
+    };
+    let (Some(weekday), Some(start_time), Some(end_time)) =
+        (act.weekday, act.start_time.as_deref(), act.end_time.as_deref())
+    else {
+        return Ok(None);
+    };
+    let key = weeks_key(&act.week_indexes);
+    if key.is_empty() {
+        return Ok(None);
+    }
+    let course_name = act
+        .course_name
+        .clone()
+        .or_else(|| act.lesson_name.clone())
+        .unwrap_or_else(|| "未命名课程".into());
+
+    conn.execute(
+        "INSERT INTO campus_courses \
+         (account_id, semester_id, remote_lesson_id, course_code, course_name, lesson_code, \
+          lesson_name, teachers, credits, course_type, color) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+         ON CONFLICT(account_id, semester_id, remote_lesson_id) DO UPDATE SET \
+           course_code = excluded.course_code, course_name = excluded.course_name, \
+           lesson_code = excluded.lesson_code, lesson_name = excluded.lesson_name, \
+           teachers = excluded.teachers, credits = excluded.credits, \
+           course_type = excluded.course_type, color = excluded.color",
+        rusqlite::params![
+            account_id,
+            semester_id,
+            lesson_id,
+            act.course_code,
+            course_name,
+            act.lesson_code,
+            act.lesson_name,
+            serde_json::to_string(&act.teachers)?,
+            act.credits,
+            act.course_type.as_ref().and_then(|t| t.name_zh.clone()),
+            act.bgc,
+        ],
+    )?;
+
+    let course_id: i64 = conn.query_row(
+        "SELECT id FROM campus_courses WHERE account_id = ?1 AND semester_id = ?2 AND remote_lesson_id = ?3",
+        rusqlite::params![account_id, semester_id, lesson_id],
+        |r| r.get(0),
+    )?;
+
+    let start_unit = act.start_unit.unwrap_or(0);
+    let weeks: Vec<i64> = key.split(',').filter_map(|w| w.parse().ok()).collect();
+
+    conn.execute(
+        "INSERT INTO campus_sessions \
+         (account_id, semester_id, course_id, weekday, start_unit, end_unit, start_time, \
+          end_time, weeks, weeks_key, weeks_str, room, building, campus, teachers) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) \
+         ON CONFLICT(account_id, semester_id, course_id, weekday, start_unit, start_time, weeks_key) \
+         DO UPDATE SET end_unit = excluded.end_unit, end_time = excluded.end_time, \
+           weeks = excluded.weeks, weeks_str = excluded.weeks_str, room = excluded.room, \
+           building = excluded.building, campus = excluded.campus, teachers = excluded.teachers",
+        rusqlite::params![
+            account_id,
+            semester_id,
+            course_id,
+            weekday,
+            start_unit,
+            act.end_unit.unwrap_or(0),
+            start_time,
+            end_time,
+            serde_json::to_string(&weeks)?,
+            key,
+            act.weeks_str,
+            act.room,
+            act.building,
+            act.campus,
+            serde_json::to_string(&act.teachers)?,
+        ],
+    )?;
+    let sid: i64 = conn.query_row(
+        "SELECT id FROM campus_sessions WHERE account_id = ?1 AND semester_id = ?2 \
+         AND course_id = ?3 AND weekday = ?4 AND start_unit = ?5 AND start_time = ?6 \
+         AND weeks_key = ?7",
+        rusqlite::params![account_id, semester_id, course_id, weekday, start_unit, start_time, key],
+        |r| r.get(0),
+    )?;
+    Ok(Some((lesson_id, course_id, sid)))
+}
+
+/// 课程级的「这门课有哪些老师」= 各时段教师的**去重并集**（按首次出现顺序）。
+///
+/// 为什么不让 `campus_courses.teachers` 停在「最后一次写入者」：一门课一周多个时段、
+/// 按周换教师是常态（桂电的健康教育就是四位老师轮着上）。只留最后一位，
+/// 课程清单与详情页会写死成「一直都是他上的」。课表格子读的是**时段级**教师，
+/// 这份并集只服务「课程全貌」那一栏。
+fn merge_course_teachers(conn: &Connection, account_id: i64, semester_id: i64) -> Result<()> {
+    let pairs: Vec<(i64, Option<String>)> = {
+        let mut stmt = conn.prepare(
+            "SELECT s.course_id, s.teachers FROM campus_sessions s \
+             WHERE s.account_id = ?1 AND s.semester_id = ?2 ORDER BY s.weekday, s.start_time",
+        )?;
+        let rows = stmt.query_map([account_id, semester_id], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    let mut merged: HashMap<i64, Vec<String>> = HashMap::new();
+    for (course_id, raw) in pairs {
+        let slot = merged.entry(course_id).or_default();
+        let list: Vec<String> = raw
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        for t in list {
+            let t = t.trim().to_string();
+            if !t.is_empty() && !slot.contains(&t) {
+                slot.push(t);
+            }
+        }
+    }
+
+    for (course_id, teachers) in merged {
+        if teachers.is_empty() {
+            continue;
+        }
+        conn.execute(
+            "UPDATE campus_courses SET teachers = ?1 \
+             WHERE id = ?2 AND account_id = ?3 AND semester_id = ?4",
+            rusqlite::params![
+                serde_json::to_string(&teachers)?,
+                course_id,
+                account_id,
+                semester_id
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 /// 同步课表：拉课表（会话过期就自愈重试一次）→ 落库 → 重建时间线派生行。
 #[tauri::command]
 pub async fn campus_sync(
@@ -1412,100 +1596,19 @@ pub async fn campus_sync(
     let mut kept_session_ids: Vec<i64> = Vec::new();
 
     for act in &fetched.snapshot.activities {
-        let Some(lesson_id) = act.lesson_id else {
-            skipped += 1;
-            continue;
-        };
-        // 缺周次/星期/时间的记录进不了日历（例如纯考试安排），跳过并计数
-        if act.week_indexes.is_empty()
-            || act.weekday.is_none()
-            || act.start_time.is_none()
-            || act.end_time.is_none()
-        {
-            skipped += 1;
-            continue;
+        match persist_activity(&conn, account_id, semester_local_id, act)? {
+            Some((lesson_id, course_id, sid)) => {
+                course_ids.insert(lesson_id, course_id);
+                kept_session_ids.push(sid);
+            }
+            None => skipped += 1,
         }
-        let course_name = act
-            .course_name
-            .clone()
-            .or_else(|| act.lesson_name.clone())
-            .unwrap_or_else(|| "未命名课程".into());
-
-        conn.execute(
-            "INSERT INTO campus_courses \
-             (account_id, semester_id, remote_lesson_id, course_code, course_name, lesson_code, \
-              lesson_name, teachers, credits, course_type, color) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
-             ON CONFLICT(account_id, semester_id, remote_lesson_id) DO UPDATE SET \
-               course_code = excluded.course_code, course_name = excluded.course_name, \
-               lesson_code = excluded.lesson_code, lesson_name = excluded.lesson_name, \
-               teachers = excluded.teachers, credits = excluded.credits, \
-               course_type = excluded.course_type, color = excluded.color",
-            rusqlite::params![
-                account_id,
-                semester_local_id,
-                lesson_id,
-                act.course_code,
-                course_name,
-                act.lesson_code,
-                act.lesson_name,
-                serde_json::to_string(&act.teachers)?,
-                act.credits,
-                act.course_type.as_ref().and_then(|t| t.name_zh.clone()),
-                act.bgc,
-            ],
-        )?;
-
-        let course_id: i64 = conn.query_row(
-            "SELECT id FROM campus_courses WHERE account_id = ?1 AND semester_id = ?2 AND remote_lesson_id = ?3",
-            rusqlite::params![account_id, semester_local_id, lesson_id],
-            |r| r.get(0),
-        )?;
-        course_ids.insert(lesson_id, course_id);
-
-        conn.execute(
-            "INSERT INTO campus_sessions \
-             (account_id, semester_id, course_id, weekday, start_unit, end_unit, start_time, \
-              end_time, weeks, weeks_str, room, building, campus) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
-             ON CONFLICT(account_id, semester_id, course_id, weekday, start_unit, start_time) \
-             DO UPDATE SET end_unit = excluded.end_unit, end_time = excluded.end_time, \
-               weeks = excluded.weeks, weeks_str = excluded.weeks_str, room = excluded.room, \
-               building = excluded.building, campus = excluded.campus",
-            rusqlite::params![
-                account_id,
-                semester_local_id,
-                course_id,
-                act.weekday,
-                act.start_unit.unwrap_or(0),
-                act.end_unit.unwrap_or(0),
-                act.start_time,
-                act.end_time,
-                serde_json::to_string(&act.week_indexes)?,
-                act.weeks_str,
-                act.room,
-                act.building,
-                act.campus,
-            ],
-        )?;
-        let sid: i64 = conn.query_row(
-            "SELECT id FROM campus_sessions WHERE account_id = ?1 AND semester_id = ?2 \
-             AND course_id = ?3 AND weekday = ?4 AND start_unit = ?5 AND start_time = ?6",
-            rusqlite::params![
-                account_id,
-                semester_local_id,
-                course_id,
-                act.weekday,
-                act.start_unit.unwrap_or(0),
-                act.start_time,
-            ],
-            |r| r.get(0),
-        )?;
-        kept_session_ids.push(sid);
     }
 
     // 远端已消失的时段（换课/退课）
     delete_stale_sessions(&conn, account_id, semester_local_id, &kept_session_ids)?;
+    // 课程级教师回收成「各时段教师的并集」：一门课按周换人时，单看最后一次写入会误导
+    merge_course_teachers(&conn, account_id, semester_local_id)?;
 
     // 节次时间表（正方有、树维没有）：左侧时间轴的逐节真读数。**只在同步里抓、只在同步里写**，
     // 打开课表那条路只读库 —— 否则每次进课表页都要多打一次教务（见文件头那条铁律）。
@@ -1543,6 +1646,10 @@ pub async fn campus_sync(
     let years = holiday::years_of(&semester.start_date, &semester.end_date);
     let plan = holiday::plan_from_cache(&conn, &years, &HolidayConfig::load(&conn));
     let todos_written = materialize_todos(&conn, account_id, &semester, &sessions, &plan)?;
+
+    // 整学期的时段已按新键重写完毕：迁移留下的「待重同步」标记到此失效。
+    // 放在这里而不是入口处 —— 只有真正跑完整条落库链路才算补上了被并掉的周次段。
+    crate::db::meta_del(&conn, SESSIONS_NEED_RESYNC)?;
 
     Ok(SyncOutcome {
         courses: course_ids.len() as i64,
@@ -1623,6 +1730,7 @@ fn schedule_view_on(
             entries: Vec::new(),
             time_slots: Vec::new(),
             courses: Vec::new(),
+            needs_resync: false,
         });
     };
 
@@ -1636,6 +1744,7 @@ fn schedule_view_on(
             entries: Vec::new(),
             time_slots: Vec::new(),
             courses: Vec::new(),
+            needs_resync: false,
         });
     };
 
@@ -1678,6 +1787,9 @@ fn schedule_view_on(
         entries,
         time_slots,
         courses,
+        // 老库（0049 之前）里被唯一键并掉的周次段只能靠一次真同步补回来：
+        // 把标记透给页面，由它替用户跑那一次（见 `pages/SchedulePage.vue`）。
+        needs_resync: meta_get(conn, SESSIONS_NEED_RESYNC).is_some(),
     })
 }
 
@@ -1923,8 +2035,8 @@ struct DetailAttempt {
 /// **每次实时拉而不读库**：容量与已选人数会随选课进程变化，库里缓存的「已选 51/52」
 /// 下一秒就可能变成「52/52」—— 而那正是用户点开详情最想知道的一件事。
 ///
-/// `weekday` / `start_unit` 用于同一门课一周上多次时定位到用户点的那一格；
-/// 都传 `None` 时给该课的第一个时段。
+/// `weekday` / `start_unit` / `week` 用于同一门课一周上多次、或按周次段换教师换教室时
+/// 定位到用户点的那一格；都传 `None` 时给该课的第一个时段。
 #[tauri::command]
 pub async fn campus_course_detail(
     state: State<'_, AppState>,
@@ -1933,6 +2045,7 @@ pub async fn campus_course_detail(
     lesson_id: i64,
     weekday: Option<i64>,
     start_unit: Option<i64>,
+    week: Option<i64>,
 ) -> Result<CourseDetail> {
     // ── 短锁：取账号 + 本地学期 id → 远端 id + 学期显示名
     let (account, remote_id, semester_name) = {
@@ -1956,6 +2069,7 @@ pub async fn campus_course_detail(
                 lesson_id,
                 weekday,
                 start_unit,
+                week,
             )
         };
 
@@ -2251,7 +2365,7 @@ pub async fn campus_course_select_status(
     let client = select_context(&state.db, &hub)?.client;
     let entry_url = client.entry_url();
     // 正式域 / 测试域：界面要说清「你练拳的地方是不是真擂台」
-    let production = super::provider::is_production_base(client.host());
+    let production = provider::is_production_base(client.host());
 
     // 无锁：拉状态
     let (server_time, student, turns) = tauri::async_runtime::spawn_blocking(
@@ -3983,9 +4097,114 @@ mod tests {
         );
     }
 
+    /// 同一门课、同一个星期几、同一个节次，按**周次段**拆成多条（教师与教室跟着段变）。
+    ///
+    /// 旧唯一键 `(course, weekday, start_unit, start_time)` 会把它们并成一条：后写的那条
+    /// 覆盖先写的 `weeks` / `room` / `teachers`，于是课表上只剩一个周次段（往往正好不含
+    /// 本周）、教师张冠李戴 —— 用户报的「课表与实际不符」就是这个。真实样本见迁移 0049。
     #[test]
-    fn axis_reports_duration_for_row_heights() {
-        let rows = build_time_axis(&[sess(8, 10, "16:10", "18:20")], &[]);
+    fn same_slot_different_week_segments_are_kept_apart() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrate_for_test(&conn).unwrap();
+        seed_account(&conn);
+
+        let act = |weeks: Vec<i64>, weeks_str: &str, teacher: &str| TimetableActivity {
+            lesson_id: Some(322367),
+            lesson_code: Some("2615286".into()),
+            course_name: Some("健康教育".into()),
+            weekday: Some(2),
+            start_unit: Some(6),
+            end_unit: Some(7),
+            start_time: Some("14:30".into()),
+            end_time: Some("16:05".into()),
+            week_indexes: weeks,
+            weeks_str: Some(weeks_str.into()),
+            room: Some("17311*".into()),
+            teachers: vec![teacher.into()],
+            ..Default::default()
+        };
+
+        for a in [
+            act(vec![5, 6, 7], "5~7", "黄观凤"),
+            act(vec![8, 9], "8~9", "韦雪军"),
+            act(vec![10, 11], "10~11", "杨雁"),
+            act(vec![12], "12", "马瑞杰"),
+        ] {
+            persist_activity(&conn, 1, 1, &a)
+                .unwrap()
+                .expect("这条活动应当入账");
+        }
+
+        let sessions = load_sessions(&conn, 1, 1).unwrap();
+        let mut health: Vec<_> = sessions
+            .iter()
+            .filter(|s| s.course_name == "健康教育")
+            .collect();
+        health.sort_by_key(|s| s.weeks.first().copied().unwrap_or(0));
+        assert_eq!(health.len(), 4, "四个周次段必须各存一条");
+        assert_eq!(health[0].weeks, vec![5, 6, 7]);
+        assert_eq!(health[0].teachers, vec!["黄观凤".to_string()]);
+        assert_eq!(health[3].weeks, vec![12]);
+        assert_eq!(health[3].teachers, vec!["马瑞杰".to_string()]);
+
+        // 课程级教师 = 各时段教师的并集：课程清单要看得全，而不是只显示最后一个写入者
+        merge_course_teachers(&conn, 1, 1).unwrap();
+        let merged: String = conn
+            .query_row(
+                "SELECT teachers FROM campus_courses WHERE remote_lesson_id = 322367",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Vec<String>>(&merged).unwrap(),
+            vec![
+                "黄观凤".to_string(),
+                "韦雪军".to_string(),
+                "杨雁".to_string(),
+                "马瑞杰".to_string()
+            ]
+        );
+    }
+
+    /// 同一条活动重复同步不得变成两条：`weeks_key` 必须是**规范形**，与教务给的顺序无关。
+    #[test]
+    fn resyncing_the_same_segment_updates_in_place() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrate_for_test(&conn).unwrap();
+        seed_account(&conn);
+
+        let act = |weeks: Vec<i64>| TimetableActivity {
+            lesson_id: Some(317746),
+            course_name: Some("大学生心理健康教育".into()),
+            weekday: Some(5),
+            start_unit: Some(8),
+            end_unit: Some(9),
+            start_time: Some("16:30".into()),
+            end_time: Some("18:05".into()),
+            week_indexes: weeks,
+            room: Some("02109Y".into()),
+            teachers: vec!["范志燕".into()],
+            ..Default::default()
+        };
+
+        persist_activity(&conn, 1, 1, &act(vec![6, 7, 8])).unwrap();
+        // 第二次顺序不同 —— 规范形之后仍然落在同一行
+        persist_activity(&conn, 1, 1, &act(vec![8, 6, 7])).unwrap();
+
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM campus_sessions WHERE course_id = \
+                 (SELECT id FROM campus_courses WHERE remote_lesson_id = 317746)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1, "同一条时段不该因为周次顺序不同而变成两条");
+    }
+
+    #[test]
+    fn axis_reports_duration_for_row_heights() {        let rows = build_time_axis(&[sess(8, 10, "16:10", "18:20")], &[]);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].start_min, 970);
         assert_eq!(rows[0].duration_min, 130, "3 节连排 = 130 分钟，前端的行高按它成比例");

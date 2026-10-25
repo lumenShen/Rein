@@ -125,8 +125,8 @@ const running = computed(() => primary.value?.id === 'pause')
 
 /* 专注中：与运动条同一条呼吸动画（色相只在色点上，文字保持中性） */
 .dot.work {
-  background: var(--cat-work);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--cat-work) 65%, transparent);
+  background: var(--mod-focus-tone);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mod-focus-tone) 65%, transparent);
   animation: rein-breathe var(--dur-pulse) infinite;
 }
 

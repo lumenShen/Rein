@@ -56,8 +56,9 @@ import sideSvg from '@/assets/muscles/rein/side.svg?raw'
  * （而不是每块肌肉一遍），而且因为生成的 SVG 本来就是按 depth 升序写的文档顺序，
  * 分组不会改变任何一块的层叠次序（同组内保持原顺序，组间按 band 顺序）。
  *
- * 着色走 CSS 继承：3 主攻 = --c-exercise，2 辅助 = --heat-mid，
- * 1 稳定 = --c-exercise-soft；未激活走中性赭红，深层解剖走冷灰。
+ * 着色走 CSS 继承：激活档 3 主攻 / 2 辅助 / 1 稳定 = 运动橙的 88% / 62% / 34%；
+ * 未激活走中性冷灰（「没算进评估」不是「练得少」），深层解剖走另一档冷灰。
+ * 练够分模式另用一套红 / 琥珀 / 绿语义阶（--heat-*），不与运动橙混用。
  *
  * 细化到肌束：三角肌前/中/后束、胸大肌上/下束、斜方肌上/中/下束、
  * 股四头分股外侧/股直/股内侧、小腿分腓肠肌/比目鱼肌等，均可单独高亮。
@@ -201,7 +202,7 @@ function isMuscle(r: Region): boolean {
  * 该分区是否有值可画。
  *
  * 两种模式对「没有值」的处理**刻意不同**：
- *  · 激活模式：没有值的肌群不参与着色（保持中性赭红），因为「这个动作没练到它」
+ *  · 激活模式：没有值的肌群不参与着色（保持中性冷灰），因为「这个动作没练到它」
  *    本来就该读作背景；
  *  · 热力模式：**有值才有色**，而 0 档（无负荷）本身就是一个值 ——
  *    热力图要回答的正是「哪块没练」，把无负荷的肌群也画成冷色。
@@ -557,8 +558,9 @@ html[data-perf='extreme'] .band-0 {
   cursor: pointer;
 }
 
-/* 底图=素描灰轮廓；未激活肌群=赭红肌肉罩（教科书红调）；
-   每块带细描边，分区缝隙+描边清晰可读。激活仍按运动绿色档位打标 */
+/* 底图=素描灰轮廓；未激活肌群=**中性冷灰蓝**，不是暖调。
+   未激活不是「练得少」，而是「这块没算进评估」；用暖色会和练够分 h1（不足）
+   抢同一片色相。每块带细描边，分区缝隙+描边清晰可读。激活按运动橙三档打标 */
 .layer.base {
   fill: rgba(120, 110, 95, 0.34);
 }
@@ -570,7 +572,7 @@ html[data-perf='extreme'] .band-0 {
 }
 
 .layer.idle {
-  fill: rgba(183, 92, 74, 0.3);
+  fill: rgba(128, 132, 150, 0.28);
 }
 
 /* 深层解剖：冷灰、无描边重音，隐去浅层后读作「更里面一层」 */
@@ -594,7 +596,7 @@ html[data-perf='extreme'] .band-0 {
   }
 
   .layer.idle {
-    fill: rgba(214, 108, 86, 0.32);
+    fill: rgba(160, 166, 190, 0.26);
   }
 
   .layer.anat {
@@ -606,43 +608,47 @@ html[data-perf='extreme'] .band-0 {
   }
 }
 
+/* 激活三档（主攻 / 辅助 / 稳定）＝ 运动模块色的单色阶。
+   这是「这块肌肉被练得多主」，是运动身份，不是好坏判断，所以走橙；
+   低档不再直接用 14% 的 soft（叠在肤色上几乎看不见），改成 34% 的混色。 */
 .layer.l1 {
-  fill: var(--c-exercise-soft);
+  fill: color-mix(in srgb, var(--c-exercise) 34%, transparent);
 }
 
 .layer.l2 {
-  fill: var(--heat-mid);
+  fill: color-mix(in srgb, var(--c-exercise) 62%, transparent);
 }
 
 .layer.l3 {
-  fill: var(--c-exercise);
+  fill: color-mix(in srgb, var(--c-exercise) 88%, transparent);
 }
 
 /* ---------- 练够分的 5 档色阶（低 → 高）----------
    色相在表达"该不该管"：红（不足，最该补）→ 琥珀（基本够）→ 绿（足够/充分）。
    0 档（未练）刻意用**中性灰**而不是色阶的一端 —— "没练到"不是一个量级，
    是"没有数据"；给它颜色会被读成"练得很少但练了"。
-   绿的深浅只有两档（足够 / 充分）：色相已经用完了，第四档靠明度区分，
-   而这两档本来就是"够"与"很够"的差别，不需要更大的视觉落差。
-   底一律走令牌（--text-3 / --danger / --warn / --c-exercise），暗色档自动跟随。 */
+   这一阶**不跟运动识别橙走**（见 tokens.css 的 --heat-* 注释）：
+   动作用橙、练够与否用红/琥珀/绿，两者回答的是不同问题。
+   填充透明度比旧版更高（64–84%）：旧版 46% 的浅橙叠在肤色上几乎与"基本够"
+   分不开，正是这次要修的对比度问题。 */
 .layer.h0 {
-  fill: color-mix(in srgb, var(--text-3) 34%, transparent);
+  fill: color-mix(in srgb, var(--heat-none) 34%, transparent);
 }
 
 .layer.h1 {
-  fill: color-mix(in srgb, var(--danger) 60%, transparent);
+  fill: color-mix(in srgb, var(--heat-low) 72%, transparent);
 }
 
 .layer.h2 {
-  fill: color-mix(in srgb, var(--warn) 62%, transparent);
+  fill: color-mix(in srgb, var(--heat-near) 74%, transparent);
 }
 
 .layer.h3 {
-  fill: color-mix(in srgb, var(--c-exercise) 46%, transparent);
+  fill: color-mix(in srgb, var(--heat-enough) 64%, transparent);
 }
 
 .layer.h4 {
-  fill: color-mix(in srgb, var(--c-exercise) 82%, transparent);
+  fill: color-mix(in srgb, var(--heat-full) 84%, transparent);
 }
 
 /* 深层已激活分区：在浅层之上半透明重描一遍，保证「标了就看得见」。
@@ -679,12 +685,14 @@ figcaption {
   border: 0.5px solid var(--line-strong);
 }
 
+/* 激活图例：三档都是「运动身份」，走运动橙的单色阶。
+   低档不能直接用 14% 的 soft（白底上几乎不可见），用与填充同源的混色。 */
 .d1 {
-  background: var(--c-exercise-soft);
+  background: color-mix(in srgb, var(--c-exercise) 34%, var(--surface));
 }
 
 .d2 {
-  background: var(--heat-mid);
+  background: color-mix(in srgb, var(--c-exercise) 62%, var(--surface));
 }
 
 .d3 {
@@ -692,26 +700,27 @@ figcaption {
   border-color: transparent;
 }
 
-/* 热力图例的点：与图上 fill 同源，但不带 alpha —— 图例是小色块，
-   按半透明画会糊在画布上，读不出色相。h3/h4 同色相，靠明度分（浅绿 / 实绿） */
+/* 热力图例的点：与图上 fill 同源，但不带 alpha —— 图例是 10px 小色块，
+   按半透明画会糊在画布上，读不出色相。取值全部按非文本 3:1 挑过（见 --heat-*）：
+   h2 琥珀与 h3 绿是跨色相的分界；h3/h4 同色相，靠明度分（中绿 / 深绿）。 */
 .legend .hs0 {
-  background: var(--text-3);
+  background: var(--heat-none);
 }
 
 .legend .hs1 {
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .legend .hs2 {
-  background: var(--warn);
+  background: var(--heat-near);
 }
 
 .legend .hs3 {
-  background: var(--heat-mid);
+  background: var(--heat-enough);
 }
 
 .legend .hs4 {
-  background: var(--c-exercise);
+  background: var(--heat-full);
 }
 
 /* 热力图例：五档 + 开关挤一行会换行，允许折行并收紧间距 */
@@ -821,11 +830,11 @@ figcaption {
 }
 
 .dot.l1 {
-  background: var(--c-exercise-soft);
+  background: color-mix(in srgb, var(--c-exercise) 34%, var(--surface));
 }
 
 .dot.l2 {
-  background: var(--heat-mid);
+  background: color-mix(in srgb, var(--c-exercise) 62%, var(--surface));
 }
 
 .dot.l3 {

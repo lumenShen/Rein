@@ -120,6 +120,14 @@
 
 **AI 动作库工具**：`list_exercises`（读，回**完整档位表**）、`upsert_exercise`（写自建动作，`muscles` 为 39 键枚举 + 1~3 档）、`set_exercise_muscles`（只改肌群，内置动作拒绝）。三个工具的 schema 共用 `ai/tools/muscleSchema.ts`，描述里写明档位语义与「先查库、与库内同名动作保持一致」。
 
+**动作详解（`guide`）与覆盖层**：教学文案分两层。「基线」= `config/exerciseGuide.ts`（81 个内置动作，`setup` 3 条 / `start` / `end` / `cautions` / `repSec`，编进前端包，改它要走发版）；「覆盖」= `exercise_guides` 表（0048），只存**与基线不同的动作**，因此删行即恢复默认，不需要备份。三层约束：
+
+1. **不进 `exercises` 表**：`seed_exercises` 的 `ON CONFLICT DO UPDATE` 会刷内置动作的内容列（`favorite` / `hidden` 是因为被显式排除在覆盖列表外才活下来），五段文案塞列里等于加 5 列 JSON 且「恢复基线」只能靠写回默认值。
+2. **合成唯一入口**：`stores/exerciseLib.ts::guideFor(id)` = 覆盖 ?? 基线。界面（详情抽屉、沉浸页紧凑详解、单组秒数 `setDurationSec`）一律经它取文案，**禁止直读 `EXERCISE_GUIDES`** —— 直读会让 AI 改过的文案在那一屏失效。
+3. **局部修改在前端合并**：模型只说「把注意第 2 条改掉」时，工具层先读当前生效值补齐其余段，再整行提交；Rust 侧永远只收完整行（`setup` 恰好 3 条、`cautions` 1–3 条、单段 ≤60 字、`repSec` 0–120，超限**报错而非截断**）。
+
+命令：`list_exercise_guides` / `upsert_exercise_guide` / `delete_exercise_guide`（`modules/exercise_lib/guide.rs`）。AI 工具：`get_exercise_guide`（读，标 `builtin`/`override`）、`set_exercise_guide`（内置动作也**可**改，落在覆盖层，不动动作库）、`list_exercise_guides`（改过的清单）、`reset_exercise_guide`（恢复基线），四者在 `exercise` 组（按需装载 + `sports` 功能开关）。
+
 校园教务：`campus_accounts` / `campus_semesters` / `campus_courses` / `campus_sessions` + `todos.course_session_id`（0021，见 §12）；`campus_grab_tasks`（0022，自动抢课任务单，见 §12）；`campus_grab_intents`（0029，抢课计划/意向，见 §12）；`campus_period_slots`（0045，学校公布的节次时间表 → 周视图行轴的逐节真读数，见 §12）。
 
 ## 5. 设计系统
@@ -177,8 +185,9 @@
 | `/ai/files/space` | ai-files-usage | 空间总览（二级内容页：**入口是文件页页头右侧那颗「总大小」文字胶囊**，不占页内位置。真源构成条（文本 / 本体）与派生缓存（索引 / 数据库，单列一组且不计入总量 —— 它们的字节本来就在数据库文件内部）各一条；目录占用（文本 + 本体，按一级目录，可点进对应目录）/ 大文件前三名摘要（可点开阅读器，完整榜单在下一级页）/ 索引来源 / 本体模态四张分布卡；维护卡做碎片回收（两段确认）与丢失本体提示。数据来自 `kb_usage`，走 `usageCached` 会话级备忘） |
 | `/ai/files/space/large` | ai-files-usage-large | 大文件（三级页：**完整榜单**，最多 100 条，按体积倒序，行渲染与大文件摘要共用 `components/kb/UsageFileList.vue`（条长 = 相对最大文件、颜色 = 文本 / 本体）；点一行按路径深链进文件管理器打开阅读器。总览页只留前三名，榜单本身不挤在总览里） |
 | `/me` | me | 我 |
-| `/settings` | settings | 设置（二级内容页：功能分组入口 + 番茄钟完整配置 + 数据（清除软件数据：四档深度两段确认）+ 关于；入口在「我 › 设置」，原设置抽屉已升级为页面） |
+| `/settings` | settings | 设置（二级内容页：功能分组入口（打开或关闭功能 / 全局浮窗）+ 番茄钟完整配置 + 数据（清除软件数据：四档深度两段确认）+ 关于；入口在「我 › 设置」，原设置抽屉已升级为页面） |
 | `/settings/features` | settings-features | 打开或关闭功能（三级页：插件层的逐项开关，列表来自 `src/plugins` 里 `toggleable` 的声明。**自身不属于任何插件**，任何组合下都可达） |
+| `/settings/float` | settings-float | 全局浮窗（三级页：功能开关 + 权限开关教程。Android 走「先开开关 → 跳系统设置 → 找到 Rein 打开「在其他应用上显示」→ 回本页确认」四步；桌面端改讲「怎么看到它」；未授权 / 不支持时如实说明并降级为程序内浮条。入口在「设置 › 功能 › 全局浮窗」，实现见 docs/GLOBAL-FLOAT.md） |
 | `/settings/sync` | settings-sync | 多设备同步（三级页：本机是谁 / 连了谁 / 怎么再加一台；入口在「设置 › 多设备同步」。**归 `sync` 插件所有**，关闭时那张卡与直链一起收） |
 | `/settings/update` | settings-update | 软件更新（三级页：版本/多源状态/下载进度/安装/更新源与通道设置 + Rein 在线服务探测；入口在「设置 › 关于 › 软件更新」，启动时也会静默检查并在有新版本时 toast 一次） |
 | `/settings/perf` | settings-perf | 画质预览（三级页：超高档的液态玻璃长什么样 —— 仅图标按钮 / 图标+文字按钮 / 底部栏（圆 + 药丸 + 圆，并列留缝；**与应用里的 Dock 共用同一份样式**，逐项一致）；可就地切档看折射与退化的差别；**动效档位也在这里就地切**（关闭 / 默认 / 丰富，台上标本跟着变 —— 丰富档下点页签能看见活动底的融合与形变，另有「试一下」按钮让底栏走一格）；台下入口拉开**液态玻璃参数调节面板**（12 项可调参数 + 自带暗场预览）；入口在「设置 › 性能 › 液态玻璃预览」） |
@@ -267,13 +276,14 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `provider.rs` | **学校系统选择器**。`SchoolSystemSpec` 把「哪所学校 + 哪套登录握手 + 打哪些接口」声明成数据；新增一所学校 = 在 `REGISTRY` 加一条，前端选择器自动出现。`LoginStrategy` 抽象登录握手（树维门户 RSA / 正方表单 RSA 两种），`EndpointSpec` 按厂商分表（`eams5` / `zfsoft`，互斥，不支持的能力留 `None` 而不是空串）。 |
+| `adapters/mod.rs` | **适配层入口**：面向贡献者的两条贡献路径说明（同厂商加 spec / 新厂商实现 trait），子模块导出。社区贡献指南见 [docs/adapters/README.md](adapters/README.md)。 |
+| `adapters/provider.rs` | **学校系统选择器**。`SchoolSystemSpec` 把「哪所学校 + 哪套登录握手 + 打哪些接口 + 有哪些能力」声明成数据；新增一所学校 = 在 `REGISTRY` 加一条，前端选择器自动出现。`LoginStrategy` 抽象登录握手（树维门户 RSA / 正方表单 RSA 两种），`EndpointSpec` 按厂商分表（`eams5` / `zfsoft`，互斥，不支持的能力留 `None` 而不是空串），`AdapterCapabilities` 声明功能位（课程详情 / 培养方案 / 开课查询 / 选课），前端入口按位显隐、不嗅探厂商。 |
 | `http.rs` | 带 Cookie 会话的 HTTP 层。项目其它域都是一次性请求（API Key 头），**只有教务需要会话**，所以这里补了 `CookieJar`、浏览器伪装头、以及「不跟随重定向」（靠 302 判定会话过期，而不是被静默跳到登录页拿到 200）。同文件含两种登录加密（`rsa_encrypt_password` / `rsa_encrypt_password_with_key`）与会话判定 `guard`。 |
-| `dates.rs` | 学期口径的换算与命名（周次 ↔ 公历日期、节次 ↔ 时刻、学期显示名）。**厂商无关**：两家适配器共用，所以从 `guet.rs` 提了出来。 |
-| `adapter.rs` | **适配器分派**：按 `LoginStrategy` 把调用转给对应厂商适配器。命令层原先有 8 处直接 `GuetAdapter::new(...)`，第二家进来后收口到这一处。 |
-| `guet.rs` | 桂电（树维 EAMS5）适配器：登录握手、课表页面变量解析、课表归一化。 |
-| `zfsoft.rs` | 广科大（正方 zftal）适配器：表单登录（csrftoken + 运行时公钥）、学年/学期下拉解析、课表归一化（节次表 + 周次表 + 位掩码）。 |
-| `course_select.rs` | **抢课**子系统（`/course-selection-api`）客户端。独立鉴权（见下），信封约定与其余接口相反，只在这一处判断。所有请求体都抽成纯函数并逐个加了单测。**只有树维那套系统有这条路**。 |
+| `dates.rs` | 学期口径的换算与命名（周次 ↔ 公历日期、节次 ↔ 时刻、学期显示名）。**厂商无关**：两家适配器共用，所以从树维适配器里提了出来。 |
+| `adapters/base.rs` | **统一接口与分派**：`CampusAdapter` trait（登录 → 会话 → 学期 → 课表；课程详情 / 培养方案是可选能力，不实现即默认「不支持」回执）+ `AnyAdapter` 按 `LoginStrategy` 穷尽分派（新厂商漏接线编译期报错）。命令层只认动作，不认识厂商。 |
+| `adapters/supwisdom.rs` | 树维（Supwisdom EAMS5）适配器（原 `guet.rs`，按厂商命名，任何声明 `SupwisdomPortalRsa` 的学校复用）：登录握手、课表页面变量解析、课表归一化、课程详情、培养方案。 |
+| `adapters/zfsoft.rs` | 正方（ZFSoft zftal）适配器：表单登录（csrftoken + 运行时公钥）、学年/学期下拉解析、课表归一化（节次表 + 周次表 + 位掩码）。 |
+| `course_select.rs` | **抢课**子系统（`/course-selection-api`）客户端。独立鉴权（见下），信封约定与其余接口相反，只在这一处判断。所有请求体都抽成纯函数并逐个加了单测。**只有树维那套系统有这条路**（spec 的能力位声明）。 |
 | `grab.rs` | **自动抢课引擎**：后台线程 + `campus_grab_tasks` 任务表 + `campus://grab` 事件流。时钟校正、错误分级重试、结果不明时的核对、崩溃续跑、**互斥志愿组**、**窗口监听**、**文件投递口**、**抢课计划的解析**全在这里。**带模块开关**（默认关，见 §13）。 |
 | `matcher.rs` | **模糊匹配**：把「高数 张」这类人的说法落成具体的教学班。纯函数（无网络无库），计划解析与输入预览共用同一份实现与同一套排序。 |
 | `models.rs` | 远端 JSON 映射（两家各自的形状）+ 本地落库形状 + IPC 契约 + 归一化快照 `TimetableSnapshot`。 |
@@ -281,8 +291,8 @@
 
 **两套登录握手**（都以真实站点实测为准）：
 
-- **树维**（`guet.rs`，对齐登录页 `main.js::submit`）：`GET /student/ldap/login-salt` → `RSA_PKCS1_v1_5(salt + "-" + password)` → `POST /student/ldap/login {username, password, captcha}` → Cookie 会话。
-- **正方**（`zfsoft.rs`，对齐登录页 `login.js` 的 `#dl`）：`GET /xtgl/login_slogin.html`（拿 `csrftoken`，同时建会话）→ `GET /xtgl/login_getPublicKey.html`（modulus/exponent，**每次登录现取**）→ `RSA_PKCS1_v1_5(裸口令)` → `POST` 同一地址（`yhm` / `mm` / `csrftoken`）。判定与直觉相反、实测两次确认：**200 = 被拒**（登录页就地重渲染，原因在 `#tips` 里），**302 = 通过**（重定向回登录页本身，该页对已登录会话会再跳到菜单页）。
+- **树维**（`adapters/supwisdom.rs`，对齐登录页 `main.js::submit`）：`GET /student/ldap/login-salt` → `RSA_PKCS1_v1_5(salt + "-" + password)` → `POST /student/ldap/login {username, password, captcha}` → Cookie 会话。
+- **正方**（`adapters/zfsoft.rs`，对齐登录页 `login.js` 的 `#dl`）：`GET /xtgl/login_slogin.html`（拿 `csrftoken`，同时建会话）→ `GET /xtgl/login_getPublicKey.html`（modulus/exponent，**每次登录现取**）→ `RSA_PKCS1_v1_5(裸口令)` → `POST` 同一地址（`yhm` / `mm` / `csrftoken`）。判定与直觉相反、实测两次确认：**200 = 被拒**（登录页就地重渲染，原因在 `#tips` 里），**302 = 通过**（重定向回登录页本身，该页对已登录会话会再跳到菜单页）。
 
 RSA 用 `rsa` crate（纯 Rust，四端交叉编译零原生依赖），填充与登录页的 `encrypt()` 等价。树维的图形验证码答案绑在**会话**上，所以「取验证码」与「提交登录」必须共用同一个 Cookie —— 用 `CampusHub` 暂存这一次握手的 jar；正方的验证码（`/kaptcha`）只在该校「错够几次」后才要，失败页里看不出来，所以配置页给了一个人工取图的入口。
 
@@ -295,7 +305,7 @@ RSA 用 `rsa` crate（纯 Rust，四端交叉编译零原生依赖），填充�
 
 没存密码是唯一修不了的情况，那就把话说清楚并给出下一步：「该账号没有保存密码 —— 请到「课表配置」重新登录一次，勾上保存密码以后过期就能自动恢复」。前端认同一套关键词（`stores/campus.ts::isSessionLostMessage`），在 toast 里直接挂「去重新登录」按钮；配置页还会把登录表单重新摆出来（此时 `account.loggedIn` 可能仍为 true，光看它会把表单藏起来，那就成了用户口中的「没反应」）。存了密码的账号在配置页可以**空着密码一键重登**（`store.relogin()`，后端回落到库里那份）。
 
-登录失败同样**必须有话说**（`guet.rs::login_failure`）：教务对「账号密码不对」并不总给 `message`，以前会吐「登录失败，教务系统未返回原因」，用户无从下手。现在按情形兜底 —— 要验证码却没说原因 → 「需要输入验证码」；填了验证码仍被拒 → 「验证码不正确」；什么都没有 → 「登录被拒绝：请核对学号与密码」。`login_first` / `weak_password` 这类必须去网页端处理的，带 `actionRequired` 透出，配置页据此给一句带链接的引导。前端把失败原因**留在表单里**（toast 两秒就没了，而它要提醒你去解决的问题不会），而不是只弹一下就消失。
+登录失败同样**必须有话说**（`adapters/supwisdom.rs::login_failure`）：教务对「账号密码不对」并不总给 `message`，以前会吐「登录失败，教务系统未返回原因」，用户无从下手。现在按情形兜底 —— 要验证码却没说原因 → 「需要输入验证码」；填了验证码仍被拒 → 「验证码不正确」；什么都没有 → 「登录被拒绝：请核对学号与密码」。`login_first` / `weak_password` 这类必须去网页端处理的，带 `actionRequired` 透出，配置页据此给一句带链接的引导。前端把失败原因**留在表单里**（toast 两秒就没了，而它要提醒你去解决的问题不会），而不是只弹一下就消失。
 
 **三条铁律**：
 
@@ -303,11 +313,13 @@ RSA 用 `rsa` crate（纯 Rust，四端交叉编译零原生依赖），填充�
 2. **周次换算只有一处**。教务只给「第 N 教学周 + 星期几」，`commands.rs::occurrence_date` 负责用学期 `start_date` 锚定成公历日期；课表视图与时间线物化共用它，避免两边公式漂移。
 3. **课表派生行是只读投影**。见下。
 
+**时段的身份 = 课 + 星期 + 节次 + 周次段**（`campus_sessions.weeks_key`，0049）。这不是一个可以省的维度：教务会把同一门课在同一个星期几、同一个节次上按**周次段**拆成多条，教师与教室跟着段走 —— 实测样本里，健康教育 17311* 周二 6-7 节被拆成「5~7 周 黄观凤 / 8~9 韦雪军 / 10~11 杨雁 / 12 马瑞杰」，大学生心理健康则是「3~5 周 信科421308 / 6~12 周 02109Y」。0021 的唯一键少这一维，后写的那条会把先写的 `weeks` / `room` / `teachers` 覆盖掉，课表上只剩一个周次段（常常正好不含本周）、教师张冠李戴，被并掉的那些周次**只能靠一次真同步补回来** —— 所以 0049 重建表后写 `campus.sessions_need_resync` 标记，`campus_schedule` 透出 `needsResync`，课表页替用户跑那一次（同步成功即清标记）。同一门课多名教师时，`campus_courses.teachers` 是各时段教师的**并集**（课程清单用），格子与详情读的是**时段级** `campus_sessions.teachers`。
+
 **时间轴（动态时间段适配层）**。周视图左列的行轴由 `commands.rs::build_time_axis` 产出（前端同口径实现在 `src/utils/campusTimeAxis.ts`，mock 用它造轴）。各校作息并不一致 —— 有的一上就是两节（第1-2节 08:00-09:25），有的是四十分钟一节（第1节 08:00-08:40、第2节 08:45-09:25），节间休息也长短不一 —— 所以行轴是**派生**的，不能拿 `(startUnit, endUnit)` 去重当行：第1-2节 与 第2-3节 并存时那样会画出两行，第2节被画两遍，一周的视觉长度也不再等于真实时间。口径：
 
 - **候选区间 = 节次表 ∪ 实际排课的节次区间**，取断点（每个区间的 `start` 与 `end + 1`）后相邻断点构成片段 —— 片段天然互斥、首尾相接，**同一节次只可能出现一次**；没课的片段不画（第5节没课就没有第5节那一行）。
 - **时刻只读教务给的数，绝不插值**：片段内每一节都能在节次表里查到 → 用逐节真读数；否则用覆盖它的**最紧封套**（覆盖者里最晚的开始 / 最早的结束）。片段内部的课间休息猜不出来，猜出来的「08:42」比老实给封套更糟。
-- **节次表是抓下来的**：正方为「第 N 节 → 几点」单独开了一个接口（`zfsoft.rs::fetch_slot_times`，`/kbcx/xskbcx_cxRjc.html`），而课表正文只有节次号；它随快照落进 `campus_period_slots`（账号 × 学期，同步时整表替换）。读课表那条路只查库、不联网。树维没有这张表 → 空表 → 轴自动退化为只用排课区间，绝不编时刻；老数据无需迁移（没同步过就没有表，显示与旧实现等价）。
+- **节次表是抓下来的**：正方为「第 N 节 → 几点」单独开了一个接口（`adapters/zfsoft.rs::fetch_slot_times`，`/kbcx/xskbcx_cxRjc.html`），而课表正文只有节次号；它随快照落进 `campus_period_slots`（账号 × 学期，同步时整表替换）。读课表那条路只查库、不联网。树维没有这张表 → 空表 → 轴自动退化为只用排课区间，绝不编时刻；老数据无需迁移（没同步过就没有表，显示与旧实现等价）。
 - **前端按片段跨行画**：每门课映射到 `(起行, 跨几行)`，`grid-row: <起行> / span <跨几行>` —— 三节连排的课因此占三行，和「三节单排」在视觉上分得开；同一天重叠的课并成一个冲突组、并排画。每个格子都**显式落位**（自动排布遇到跨行会把后续格子挤到别的列上）；行高按真实时长成比例（`minmax(56px, N fr)`），节次少时 `fr` 把高度铺满、多时滚动。
 
 **课程详情有两个来源**。远端（`campus_course_detail` → 教务「课程详情」页：容量 / 已选人数是实时值）与本机快照（`stores/campus.ts::offlineCourseDetail`：课名 / 教师 / 地点 / 时间 / 周次 / 学分，全部来自已同步的 `campus_courses` + `campus_sessions`）。点课程格时**先摆本机那份**，远端可用时整份替换：正方那套教务没有详情接口，本机那份就是最终结果；树维那套要现拉一次整张课表，先摆本机那份也省掉了对着骨架干等。远端失败（没接口 / 会话过期 / 断网）一律留着本机那份，不把已有档案换成报错页；只有两边都没有时才报错。远端才有的字段（容量、学时构成…）留空而不编 —— 抽屉的排版原则是「空值不占位」。
@@ -533,7 +545,7 @@ App 里的窗口监听只救「App 开着」的情况；**窗口在 App 没开�
 >
 > 登录登不上时的行为是被刻意设计过的：库里那句「教务拒绝了这次登录」**不替教务编原因**（实测它可能只回 `{result:true,needCaptcha:false}`，什么都不说）—— 编出来的「密码错误」会把「其实会话还能救」的线索带偏。
 
-`scripts/lib/guet-session.mjs` 是它与 `probe-course-select.mjs` 共用的会话层（登录握手 / Cookie / SSO 令牌 / 信封约定）。**公钥仍然从 `provider.rs` 正则读**，不在这里抄一份 —— 抄错一个字符就是 `digital envelope routines::decode error`，很难一眼看出。
+`scripts/lib/guet-session.mjs` 是它与 `probe-course-select.mjs` 共用的会话层（登录握手 / Cookie / SSO 令牌 / 信封约定）。**公钥仍然从 `adapters/provider.rs` 正则读**，不在这里抄一份 —— 抄错一个字符就是 `digital envelope routines::decode error`，很难一眼看出。
 
 ## 13. 功能插件层（src/plugins · stores/features.ts）
 
@@ -711,7 +723,7 @@ Rust 侧 `cargo test --lib update::`（37 项，含**官方 CLI 签名必须验�
 
 **回归**：`node scripts/e2e-voice.mjs`（语音链路 + 按需 AI store）、`node scripts/e2e-ai-tools.mjs`
 （分组装载与功能门禁）、`node scripts/e2e-muscle-map.mjs`（异步之后的肌群图）、
-`node scripts/e2e-layout-guard.mjs`（27 条路由的布局不变量）。
+`node scripts/e2e-layout-guard.mjs`（28 条路由的布局不变量）。
 
 
 

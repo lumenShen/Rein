@@ -89,19 +89,22 @@ export const campusService = {
    * 命令本身没有本机兜底能力：它只认教务。
    *
    * `weekday` / `startUnit` 用于同一门课一周上多次时定位到用户点的那一格；
-   * 都省略时给该课的第一个时段。
+   * `week` 再往前一步：同一门课同一个格子按**周次段**换教师换教室时（健康教育四位老师
+   * 轮着上），它决定抽屉里显示「这一周实际上是谁上」。都省略时给该课的第一个时段。
    */
   courseDetail: (input: {
     semesterId: number
     lessonId: number
     weekday?: number | null
     startUnit?: number | null
+    week?: number | null
   }) =>
     invoke<CourseDetail>('campus_course_detail', {
       semesterId: input.semesterId,
       lessonId: input.lessonId,
       weekday: input.weekday ?? null,
       startUnit: input.startUnit ?? null,
+      week: input.week ?? null,
     }),
 
   /* ---------------- 官方调休映射（课表 / 时间线共用） ---------------- */

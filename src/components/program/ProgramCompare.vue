@@ -481,8 +481,11 @@ th.off .col-hit {
 }
 
 .cell.l3 {
-  background: var(--c-exercise);
-  color: var(--on-accent);
+  /* 色阶最高档：底色必须托住前景 —— tone 层（--c-exercise）在亮色下白字只有 3.6:1，
+     改用实底层。前景用 --on-tone 而不是 --on-accent：这个组件也可能被非运动页复用，
+     不能依赖模块页把 on-accent 翻成深墨；on-tone 按亮暗固定反色（亮白 / 暗深墨）。 */
+  background: var(--c-exercise-deep);
+  color: var(--on-tone);
   font-weight: var(--fw-bold);
 }
 

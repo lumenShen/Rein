@@ -250,9 +250,10 @@ const stats = computed<{ k: string; v: string }[]>(() => {
   /* 类型字章（「计时 / 有氧」＝这是哪一类）：色相保留的少数例外之一，
      但仅限 ≤ --fs-caption 且整屏只出现一枚 —— 本抽屉标题行正是如此。
      列表里的同款徽标（PlanDetailPage 逐动作行）不满足「只出现一次」，已改中性色。
-     底色按 c-balance 14% 现混、文字取 c-balance 实档（暗色档跟随主色，不再覆写） */
-  background: color-mix(in srgb, var(--c-balance) 14%, transparent);
-  color: var(--c-balance);
+     文字必须走 strong 层：tone 层（--c-balance）是给环和色块的高饱和档，
+     压在同色 14% 的浅底上只有 3.2:1，小字读不清。 */
+  background: var(--mod-program-soft);
+  color: var(--mod-program-strong);
 }
 
 /* 小节标题行：右侧留帮助入口位（sec-hint 用 margin-left:auto 顶到行尾） */

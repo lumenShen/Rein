@@ -174,12 +174,21 @@
      压在 #f5f5f7 上实测 4.39:1，差 0.11 到 AA。#0062d6 让两类一起过，肉眼仍是同一支
      iOS 蓝（G/B 各压 12/18 级，色相不动）。
      暗色档**故意不动**，理由写在那个块里。 */
-  --accent: #0062d6;
+  /* **品牌蓝的真源**。--accent 会在模块页被 data-tone 改写成该模块的主色，
+     所以「蓝色本身」必须另留一个不被改写的名字：饮水、交通、存储文字这些
+     **数据分类色**跟随品牌蓝，不能因为用户此刻站在饮食页就变成珊瑚色。
+     需要品牌蓝的地方一律写 --accent-base，需要「当前页操作色」的地方才写 --accent。 */
+  --accent-base: #0062d6;
+  --accent: var(--accent-base);
   /* soft 与主色**同源同色相、只是浓度不同**（12%；暗色块同构，是 --accent 的 18%）——
      主色换档它必须跟着换，否则 soft 底会悄悄漂回旧蓝。 */
   --accent-soft: rgba(0, 98, 214, 0.12);
   --accent-strong: #0a5ec2; /* accent-soft 底或白底上的文字蓝 */
   --on-accent: #ffffff; /* accent 及语义色实底按钮 / 分类彩底图标的前景白 */
+  /* 模块色实底上的前景。与 --on-accent 分开：--on-accent 会被模块页在暗色下
+     改成深墨（见文件末尾），而 float / 沉浸层这类**游离子孙**并不总在模块页里。
+     这里按亮暗两档固定反色：亮色模块底压白、暗色提亮后的模块底压深墨。 */
+  --on-tone: #ffffff;
   /* 实底档的绿。**真源** —— --c-protein / --cat-workout / --led-income / --led-salary
      都由它派生（这几个名字在亮暗两档都是同一支 iOS 绿，各挂一份值只会让「换绿」
      要改四处、还容易漏）：改色只改这一行，派生名自动跟随。 */
@@ -197,15 +206,97 @@
   --danger-soft: rgba(255, 59, 48, 0.12); /* 危险操作 soft 底 */
   --danger-strong: #c1271d; /* danger-soft 底上的文字红 */
 
+  /* ============================================================
+     模块识别色
+     ------------------------------------------------------------
+     每支模块色按「人的既有联想」选色相：运动＝活力橙、饮食＝食欲红、
+     专注＝深海靛（收心）、待办＝完成绿、课表＝学院天蓝、记账＝金币黄、
+     方案＝青绿（生长/计划）、AI＝创造紫、录音＝声波玫红。总览与「我」
+     不持色，沿用品牌蓝 —— 它们是壳，不是一个功能域。
+
+     每支色分三层，**用途不同、不要混用**：
+       --mod-<m>-tone    图形/数据层：进度环、图表、大图标、模块底色点。
+                          只需 3:1（WCAG 非文本图形），所以能保住高饱和；
+       --mod-<m>         实底层：按钮填充、实心模块徽标。白字压上去 ≥4.5:1，
+                          同时当文字压在画布 #f5f5f7 上也 ≥4.5:1（双用途，见 --accent 注释）；
+       --mod-<m>-strong  浅底文字层：soft 底 / 白底上的模块色文字，≥4.5:1。
+     暗色档统一提亮（tone 在 #1c1c1e 上 ≥4.5），模块页的 --on-accent 同步改深墨，
+     让亮色实底上的前景也过 AA —— 见文件末尾 html[data-tone] 段。
+     ============================================================ */
+  --mod-nutrition: #c92a2a;
+  --mod-nutrition-strong: #b42318;
+  --mod-nutrition-tone: #f04452;
+  --mod-nutrition-soft: rgba(240, 68, 82, 0.14);
+
+  --mod-sports: #c2410c;
+  --mod-sports-strong: #b54708;
+  --mod-sports-tone: #e8590c;
+  --mod-sports-soft: rgba(232, 89, 12, 0.14);
+
+  --mod-focus: #3b5bdb;
+  --mod-focus-strong: #2f45b5;
+  --mod-focus-tone: #5c7cfa;
+  --mod-focus-soft: rgba(92, 124, 250, 0.14);
+
+  --mod-todo: #237032;
+  --mod-todo-strong: #1e7b34;
+  --mod-todo-tone: #2f9e44;
+  --mod-todo-soft: rgba(47, 158, 68, 0.14);
+
+  --mod-campus: #0369a1;
+  --mod-campus-strong: #075985;
+  --mod-campus-tone: #1c7ed6;
+  --mod-campus-soft: rgba(28, 126, 214, 0.14);
+
+  --mod-ledger: #a16207;
+  --mod-ledger-strong: #8a5a00;
+  --mod-ledger-tone: #a16207;
+  --mod-ledger-soft: rgba(161, 98, 7, 0.14);
+
+  --mod-program: #0b7285;
+  --mod-program-strong: #0f766e;
+  --mod-program-tone: #0b9e74;
+  --mod-program-soft: rgba(11, 158, 116, 0.14);
+
+  --mod-ai: #6741d9;
+  --mod-ai-strong: #5f3dc4;
+  --mod-ai-tone: #845ef7;
+  --mod-ai-soft: rgba(132, 94, 247, 0.14);
+
+  --mod-record: #a61e4d;
+  --mod-record-strong: #9d174d;
+  --mod-record-tone: #e64980;
+  --mod-record-soft: rgba(230, 73, 128, 0.14);
+
   /* ---------- 健康域色 ---------- */
-  /* 三环：摄入 / 运动 / 均衡（继承自 Apple Fitness 三环） */
-  --c-intake: #fa114f;
-  --intake-glow: rgba(250, 17, 79, 0.35); /* 倒计时 GO! 光晕（随主色走） */
-  --c-exercise: #92e82a;
-  --c-exercise-deep: #5ba800; /* 运动绿文字档：亮底上保证对比，暗色提亮 */
-  --c-exercise-soft: rgba(146, 232, 42, 0.2); /* 完成态底色（组格/标签） */
-  --heat-mid: rgba(146, 232, 42, 0.55); /* 肌群激活 · 辅助档（低档复用 soft，高档复用主色） */
-  --c-balance: #1eeaef;
+  /* 三环：摄入（饮食红）/ 运动（活力橙）/ 均衡（方案青绿）。
+     三者都从模块识别色派生 —— 运动和饮食的环色不再是另立的两支「健康绿/粉」，
+     而是与该模块在导航、入口、图表里用同一支色：环是模块色的一种数据形态。
+     取 tone 层而不是实底层：环是非文本图形，3:1 即可，保住高饱和；
+     环上若压文字，文字用对应的 strong 层。 */
+  --c-intake: var(--mod-nutrition-tone);
+  --intake-glow: rgba(240, 68, 82, 0.35); /* 倒计时 GO! 光晕（随主色走） */
+  --c-exercise: var(--mod-sports-tone);
+  --c-exercise-deep: var(--mod-sports-strong); /* 运动色文字档：亮底上保证对比，暗色提亮 */
+  --c-exercise-soft: var(--mod-sports-soft); /* 完成态底色（组格/标签） */
+  --c-balance: var(--mod-program-tone);
+
+  /* ---------- 训练充足度色阶（练够分） ----------
+     **这不是模块色，也不跟运动识别橙走。** 运动橙回答的是「这是运动」，
+     练够分回答的是「练够了没有」—— 后者是「好 / 该补」的判断，必须用语义色阶：
+     红（不足）→ 琥珀（基本够）→ 绿（足够 / 充分）。
+     曾经把「足够」绑在 --c-exercise 上，运动换成橙色后 h2/h3/h4 全落在橙区，
+     不足与充分在色相上再也分不开；这里把两者彻底拆开。
+
+     取值全部按**非文本图形 3:1** 挑过（图例是 10px 实心点，也是图上的填充底色）：
+     亮色档最低 3.4:1（--heat-enough / 白底），暗色档最低 5.8:1（--heat-low / #1c1c1e）。
+     「足够 / 充分」只差明度，但两者都是「够」，不需要更大的视觉落差；
+     真正的分界在「基本够（琥珀）」与「足够（绿）」之间，那里是跨色相的。 */
+  --heat-none: var(--text-3);
+  --heat-low: #c1271d;
+  --heat-near: #b45309;
+  --heat-enough: #2f9e44;
+  --heat-full: #1e7b34;
 
   /* ---------- 配速色带（跑步分段配速的「快 → 慢」渐变两端） ----------
      它**不是**三环色。值恰好与 --c-exercise / --c-intake 相同，但那只是巧合：
@@ -223,16 +314,16 @@
   --hero-text: rgba(255, 255, 255, 0.92);
   --hero-text-dim: rgba(255, 255, 255, 0.55);
   --hero-end: #ff6961;
-  --hero-route-track: rgba(146, 232, 42, 0.3);
-  --hero-route-line: #92e82a;
-  --hero-route-glow: rgba(146, 232, 42, 0.65);
+  --hero-route-track: rgba(232, 89, 12, 0.3);
+  --hero-route-line: var(--mod-sports-tone);
+  --hero-route-glow: rgba(232, 89, 12, 0.65);
 
   /* 宏量营养素 */
   --c-protein: var(--ok); /* 派生：与 --ok 同色（iOS 绿，亮暗两档同值），换色只改 --ok */
   --c-carb: #ff9f0a;
   --c-fat: #ffcc00;
   --c-sodium: var(--danger); /* 派生：与 --danger 同色（iOS 红，亮暗两档同值） */
-  --c-water: var(--accent); /* 饮水：跟随主色（不再单独持一支与 accent 脱节的旧蓝 #007aff） */
+  --c-water: var(--accent-base); /* 饮水：跟随品牌蓝（--accent 会被模块页改写，数据分类色不能跟着变） */
 
   /* ---------- 待办分类色 ---------- */
   /* 中性灰（iOS systemGray）。**真源** —— --led-housing / --led-other / --sto-db
@@ -251,7 +342,7 @@
   --led-expense: var(--danger); /* 支出（语义固定，亮暗色同用）；派生：与 --danger 同色 */
   --led-income: var(--ok); /* 收入；派生：与 --ok 同色（亮暗两档同值） */
   --led-food: #ff9500; /* 独立持色：暗色块提亮为 #ff9f0a，与 --warn 故意分叉，不收编 */
-  --led-transport: var(--accent); /* 交通：跟随主色（暗色块那支本就是 #0a84ff，与 --accent 同源） */
+  --led-transport: var(--accent-base); /* 交通：跟随品牌蓝（与 --c-water 同理，不随模块页改写） */
   --led-shopping: #af52de; /* 独立持色：暗色块提亮为 #bf5af2 */
   --led-entertainment: var(--cat-health); /* 派生：与 --cat-health 同色（亮暗两档同值） */
   --led-housing: var(--cat-general); /* 派生：与 --cat-general 同色 */
@@ -265,11 +356,11 @@
   --led-other: var(--cat-general); /* 派生：与 --cat-general 同色 */
 
   /* ---------- 工作区存储域色（空间总览） ----------
-     四条账各自的颜色。--sto-text 跟随主色（它在多数工作区里是最大的一支，也该与
-     全站主色一致）；--sto-asset / --sto-index 独立持色，暗色块里各提亮一档 —— 与
+     四条账各自的颜色。--sto-text 跟随品牌蓝（它在多数工作区里是最大的一支，也该与
+     全站主色一致；不跟 --accent，否则在模块页会变成该模块的颜色）；--sto-asset / --sto-index 独立持色，暗色块里各提亮一档 —— 与
      记账分类色同一条理由（索引的暗色值与 --led-bills 相同，是两处独立声明，不是
      var() 派生，改一处另一处不跟）；--sto-db 收编为 --cat-general 的派生。 */
-  --sto-text: var(--accent);
+  --sto-text: var(--accent-base);
   --sto-asset: #af52de; /* 独立持色：暗色块提亮为 #bf5af2（与 --led-shopping 同值但互不派生） */
   --sto-index: #32ade6; /* 独立持色：暗色块提亮为 #5ac8fa（与 --led-bills 同值但互不派生） */
   --sto-db: var(--cat-general); /* 派生：与 --cat-general 同色 */
@@ -289,12 +380,17 @@
   --radius-s: 8px;
   /* 卡片**内**的二级分组面（.card.sub 这类「一组行」）：corner_radius_level6 = 12。
      它必须比母卡的 16 收一档，否则「里面那一层」读不出来 —— 文档「层级正相关」
-     的反向应用。 */
+     的反向应用。**同心关系**由 base.css 的 `.card > .card.sub` 处理：
+     外卡 16 − 井 12 = 4 的缝；井向外扩、内距补回，文字仍落在卡片的 16 内距上。
+     桌面外卡 14 → 缝 2；同一套 calc() 自动跟随，不另写常量。 */
   --radius-m-nest: 12px;
   --radius-m: 16px;
   --radius-l: 20px;
   --radius-xl: 32px;
   --radius-full: 999px;
+  /* 嵌套同心缝：外圆角 − 内圆角。卡内二级井 / 快捷组都按这一条算，
+     换外卡或内井的圆角时只改上面两行，缝自动跟随。 */
+  --r-nest-gap: calc(var(--radius-m) - var(--radius-m-nest));
 
   /* ============================================================
      间隔 · 对齐 HarmonyOS《间隔参数》
@@ -666,13 +762,64 @@ html[data-shell='desk'] {
        那属于组件层的成片改动（60 个文件），不能塞进一次令牌调整里。
        模块内能做的那部分已经做了：抢课里的「已选」胶囊就是从
        白字压主色改成了 accent-strong 压 accent-soft（4.6:1）。 */
-    --accent: #0a84ff;
+    --accent-base: #0a84ff;
+    --accent: var(--accent-base);
     --accent-soft: rgba(10, 132, 255, 0.18);
     --accent-strong: #4da3ff;
+    --on-tone: #0b0b0e;
     --ok-strong: #30d158;
     --warn-soft: rgba(255, 179, 64, 0.16);
     --warn-strong: #ffb340;
     --danger-strong: #ff6961;
+
+    /* 模块识别色 · 暗色档：整组提亮（压在 #1c1c1e 上文字 ≥4.5），
+       soft 浓度也从 14% 抬到 20% —— 黑底上的淡色需要更多实体才立得住。
+       实底档（--mod-<m>）在暗色里就是亮色本身，因此模块页会把 --on-accent
+       改成深墨（见文件末尾 html[data-tone] 段），否则白字压上去会掉到 2–3:1。 */
+    --mod-nutrition: #ff6b6b;
+    --mod-nutrition-strong: #ffa8a8;
+    --mod-nutrition-tone: #ff6b6b;
+    --mod-nutrition-soft: rgba(255, 107, 107, 0.2);
+
+    --mod-sports: #ff9f45;
+    --mod-sports-strong: #ffc078;
+    --mod-sports-tone: #ff9f45;
+    --mod-sports-soft: rgba(255, 159, 69, 0.2);
+
+    --mod-focus: #8ea2ff;
+    --mod-focus-strong: #b4c0ff;
+    --mod-focus-tone: #8ea2ff;
+    --mod-focus-soft: rgba(142, 162, 255, 0.2);
+
+    --mod-todo: #51cf66;
+    --mod-todo-strong: #8ce99a;
+    --mod-todo-tone: #51cf66;
+    --mod-todo-soft: rgba(81, 207, 102, 0.2);
+
+    --mod-campus: #4dabf7;
+    --mod-campus-strong: #a5d8ff;
+    --mod-campus-tone: #4dabf7;
+    --mod-campus-soft: rgba(77, 171, 247, 0.2);
+
+    --mod-ledger: #ffd43b;
+    --mod-ledger-strong: #ffe066;
+    --mod-ledger-tone: #ffd43b;
+    --mod-ledger-soft: rgba(255, 212, 59, 0.2);
+
+    --mod-program: #2dd4bf;
+    --mod-program-strong: #96f2d7;
+    --mod-program-tone: #2dd4bf;
+    --mod-program-soft: rgba(45, 212, 191, 0.2);
+
+    --mod-ai: #b197fc;
+    --mod-ai-strong: #d0bfff;
+    --mod-ai-tone: #b197fc;
+    --mod-ai-soft: rgba(177, 151, 252, 0.2);
+
+    --mod-record: #f783ac;
+    --mod-record-strong: #fcc2d7;
+    --mod-record-tone: #f783ac;
+    --mod-record-soft: rgba(247, 131, 172, 0.2);
 
     --shadow-card: none;
     --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.6);
@@ -683,26 +830,32 @@ html[data-shell='desk'] {
 
     /* 暗色下提亮三环与宏量色，保持对比度 */
     --c-fat: #ffd60a;
-    --c-balance: #40e8ec;
-    --c-exercise: #a4f04b;
-    --c-exercise-deep: #a4f04b;
-    --intake-glow: rgba(255, 55, 95, 0.4);
-    --c-intake: #ff375f;
+    --c-balance: var(--mod-program-tone);
+    --c-exercise: var(--mod-sports-tone);
+    --c-exercise-deep: var(--mod-sports-strong);
+    --intake-glow: rgba(255, 107, 107, 0.4);
+    --c-intake: var(--mod-nutrition-tone);
 
     /* 轨迹线随三环运动色同步提亮 */
-    --hero-route-track: rgba(164, 240, 75, 0.32);
-    --hero-route-line: #a4f04b;
-    --hero-route-glow: rgba(164, 240, 75, 0.65);
-    --c-exercise-soft: rgba(164, 240, 75, 0.22);
-    --heat-mid: rgba(164, 240, 75, 0.58);
+    --hero-route-track: rgba(255, 159, 69, 0.32);
+    --hero-route-line: var(--mod-sports-tone);
+    --hero-route-glow: rgba(255, 159, 69, 0.65);
+    --c-exercise-soft: var(--mod-sports-soft);
 
-    /* 存储域色：暗色提亮一档（--sto-text 跟随 --accent，已经提过） */
+    /* 训练充足度 · 暗色档：整阶提亮到 #1c1c1e 上 ≥5.8:1；
+       「充分」用更浅的绿而不是更深的绿 —— 暗场的「更充分」是更亮，不是更沉。 */
+    --heat-low: #ff6961;
+    --heat-near: #ffb340;
+    --heat-enough: #30d158;
+    --heat-full: #86e8a8;
+
+    /* 存储域色：暗色提亮一档（--sto-text 跟随品牌蓝，已经提过） */
     --sto-asset: #bf5af2;
     --sto-index: #5ac8fa;
 
     /* 记账分类色：暗色整体提亮一档，保持对比度。
-       --led-transport **不在这里覆写** —— 亮色块它就是 var(--accent)，暗色里
-       自动解析成 --accent 的暗色值（#0a84ff）；再写一份只会和主色静默分叉。
+       --led-transport **不在这里覆写** —— 亮色块它就是 var(--accent-base)，暗色里
+       自动解析成 --accent-base 的暗色值（#0a84ff）；再写一份只会和品牌蓝静默分叉。
        --led-income / --led-salary / --led-expense / --led-medical / --led-housing /
        --led-other / --led-entertainment 同理：亮色块已收编为派生，真源（--ok /
        --danger / --cat-general / --cat-health）在暗色同样不覆写，派生值自动跟随
@@ -712,5 +865,94 @@ html[data-shell='desk'] {
     --led-bills: #5ac8fa;
     --led-travel: #40c8e0;
     --led-food: #ff9f0a;
+  }
+}
+
+/* ============================================================
+   模块页色调作用域
+   ------------------------------------------------------------
+   data-tone 由 App.vue 写在 <html> 上（与 data-shell / data-perf / data-inspector
+   同一条做法）—— 所以要照顾 teleport 到 body 的弹层，而不是只包住 RouterView。
+
+   只改写「当前页操作色」的四个名字，不动任何数据分类色：
+     --accent        实底层（按钮填充 / 链接 / 选中态）
+     --accent-strong 浅底上的文字层
+     --accent-soft   soft 底
+     --tone          图形层（进度环 / 图表 / 大图标；比实底更饱和）
+
+   为什么实底与图形要分两层：实底要托住白字（≥4.5:1），必须压深；图形只需 3:1，
+   可以保住「活力橙」的高饱和。若只留一层，要么按钮不合格，要么图标发灰发褐。
+
+   总览 / 我 / 设置不写 data-tone：它们是壳，不是一个功能域，沿用品牌蓝。
+   ============================================================ */
+html[data-tone='nutrition'] {
+  --accent: var(--mod-nutrition);
+  --accent-strong: var(--mod-nutrition-strong);
+  --accent-soft: var(--mod-nutrition-soft);
+  --tone: var(--mod-nutrition-tone);
+}
+
+html[data-tone='sports'] {
+  --accent: var(--mod-sports);
+  --accent-strong: var(--mod-sports-strong);
+  --accent-soft: var(--mod-sports-soft);
+  --tone: var(--mod-sports-tone);
+}
+
+html[data-tone='focus'] {
+  --accent: var(--mod-focus);
+  --accent-strong: var(--mod-focus-strong);
+  --accent-soft: var(--mod-focus-soft);
+  --tone: var(--mod-focus-tone);
+}
+
+html[data-tone='todo'] {
+  --accent: var(--mod-todo);
+  --accent-strong: var(--mod-todo-strong);
+  --accent-soft: var(--mod-todo-soft);
+  --tone: var(--mod-todo-tone);
+}
+
+html[data-tone='campus'] {
+  --accent: var(--mod-campus);
+  --accent-strong: var(--mod-campus-strong);
+  --accent-soft: var(--mod-campus-soft);
+  --tone: var(--mod-campus-tone);
+}
+
+html[data-tone='ledger'] {
+  --accent: var(--mod-ledger);
+  --accent-strong: var(--mod-ledger-strong);
+  --accent-soft: var(--mod-ledger-soft);
+  --tone: var(--mod-ledger-tone);
+}
+
+html[data-tone='program'] {
+  --accent: var(--mod-program);
+  --accent-strong: var(--mod-program-strong);
+  --accent-soft: var(--mod-program-soft);
+  --tone: var(--mod-program-tone);
+}
+
+html[data-tone='ai'] {
+  --accent: var(--mod-ai);
+  --accent-strong: var(--mod-ai-strong);
+  --accent-soft: var(--mod-ai-soft);
+  --tone: var(--mod-ai-tone);
+}
+
+html[data-tone='record'] {
+  --accent: var(--mod-record);
+  --accent-strong: var(--mod-record-strong);
+  --accent-soft: var(--mod-record-soft);
+  --tone: var(--mod-record-tone);
+}
+
+/* 暗色档：模块色整组提亮，白字压上去会掉到 2–3:1，所以模块页的前景翻成深墨。
+   这同时修好了语义实底（--ok / --warn / --danger）在暗色里压白字的老问题 ——
+   这些亮色实底配深墨本来就更清楚，而模块页恰好是它们最密集的地方。 */
+@media (prefers-color-scheme: dark) {
+  html[data-tone] {
+    --on-accent: #0b0b0e;
   }
 }

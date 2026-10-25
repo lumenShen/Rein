@@ -82,7 +82,8 @@ const effectW = computed(() => {
   return Math.round(ratio * 50)
 })
 
-/** 档位配色：很好/不错 = 运动绿，一般 = 琥珀，疲惫/很差 = 红（与热力图同一套语义） */
+/** 档位配色：很好/不错 = 绿，一般 = 琥珀，疲惫/很差 = 红（与练够分同一套语义色阶）。
+ *  这三档是「状态好坏」的判断，不跟运动识别橙走，否则「好」与「一般」会挤在橙区。 */
 function toneOf(v: number): string {
   return v >= 4 ? 'tone-good' : v === 3 ? 'tone-fair' : 'tone-poor'
 }
@@ -351,15 +352,15 @@ watch(
 }
 
 .tone-good .rd-dot {
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 .tone-fair .rd-dot {
-  background: var(--warn);
+  background: var(--heat-near);
 }
 
 .tone-poor .rd-dot {
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .rd-label {
@@ -457,14 +458,14 @@ watch(
      圆帽给末端侧，贴零线那侧直角才接得上中线 */
   clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0 round 0 var(--radius-full) var(--radius-full) 0);
   border-radius: 0 var(--radius-full) var(--radius-full) 0;
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 .rd-dbar.neg {
   right: 50%;
   clip-path: inset(0 0 0 calc(100% - var(--p, 0%)) round var(--radius-full) 0 0 var(--radius-full));
   border-radius: var(--radius-full) 0 0 var(--radius-full);
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .rd-strack {
@@ -486,15 +487,15 @@ watch(
 }
 
 .rd-sbar.tone-good {
-  background: var(--c-exercise);
+  background: var(--heat-enough);
 }
 
 .rd-sbar.tone-fair {
-  background: var(--warn);
+  background: var(--heat-near);
 }
 
 .rd-sbar.tone-poor {
-  background: var(--danger);
+  background: var(--heat-low);
 }
 
 .rd-psub {

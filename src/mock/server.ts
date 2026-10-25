@@ -29,6 +29,7 @@ import type {
   DailyTargets,
   ExerciseCategory,
   ExerciseEquipment,
+  ExerciseGuideOverride,
   ExerciseInput,
   ExerciseKind,
   ExerciseRecord,
@@ -719,6 +720,67 @@ function saveExerciseFavorite(): void {
   }
 }
 
+/* ---- 动作详解覆盖层（与 Rust 0048 exercise_guides 同语义） ---- */
+
+/** 用户/AI 改过的教学文案（只存差异；删键 = 恢复内置基线） */
+const EXERCISE_GUIDE_KEY = 'rein.mock.exerciseGuides.v1'
+const exerciseGuides: Record<string, ExerciseGuideOverride> = {}
+
+function loadExerciseGuides(): void {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EXERCISE_GUIDE_KEY) ?? '{}') as Record<
+      string,
+      ExerciseGuideOverride
+    >
+    for (const [id, g] of Object.entries(raw)) exerciseGuides[id] = g
+  } catch {
+    /* 损坏数据按空处理 */
+  }
+}
+
+function saveExerciseGuides(): void {
+  try {
+    localStorage.setItem(EXERCISE_GUIDE_KEY, JSON.stringify(exerciseGuides))
+  } catch {
+    /* 同上 */
+  }
+}
+
+/** 单段文案校验（与 Rust `guide::line` 同口径：≤60 字、不可空） */
+function guideLine(v: unknown, field: string): string {
+  const t = typeof v === 'string' ? v.trim() : ''
+  if (!t) throw new Error(`${field}不能为空`)
+  if ([...t].length > 60) throw new Error(`${field}最多 60 字，当前 ${[...t].length} 字；请压缩后重试`)
+  return t
+}
+
+function guideFromInput(raw: unknown): ExerciseGuideOverride {
+  const input = (raw ?? {}) as Record<string, unknown>
+  const exerciseId = String(input.exerciseId ?? '')
+  if (!exercises.some((e) => e.id === exerciseId)) {
+    throw new Error(`动作不存在：${exerciseId}（先用 list_exercises 拿 id，或按名称精确定位）`)
+  }
+  const setup = Array.isArray(input.setup) ? input.setup : []
+  if (setup.length !== 3) throw new Error(`setup 必须恰好 3 条（摆位 → 躯干 → 呼吸/绷紧），当前 ${setup.length} 条`)
+  const cautions = Array.isArray(input.cautions) ? input.cautions : []
+  if (cautions.length === 0) throw new Error('cautions 至少 1 条：这个动作最容易犯的错，不能空着')
+  if (cautions.length > 3) throw new Error(`cautions 最多 3 条，当前 ${cautions.length} 条`)
+  const repSec = Number(input.repSec ?? 0)
+  if (!Number.isFinite(repSec) || repSec < 0 || repSec > 120) {
+    throw new Error(`repSec（每次循环秒数）应在 0–120，当前 ${String(input.repSec)}；计时/有氧动作给 0`)
+  }
+  return {
+    exerciseId,
+    setup: setup.map((s, i) => guideLine(s, `setup 第 ${i + 1} 条`)),
+    start: guideLine(input.start, 'start（开始/轨迹）'),
+    end: guideLine(input.end, 'end（结束/回位）'),
+    cautions: cautions.map((s, i) => guideLine(s, `cautions 第 ${i + 1} 条`)),
+    repSec: Math.round(repSec),
+    updatedBy: input.updatedBy === 'user' ? 'user' : 'ai',
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 /** 名称（或别名）精确匹配；名字已被 trim/规范化 */
 function findExerciseByName(name: string): ExerciseRecord | undefined {
   const key = name.trim()
@@ -866,6 +928,7 @@ function strengthRecord(r: MockStrengthSet) {
 }
 
 loadExercises()
+loadExerciseGuides()
 
 let pomodoroSeq = 0
 const pomodoroSessions: PomodoroSession[] = []
@@ -5475,7 +5538,7 @@ function defaultUpdateSettings(): UpdateSettings {
         id: 'github',
         name: 'GitHub Release',
         kind: 'tauri-static',
-        url: 'https://github.com/gozaoo-coder/Rein/releases/latest/download/latest.json',
+        url: 'https://github.com/lumenShen/Rein/releases/latest/download/latest.json',
         enabled: true,
         priority: 10,
       },
@@ -6486,6 +6549,11 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       if (e.isCustom) {
         exercises.splice(exercises.indexOf(e), 1)
         saveExercises()
+        // 覆盖层跟着自建动作走（Rust 侧是外键 ON DELETE CASCADE，这里手动对齐）
+        if (exerciseGuides[e.id]) {
+          delete exerciseGuides[e.id]
+          saveExerciseGuides()
+        }
       } else {
         e.hidden = true
         saveExerciseHidden()
@@ -6508,6 +6576,27 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       e.favorite = Boolean(args.favorite)
       if (!e.isCustom) saveExerciseFavorite()
       else saveExercises()
+      return delay(undefined as T)
+    }
+
+    case 'list_exercise_guides': {
+      const rows = Object.values(exerciseGuides).sort((a, b) =>
+        a.updatedAt < b.updatedAt ? 1 : -1,
+      )
+      return delay(rows as T)
+    }
+
+    case 'upsert_exercise_guide': {
+      const row = guideFromInput(args.input)
+      exerciseGuides[row.exerciseId] = row
+      saveExerciseGuides()
+      return delay(row as T)
+    }
+
+    case 'delete_exercise_guide': {
+      const id = String(args.exerciseId ?? '')
+      delete exerciseGuides[id]
+      saveExerciseGuides()
       return delay(undefined as T)
     }
 
@@ -9071,6 +9160,7 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
           loginStrategy: 'supwisdom-portal-rsa',
           bizTypeId: 2,
           mayRequireCaptcha: true,
+          capabilities: { courseDetail: true, program: true, lessonSearch: true, courseSelect: true },
         },
         {
           kind: 'guet-supwisdom-eams5-test',
@@ -9082,6 +9172,7 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
           loginStrategy: 'supwisdom-portal-rsa',
           bizTypeId: 2,
           mayRequireCaptcha: true,
+          capabilities: { courseDetail: true, program: true, lessonSearch: true, courseSelect: true },
         },
         {
           kind: 'gxust-zfsoft-zftal',
@@ -9094,6 +9185,8 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
           // 正方没有「培养层次」这个概念（学期就是学年 + 学期代码）
           bizTypeId: null,
           mayRequireCaptcha: true,
+          // 与 Rust `ZFSOFT_CAPS` 一致：课表主线之外，四个可选能力都没有接口
+          capabilities: { courseDetail: false, program: false, lessonSearch: false, courseSelect: false },
         },
       ] as T)
 
@@ -9204,7 +9297,14 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
 
     case 'campus_schedule': {
       if (!campusAccount) {
-        return delay({ account: null, semester: null, entries: [], timeSlots: [], courses: [] } as T)
+        return delay({
+          account: null,
+          semester: null,
+          entries: [],
+          timeSlots: [],
+          courses: [],
+          needsResync: false,
+        } as T)
       }
       const sem = campusSemester()
       const fallback = campusRange()
@@ -9218,6 +9318,8 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
         // 有节次表就是逐节轴（第1节 08:00-08:40），课块再按占的节次跨行（见周视图）。
         timeSlots: buildAxisRows(CAMPUS_PERIOD_SLOTS, CAMPUS_SESSIONS),
         courses: campusCourses,
+        // 演示数据永远是新口径（没有老库升级这回事），所以自愈标记恒为 false
+        needsResync: false,
       } as T)
     }
 
@@ -9251,10 +9353,12 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'campus_course_detail': {
       if (!campusAccount) throw new Error('还没有绑定教务系统账号，请先在「课表配置」里登录')
       // 与 Rust 适配器同一条口径：正方那套教务**没有课程详情接口**
-      // （`AnyAdapter::fetch_course_detail` 直接返回「暂不支持」）。mock 照同样的样子失败 ——
+      // （`CampusAdapter::fetch_course_detail` 的默认「不支持」回执）。mock 照同样的样子失败 ——
       // 否则「本机档案兜底」那条分支在浏览器里永远走不到，而它正是正方用户唯一的详情来源。
       if (campusAccount.systemKind === 'gxust-zfsoft-zftal') {
-        throw new Error('广西科技大学的正方教务系统暂不支持查看课程详情')
+        throw new Error(
+          '广西科技大学的教务系统暂不支持查看课程详情（正方 ZFSoft zftal-ui-v5 · jwxt.gxust.edu.cn）',
+        )
       }
       const lessonId = Number(args.lessonId)
       const weekday = args.weekday == null ? null : Number(args.weekday)

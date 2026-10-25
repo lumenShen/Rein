@@ -8,7 +8,7 @@ export const sportsPlugin = definePlugin({
   name: '运动',
   desc: '训练课程、跑步模式与运动记录',
   icon: Dumbbell,
-  accent: '--c-exercise',
+  accent: '--mod-sports',
   toggleable: true,
   defaultEnabled: true,
   routes: [
@@ -27,7 +27,7 @@ export const sportsPlugin = definePlugin({
       title: '记运动',
       sub: '力量 / 有氧 · MET 估算',
       icon: Dumbbell,
-      ic: { background: 'var(--c-exercise-soft)', color: 'var(--c-exercise-deep)' },
+      ic: { background: 'var(--mod-sports-soft)', color: 'var(--mod-sports-strong)' },
       order: 20,
       action: 'add-workout',
     },

@@ -17,7 +17,7 @@ export const aiPlugin = definePlugin({
   name: 'AI',
   desc: '对话、拍照识别与知识库',
   icon: Sparkles,
-  accent: '--cat-study',
+  accent: '--mod-ai',
   routes: [
     'ai',
     'ai-models',
@@ -36,8 +36,8 @@ export const aiPlugin = definePlugin({
       sub: '提问 · 拍照识别',
       icon: Sparkles,
       ic: {
-        background: 'color-mix(in srgb, var(--cat-study) 14%, transparent)',
-        color: 'var(--cat-study)',
+        background: 'var(--mod-ai-soft)',
+        color: 'var(--mod-ai-strong)',
       },
       order: 50,
       to: { name: 'ai' },
@@ -50,7 +50,7 @@ export const todoPlugin = definePlugin({
   name: '待办',
   desc: '今日画布、周时间线与清单',
   icon: ListTodo,
-  accent: '--cat-general',
+  accent: '--mod-todo',
   routes: ['todos'],
   nav: [{ route: 'todos', label: '待办', icon: ListTodo, surfaces: ['rail'], order: 150 }],
 })

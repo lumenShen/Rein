@@ -1,5 +1,5 @@
 /**
- * 动作详解 · 结构化教学数据（内置动作的唯一真源）。
+ * 动作详解 · 结构化教学数据（内置动作的**基线**）。
  *
  * 库里每个动作只有一段 `tips`（一句话要点）与可选的 `steps`。训练时真正需要的是
  * **按动作阶段切开**的指引：怎么摆位（准备）、往哪走（开始/轨迹）、回到哪（结束）、
@@ -19,6 +19,13 @@
  * 只覆盖 81 个内置动作：自建动作没有教学内容，界面回落库里那段 tips。
  * 键 = `exercises.id`，与 `resources/exercises.json` 一一对应（`npm run typecheck` 不校，
  * 但 `scripts/e2e-session-guide.mjs` 会要求内置动作全覆盖）。
+ *
+ * ⚠️ 本文件是**基线**，不是唯一真源：AI 与用户的改动落在 `exercise_guides` 表
+ * （迁移 0048，命令见 `modules/exercise_lib/guide.rs`），由
+ * `stores/exerciseLib.ts::guideFor` 合成「覆盖 ?? 基线」。所以：
+ *   - 界面一律通过 `lib.guideOf(item)` / `lib.guideFor(id)` 取文案，别直接读 `EXERCISE_GUIDES`；
+ *   - 改这里的文案只影响**没被覆盖过**的动作（覆盖行仍在库里生效，删行才回落本文件）；
+ *   - 覆盖层只存差异，所以「恢复默认」= 删一行，不需要备份。
  */
 
 import type { ExerciseKind } from '@/types'

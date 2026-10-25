@@ -7,6 +7,21 @@
  * 已经带具体日期，不需要再实现一遍周次换算。
  */
 
+/**
+ * 该教务系统实际可用的功能位（Rust `adapters::provider::AdapterCapabilities` 镜像）。
+ * 入口显隐跟着它走 —— 前端不认识「哪家厂商缺什么」，只认能力。
+ */
+export interface AdapterCapabilities {
+  /** 课程详情（教学班档案） */
+  courseDetail: boolean
+  /** 培养方案与学分完成度 */
+  program: boolean
+  /** 全校开课查询 */
+  lessonSearch: boolean
+  /** 选课与抢课 */
+  courseSelect: boolean
+}
+
 /** 学校系统选择器的一项（`campus_systems` 返回） */
 export interface SchoolSystemInfo {
   /** 稳定键，落库在 `campus_accounts.system_kind` */
@@ -28,6 +43,8 @@ export interface SchoolSystemInfo {
   bizTypeId: number | null
   /** 登录过程中可能出现图形验证码，UI 预留验证码位 */
   mayRequireCaptcha: boolean
+  /** 实际可用的功能位，入口显隐跟着它走 */
+  capabilities: AdapterCapabilities
 }
 
 /**
@@ -182,6 +199,11 @@ export interface ScheduleView {
   entries: ScheduleEntry[]
   timeSlots: PeriodSlot[]
   courses: CampusCourse[]
+  /**
+   * 库里的时段是**旧规则**写下的（同一门课同一时段的多个周次段被并成了一条），
+   * 只有一次真同步能把它们补回来。页面看到它就自动跑那一次（v0.7.4 老库升级用）。
+   */
+  needsResync: boolean
 }
 
 export interface LoginOutcome {

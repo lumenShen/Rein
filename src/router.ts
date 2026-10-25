@@ -91,6 +91,13 @@ export const routes = [
     meta: { title: '打开或关闭功能' },
   },
   {
+    path: '/settings/float',
+    name: 'settings-float',
+    component: () => import('@/pages/GlobalFloatPage.vue'),
+    // 三级页：全局浮窗开关 + 权限开关教程（入口在「设置 › 功能 › 全局浮窗」）
+    meta: { title: '全局浮窗' },
+  },
+  {
     path: '/settings/sync',
     name: 'settings-sync',
     component: () => import('@/pages/SyncPage.vue'),

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, HeartPulse, RefreshCw, Sparkles, Timer, ToggleLeft, Trash2 } from 'lucide-vue-next'
+import { ChevronRight, HeartPulse, Pin, RefreshCw, Sparkles, Timer, ToggleLeft, Trash2 } from 'lucide-vue-next'
 
 import DataClearSheet from '@/components/settings/DataClearSheet.vue'
 import ExternalAccessSection from '@/components/settings/ExternalAccessSection.vue'
-import GlobalFloatSection from '@/components/settings/GlobalFloatSection.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import NumberStepper from '@/components/common/NumberStepper.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -13,10 +12,12 @@ import PillChip from '@/components/common/PillChip.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { toggleablePlugins } from '@/plugins'
+import { isTauri } from '@/services/transport'
 import { useExercisePrefs, PREP_SEC_MAX, PREP_SEC_MIN } from '@/stores/exercisePrefs'
 import { useFeaturesStore } from '@/stores/features'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useUpdateStore } from '@/stores/update'
+import { floatEnabled, floatStatus, refreshFloatStatus } from '@/system/globalFloat'
 import { MOTION_LEVELS, motionEffective, motionLevel, setMotionLevel, type MotionLevel } from '@/system/motion'
 import { PERF_MODES, liquidGlass, perfMode, setPerfMode, type PerfMode } from '@/system/perf'
 
@@ -49,6 +50,15 @@ const clearOpen = ref(false)
 
 /** 功能行副标：列出可开关模块，一眼看到有哪些功能可关 */
 const featureNames = computed(() => toggleablePlugins().map((p) => p.name).join(' · '))
+
+/** 全局浮窗入口副标：入口这一行就说清「现在是什么状态」，不必点进去才知道 */
+const floatHint = computed(() => {
+  if (!isTauri) return '浏览器预览不支持系统浮窗'
+  if (!floatStatus.value.supported) return '本机不支持 · 仍用程序内浮条'
+  if (!floatEnabled.value) return '已关闭 · 只在程序内显示'
+  if (!floatStatus.value.permitted) return '未授权「在其他应用上显示」'
+  return floatStatus.value.visible ? '浮窗显示中' : '已开启 · 离开应用时出现'
+})
 
 /** 副标：把「有没有新版本」直接写在行里，不必进页面才知道 */
 const updateHint = computed(() => {
@@ -102,6 +112,8 @@ const motionHint = computed(() => {
 onMounted(() => {
   // 只在本地读一次快照，不触发联网：设置页不该因为网络慢而卡
   if (!update.snapshot) void update.load()
+  // 入口副标要报真实状态（权限可能刚在系统设置里改过）
+  void refreshFloatStatus()
 })
 </script>
 
@@ -111,7 +123,7 @@ onMounted(() => {
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
-    <!-- 功能：插件开关入口 -->
+    <!-- 功能：插件开关入口 + 全局浮窗（浮窗不属于插件开关，单独一张三级页） -->
     <section class="card d-full">
       <h2 class="gtitle">功能</h2>
       <button class="frow row" @click="router.push({ name: 'settings-features' })">
@@ -121,6 +133,21 @@ onMounted(() => {
         <span class="col ftxt">
           <b>打开或关闭功能</b>
           <em class="t-2">{{ featureNames }}</em>
+        </span>
+        <ChevronRight :size="16" class="t-3" />
+      </button>
+      <!-- 全局浮窗：开关本身一行就够，但权限教程需要一页；这里只留入口与当下状态 -->
+      <button
+        class="frow row"
+        data-testid="settings-float-entry"
+        @click="router.push({ name: 'settings-float' })"
+      >
+        <i class="fic" style="background: var(--accent-soft); color: var(--accent)">
+          <Pin :size="18" />
+        </i>
+        <span class="col ftxt">
+          <b>全局浮窗</b>
+          <em class="t-2">{{ floatHint }}</em>
         </span>
         <ChevronRight :size="16" class="t-3" />
       </button>
@@ -239,10 +266,6 @@ onMounted(() => {
       </header>
       <SegmentedControl v-model="motionChoice" class="perfseg" :options="MOTION_OPTIONS" />
     </section>
-
-    <!-- 全局浮窗：专注 / 训练在离开应用后浮在最上层（system/globalFloat + 桌面第二窗口 /
-         Android 系统浮层）。未授权时如实说明并降级为程序内浮窗。 -->
-    <GlobalFloatSection />
 
     <!-- 多设备同步。属「同步」模块（模块关掉时整卡收起，直链也被守卫拦回主页） -->
     <section v-if="syncOn" class="card">
@@ -428,6 +451,13 @@ onMounted(() => {
   min-height: var(--row-h-double);
   text-align: left;
   color: inherit;
+}
+
+/* 功能卡里两行入口紧挨着：不叠 8px 外边距（那会把它们读成两组），
+   改画一条发丝线，读起来是一张清单 */
+.frow + .frow {
+  margin-top: 0;
+  border-top: 0.5px solid var(--line);
 }
 
 .fic {

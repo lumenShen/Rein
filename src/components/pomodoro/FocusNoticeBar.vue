@@ -72,7 +72,7 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--cat-work);
+  background: var(--mod-focus-tone);
 }
 
 .tone-break .dot {

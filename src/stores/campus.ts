@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { campusService } from '@/services/campusService'
 import { useTodoStore } from '@/stores/todo'
 import type {
+  AdapterCapabilities,
   CampusAccount,
   CampusCourse,
   CampusLoginInput,
@@ -37,6 +38,23 @@ export const useCampusStore = defineStore('campus', () => {
   const lastSync = ref<SyncOutcome | null>(null)
 
   const hasAccount = computed(() => account.value !== null)
+
+  /**
+   * 当前账号那套教务系统的**能力位**（入口显隐跟着它走，前端不认识厂商）。
+   * 未登录 / 系统未知时按「全有」兜底，保持旧客户端行为不变。
+   */
+  const capabilities = computed<AdapterCapabilities>(() => {
+    const kind = account.value?.systemKind
+    const sys = kind ? systems.value.find((s) => s.kind === kind) : null
+    return (
+      sys?.capabilities ?? {
+        courseDetail: true,
+        program: true,
+        lessonSearch: true,
+        courseSelect: true,
+      }
+    )
+  })
   const semester = computed(() => view.value?.semester ?? null)
   const courses = computed(() => view.value?.courses ?? [])
   const timeSlots = computed(() => view.value?.timeSlots ?? [])
@@ -201,6 +219,7 @@ export const useCampusStore = defineStore('campus', () => {
     loggingIn,
     lastSync,
     hasAccount,
+    capabilities,
     semester,
     courses,
     timeSlots,
@@ -245,7 +264,9 @@ export function offlineCourseDetail(
   semesterName: string,
 ): CourseDetail {
   const weeks = [...session.weeks].sort((a, b) => a - b)
-  const teachers = (course && course.teachers.length > 0 ? course.teachers : session.teachers).filter(
+  // **时段级教师优先**：一门课按周换人时（桂电的健康教育四位老师轮着上），课程级那份
+  // 是各时段教师的并集 —— 放进「这一节」的档案里会被读成「这一节他们一起上」。
+  const teachers = (session.teachers.length > 0 ? session.teachers : (course?.teachers ?? [])).filter(
     Boolean,
   )
   const startUnit = session.startUnit > 0 ? session.startUnit : 0

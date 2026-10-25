@@ -15,6 +15,8 @@ import { libraryMuscles } from '@/utils/libraryMuscles'
 import type {
   ExerciseCategory,
   ExerciseEquipment,
+  ExerciseGuideInput,
+  ExerciseGuideOverride,
   ExerciseInput,
   ExerciseKind,
   ExerciseRecord,
@@ -27,6 +29,13 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
   const loaded = ref(false)
   const loading = ref(false)
 
+  /**
+   * 动作详解覆盖层（0048）：只含**被改过的动作**。
+   * 基线在 `config/exerciseGuide.ts`（编进包，81 条），这里存的是差异 ——
+   * 所以删掉一个键就等于恢复默认，不需要备份。
+   */
+  const guides = ref<Record<string, ExerciseGuideOverride>>({})
+
   const byId = computed(() => {
     const map = new Map<string, ExerciseRecord>()
     for (const e of list.value) map.set(e.id, e)
@@ -36,7 +45,17 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
   async function load(includeHidden = false): Promise<void> {
     loading.value = true
     try {
-      list.value = await exerciseLibService.list({ includeHidden })
+      // 覆盖层与动作列表一起刷：列表页与沉浸页都靠 guideOf 取文案，
+      // 分开刷会让「AI 刚改完」的那一屏读到旧值。覆盖层失败不该挡住列表（离线/老库），
+      // 所以单独 catch 成空表 —— 此时界面显示基线，与没有改动时完全一致。
+      const [rows, overrides] = await Promise.all([
+        exerciseLibService.list({ includeHidden }),
+        exerciseLibService.listGuides().catch(() => [] as ExerciseGuideOverride[]),
+      ])
+      list.value = rows
+      const map: Record<string, ExerciseGuideOverride> = {}
+      for (const g of overrides) map[g.exerciseId] = g
+      guides.value = map
       loaded.value = true
     } finally {
       loading.value = false
@@ -109,12 +128,56 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
   /**
    * 结构化动作详解（准备 3 条 / 开始 / 结束 / 注意）。
    *
-   * 数据在前端常量表（`config/exerciseGuide`）而不是库表：它是**教学内容**，
-   * 不随用户改动、不参与同步，也不该为 81 个内置动作各写一列 JSON。
-   * 自建动作返回 null，界面回落 `tipsOf` 那一句话。
+   * 两层结构：`config/exerciseGuide` 是**内置基线**（编进包的教学内容，81 条），
+   * `exercise_guides` 表是**覆盖层**（0048，AI 或用户改过的差异）。这里读的是
+   * 「覆盖 ?? 基线」的合成值 —— 所以 AI 改完文案，详情抽屉与沉浸页当轮就跟着变。
+   *
+   * 覆盖行做一次形状兜底：脏数据（setup 不是 3 条 / cautions 空）一律回落基线，
+   * 别让半条记录把界面顶出空号。自建动作没有基线，改过的才有值。
    */
+  function guideFor(exerciseId: string | null | undefined): ExerciseGuide | null {
+    if (!exerciseId) return null
+    const o = guides.value[exerciseId]
+    if (o) {
+      const setup = o.setup.map((s) => s.trim()).filter(Boolean)
+      const cautions = o.cautions.map((s) => s.trim()).filter(Boolean)
+      if (setup.length === 3 && cautions.length > 0) {
+        return {
+          setup: [setup[0], setup[1], setup[2]],
+          start: o.start,
+          end: o.end,
+          cautions,
+          repSec: o.repSec,
+        }
+      }
+    }
+    return guideOfId(exerciseId)
+  }
+
   function guideOf(item: Pick<PlanExercise, 'exerciseId'> | null | undefined): ExerciseGuide | null {
-    return guideOfId(item?.exerciseId)
+    return guideFor(item?.exerciseId)
+  }
+
+  /** 这条详解从哪来的：覆盖层 / 内置基线 / 没有（自建且未改过） */
+  function guideSourceOf(exerciseId: string): 'override' | 'builtin' | 'none' {
+    if (guides.value[exerciseId]) return 'override'
+    return guideOfId(exerciseId) ? 'builtin' : 'none'
+  }
+
+  /** 写覆盖层（五段完整提交；局部修改由调用方先读 `guideFor` 再合并） */
+  async function saveGuide(input: ExerciseGuideInput): Promise<ExerciseGuideOverride> {
+    const row = await exerciseLibService.upsertGuide(input)
+    guides.value = { ...guides.value, [row.exerciseId]: row }
+    return row
+  }
+
+  /** 删覆盖 = 恢复内置基线 */
+  async function resetGuide(exerciseId: string): Promise<void> {
+    await exerciseLibService.resetGuide(exerciseId)
+    if (!guides.value[exerciseId]) return
+    const next = { ...guides.value }
+    delete next[exerciseId]
+    guides.value = next
   }
 
   /** 按类型取库内动作（沉浸页「更换动作」用） */
@@ -185,6 +248,11 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
     musclesOf,
     tipsOf,
     guideOf,
+    guides,
+    guideFor,
+    guideSourceOf,
+    saveGuide,
+    resetGuide,
     forKind,
     search,
   }

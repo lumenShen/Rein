@@ -4,7 +4,7 @@
  *
  * 两段式：
  *   A1 mock（浏览器，无头 Edge + 原生 CDP，走 src/mock/server.ts）
- *     · 设置页「全局浮窗」卡在场、如实写「不支持」、开关落 localStorage 并持久化；
+ *     · 设置页「功能」入口在场 → 点进三级页「全局浮窗」；如实写「不支持」、开关落 localStorage 并持久化；
  *     · 浏览器模式不出现自绘标题栏 / 拖拽区 / 窗口按钮，430×932 与 1512×945 的壳层不回归；
  *     · 直接打开 float.html 渲染「等待会话」空态且零未捕获异常；
  *     · 既有程序内浮条零变化（专注浮条相位/读数/四颗按钮、结束确认文案；录音条与运动条冒烟）；
@@ -103,7 +103,7 @@ async function gotoHash(page, hash, readyExpr, label) {
   await sleep(150)
 }
 
-/** 设置页的「全局浮窗」卡（用 h2 精确匹配，避免命中含该词的其它卡片） */
+/** 三级页的「全局浮窗」开关卡（用 h2 精确匹配，避免命中含该词的其它卡片） */
 const FLOAT_CARD = `[...document.querySelectorAll('section.card')]
   .find((s) => s.querySelector('h2')?.textContent.trim() === '全局浮窗')`
 
@@ -199,16 +199,33 @@ async function stageMock() {
     await sleep(1500)
     await dismissUpdate(main)
 
-    /* ---------- A1.1 设置页「全局浮窗」卡 / 降级态 / 开关持久化 ---------- */
+    /* ---------- A1.1 设置入口 → 三级页「全局浮窗」/ 降级态 / 开关持久化 ---------- */
     await gotoHash(main, '#/settings', `document.querySelector('h1')?.textContent === '设置'`, '设置页')
+    const entry = await main.eval(`(() => {
+      const btn = document.querySelector('[data-testid="settings-float-entry"]')
+      return btn
+        ? {
+            text: btn.textContent.replace(/\\s+/g, ' ').trim(),
+            hint: btn.querySelector('em')?.textContent.trim() ?? null,
+          }
+        : null
+    })()`)
+    ok(
+      'A1.1a 设置页「功能」有全局浮窗入口（副标报当前状态）',
+      !!entry && entry.text.includes('全局浮窗') && !!entry.hint,
+      JSON.stringify(entry),
+    )
+    await main.clickSel('[data-testid="settings-float-entry"]')
+    await main.waitFor(`document.querySelector('h1')?.textContent === '全局浮窗'`, 8000, '全局浮窗三级页')
+    ok('A1.1b 点入口进入三级页（开关 + 权限教程）', true)
     const card = await readFloatCard(main)
     ok(
-      'A1.1a 设置页有「全局浮窗」卡（开关读屏名 = 全局浮窗）',
+      'A1.1c 三级页有「全局浮窗」开关（开关读屏名 = 全局浮窗）',
       !!card && card.switchLabel === '全局浮窗' && card.title === '全局浮窗',
       JSON.stringify(card),
     )
     ok(
-      'A1.1b 卡头如实写「不支持」（浏览器没有系统浮窗）',
+      'A1.1d 卡头如实写「不支持」（浏览器没有系统浮窗）',
       !!card && card.state.includes('不支持') && card.note.includes('浏览器预览'),
       `状态=${card?.state} 说明=${card?.note?.slice(0, 46)}`,
     )
@@ -217,13 +234,13 @@ async function stageMock() {
       return await invoke('global_float_status')
     })()`)
     ok(
-      'A1.1c 浏览器 mock 返回 supported:false（上层据此降级）',
+      'A1.1e 浏览器 mock 返回 supported:false（上层据此降级）',
       mockStatus?.supported === false && mockStatus?.permitted === false,
       JSON.stringify(mockStatus),
     )
 
     const keyBefore = await main.eval(`localStorage.getItem(${JSON.stringify(KEY_FLOAT)})`)
-    ok('A1.1d 开关默认开（未写入 localStorage 时按默认 true 渲染）', card?.checked === 'true', `checked=${card?.checked} key=${keyBefore}`)
+    ok('A1.1f 开关默认开（未写入 localStorage 时按默认 true 渲染）', card?.checked === 'true', `checked=${card?.checked} key=${keyBefore}`)
     if (!(await clickFloatToggle(main))) throw new Error('点不到「全局浮窗」开关')
     await main.waitFor(`${FLOAT_CARD}?.querySelector('button[role="switch"]')?.getAttribute('aria-checked') === 'false'`, 4000, '开关关闭')
     const afterOff = {
@@ -231,7 +248,7 @@ async function stageMock() {
       card: await readFloatCard(main),
     }
     ok(
-      'A1.1e 点开关 → 关：localStorage rein.globalFloat.v1 = 0',
+      'A1.1g 点开关 → 关：localStorage rein.globalFloat.v1 = 0',
       afterOff.key === '0' && afterOff.card?.checked === 'false',
       `key=${afterOff.key} checked=${afterOff.card?.checked}`,
     )
@@ -240,20 +257,28 @@ async function stageMock() {
     await main.waitFor(`!!document.querySelector('.page')`, 45000, '刷新后应用挂载')
     await sleep(1600)
     await dismissUpdate(main)
-    await gotoHash(main, '#/settings', `document.querySelector('h1')?.textContent === '设置'`, '刷新后设置页')
+    await gotoHash(main, '#/settings/float', `document.querySelector('h1')?.textContent === '全局浮窗'`, '刷新后全局浮窗页')
     const afterReload = {
       key: await main.eval(`localStorage.getItem(${JSON.stringify(KEY_FLOAT)})`),
       card: await readFloatCard(main),
     }
     ok(
-      'A1.1f 刷新后仍是关（偏好持久化）',
+      'A1.1h 刷新后仍是关（偏好持久化）',
       afterReload.key === '0' && afterReload.card?.checked === 'false',
       `key=${afterReload.key} checked=${afterReload.card?.checked}`,
     )
     // 恢复成开，后面的浮条场景不受它影响
     if (!(await clickFloatToggle(main))) throw new Error('点不到开关（恢复开）')
     await main.waitFor(`${FLOAT_CARD}?.querySelector('button[role="switch"]')?.getAttribute('aria-checked') === 'true'`, 4000, '开关恢复开')
-    ok('A1.1g 再点一次恢复开并写回 1', (await main.eval(`localStorage.getItem(${JSON.stringify(KEY_FLOAT)})`)) === '1')
+    ok('A1.1i 再点一次恢复开并写回 1', (await main.eval(`localStorage.getItem(${JSON.stringify(KEY_FLOAT)})`)) === '1')
+
+    // 浏览器预览也把 Android 真机的授权流程展开（只读），桌面开发时能一眼看到完整引导
+    const previewSteps = await main.eval(`(() => {
+      const title = [...document.querySelectorAll('.preview-title')]
+        .find((e) => e.textContent.includes('Android 真机上的授权流程'))
+      return title ? title.closest('section.card')?.querySelectorAll('.step').length ?? 0 : 0
+    })()`)
+    ok('A1.1j 浏览器预览展示 Android 授权流程 4 步（只读）', previewSteps === 4, `${previewSteps} 步`)
 
     /* ---------- A1.2 浏览器模式无自绘标题栏 / 缩放热区；两种视口壳层不回归 ---------- */
     const chrome = await main.eval(`({

@@ -325,6 +325,15 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
   background: var(--surface-inset);
 }
 
+/* 卡内的宏量井与外卡同圆心：外卡 16 − 井 12 = 4 的缝（桌面 2）。
+   井贴在卡的内容边缘（16 内距），所以横向/底部各外扩 12（桌面 14），
+   井的左右内距同步补到 12（桌面 14），文字仍落在卡的 16 内距上。 */
+:global(.card .well) {
+  margin-inline: calc(-1 * (var(--pad-card) - var(--r-nest-gap)));
+  margin-bottom: calc(-1 * (var(--pad-card) - var(--r-nest-gap)));
+  padding-inline: calc(var(--pad-card) - var(--r-nest-gap));
+}
+
 /* ── 三大宏量 ── */
 .macros {
   display: grid;

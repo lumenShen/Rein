@@ -31,6 +31,7 @@ const ROUTES = [
   ['me', '#/me'],
   ['settings', '#/settings'],
   ['settings-features', '#/settings/features'],
+  ['settings-float', '#/settings/float'],
   ['settings-sync', '#/settings/sync'],
   ['settings-update', '#/settings/update'],
   ['settings-perf', '#/settings/perf'],

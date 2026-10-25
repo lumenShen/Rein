@@ -51,17 +51,17 @@ const manualOpen = ref(false)
          通栏铺开时每个磁贴会宽到 230px，读起来像把手机上的四列网格拉变了形。 -->
     <ul class="quick d-half">
       <li>
-        <QuickTile label="跑步" icon-bg="var(--c-exercise-soft)" icon-color="var(--c-exercise-deep)" @click="router.push('/session/run')">
+        <QuickTile label="跑步" icon-bg="var(--mod-sports-soft)" icon-color="var(--mod-sports-strong)" @click="router.push('/session/run')">
           <Footprints :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="手动记" icon-bg="var(--accent-soft)" icon-color="var(--accent-strong)" @click="manualOpen = true">
+        <QuickTile label="手动记" icon-bg="var(--mod-todo-soft)" icon-color="var(--mod-todo-strong)" @click="manualOpen = true">
           <PenLine :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="动作库" icon-bg="var(--warn-soft)" icon-color="var(--warn-strong)" @click="router.push('/sports/exercises')">
+        <QuickTile label="动作库" icon-bg="var(--mod-focus-soft)" icon-color="var(--mod-focus-strong)" @click="router.push('/sports/exercises')">
           <ListChecks :size="20" />
         </QuickTile>
       </li>

@@ -97,7 +97,7 @@ const dotClass = computed(() => {
 }
 
 .tb-dot.work-focus {
-  background: var(--cat-work);
+  background: var(--mod-focus-tone);
 }
 
 .tb-dot.work-exercise {

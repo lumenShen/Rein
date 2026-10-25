@@ -33,7 +33,7 @@ use crate::error::Result;
 pub const DEFAULT_SERVICE_BASE: &str = "http://47.100.36.179:8787";
 /// GitHub Release 的清单地址（`releases/latest` 永远指向最新正式版）。
 pub const GITHUB_MANIFEST_URL: &str =
-    "https://github.com/gozaoo-coder/Rein/releases/latest/download/latest.json";
+    "https://github.com/lumenShen/Rein/releases/latest/download/latest.json";
 
 pub const SETTINGS_KEY: &str = "update_settings_v1";
 pub const PROGRESS_EVENT: &str = "update://progress";
