@@ -958,6 +958,16 @@ function askQuick(q: string): void {
   min-height: 34px;
   font-size: var(--fs-footnote);
   font-weight: var(--fw-medium);
+  /* base.css 的 :focus-visible（0,1,0）压过全局 input { outline:none }（0,0,1），
+     键盘聚焦时会在 input 的直角盒上画一圈 accent 外框 —— 药丸条里多出一个
+     「谜之方块」。焦点态交给下面 .ask:focus-within，输入框自己不再画。 */
+  outline: none;
+}
+
+/* 焦点落在玻璃条本体：border（glass-surface 留的 1px transparent）换成 accent，
+   与 QuickAddBar / RecordPage 的容器焦点态同一条惯例（RecordPage.vue 的注释） */
+.ask:focus-within {
+  border-color: var(--accent);
 }
 
 .send {
