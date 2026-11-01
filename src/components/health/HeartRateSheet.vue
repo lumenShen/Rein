@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { Bluetooth, Heart, LoaderCircle } from 'lucide-vue-next'
+import { Bluetooth, LoaderCircle } from 'lucide-vue-next'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { hrZoneMeta } from '@/config/hr'
+import HeartRateZoneMeter from '@/components/health/HeartRateZoneMeter.vue'
 import { useHeartRateStore } from '@/stores/heartRate'
 import type { HrDevice } from '@/types'
 
@@ -19,7 +19,6 @@ const emit = defineEmits<{ close: [] }>()
 
 const hr = useHeartRateStore()
 
-const zone = computed(() => hrZoneMeta(hr.zone))
 const connectedId = computed(() => (hr.connected ? hr.device?.id ?? null : null))
 const scanning = computed(() => hr.scanning)
 const busy = computed(() => hr.scanning || hr.connecting || hr.reconnecting)
@@ -106,19 +105,19 @@ watch(
 
     <template v-else>
       <section class="hero card sub">
-        <div class="hero-line">
-          <span class="heart" :class="{ live: hr.connected }">
-            <Heart :size="22" :stroke-width="2" aria-hidden="true" />
-            <i v-if="hr.connected" class="beat" />
-          </span>
-          <span class="bpm num">
-            <b>{{ hr.connected ? (hr.bpm ?? '—') : '—' }}</b>
-            <em>次/分</em>
-          </span>
-          <StatusChip :tone="stateTone">{{ stateLabel }}</StatusChip>
-        </div>
+        <!-- 读数 + 区间条 + 当前心率位置：组件自带读数与图心，状态胶囊走 trailing 槽 -->
+        <HeartRateZoneMeter
+          :bpm="hr.connected ? hr.bpm : null"
+          :max-hr="hr.maxHr"
+          :zone="hr.zone"
+          :live="hr.connected"
+        >
+          <template #trailing>
+            <StatusChip :tone="stateTone">{{ stateLabel }}</StatusChip>
+          </template>
+        </HeartRateZoneMeter>
         <p class="hero-meta">
-          <span v-if="hr.connected">{{ hr.deviceName }}<template v-if="zone"> · {{ zone.label }}区</template></span>
+          <span v-if="hr.connected">{{ hr.deviceName }}</span>
           <span v-else-if="busy" class="row center">
             <LoaderCircle class="spin" :size="14" :stroke-width="2.2" aria-hidden="true" />
             {{ hr.scanning ? '正在扫描附近的心率设备…' : '正在连接…' }}
@@ -190,61 +189,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--sp-8);
-}
-
-.hero-line {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-}
-
-.heart {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--sp-40);
-  height: var(--sp-40);
-  border-radius: var(--radius-full);
-  color: var(--text-2);
-  background: var(--surface-2);
-}
-
-.heart.live {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.beat {
-  position: absolute;
-  top: var(--sp-6);
-  right: var(--sp-8);
-  width: var(--sp-6);
-  height: var(--sp-6);
-  border-radius: var(--radius-full);
-  background: var(--danger);
-  animation: rein-breathe 1.1s var(--ease-standard) infinite;
-}
-
-.bpm {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-6);
-  margin-right: auto;
-}
-
-.bpm b {
-  font-size: var(--fs-display-s);
-  font-weight: var(--fw-bold);
-  letter-spacing: -0.5px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.bpm em {
-  font-size: var(--fs-subhead);
-  color: var(--text-2);
-  font-style: normal;
 }
 
 .hero-meta {
