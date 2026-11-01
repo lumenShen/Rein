@@ -1220,8 +1220,10 @@ function bumpKm(delta: number): void {
           </div>
 
           <!-- 三列指标卡：时长 / 平均配速 / 消耗（主读数已上提到 hero 行）。
-               瞬时那列从前在这里，现在它是 hero 的右读数，不再重复出现。 -->
-          <div class="pace row glass-surface">
+               瞬时那列从前在这里，现在它是 hero 的右读数，不再重复出现。
+               心率连上后插一列：跑步时「心率此刻多少、在哪个区」与配速/消耗
+               是同一层要观察的数据，不该只藏在左上角那颗 chip 里。 -->
+          <div class="pace row glass-surface" :class="{ 'with-hr': hr.connected }">
             <div class="col center">
               <span class="lab">时长</span>
               <b class="num pv">{{ clockText }}</b>
@@ -1232,6 +1234,14 @@ function bumpKm(delta: number): void {
               <span class="lab">平均配速</span>
               <b class="num pv">{{ paceText }}</b>
               <span class="pu">/km</span>
+            </div>
+            <div v-if="hr.connected" class="col center hrstat">
+              <span class="lab">
+                <Heart :size="12" :stroke-width="2.2" class="hrlab" aria-hidden="true" />
+                心率
+              </span>
+              <b class="num pv">{{ hr.bpm ?? '—' }}</b>
+              <span class="pu">{{ hrZoneLabel ? `${hrZoneLabel}区` : '次/分' }}</span>
             </div>
             <div class="col center kcal">
               <span class="lab">消耗</span>
@@ -2284,6 +2294,18 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   font-weight: var(--fw-bold);
   letter-spacing: -0.5px;
   color: var(--text-1);
+}
+
+/* 心率接入后是四列：34px 的「00:00」「5'30"」在 ~84px 的格里会顶到分隔线，
+   值降一档；标签与单位不动，四列仍有统一的基线。 */
+.pace.with-hr .pv,
+.pace.with-hr .kcal b {
+  font-size: var(--fs-title1);
+}
+
+.hrstat .hrlab {
+  flex: none;
+  color: var(--danger);
 }
 
 /* 自动暂停时不再产生新值：留住停表前的读数，压暗表示「这是上一刻的」——

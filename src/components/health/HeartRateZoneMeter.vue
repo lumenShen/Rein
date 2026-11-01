@@ -13,7 +13,8 @@
 import { computed } from 'vue'
 import { Heart } from 'lucide-vue-next'
 
-import { HR_ZONES, hrZoneMeta } from '@/config/hr'
+import HeartRateZoneBar from '@/components/health/HeartRateZoneBar.vue'
+import { hrZoneMeta } from '@/config/hr'
 
 const props = withDefaults(
   defineProps<{
@@ -30,15 +31,6 @@ const props = withDefaults(
 )
 
 const meta = computed(() => hrZoneMeta(props.zone))
-
-/** 0..1：50% HRmax → 0，100% HRmax → 1 */
-const progress = computed<number | null>(() => {
-  if (props.bpm == null || !props.maxHr) return null
-  const ratio = props.bpm / props.maxHr
-  return Math.min(1, Math.max(0, (ratio - 0.5) / 0.5))
-})
-
-const showMarker = computed(() => props.live && progress.value != null)
 </script>
 
 <template>
@@ -56,20 +48,9 @@ const showMarker = computed(() => props.live && progress.value != null)
       <slot name="trailing" />
     </div>
 
-    <!-- 条本身是装饰：读数与区间名在上面已经是文本，读屏不必再听一遍颜色 -->
-    <div class="hzm-bar" :class="{ dim: !showMarker }" aria-hidden="true">
-      <i
-        v-for="z in HR_ZONES"
-        :key="z.zone"
-        class="hzm-seg"
-        :style="{ background: `var(${z.colorVar})` }"
-      />
-      <span
-        v-if="showMarker"
-        class="hzm-marker"
-        :style="{ '--p': progress ?? 0 }"
-      />
-    </div>
+    <!-- 条本身是装饰：读数与区间名在上面已经是文本，读屏不必再听一遍颜色。
+         同一份条也用在训练顶栏的紧凑档（见 HeartRateZoneBar）。 -->
+    <HeartRateZoneBar :bpm="bpm" :max-hr="maxHr" :live="live" />
   </section>
 </template>
 
@@ -143,41 +124,5 @@ const showMarker = computed(() => props.live && progress.value != null)
   font-weight: var(--fw-medium);
   /* 区间名保持中性色：色相只由条表达（config/hr 的约定） */
   color: var(--text-2);
-}
-
-.hzm-bar {
-  position: relative;
-  display: flex;
-  gap: 3px;
-  height: 10px;
-  /* cqw 的基准：三角按 --p 换算成这条的真实像素宽度 */
-  container-type: inline-size;
-}
-
-.hzm-seg {
-  flex: 1;
-  border-radius: var(--radius-full);
-  transition: opacity var(--dur-fast) var(--ease-standard);
-}
-
-/* 没有实时样本时整条变淡：它退化成图例，不再假装是当前读数 */
-.hzm-bar.dim .hzm-seg {
-  opacity: 0.35;
-}
-
-.hzm-marker {
-  position: absolute;
-  left: 0;
-  bottom: -6px;
-  width: 0;
-  height: 0;
-  margin-left: -5px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  /* border-bottom 的三角尖朝上，顶住条的底边 */
-  border-bottom: 6px solid var(--text-1);
-  transform: translateX(calc(var(--p) * 100cqw));
-  transition: transform var(--dur-slow) var(--ease-out);
-  will-change: transform;
 }
 </style>

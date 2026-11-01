@@ -11,6 +11,7 @@ import InfoHint from '@/components/common/InfoHint.vue'
 import RingProgress from '@/components/common/RingProgress.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
+import HeartRateZoneBar from '@/components/health/HeartRateZoneBar.vue'
 // 这两块按需加载：肌群图本体是 160 KB 的解剖 SVG（三个视图 raw 内联）＋ 一处
 // 只在点开动作详情时才出现的抽屉。它们是沉浸层**内部**的详情块，用户不开到那一屏
 // 就用不到 —— 而沉浸层挂在 App 根上，静态 import 等于让每个路由都背着这 160 KB 首屏。
@@ -1493,9 +1494,21 @@ function trapFocus(e: KeyboardEvent): void {
               :aria-label="hrConnected ? `心率 ${hr.bpm} 次每分，打开心率设备` : '连接心率设备'"
               @click="hrOpen = true"
             >
-              <Heart :size="17" :stroke-width="2.1" aria-hidden="true" />
-              <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
-              <span v-else class="hrword">心率</span>
+              <span class="hrread">
+                <Heart :size="17" :stroke-width="2.1" aria-hidden="true" />
+                <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
+                <span v-else class="hrword">心率</span>
+              </span>
+              <!-- 连接后补一条紧凑区间条：组间休息时不用退出训练层也能看出
+                   当前在哪个区、离下一档还有多远。 -->
+              <HeartRateZoneBar
+                v-if="hrConnected"
+                class="hrbar"
+                compact
+                live
+                :bpm="hr.bpm"
+                :max-hr="hr.maxHr"
+              />
             </button>
           </SessionGlassButton>
           <!-- 结束是这条栏里唯一的「主行动」：苹果的规矩是它单独着色（tinted）当焦点，
@@ -1839,13 +1852,27 @@ function trapFocus(e: KeyboardEvent): void {
   min-width: 0;
 }
 
-/* 心率读数：未连接时是「心率」两个字（点开去连），已连接时只剩图标 + BPM。
-   已连接用危险色只落在图标上（心率的语义色），数字保持中性。 */
+/* 心率读数：未连接时是「心率」两个字（点开去连）；已连接时上行图标 + BPM、
+   下行一条紧凑区间条。写成两行是为了条有确定的 52px 宽，胶囊不会被三角撑开。 */
 .ctrl-top .hrbtn {
-  gap: var(--gap-text);
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   padding: 0 var(--sp-10);
   font-weight: var(--fw-semibold);
   color: var(--text-2);
+}
+
+.ctrl-top .hrread {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-text);
+  line-height: 1;
+}
+
+.ctrl-top .hrbar {
+  width: 52px;
+  flex: none;
 }
 
 .ctrl-top .hrbtn.live {
