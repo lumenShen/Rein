@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Heart, RotateCcw, Trophy } from 'lucide-vue-next'
+import { RotateCcw, Trophy } from 'lucide-vue-next'
 
 import RingProgress from '@/components/common/RingProgress.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
-import { hrZoneMeta } from '@/config/hr'
+import HeartRateSummary from '@/components/health/HeartRateSummary.vue'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
 import { useHeartRateStore } from '@/stores/heartRate'
 import { useSessionStore } from '@/stores/session'
@@ -50,9 +50,6 @@ import type { StrengthSetRecord } from '@/types'
  */
 const s = useSessionStore()
 const hr = useHeartRateStore()
-
-/** 本次课的心率读数（Rust 侧积分；没有样本时整行不渲染） */
-const hrLevel = computed(() => hrZoneMeta(hr.liveLevel))
 
 /** 体感三档：由好到差固定次序（读起来是「比预期好」往下），等权不预设高亮 */
 const FEEL_OPTIONS = (['better', 'as_expected', 'worse'] as const).map((value) => ({
@@ -402,14 +399,14 @@ function prDeltaText(p: PrRow): string {
       </div>
     </div>
 
-    <!-- 心率读数：训练课的消耗一律按运动强度（MET）估算 —— 心率法在抗阻训练上
-         严重高估，心率数据在这里只回答「强度与恢复」。 -->
-    <p v-if="hr.liveAvgBpm != null" class="hrline">
-      <Heart class="hric" :size="15" :stroke-width="2.2" aria-hidden="true" />
-      <span>平均 <b class="num">{{ hr.liveAvgBpm }}</b> 次/分</span>
-      <span>最高 <b class="num">{{ hr.liveMaxBpm ?? '—' }}</b></span>
-      <span v-if="hrLevel">主要在 {{ hrLevel.label }}区</span>
-    </p>
+    <!-- 心率：训练课的消耗一律按运动强度（MET）估算 —— 心率法在抗阻训练上
+         严重高估，心率数据在这里只回答「强度与恢复」。整场读数与历史详情共用
+         同一份 HrWorkoutSummary（完成保存时落库的那一份）。 -->
+    <HeartRateSummary
+      v-if="hr.lastSummary && hr.lastSummary.avgBpm != null"
+      :hr="hr.lastSummary"
+      class="sumcard"
+    />
 
     <!-- 进步：即时判定先出，历史回来后 mergeHistoryPr 覆盖为真纪录。
          情绪高点：标题带奖杯标记，增量升为 callout 档。 -->
@@ -748,28 +745,6 @@ function prDeltaText(p: PrRow): string {
   border-radius: var(--radius-m-nest);
   padding: var(--sp-8) var(--sp-10);
   min-width: 0;
-}
-
-/* 心率读数：一行事实（平均 / 最高 / 主要区间）。
-   放在指标卡下方，不占第五格 —— 它不是「成绩」里的一个量纲，而是对强度的补充。 */
-.hrline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap-sm);
-  margin-top: var(--gap-md);
-  font-size: var(--fs-footnote);
-  line-height: var(--lh-caption);
-  color: var(--text-2);
-}
-
-.hrline b {
-  color: var(--text-1);
-  font-weight: var(--fw-semibold);
-}
-
-.hrline .hric {
-  color: var(--danger);
 }
 
 /* ---------- 进步 ---------- */

@@ -101,6 +101,8 @@ export const useHeartRateStore = defineStore('heartRate', () => {
   let pollTimer: number | null = null
   /** 正在进行的「开始测量」（拉画像 + IPC）；结束时先等它落地，避免命令乱序 */
   let pendingBegin: Promise<void> | null = null
+  /** 正在进行的「结束测量」：跑步进总结与点保存会各收一次，必须共享同一个结果 */
+  let pendingFinish: Promise<HrWorkoutSummary | null> | null = null
 
   /* ---------- 事件 / 轮询 ---------- */
 
@@ -281,35 +283,43 @@ export const useHeartRateStore = defineStore('heartRate', () => {
   }
 
   /**
-   * 结束测量并取回总结。重复调用（保存失败后重试）直接返回上一次的结果，
-   * 避免第二次拿到 null 把已算好的心率热量弄丢。
+   * 结束测量并取回总结。重复调用（保存失败后重试 / 进总结与保存各一次）直接返回
+   * 上一次的结果或在途的同一个 Promise，避免第二次拿到 null 把已算好的心率摘要覆盖掉。
    */
-  async function finishWorkout(): Promise<HrWorkoutSummary | null> {
+  function finishWorkout(): Promise<HrWorkoutSummary | null> {
+    if (pendingFinish) return pendingFinish
     if (workoutStartedAtMs.value == null && lastSummary.value != null) {
-      return lastSummary.value
+      return Promise.resolve(lastSummary.value)
     }
-    // 开始测量可能还在拉画像 / 发 IPC：等它落地再收尾，否则晚到的 start 会留下一场幽灵测量
-    if (pendingBegin) {
-      try {
-        await pendingBegin
-      } catch {
-        /* begin 自己已兜住错误 */
+    const run = (async (): Promise<HrWorkoutSummary | null> => {
+      // 开始测量可能还在拉画像 / 发 IPC：等它落地再收尾，否则晚到的 start 会留下一场幽灵测量
+      if (pendingBegin) {
+        try {
+          await pendingBegin
+        } catch {
+          /* begin 自己已兜住错误 */
+        }
       }
-    }
-    let summary: HrWorkoutSummary | null = null
-    try {
-      summary = await heartRateService.workoutFinish()
-    } catch (e) {
-      console.warn('[heartRate] 结束测量失败（回退到 MET / ACSM 估算）', e)
-    }
-    lastSummary.value = summary
-    workoutStartedAtMs.value = null
-    workoutPaused.value = false
-    if (autoConnectRequested.value) {
-      autoConnectRequested.value = false
-      void disconnect()
-    }
-    return summary
+      let summary: HrWorkoutSummary | null = null
+      try {
+        summary = await heartRateService.workoutFinish()
+      } catch (e) {
+        console.warn('[heartRate] 结束测量失败（回退到 MET / ACSM 估算）', e)
+      }
+      lastSummary.value = summary
+      workoutStartedAtMs.value = null
+      workoutPaused.value = false
+      if (autoConnectRequested.value) {
+        autoConnectRequested.value = false
+        void disconnect()
+      }
+      return summary
+    })()
+    pendingFinish = run
+    void run.finally(() => {
+      if (pendingFinish === run) pendingFinish = null
+    })
+    return run
   }
 
   /** 放弃本次测量（放弃训练时调用）：不产生总结，也不参与消耗。 */

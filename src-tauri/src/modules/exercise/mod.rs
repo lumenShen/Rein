@@ -11,9 +11,10 @@ use models::Workout;
 /// workouts 表列清单（SELECT 时必须使用，保证行映射下标稳定）。
 /// 新列一律**追加在末尾**：中间插入会把后面所有下标推一位，而调用方是按序号读的。
 pub(crate) const WORKOUT_COLS: &str =
-    "id, name, type, date, start_min, duration_min, kcal, intensity, effort, note, session_id, created_at, source";
+    "id, name, type, date, start_min, duration_min, kcal, intensity, effort, note, session_id, created_at, source, hr_json";
 
 pub(crate) fn workout_from_row(row: &Row<'_>) -> rusqlite::Result<Workout> {
+    let hr_json: Option<String> = row.get(13)?;
     Ok(Workout {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -28,6 +29,8 @@ pub(crate) fn workout_from_row(row: &Row<'_>) -> rusqlite::Result<Workout> {
         session_id: row.get(10)?,
         created_at: row.get(11)?,
         source: row.get(12)?,
+        // 坏 JSON 按「没有心率」处理：历史详情缺一段视图，不能让整条记录读不出来
+        hr: hr_json.and_then(|raw| serde_json::from_str(&raw).ok()),
     })
 }
 

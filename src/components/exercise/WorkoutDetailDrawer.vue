@@ -6,6 +6,7 @@ import ActionSheet from '@/components/common/ActionSheet.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
+import HeartRateSummary from '@/components/health/HeartRateSummary.vue'
 import WorkoutSourceTag from '@/components/exercise/WorkoutSourceTag.vue'
 import { sessionService } from '@/services/sessionService'
 import { EFFORT_LABELS, WORKOUT_META } from '@/config/domain'
@@ -482,6 +483,12 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
           <div v-if="ascentM != null" class="cell"><div class="v num">{{ ascentM }}</div><div class="k">累计爬升 m</div></div>
         </div>
 
+        <HeartRateSummary
+          v-if="workout.hr && workout.hr.avgBpm != null"
+          :hr="workout.hr"
+          class="hrblock"
+        />
+
         <template v-if="splitRows.length > 0">
           <!-- 骑行列头跟着值走：行内值是 km/h 时速，写「用时」会把量纲读反 -->
           <p class="sec">每公里{{ isCycle ? '时速' : '配速' }}</p>
@@ -508,6 +515,12 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
           <div v-if="courseTotals.timedSec > 0" class="cell"><div class="v num">{{ fmtClock(courseTotals.timedSec) }}</div><div class="k">计时合计</div></div>
           <div v-if="courseTotals.volume <= 0 && courseTotals.timedSec <= 0" class="cell"><div class="v num">--</div><div class="k">暂无明细数据</div></div>
         </div>
+
+        <HeartRateSummary
+          v-if="workout.hr && workout.hr.avgBpm != null"
+          :hr="workout.hr"
+          class="hrblock"
+        />
 
         <!-- 肌群练够分提醒：紧接统计格 —— 上面那两个数字说的是「这次练了多少」，
              这里说的是「这次练的肌群，本周练够了没有」。数据与「本周练够分」卡同源。 -->
@@ -556,6 +569,11 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
           <div class="cell"><div class="v">{{ effortCell.value }}</div><div class="k">{{ effortCell.key }}</div></div>
           <div class="cell"><div class="v">{{ typeLabel }}</div><div class="k">类型</div></div>
         </div>
+        <HeartRateSummary
+          v-if="workout.hr && workout.hr.avgBpm != null"
+          :hr="workout.hr"
+          class="hrblock"
+        />
         <p v-if="detail.fromSession" class="hint">
           该记录来自「{{ detail.fromSession.planName }}」，但没有可用的过程快照。
         </p>
@@ -769,6 +787,14 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
 .mvol {
   margin-top: var(--gap-md);
   /* 四边同距 12，与 .routebox / .cell 同一套内距 */
+  padding: var(--pad-card-tight);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+}
+
+/* 心率摘要：与 .mvol 同一套「浅底 → 内距 12 → 圆角 16」，紧跟来源对应的明细之后 */
+.hrblock {
+  margin-top: var(--gap-md);
   padding: var(--pad-card-tight);
   border-radius: var(--radius-m);
   background: var(--surface-2);

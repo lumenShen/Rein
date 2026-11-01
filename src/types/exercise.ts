@@ -1,6 +1,7 @@
 /** 运动域类型 · 与 Rust `modules/exercise` / `modules/exercise_lib` 对应 */
 
 import type { ActivationMap, MuscleKey } from '@/config/muscles'
+import type { HrWorkoutSummary } from './heartRate'
 
 /**
  * 运动类型枚举 · 「记运动」可选的**全部**项目。
@@ -209,6 +210,9 @@ export interface Workout {
   /** 来源：本机记的 / 手机同步进来的第三方数据（见 [`WorkoutSource`]） */
   source: WorkoutSource
   createdAt: string
+  /** 整场心率摘要：课程/跑步结束时落库；手动补录、手机同步、无样本为 null。
+   *  历史详情与结果页读的是这一份（分区时长、覆盖、平均/最高都在里面）。 */
+  hr?: HrWorkoutSummary | null
 }
 
 export interface WorkoutInput {

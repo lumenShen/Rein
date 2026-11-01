@@ -1780,6 +1780,16 @@ INSERT INTO app_meta (key, value) VALUES ('campus.sessions_need_resync', '1')
   ON CONFLICT(key) DO UPDATE SET value = '1';
 "#;
 
+/// 0050 · 运动记录的心率摘要（整场 HrWorkoutSummary 的 JSON；无样本为 NULL）。
+///
+/// 为什么是一整列 JSON 而不是摊成 avg/max/zones 等七八列：这份摘要是**一次测量的
+/// 完整快照**，历史详情/结果页只读不查；摊列会让每条写 workouts 的路径（课程结束、
+/// 跑步、手动补录、同步导入、知识库派生）都跟着改一遍列清单。JSON 只在课程/跑步
+/// 结束时写入，其余路径留 NULL。
+const MIGRATION_0050: &str = r#"
+ALTER TABLE workouts ADD COLUMN hr_json TEXT;
+"#;
+
 const MIGRATIONS: &[&str] = &[
     MIGRATION_0001,
     MIGRATION_0002,
@@ -1830,6 +1840,7 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_0047,
     MIGRATION_0048,
     MIGRATION_0049,
+    MIGRATION_0050,
 ];
 
 /// 通用键值元数据（`app_meta`）读写 —— 全应用**唯一一份**这条 SQL。

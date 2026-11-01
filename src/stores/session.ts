@@ -1427,6 +1427,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         intensity,
         kcal,
         note: noteParts.join(' · '),
+        hr: hrSummary,
         sets: buildSetRows(),
       })
     } catch (e) {
@@ -1559,6 +1560,8 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
       ...input,
       intensity: input.intensity ?? null,
       note: input.note ?? null,
+      // 外部送来的结束载荷不带本机心率测量：这条记录没有可关联的心率摘要
+      hr: null,
     })
     return true
   }

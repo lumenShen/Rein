@@ -1774,6 +1774,7 @@ function addWorkout(w: Partial<Workout> & { name: string; type: Workout['type'];
     // 种子记录默认是本机记的；要一条「手机同步」样例见下面「晨跑」那条
     source: w.source ?? 'local',
     createdAt: `${w.date}T20:00:00`,
+    hr: w.hr ?? null,
   })
 }
 
@@ -1782,7 +1783,35 @@ function addWorkout(w: Partial<Workout> & { name: string; type: Workout['type'];
 // 「本周分钟 / 大卡 / 次数」与记录页行数这类断言（见 scripts/e2e-feature-toggles.mjs、
 // scripts/e2e-strength.mjs）。真机上这个值由 Rust 从 workouts.source 读，不由 mock 决定。
 addWorkout({ name: '夜跑', type: 'run', date: addDays(today, -2), startMin: 19 * 60 + 30, durationMin: 30, intensity: 'high', kcal: 360, source: 'health_connect' })
-addWorkout({ name: '力量训练 · 下肢', type: 'strength', date: yesterday, startMin: 18 * 60 + 30, durationMin: 40, intensity: 'moderate', kcal: 245 })
+addWorkout({
+  name: '力量训练 · 下肢',
+  type: 'strength',
+  date: yesterday,
+  startMin: 18 * 60 + 30,
+  durationMin: 40,
+  intensity: 'moderate',
+  kcal: 245,
+  // 带心率的历史样例：详情抽屉/记录行在浏览器 dev 里也能看到心率视图
+  hr: {
+    durationSec: 2400,
+    measuredSec: 2100,
+    coverage: 0.875,
+    samples: 210,
+    avgBpm: 132,
+    maxBpm: 158,
+    minBpm: 92,
+    kcal: 260,
+    zones: [
+      { zone: 1, seconds: 120 },
+      { zone: 2, seconds: 480 },
+      { zone: 3, seconds: 900 },
+      { zone: 4, seconds: 420 },
+      { zone: 5, seconds: 180 },
+    ],
+    level: 3,
+    intensity: 'moderate',
+  },
+})
 // 手动补录样例：走体感 + 用户直接给热量那条路（effort 有值、intensity 是派生档位）
 addWorkout({ name: '羽毛球 · 47分钟', type: 'badminton', date: today, startMin: 20 * 60, durationMin: 47, intensity: 'moderate', effort: 4, kcal: 412 })
 
@@ -6406,6 +6435,7 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
         intensity: string
         kcal: number
         note: string | null
+        hr?: Workout['hr']
         sets?: {
           exerciseKey: string
           exerciseId?: string
@@ -6437,6 +6467,8 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
         sessionId: input.id,
         source: 'local',
         createdAt: new Date().toISOString(),
+        // 与 Rust session_finish 同一语义：整份心率摘要落进记录
+        hr: input.hr ?? null,
       }
       workouts.push(w)
       // 逐组做组明细落库（重量曲线数据源，与 Rust session_finish 事务内写入同语义）

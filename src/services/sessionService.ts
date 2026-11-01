@@ -1,6 +1,7 @@
 /** 训练课会话 IPC 封装 · 对应 modules/session/commands.rs */
 
 import type {
+  HrWorkoutSummary,
   RunSnapshot,
   SessionRecord,
   SessionSnapshotState,
@@ -44,7 +45,8 @@ export const sessionService = {
   getActive: () => invoke<SessionRecord | null>('session_active'),
 
   /** 正常结束（保存）：事务内写入训练记录 + 逐组做组明细（重量曲线数据源）并关闭会话。
-   *  `intensity` 可空（Rust 侧是 `Option<String>`）：外部下行的结束载荷允许省略它。 */
+   *  `intensity` 可空（Rust 侧是 `Option<String>`）：外部下行的结束载荷允许省略它。
+   *  `hr` 是整场心率摘要（无样本传 null）：Rust 原样落进 workouts.hr_json。 */
   finish: (p: {
     id: number
     name: string
@@ -54,6 +56,7 @@ export const sessionService = {
     intensity: string | null
     kcal: number
     note: string | null
+    hr?: HrWorkoutSummary | null
     sets: StrengthSetRow[]
   }) => invoke<Workout>('session_finish', { input: p }),
 

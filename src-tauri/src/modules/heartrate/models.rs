@@ -1,6 +1,6 @@
 //! 心率域对外模型（serde camelCase，与 `src/types/heartRate.ts` 互为镜像）。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// 连接状态机。字符串值与前端 `HrState` 一一对应。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -47,7 +47,10 @@ pub struct HrSample {
 }
 
 /// 一次测量会话的最终读数。只有收到过样本才会产生。
-#[derive(Debug, Clone, Serialize)]
+///
+/// `Deserialize` 供运动记录回读：整份摘要以 JSON 落在 `workouts.hr_json` 里
+/// （exercise 模块），历史详情直接反序列化，不另拍一套字段。
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HrWorkoutSummary {
     /// 从开始测量到现在（墙钟）。
@@ -69,7 +72,7 @@ pub struct HrWorkoutSummary {
     pub intensity: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HrZoneTime {
     pub zone: u8,

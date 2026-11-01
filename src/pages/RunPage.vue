@@ -7,6 +7,7 @@ import ActionSheet from '@/components/common/ActionSheet.vue'
 import CountdownOverlay from '@/components/common/CountdownOverlay.vue'
 import GlassThumb from '@/components/common/GlassThumb.vue'
 import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
+import HeartRateSummary from '@/components/health/HeartRateSummary.vue'
 import HoldToEnd from '@/components/run/HoldToEnd.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
@@ -348,6 +349,18 @@ const hasGaps = computed(() => r.gapSlowCount + r.gapFastCount + r.gapDropCount 
  *  有距离时 ACSM 是主口径，心率数据只展示强度信息。 */
 const hrKcal = computed(() => hr.usableKcal)
 const hrKcalUsed = computed(() => effKm.value == null && hrKcal.value != null)
+/** 消耗来源说明：只在无距离、且心率参与估算时出现一次 */
+const hrKcalNote = computed(() => {
+  if (effKm.value != null) return ''
+  if (hrKcalUsed.value) return '心率估算消耗'
+  if (hr.liveMeasuredSec != null && hr.liveMeasuredSec < 300) {
+    return '心率样本不足 5 分钟，消耗按速度估算'
+  }
+  if (hr.liveCoverage != null) {
+    return `心率覆盖 ${Math.round(hr.liveCoverage * 100)}%，消耗按速度估算`
+  }
+  return ''
+})
 /** 消耗是估算：无距离（含心率兜底）/ 有断档时都如实标「≈」并给一句为什么 */
 const kcalApprox = computed(() => hasGaps.value || effKm.value == null)
 const kcalHint = computed(() => {
@@ -868,6 +881,17 @@ function onDrawerScroll(e: Event): void {
 // 阶段切换时换了一整个面板，滚动位置随之归零 —— 暗带不能留着上一面的状态
 watch(() => r.phase, () => (paneScrolled.value = false))
 
+// 进入总结 = 本次跑步已结束（没有回到 running 的路径）：在这里收口心率，
+// 结果页才能画出整场区间分布；保存时 finishWorkout 会返回同一份缓存，
+// 落库的也是这一份，历史详情与结果页读到的读数一致。
+watch(
+  () => r.phase,
+  (p, prev) => {
+    if (p === 'summary' && prev !== 'summary') void hr.finishWorkout()
+  },
+  { immediate: true },
+)
+
 const drawerCollapsed = ref(false)
 const drawerDragging = ref(false)
 const dragY = ref<number | null>(null)
@@ -1300,25 +1324,22 @@ function bumpKm(delta: number): void {
           </div>
           <p v-if="kcalHint" class="hint left">{{ kcalHint }}</p>
 
-          <!-- 心率读数：平均 / 最高 / 主要区间。热量只在无距离时按心率积分，
-               有距离时 ACSM 是主口径 —— 徽标只在真正用到心率热量时出现。 -->
-          <p v-if="hr.liveAvgBpm != null" class="hrline">
+          <!-- 心率：整场区间分布 / 覆盖 / 分析。进入总结时已收口（见脚本 watch），
+               所以结果页与稍后落库的历史详情看到的是同一份读数。 -->
+          <HeartRateSummary
+            v-if="hr.lastSummary && hr.lastSummary.avgBpm != null"
+            :hr="hr.lastSummary"
+            class="sumcard"
+          />
+          <!-- 收口失败（无样本 / 命令失败）时退回一行原始读数：
+               结果页不能因为拿不到分区就整块空着。 -->
+          <p v-else-if="hr.liveAvgBpm != null" class="hrline">
             <Heart class="hric" :size="15" :stroke-width="2.2" aria-hidden="true" />
             <span>平均 <b class="num">{{ hr.liveAvgBpm }}</b> 次/分</span>
             <span>最高 <b class="num">{{ hr.liveMaxBpm ?? '—' }}</b></span>
             <span v-if="hrZoneLabel">主要在 {{ hrZoneLabel }}区</span>
-            <template v-if="effKm == null">
-              <span v-if="hrKcalUsed" class="hrtag">心率估算消耗</span>
-              <span
-                v-else-if="hr.liveMeasuredSec != null && hr.liveMeasuredSec < 300"
-                class="weak"
-              >心率样本不足 5 分钟，消耗按速度估算</span>
-              <span
-                v-else-if="hr.liveCoverage != null"
-                class="weak"
-              >心率覆盖 {{ Math.round(hr.liveCoverage * 100) }}%，消耗按速度估算</span>
-            </template>
           </p>
+          <p v-if="hrKcalNote" class="hint left">{{ hrKcalNote }}</p>
 
           <!-- 记录说明：逐行说清这次「哪些段没算、哪些段补了」。取值互斥
                （每一段墙钟只落一个桶），同一段时间不会在两行里各说一遍。 -->

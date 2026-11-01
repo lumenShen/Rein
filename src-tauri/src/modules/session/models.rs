@@ -64,6 +64,10 @@ pub struct FinishInput {
     pub intensity: Option<String>,
     pub kcal: f64,
     pub note: Option<String>,
+    /// 整场心率摘要（无样本 / 未连接为 None）：原样落进 workouts.hr_json，
+    /// 历史详情与结果页共用这份读数；不参与任何结算。
+    #[serde(default)]
+    pub hr: Option<crate::modules::heartrate::models::HrWorkoutSummary>,
     /// 逐组做组明细（session_finish 事务内展开写入 workout_sets）；旧客户端缺省 = 空
     #[serde(default)]
     pub sets: Vec<FinishSet>,

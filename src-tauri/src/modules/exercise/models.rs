@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::modules::heartrate::models::HrWorkoutSummary;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workout {
@@ -32,4 +34,8 @@ pub struct Workout {
     /// 所以它在跨设备同步后仍然保持原值。
     pub source: String,
     pub created_at: String,
+    /// 整场心率摘要（无样本 / 手动补录 / 手机同步为 None）。
+    /// 落库是 `workouts.hr_json` 一整份 JSON：历史详情与结果页读的是同一份读数，
+    /// 不另在记录上摊七八个列。
+    pub hr: Option<HrWorkoutSummary>,
 }

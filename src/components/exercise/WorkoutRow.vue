@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Trash2 } from 'lucide-vue-next'
+import { Heart, Trash2 } from 'lucide-vue-next'
 
 import { WORKOUT_META } from '@/config/domain'
 import WorkoutSourceTag from '@/components/exercise/WorkoutSourceTag.vue'
@@ -46,6 +46,14 @@ const metaLine = computed(() => {
       <p class="name">
         <span class="nm">{{ workout.name }}</span>
         <WorkoutSourceTag :source="workout.source" />
+        <!-- 平均心率是记录里最该被扫到的一条附加事实；完整分区留给详情抽屉 -->
+        <span
+          v-if="workout.hr?.avgBpm != null"
+          class="hrbadge num"
+          :aria-label="`平均心率 ${workout.hr.avgBpm}`"
+        >
+          <Heart :size="11" :stroke-width="2.2" aria-hidden="true" />{{ workout.hr.avgBpm }}
+        </span>
       </p>
       <p class="meta num">{{ metaLine }}</p>
     </div>
@@ -120,6 +128,17 @@ const metaLine = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 平均心率：小号数字 + 危险色的心（心率的语义色），不抢名字与热量两个主读数 */
+.hrbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--danger-strong);
 }
 
 .meta {

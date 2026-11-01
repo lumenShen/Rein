@@ -194,9 +194,14 @@ pub(crate) fn session_finish_on(
     input: FinishInput,
 ) -> Result<crate::modules::exercise::models::Workout> {
     let tx = conn.transaction()?;
+    // 心率摘要按整份 JSON 落库；序列化失败不该挡住记录保存（心态同坏 JSON 读不出的兜底）
+    let hr_json = input
+        .hr
+        .as_ref()
+        .and_then(|hr| serde_json::to_string(hr).ok());
     tx.execute(
-        "INSERT INTO workouts (name, type, date, start_min, duration_min, kcal, intensity, note, session_id, created_at) \
-         VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+        "INSERT INTO workouts (name, type, date, start_min, duration_min, kcal, intensity, note, session_id, hr_json, created_at) \
+         VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
         rusqlite::params![
             input.name,
             input.workout_type,
@@ -205,7 +210,8 @@ pub(crate) fn session_finish_on(
             input.kcal,
             input.intensity.clone().unwrap_or_else(|| "moderate".into()),
             input.note,
-            input.id
+            input.id,
+            hr_json
         ],
     )?;
     let workout_id = tx.last_insert_rowid();
@@ -725,6 +731,22 @@ mod tests {
                 intensity: None,
                 kcal: 300.0,
                 note: None,
+                hr: Some(crate::modules::heartrate::models::HrWorkoutSummary {
+                    duration_sec: 2400,
+                    measured_sec: 2100,
+                    coverage: 0.875,
+                    samples: 210,
+                    avg_bpm: Some(132),
+                    max_bpm: Some(158),
+                    min_bpm: Some(92),
+                    kcal: Some(260.0),
+                    zones: vec![
+                        crate::modules::heartrate::models::HrZoneTime { zone: 3, seconds: 1500 },
+                        crate::modules::heartrate::models::HrZoneTime { zone: 4, seconds: 600 },
+                    ],
+                    level: Some(3),
+                    intensity: Some("moderate".into()),
+                }),
                 sets: vec![FinishSet {
                     exercise_key: "bench".into(),
                     exercise_name: "卧推".into(),
@@ -756,6 +778,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(sets, 1, "逐组明细落库");
+        // 心率摘要按 JSON 往返：落库后读回的同一条记录必须还带着这份读数
+        let hr = workout.hr.expect("心率摘要应随记录返回");
+        assert_eq!(hr.avg_bpm, Some(132));
+        assert_eq!(hr.zones.len(), 2);
+        assert_eq!(hr.zones[0].seconds, 1500);
         assert!(session_active_on(&conn).unwrap().is_none(), "结束后无活跃会话");
     }
 

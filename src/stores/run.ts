@@ -1280,6 +1280,7 @@ export const useRunStore = defineStore('run', () => {
           intensity: tier,
           kcal: kcalFinal,
           note: noteParts.length > 0 ? noteParts.join(' · ') : null,
+          hr: hrSummary,
           sets: [], // 跑步无逐组重量
         })
       } catch (e) {
