@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Footprints, Heart, ListChecks, PenLine } from 'lucide-vue-next'
 
@@ -16,6 +16,7 @@ import { useExerciseStore } from '@/stores/exercise'
 import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useTodoStore } from '@/stores/todo'
+import { motionOn } from '@/system/motion'
 import { todayStr } from '@/utils/date'
 
 /** 运动页（训练主页）：周概览（含最近一次）+ 跑步/手动记快速入口 + 课程启动 + 运动负荷 + 运动待办。 */
@@ -38,11 +39,57 @@ onMounted(() => {
 })
 
 const manualOpen = ref(false)
-/** 心率设备抽屉：页头的心率入口统一打开它（运动页不再占一张内容卡） */
+/** 设备管理抽屉：页头入口统一打开它（运动页不再占一张内容卡） */
 const hrOpen = ref(false)
-const hrConnected = computed(() => hr.connected && hr.bpm != null)
+
+/**
+ * 已连接设备。当前 BLE 链路只允许一个中心连接（数量恒 0/1），
+ * 但文案按「N 个」写 —— 以后支持多设备时这里只换数据源，页头不用改。
+ */
+const hrConnectedDevices = computed(() => (hr.connected && hr.device ? [hr.device] : []))
+const hrConnectedCount = computed(() => hrConnectedDevices.value.length)
+const hrDeviceNames = computed(() => hrConnectedDevices.value.map((d) => d.name))
+
+/** 轮播串：未连接只有「设备管理」；连接后「已连接设备 N 个」与各设备名轮流出现 */
+const hrTexts = computed(() =>
+  hrConnectedCount.value === 0
+    ? ['设备管理']
+    : [`已连接设备 ${hrConnectedCount.value} 个`, ...hrDeviceNames.value],
+)
+const hrTextIndex = ref(0)
+const hrText = computed(() => {
+  if (hrConnectedCount.value === 0) return '设备管理'
+  // 关闭动效时不做轮播：把两段并成一句，信息不丢
+  if (!motionOn.value) {
+    return `已连接设备 ${hrConnectedCount.value} 个 · ${hrDeviceNames.value.join('、')}`
+  }
+  return hrTexts.value[hrTextIndex.value % hrTexts.value.length] ?? ''
+})
+
+let hrRotateTimer: ReturnType<typeof setInterval> | null = null
+function stopHrRotate(): void {
+  if (hrRotateTimer) {
+    clearInterval(hrRotateTimer)
+    hrRotateTimer = null
+  }
+}
+/** 连接状态 / 设备名 / 动效开关任一变化：回到第一段，必要时重开轮播 */
+function syncHrRotate(): void {
+  stopHrRotate()
+  hrTextIndex.value = 0
+  if (!motionOn.value) return
+  if (hrConnectedCount.value === 0 || hrTexts.value.length < 2) return
+  hrRotateTimer = setInterval(() => {
+    hrTextIndex.value = (hrTextIndex.value + 1) % hrTexts.value.length
+  }, 3200)
+}
+watch([hrConnectedCount, hrDeviceNames, motionOn], syncHrRotate, { immediate: true })
+onBeforeUnmount(stopHrRotate)
+
 const hrAria = computed(() =>
-  hrConnected.value ? `心率 ${hr.bpm} 次每分，打开心率设备` : '连接心率设备',
+  hrConnectedCount.value === 0
+    ? '设备管理，打开心率设备'
+    : `已连接 ${hrConnectedCount.value} 个设备：${hrDeviceNames.value.join('、')}，打开设备管理`,
 )
 </script>
 
@@ -51,19 +98,20 @@ const hrAria = computed(() =>
     <!-- 页首不留副标题：本周分钟与大卡紧跟在下方的「本周运动」卡里（同一份数据的同一处读数，
          两处各写一遍只会稀释首屏信息密度） -->
     <PageHeader title="运动">
-      <!-- 心率入口：统一挂在页头（不再占页内一张卡）——未连接显示「心率」，
-           连接后图心转危险色并直接读数；点开是设备抽屉。 -->
+      <!-- 设备管理入口：统一挂在页头（不再占页内一张卡）。
+           未连接 = 「设备管理」；连接后「已连接设备 N 个」与设备名轮播，点开是设备抽屉。 -->
       <template #action>
         <button
           type="button"
           class="hdr-btn pill hr-pill"
-          :class="{ live: hrConnected }"
+          :class="{ live: hrConnectedCount > 0 }"
           :aria-label="hrAria"
           @click="hrOpen = true"
         >
           <Heart :size="15" :stroke-width="2.1" aria-hidden="true" />
-          <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
-          <span v-else>心率</span>
+          <Transition name="hr-swap" mode="out-in">
+            <span :key="hrText" class="hrtxt">{{ hrText }}</span>
+          </Transition>
         </button>
       </template>
     </PageHeader>
@@ -149,15 +197,56 @@ const hrAria = computed(() =>
   letter-spacing: -0.3px;
 }
 
-/* 心率入口：几何与材质沿用 PageHeader 的 .hdr-btn.pill（这里只补状态色）——
-   未连接时图标是次级色，连接后图标转危险色，BPM 数字保持中性。 */
+/* 设备管理入口：几何与材质沿用 PageHeader 的 .hdr-btn.pill（圆角已在那边重置为胶囊），
+   这里补状态色、固定宽度与轮播。固定宽度是为了轮播换字时不把页头标题挤得左右跳：
+   14px 下「Xiaomi Smart Band 8」约 141px，留一点余量。 */
 .hr-pill svg {
   color: var(--text-2);
   transition: color var(--dur-fast) var(--ease-standard);
 }
 
+.hr-pill.live {
+  min-width: 196px;
+  justify-content: center;
+}
+
 .hr-pill.live svg {
   color: var(--danger);
+}
+
+/* 文本区：一条单行，超长设备名截断（完整名称在抽屉里） */
+.hrtxt {
+  display: inline-block;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 轮播换字：轻微上移淡出 / 上移淡入。关闭动效（motion off）时走下面的
+   prefers-reduced-motion 兜底，状态直接切换。 */
+.hr-swap-enter-active,
+.hr-swap-leave-active {
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.hr-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.hr-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hr-swap-enter-active,
+  .hr-swap-leave-active {
+    transition: none;
+  }
 }
 
 .list {

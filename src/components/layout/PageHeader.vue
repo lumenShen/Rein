@@ -301,12 +301,15 @@ html[data-motion='rich'] .page-header.collapsed .ph-bar > :slotted(.hdr-btn) {
 
 /* 文字胶囊变体（`.hdr-btn.pill`）：38px 圆钮只装得下图标，而有的入口本身就是一句话
    —— 文件页右侧那颗「空间总览 · 总大小」。放宽宽度、内容自己撑，材质/玻璃/按压反馈
-   一律沿用上面那套 .hdr-btn 规则（变体不复制材质，只改几何与字号）。 */
+   一律沿用上面那套 .hdr-btn 规则（变体不复制材质，只改几何与字号）。
+   **圆角必须重置成胶囊**：.hdr-btn 的 50% 是按 38×38 的圆形写的，套到放宽后的宽度上
+   会变成椭圆（两端不是半圆，半径随宽度拉伸）。 */
 .page-header :slotted(.hdr-btn.pill) {
   width: auto;
   min-width: 38px;
   padding: 0 var(--pad-inline);
   gap: var(--sp-6);
+  border-radius: var(--radius-full);
   font-size: var(--fs-subhead);
   font-weight: var(--fw-semibold);
   font-variant-numeric: tabular-nums;
