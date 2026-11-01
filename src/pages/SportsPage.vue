@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { Footprints, Heart, ListChecks, PenLine } from 'lucide-vue-next'
 
@@ -16,6 +16,7 @@ import { useExerciseStore } from '@/stores/exercise'
 import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useTodoStore } from '@/stores/todo'
+import { useMarqueeText } from '@/composables/useMarqueeText'
 import { motionOn } from '@/system/motion'
 import { todayStr } from '@/utils/date'
 
@@ -50,41 +51,29 @@ const hrConnectedDevices = computed(() => (hr.connected && hr.device ? [hr.devic
 const hrConnectedCount = computed(() => hrConnectedDevices.value.length)
 const hrDeviceNames = computed(() => hrConnectedDevices.value.map((d) => d.name))
 
-/** 轮播串：未连接只有「设备管理」；连接后「已连接设备 N 个」与各设备名轮流出现 */
-const hrTexts = computed(() =>
-  hrConnectedCount.value === 0
-    ? ['设备管理']
-    : [`已连接设备 ${hrConnectedCount.value} 个`, ...hrDeviceNames.value],
+/**
+ * 胶囊宽度只认这一句：「已连接设备 N 个」。它是隐藏 sizer 的文本，也是 marquee
+ * 视口的宽度来源 —— 设备名再长也只会在视口里滚动，不会把页头标题挤得左右跳。
+ * 未连接时退回「设备管理」的自身宽度（那是另一个状态，不预留连接态的宽度）。
+ */
+const hrSizerText = computed(() =>
+  hrConnectedCount.value === 0 ? '设备管理' : `已连接设备 ${hrConnectedCount.value} 个`,
 )
-const hrTextIndex = ref(0)
-const hrText = computed(() => {
-  if (hrConnectedCount.value === 0) return '设备管理'
-  // 关闭动效时不做轮播：把两段并成一句，信息不丢
-  if (!motionOn.value) {
-    return `已连接设备 ${hrConnectedCount.value} 个 · ${hrDeviceNames.value.join('、')}`
-  }
-  return hrTexts.value[hrTextIndex.value % hrTexts.value.length] ?? ''
-})
+/** 跑马灯内容：计数在前、设备名在后（静止时先读到的是完整的状态） */
+const hrStatusText = computed(() =>
+  hrConnectedCount.value === 0
+    ? '设备管理'
+    : `${hrSizerText.value} · ${hrDeviceNames.value.join('、')}`,
+)
 
-let hrRotateTimer: ReturnType<typeof setInterval> | null = null
-function stopHrRotate(): void {
-  if (hrRotateTimer) {
-    clearInterval(hrRotateTimer)
-    hrRotateTimer = null
-  }
-}
-/** 连接状态 / 设备名 / 动效开关任一变化：回到第一段，必要时重开轮播 */
-function syncHrRotate(): void {
-  stopHrRotate()
-  hrTextIndex.value = 0
-  if (!motionOn.value) return
-  if (hrConnectedCount.value === 0 || hrTexts.value.length < 2) return
-  hrRotateTimer = setInterval(() => {
-    hrTextIndex.value = (hrTextIndex.value + 1) % hrTexts.value.length
-  }, 3200)
-}
-watch([hrConnectedCount, hrDeviceNames, motionOn], syncHrRotate, { immediate: true })
-onBeforeUnmount(stopHrRotate)
+const hrViewEl = useTemplateRef<HTMLElement>('hrView')
+const hrInnerEl = useTemplateRef<HTMLElement>('hrInner')
+const hrCopyEl = useTemplateRef<HTMLElement>('hrCopy')
+const { isOverflow: hrOverflow, isScrolling: hrScrolling } = useMarqueeText(
+  hrStatusText,
+  motionOn,
+  { view: hrViewEl, inner: hrInnerEl, copy: hrCopyEl },
+)
 
 const hrAria = computed(() =>
   hrConnectedCount.value === 0
@@ -99,7 +88,8 @@ const hrAria = computed(() =>
          两处各写一遍只会稀释首屏信息密度） -->
     <PageHeader title="运动">
       <!-- 设备管理入口：统一挂在页头（不再占页内一张卡）。
-           未连接 = 「设备管理」；连接后「已连接设备 N 个」与设备名轮播，点开是设备抽屉。 -->
+           未连接 = 「设备管理」；连接后计数与设备名在同一行里跑马灯 —— 宽度由隐藏
+           sizer 的「已连接设备 N 个」钉死，长设备名只在视口内滚动，页头不跟着抖。 -->
       <template #action>
         <button
           type="button"
@@ -109,9 +99,20 @@ const hrAria = computed(() =>
           @click="hrOpen = true"
         >
           <Heart :size="15" :stroke-width="2.1" aria-hidden="true" />
-          <Transition name="hr-swap" mode="out-in">
-            <span :key="hrText" class="hrtxt">{{ hrText }}</span>
-          </Transition>
+          <span class="hr-text">
+            <span class="hr-sizer" aria-hidden="true">{{ hrSizerText }}</span>
+            <!-- 视口叠在 sizer 上：宽度取 sizer，内容只做 transform 位移 -->
+            <span
+              ref="hrView"
+              class="hr-view"
+              :class="{ 'is-overflow': hrOverflow, 'is-scrolling': hrScrolling }"
+            >
+              <span ref="hrInner" class="hr-track">
+                <span ref="hrCopy" class="hr-copy">{{ hrStatusText }}</span>
+                <span v-if="hrOverflow" class="hr-copy" aria-hidden="true">{{ hrStatusText }}</span>
+              </span>
+            </span>
+          </span>
         </button>
       </template>
     </PageHeader>
@@ -198,56 +199,92 @@ const hrAria = computed(() =>
 }
 
 /* 设备管理入口：几何与材质沿用 PageHeader 的 .hdr-btn.pill（圆角已在那边重置为胶囊），
-   这里补状态色、固定宽度与轮播。固定宽度是为了轮播换字时不把页头标题挤得左右跳：
-   14px 下「Xiaomi Smart Band 8」约 141px，留一点余量。 */
+   这里补状态色与文本视口。
+
+   **宽度不跟内容走**：.hr-sizer 用一句看不见的「已连接设备 N 个」把胶囊钉在这个尺寸，
+   跑马灯视口绝对定位叠在它上面。设备名再长也只改 .hr-track 的内部宽度（由 transform
+   平移），胶囊与页头标题的布局一次算好、滚动期间不再重排 —— 这正是换字动画做不到的：
+   那条路每次换串都要重新量文本、挤一下标题。 */
 .hr-pill svg {
   color: var(--text-2);
   transition: color var(--dur-fast) var(--ease-standard);
-}
-
-.hr-pill.live {
-  min-width: 196px;
-  justify-content: center;
 }
 
 .hr-pill.live svg {
   color: var(--danger);
 }
 
-/* 文本区：一条单行，超长设备名截断（完整名称在抽屉里） */
-.hrtxt {
+.hr-text {
+  position: relative;
   display: inline-block;
-  max-width: 148px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
+}
+
+/* 连接态在计数句末留出渐隐带的宽度：静止时「个」字完整可见，不会一上来就糊在半截 */
+.hr-pill.live .hr-text {
+  padding-right: 10px;
+}
+
+.hr-sizer {
+  display: block;
+  visibility: hidden;
   white-space: nowrap;
 }
 
-/* 轮播换字：轻微上移淡出 / 上移淡入。关闭动效（motion off）时走下面的
-   prefers-reduced-motion 兜底，状态直接切换。 */
-.hr-swap-enter-active,
-.hr-swap-leave-active {
-  transition:
-    opacity 160ms var(--ease-out),
-    transform 160ms var(--ease-out);
+/* 视口：宽度/高度都取 sizer 的盒子，左右边缘由 mask 渐隐 */
+.hr-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.hr-swap-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
+.hr-track {
+  display: inline-block;
+  width: max-content;
+  white-space: nowrap;
 }
 
-.hr-swap-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
+/* 副本之间留 24px 空档：循环接缝处两份文本不会连成一个词。
+   JS 按这个 margin 算周期，改宽度不用改脚本。 */
+.hr-copy {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: var(--sp-24);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hr-swap-enter-active,
-  .hr-swap-leave-active {
-    transition: none;
-  }
+/* 溢出：右缘 10px 渐隐 —— 静止时就宣告「后面还有（设备名）」 */
+.hr-view.is-overflow {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent 100%);
 }
+
+/* 滚动中补上左缘渐隐：文字从左侧化入，而不是被视口硬切一刀。
+   mask-image 是离散属性做不了补间，两态直接切换（发生在开始/停止滚动的那一帧）。 */
+.hr-view.is-overflow.is-scrolling {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 10px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 10px),
+    transparent 100%
+  );
+}
+
+/* 只有真的在滚动时才提升合成层：静止的页头不该常驻一张 will-change 的贴图 */
+.hr-view.is-scrolling .hr-track {
+  will-change: transform;
+}
+
+/* 关闭动效 / 系统减弱动效：不做位移（JS 侧已停），保留右缘渐隐作溢出提示。
+   静止时视口恰好停在计数句上，信息不丢。 */
 
 .list {
   margin-top: var(--sp-6);
