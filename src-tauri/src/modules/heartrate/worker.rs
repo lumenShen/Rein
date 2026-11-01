@@ -29,6 +29,11 @@ const HEART_RATE_SERVICE: u16 = 0x180D;
 const HEART_RATE_MEASUREMENT: u16 = 0x2A37;
 const TICK: Duration = Duration::from_secs(2);
 const RECONNECT_DELAYS: [u64; 4] = [0, 1, 2, 4];
+/** 连接 + 发现服务 + 订阅的硬上限。Windows/WinRT 在设备被手机占用时会一直挂起
+ *  （connect 不返回也不报错），没有这段超时界面就会永远停在「正在连接」。 */
+const ATTACH_TIMEOUT: Duration = Duration::from_secs(15);
+/** 失败清场时最多等这么久：信道已经坏了，disconnect 也可能挂。 */
+const CLEANUP_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub(super) fn spawn(
     app: AppHandle,
@@ -320,7 +325,10 @@ impl Worker {
         self.emit();
         let peripheral = match self.find_peripheral(&id).await {
             Ok(p) => p,
-            Err(e) => return self.fail(e),
+            Err(e) => {
+                eprintln!("[heartrate] find peripheral failed: {e}");
+                return self.fail(e);
+            }
         };
         self.peripheral = Some(peripheral.clone());
         if let Err(e) = self.attach(&peripheral).await {
@@ -329,7 +337,20 @@ impl Worker {
     }
 
     /// 连接 → 发现服务 → 订阅 0x2A37 → 起通知泵。成功时把状态置 connected。
+    /// 整段带超时：任何一步挂住都按失败收尾，并尽力把半开的连接清掉。
     async fn attach(&mut self, peripheral: &Peripheral) -> Result<(), String> {
+        let result = match tokio::time::timeout(ATTACH_TIMEOUT, self.attach_inner(peripheral)).await {
+            Ok(result) => result,
+            Err(_) => Err("连接超时（15 秒）：手环可能仍连着手机 App，或没有开启心率广播".into()),
+        };
+        if let Err(e) = &result {
+            eprintln!("[heartrate] attach failed: {e}");
+            let _ = tokio::time::timeout(CLEANUP_TIMEOUT, peripheral.disconnect()).await;
+        }
+        result
+    }
+
+    async fn attach_inner(&mut self, peripheral: &Peripheral) -> Result<(), String> {
         if !peripheral.is_connected().await.unwrap_or(false) {
             peripheral
                 .connect()
@@ -398,6 +419,7 @@ impl Worker {
             });
         });
         self.emit();
+        eprintln!("[heartrate] connected and subscribed 0x2A37");
         Ok(())
     }
 
