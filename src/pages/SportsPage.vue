@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Footprints, ListChecks, PenLine } from 'lucide-vue-next'
+import { Footprints, Heart, ListChecks, PenLine } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import QuickTile from '@/components/common/QuickTile.vue'
-import HeartRateCard from '@/components/health/HeartRateCard.vue'
+import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
 import ExerciseVolumeCard from '@/components/exercise/ExerciseVolumeCard.vue'
 import ExerciseWeekCard from '@/components/exercise/ExerciseWeekCard.vue'
 import PlanRecentCard from '@/components/exercise/PlanRecentCard.vue'
@@ -38,13 +38,35 @@ onMounted(() => {
 })
 
 const manualOpen = ref(false)
+/** 心率设备抽屉：页头的心率入口统一打开它（运动页不再占一张内容卡） */
+const hrOpen = ref(false)
+const hrConnected = computed(() => hr.connected && hr.bpm != null)
+const hrAria = computed(() =>
+  hrConnected.value ? `心率 ${hr.bpm} 次每分，打开心率设备` : '连接心率设备',
+)
 </script>
 
 <template>
   <div class="page">
     <!-- 页首不留副标题：本周分钟与大卡紧跟在下方的「本周运动」卡里（同一份数据的同一处读数，
          两处各写一遍只会稀释首屏信息密度） -->
-    <PageHeader title="运动" />
+    <PageHeader title="运动">
+      <!-- 心率入口：统一挂在页头（不再占页内一张卡）——未连接显示「心率」，
+           连接后图心转危险色并直接读数；点开是设备抽屉。 -->
+      <template #action>
+        <button
+          type="button"
+          class="hdr-btn pill hr-pill"
+          :class="{ live: hrConnected }"
+          :aria-label="hrAria"
+          @click="hrOpen = true"
+        >
+          <Heart :size="15" :stroke-width="2.1" aria-hidden="true" />
+          <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
+          <span v-else>心率</span>
+        </button>
+      </template>
+    </PageHeader>
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
@@ -74,9 +96,6 @@ const manualOpen = ref(false)
       </li>
     </ul>
 
-    <!-- 心率设备：连接手环的标准心率广播；训练时由 Rust 侧按心率积分消耗 -->
-    <HeartRateCard />
-
     <!-- 训练启动：最近使用的三个课程（全部课程在二级页） -->
     <PlanRecentCard />
 
@@ -96,6 +115,9 @@ const manualOpen = ref(false)
 
     <!-- 手动记运动 -->
     <AddWorkoutSheet :open="manualOpen" @close="manualOpen = false" />
+
+    <!-- 页头心率入口的设备抽屉 -->
+    <HeartRateSheet :open="hrOpen" @close="hrOpen = false" />
     </div>
   </div>
 </template>
@@ -125,6 +147,17 @@ const manualOpen = ref(false)
   font-size: var(--fs-title3);
   font-weight: var(--fw-bold);
   letter-spacing: -0.3px;
+}
+
+/* 心率入口：几何与材质沿用 PageHeader 的 .hdr-btn.pill（这里只补状态色）——
+   未连接时图标是次级色，连接后图标转危险色，BPM 数字保持中性。 */
+.hr-pill svg {
+  color: var(--text-2);
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+
+.hr-pill.live svg {
+  color: var(--danger);
 }
 
 .list {
