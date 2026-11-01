@@ -116,7 +116,9 @@ export const useNutritionStore = defineStore('nutrition', () => {
   const kcalIntake = computed(() => Math.round(summary.value?.intake.kcal ?? 0))
   const kcalTarget = computed(() => Math.round(summary.value?.targets.kcal ?? 0))
   const exerciseKcal = computed(() => Math.round(summary.value?.exerciseKcal ?? 0))
-  const kcalRemaining = computed(() => Math.max(0, kcalTarget.value + exerciseKcal.value - kcalIntake.value))
+  // 目标（TDEE ± 缺口/盈余）已含活动系数里的训练消耗，不再把总运动消耗加回 ——
+  // 加回等于双重计入。运动消耗只作独立指标展示（三环里的运动环）。
+  const kcalRemaining = computed(() => Math.max(0, kcalTarget.value - kcalIntake.value))
 
   const macros = computed<MacroStat[]>(() => macroStatsFrom(summary.value))
 

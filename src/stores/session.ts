@@ -17,6 +17,7 @@ import { estimateKcal } from '@/config/domain'
 import { useToast } from '@/composables/useToast'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
 import { useExerciseStore } from '@/stores/exercise'
+import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePlanStore } from '@/stores/plan'
 import { todayStr } from '@/utils/date'
@@ -30,6 +31,7 @@ import type {
   DoneSet,
   FeelingInput,
   GatewaySessionFinish,
+  Intensity,
   PlanExercise,
   PlanExerciseOverride,
   PlanExerciseRef,
@@ -421,16 +423,18 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     return Math.max(0, Math.round((Date.now() - t) / 1000))
   })
 
-  const estimateKcalValue = computed(() =>
-    plan.value
+  const estimateKcalValue = computed(() => {
+    // 力量/课程热量一律走 MET × 体重，不吃心率热量：心率法（Keytel）在抗阻训练
+    // 上严重高估（心率升高不等于能耗升高），心率测量只贡献区间与强度档。
+    return plan.value
       ? estimateKcal(
           plan.value.workoutType,
           'moderate',
           durationMin.value || 1,
           useNutritionStore().profile?.weightKg ?? 70,
         )
-      : 0,
-  )
+      : 0
+  })
 
   const isActive = computed(() => phase.value !== 'idle' && plan.value != null)
 
@@ -681,6 +685,8 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         beginExercise()
         await persist()
       }
+      // 心率测量与本场训练同起同收：恢复会话时按原 startedAt 计覆盖率
+      void useHeartRateStore().beginWorkout(startedAtIso.value)
       void usePlanStore().touch(p.id) // 维护「最近使用」排序
       return 'ok'
     } catch (e: unknown) {
@@ -1393,14 +1399,24 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
   /** 结束并保存：后端事务内写训练记录 + 逐组明细 + 关闭会话（允许提前结束，保存已完成进度） */
   async function finishAndSave(): Promise<SessionFinishResult | null> {
     if (!plan.value || !sessionId.value) return null
+    // 先收心率（Rust 返回整场积分与强度档）；失败静默回退到 MET 估算
+    await useHeartRateStore().finishWorkout()
+    const hrSummary = useHeartRateStore().lastSummary
     const duration = durationMin.value
     const kcal = estimateKcalValue.value
+    // 心率覆盖率足够时只借用心率读出的强度档（数字仍按 MET 口径）
+    const intensity: Intensity =
+      (useHeartRateStore().usableKcal != null ? hrSummary?.intensity : null) ?? 'moderate'
     const volume = totalVolume.value
     const done = doneCount.value
     const total = totalCount.value
     const noteParts = [`${done}/${total} 组完成`]
     if (done < total) noteParts.push('提前结束')
     if (volume > 0) noteParts.push(`总容量约 ${volume} kg`)
+    if (hrSummary?.avgBpm != null) {
+      const max = hrSummary.maxBpm != null ? ` · 最高 ${hrSummary.maxBpm}` : ''
+      noteParts.push(`平均心率 ${hrSummary.avgBpm}${max}`)
+    }
     try {
       await sessionService.finish({
         id: sessionId.value,
@@ -1408,7 +1424,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         workoutType: plan.value.workoutType,
         date: todayStr(),
         durationMin: duration,
-        intensity: 'moderate',
+        intensity,
         kcal,
         note: noteParts.join(' · '),
         sets: buildSetRows(),
@@ -1440,6 +1456,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
   async function discard(): Promise<void> {
     const id = sessionId.value
     if (id) await discardById(id)
+    else void useHeartRateStore().cancelWorkout()
   }
 
   /** 外部放弃（如主页恢复卡） */
@@ -1451,6 +1468,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
       finishError.value = e instanceof Error ? e.message : String(e)
       throw e
     }
+    void useHeartRateStore().cancelWorkout()
     if (sessionId.value === id) endLocal()
   }
 
@@ -1470,6 +1488,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     skippedSets.value = {}
     exerciseOverrides.value = {}
     finishError.value = ''
+    useHeartRateStore().clearFinished()
   }
 
   /* ---------- 外部控制（contract §14.3） ---------- */
@@ -1801,6 +1820,8 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         phase.value = cur && cur.kind !== 'strength' ? 'timed-ready' : 'exercise'
       }
     }
+    // 中途恢复：从这一刻起继续采心率，覆盖率按整场 startedAt 计算
+    void useHeartRateStore().beginWorkout(rec.startedAt)
     return 'restored'
   }
 

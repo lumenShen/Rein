@@ -4,6 +4,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
 import { usePomodoroStore } from './stores/pomodoro'
+import { useHeartRateStore } from './stores/heartRate'
 import { externalAccessRuntime } from './system/externalAccessRuntime'
 import { globalFloat } from './system/globalFloat'
 import { initRubberScroll } from './system/rubberScroll'
@@ -21,6 +22,8 @@ usePomodoroStore().init()
 // 运动系统运行时：启动即接管未完成的运动（计时/GPS/落盘独立于组件，
 // 悬浮运动条与沉浸页共用这一份数据源）
 workoutRuntime.init()
+// 心率：订阅 Rust 侧的连接状态与节流样本（桌面 BLE）；mock 模式下走 1s 轮询
+void useHeartRateStore().init()
 // 分享收件箱运行时：接收系统分享/打开的文件，路由到 AI 页预填
 shareInbox.init()
 // 外部访问授权弹窗运行时：订阅授权请求/状态事件并兜底拉取待决列表

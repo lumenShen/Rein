@@ -34,6 +34,7 @@ export { fmtClock, fmtPace }
 import { FALLBACK_LIVE, trackingService } from '@/services/trackingService'
 import { useToast } from '@/composables/useToast'
 import { useExerciseStore } from '@/stores/exercise'
+import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { PACE_STALE_SEC, RunGate } from '@/stores/runGate'
 import { todayStr } from '@/utils/date'
@@ -331,12 +332,37 @@ export const useRunStore = defineStore('run', () => {
     return 'low'
   })
 
-  /** ACSM 速度连续模型：有 GPS 距离按平均配速精确计算，无距离退回 MET 中档 */
-  const kcal = computed(() => estimateRunKcal(km.value, elapsedSec.value, weightKg.value))
+  /** 平均坡度（净爬升 ÷ 入账里程，分数）：喂 ACSM 的坡度项。
+   *  GPS 海拔噪声大（±10m 级）：里程 <1km 或两端高差 <10m 都按平地计；
+   *  下坡段能耗高于线性外推（ACSM 方程只在 0~20% 坡度内有效），负坡一律截为 0。 */
+  const avgGrade = computed<number>(() => {
+    if (km.value < 1) return 0
+    const alts = trackPoints.value.map((p) => p.alt).filter((a): a is number => typeof a === 'number')
+    if (alts.length < 10) return 0
+    const delta = (alts[alts.length - 1]! - alts[0]!) / (km.value * 1000)
+    return Math.min(0.15, Math.max(0, delta))
+  })
 
-  /** 任意距离下的热量（总结页距离核对时实时重算） */
+  /** 热量：有距离走 ACSM（含坡度项）；心率法在稳态有氧上也有 ~13% 系统性低估
+   *  （Montgomery 2017），只在没有距离数据（跑步机未补填 / 定位不可用）时兜底，
+   *  最后退回 MET 中档。与 save() 写进记录的是同一口径。 */
+  const kcal = computed(() => {
+    if (km.value > 0.05)
+      return estimateRunKcal(km.value, elapsedSec.value, weightKg.value, avgGrade.value)
+    return (
+      useHeartRateStore().usableKcal ??
+      estimateRunKcal(null, elapsedSec.value, weightKg.value)
+    )
+  })
+
+  /** 任意距离下的热量（总结页距离核对时实时重算）；无距离时与 kcal 同一回落链 */
   function kcalAt(kmVal: number | null): number {
-    return estimateRunKcal(kmVal, elapsedSec.value, weightKg.value)
+    if (kmVal != null && kmVal > 0.01)
+      return estimateRunKcal(kmVal, elapsedSec.value, weightKg.value, avgGrade.value)
+    return (
+      useHeartRateStore().usableKcal ??
+      estimateRunKcal(null, elapsedSec.value, weightKg.value)
+    )
   }
 
   const goalProgress = computed<number | null>(() => {
@@ -1071,6 +1097,8 @@ export const useRunStore = defineStore('run', () => {
     })
     sessionId.value = rec.id
     await armKeepalive() // 起表前先确保保活/授权，弹框等待不计入运动时长
+    // 心率测量与跑步同起同收：连接/扫描失败都只是回退到 ACSM 估算
+    void useHeartRateStore().beginWorkout(startedAtIso.value)
     if (source.value === 'native') {
       gpsStatus.value = 'acquiring'
       await nativeRunBegin(0, 0) // baseline 0/0：新一轮从零起
@@ -1211,13 +1239,33 @@ export const useRunStore = defineStore('run', () => {
     const finalKm = manualKm != null && manualKm > 0 ? manualKm : km.value > 0.01 ? km.value : null
     const paceSec =
       finalKm != null && finalKm > 0.05 ? Math.round(elapsedSec.value / finalKm) : null
+    // 先收心率（Rust 返回整场积分与强度档）；保存失败重试时 finishWorkout 返回缓存。
+    // 热量口径与 kcal computed 一致：有距离 ACSM（含坡度），心率只在无距离时兜底。
+    const hr = useHeartRateStore()
+    await hr.finishWorkout()
+    const hrSummary = hr.lastSummary
+    const hrKcal = hr.usableKcal
+    // 强度档按平均配速分档；无距离（配速算不出）时才借心率测量给出的档
     const tier: Intensity =
-      paceSec == null ? 'moderate' : paceSec <= 330 ? 'high' : paceSec <= 450 ? 'moderate' : 'low'
-    const kcalFinal = estimateRunKcal(finalKm, elapsedSec.value, weightKg.value)
+      paceSec != null
+        ? paceSec <= 330
+          ? 'high'
+          : paceSec <= 450
+            ? 'moderate'
+            : 'low'
+        : (hrSummary?.intensity ?? 'moderate')
+    const kcalFinal =
+      finalKm != null && finalKm > 0.01
+        ? estimateRunKcal(finalKm, elapsedSec.value, weightKg.value, avgGrade.value)
+        : (hrKcal ?? estimateRunKcal(null, elapsedSec.value, weightKg.value))
     const noteParts: string[] = []
     if (finalKm != null) noteParts.push(`${finalKm.toFixed(2)} km`)
     if (paceSec != null) noteParts.push(`配速 ${fmtPace(paceSec)}`)
     if (manualKm != null && finalKm !== km.value) noteParts.push('距离手动补填')
+    if (hrSummary?.avgBpm != null) {
+      const max = hrSummary.maxBpm != null ? ` · 最高 ${hrSummary.maxBpm}` : ''
+      noteParts.push(`平均心率 ${hrSummary.avgBpm}${max}`)
+    }
     // 最终距离写进快照：详情抽屉/对账都以它为准（保存前的最后一次落盘）
     finalKmSnap.value = finalKm
     await persist()
@@ -1267,6 +1315,7 @@ export const useRunStore = defineStore('run', () => {
         throw e
       }
     }
+    void useHeartRateStore().cancelWorkout()
     resetLocal()
   }
 
@@ -1277,6 +1326,7 @@ export const useRunStore = defineStore('run', () => {
       finishError.value = e instanceof Error ? e.message : String(e)
       throw e
     }
+    void useHeartRateStore().cancelWorkout()
     if (sessionId.value === id) resetLocal()
   }
 
@@ -1338,6 +1388,7 @@ export const useRunStore = defineStore('run', () => {
     resumeGraceUntil = 0
     manualPausedWallMs = 0
     phase.value = 'idle'
+    useHeartRateStore().clearFinished()
   }
 
   /* ---------- 中断恢复 ---------- */
@@ -1432,6 +1483,19 @@ export const useRunStore = defineStore('run', () => {
     // 闸门以最终基线重建（续跑距离/时长不回 0）；暂停态下手动相位置位
     gate = newGate(accumMs.value, distanceM.value)
     if (phase.value === 'paused') gate.setManualPaused(true)
+    // 已跑完待保存的快照不再开启新测量（那一场已经结束，补测只会污染覆盖率）；
+    // 恢复进来时 phase 是 paused / summary，测量从暂停开始，点「继续」才解冻。
+    if (phase.value !== 'summary') {
+      void useHeartRateStore()
+        .beginWorkout(rec.startedAt, { paused: true })
+        .then(() => {
+          // 「中断前正在跑」会在这之后自动 resume()：等测量真正建立后再对齐一次，
+          // 否则 resume 命令可能先于 hr_workout_start 到达，把暂停态留到开跑之后。
+          void useHeartRateStore().setWorkoutPaused(
+            phase.value !== 'running' || pauseCause.value != null,
+          )
+        })
+    }
     if (phase.value === 'paused') {
       if (interruptedRunning) {
         resume()
@@ -1446,6 +1510,12 @@ export const useRunStore = defineStore('run', () => {
   }
 
   /* ---------- 自动暂停开关落盘 ---------- */
+
+  // 心率积分跟着跑步的“净计时”走：手动暂停、自动暂停、进入总结都冻结，
+  // 恢复跑时解冻。暂停期间的样本既不计热量，也不再计入覆盖率。
+  watch([phase, pauseCause], ([p, cause]) => {
+    void useHeartRateStore().setWorkoutPaused(p !== 'running' || cause != null)
+  })
 
   watch(autoPauseOn, (on) => {
     try {

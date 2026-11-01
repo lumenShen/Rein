@@ -334,13 +334,24 @@ export function estimateKcalByEffort(
  * 相比配速三档 MET，热量随平均配速连续变化，长距离误差显著更小。
  * km 缺失（跑步机未补填 / GPS 不可用）时退回 MET 中档估算。
  */
+/**
+ * 跑步热量：ACSM 跑步代谢方程。
+ * VO2 (ml/kg/min) = 0.2 × v + 0.9 × v × grade + 3.5，v 为平均速度 (m/min)，
+ * grade 为坡度（净爬升/里程的分数）。千卡 = VO2(L/min) × 5 kcal/L
+ * → 化简为 (0.2v + 0.9·v·grade + 3.5) × 体重kg × 分钟 ÷ 200。
+ * 相比配速三档 MET，热量随平均配速连续变化，长距离误差显著更小。
+ * 坡度由调用方提供；GPS 海拔噪声大，算不出可信坡度时传 0（平地）。
+ * km 缺失（跑步机未补填 / GPS 不可用）时退回 MET 中档估算。
+ */
 export function estimateRunKcal(
   km: number | null,
   elapsedSec: number,
   weightKg: number,
+  grade = 0,
 ): number {
   const minutes = Math.max(1, elapsedSec / 60)
   if (km == null || km <= 0.01) return estimateKcal('run', 'moderate', minutes, weightKg)
   const v = (km * 1000) / minutes // 平均速度 m/min
-  return Math.round(((0.2 * v + 3.5) * weightKg * minutes) / 200)
+  const vo2 = 0.2 * v + 0.9 * v * grade + 3.5
+  return Math.round((vo2 * weightKg * minutes) / 200)
 }

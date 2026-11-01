@@ -74,6 +74,11 @@ import type {
   Workout,
   WorkoutPlanInput,
   WorkoutPlanRecord,
+  HrConnState,
+  HrDevice,
+  HrProfileInput,
+  HrStatus,
+  HrWorkoutSummary,
 } from '@/types'
 import { normalizeActivation } from '@/config/muscles'
 import { buildAxisRows } from '@/utils/campusTimeAxis'
@@ -181,6 +186,108 @@ let healthLastSync: string | null = null
 let healthImported = 12
 let healthExported = 0
 let healthSteps = 0
+
+/**
+ * 心率设备 mock：浏览器没有蓝牙，给一台演示手环与随时间波动的心率，便于调 UI。
+ * 与真机不同，这里连接即视为已连上，覆盖率在前 30 秒线性爬升。
+ */
+let hrState: HrConnState = 'idle'
+let hrDevice: HrDevice | null = null
+let hrDevices: HrDevice[] = []
+let hrWorkoutStartedAt = 0
+let hrPausedAt = 0
+let hrPausedMs = 0
+let hrProfile: HrProfileInput = { ageYears: 30, sex: 'male', weightKg: 70 }
+
+export const mockHeartRate: {
+  onStatus: ((s: unknown) => void) | null
+  onSample: ((s: unknown) => void) | null
+} = { onStatus: null, onSample: null }
+
+const HR_DEMO_DEVICE: HrDevice = {
+  id: 'mock-mi-band-8',
+  name: 'Xiaomi Smart Band 8',
+  rssi: -48,
+  hasHeartRate: true,
+}
+const HR_DEMO_DEVICE_2: HrDevice = {
+  id: 'mock-polar-h10',
+  name: 'Polar H10',
+  rssi: -63,
+  hasHeartRate: true,
+}
+
+function mockHrBpm(): number {
+  const t = Date.now() / 1000
+  const base = hrState === 'connected' ? (hrWorkoutStartedAt ? 136 : 76) : 72
+  return Math.round(base + Math.sin(t / 4) * 9 + Math.sin(t / 1.7) * 3)
+}
+
+function mockHrZone(bpm: number): number | null {
+  // 与 Rust calc.rs 同一公式：Tanaka 208−0.7×age（女 Gulati 206−0.88×age）
+  if (hrProfile.ageYears == null) return null
+  const max =
+    hrProfile.sex === 'female'
+      ? 206 - 0.88 * hrProfile.ageYears
+      : 208 - 0.7 * hrProfile.ageYears
+  const r = bpm / max
+  if (r < 0.6) return 1
+  if (r < 0.7) return 2
+  if (r < 0.8) return 3
+  if (r < 0.9) return 4
+  return 5
+}
+
+/** 与 Rust Measurement::elapsed_sec 同口径：暂停期间不计入。 */
+function mockHrElapsedSec(): number {
+  if (!hrWorkoutStartedAt) return 0
+  const now = Date.now()
+  const paused = hrPausedMs + (hrPausedAt ? Math.max(0, now - hrPausedAt) : 0)
+  return Math.max(0, Math.floor((now - hrWorkoutStartedAt - paused) / 1000))
+}
+
+function resetMockHrWorkout(): void {
+  hrWorkoutStartedAt = 0
+  hrPausedAt = 0
+  hrPausedMs = 0
+}
+
+function mockHrStatus(): HrStatus {
+  const connected = hrState === 'connected'
+  const bpm = connected ? mockHrBpm() : null
+  // 与 Rust calc.rs 同一公式：Tanaka 208−0.7×age（女 Gulati 206−0.88×age）
+  const maxHr =
+    hrProfile.ageYears != null
+      ? Math.round(
+          hrProfile.sex === 'female'
+            ? 206 - 0.88 * hrProfile.ageYears
+            : 208 - 0.7 * hrProfile.ageYears,
+        )
+      : null
+  const elapsed = mockHrElapsedSec()
+  const coverage = hrWorkoutStartedAt ? Math.min(1, elapsed / 30) : null
+  const liveKcal = hrWorkoutStartedAt ? Math.round((elapsed / 60) * 8.4 * 10) / 10 : null
+  const liveAvg = hrWorkoutStartedAt ? 132 : null
+  return {
+    supported: true,
+    state: hrState,
+    device: hrDevice,
+    devices: hrDevices,
+    bpm,
+    contact: connected ? true : null,
+    lastSampleAt: connected ? Date.now() : null,
+    error: null,
+    maxHr,
+    zone: bpm != null ? mockHrZone(bpm) : null,
+    workoutActive: hrWorkoutStartedAt > 0,
+    liveAvgBpm: liveAvg,
+    liveMaxBpm: hrWorkoutStartedAt ? 158 : null,
+    liveKcal,
+    liveCoverage: coverage,
+    liveElapsedSec: hrWorkoutStartedAt ? elapsed : null,
+    liveLevel: liveAvg != null ? mockHrZone(liveAvg) : null,
+  }
+}
 
 /**
  * health_sync_workouts 的静态样例。
@@ -7641,6 +7748,97 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'voice_draft_clear':
       voiceDraft = null
       return delay(undefined as T)
+
+    // heartrate（浏览器 mock：一台演示手环 + 随时间波动的心率；真机走 btleplug）
+    case 'hr_state':
+      return delay(mockHrStatus() as T)
+    case 'hr_set_profile': {
+      hrProfile = {
+        ageYears: args.ageYears == null ? null : Number(args.ageYears),
+        sex: args.sex === 'male' || args.sex === 'female' ? args.sex : null,
+        weightKg: args.weightKg == null ? null : Number(args.weightKg),
+      }
+      return delay(mockHrStatus() as T)
+    }
+    case 'hr_scan_start':
+      hrState = 'scanning'
+      hrDevices = [{ ...HR_DEMO_DEVICE }, { ...HR_DEMO_DEVICE_2 }]
+      return delay(mockHrStatus() as T)
+    case 'hr_scan_stop':
+      if (hrState === 'scanning') hrState = 'idle'
+      return delay(mockHrStatus() as T)
+    case 'hr_connect': {
+      const id = String(args.id ?? HR_DEMO_DEVICE.id)
+      const name = String(args.name ?? HR_DEMO_DEVICE.name)
+      hrDevice =
+        hrDevices.find((d) => d.id === id) ??
+        ({ id, name, rssi: -50, hasHeartRate: true } satisfies HrDevice)
+      hrState = 'connected'
+      return delay(mockHrStatus() as T)
+    }
+    case 'hr_disconnect':
+      hrState = 'idle'
+      hrDevice = null
+      return delay(mockHrStatus() as T)
+    case 'hr_workout_start': {
+      hrProfile = {
+        ageYears: args.ageYears == null ? null : Number(args.ageYears),
+        sex: args.sex === 'male' || args.sex === 'female' ? args.sex : null,
+        weightKg: args.weightKg == null ? null : Number(args.weightKg),
+      }
+      const started = Number(args.startedAtMs)
+      hrWorkoutStartedAt = Number.isFinite(started) && started > 0 ? started : Date.now()
+      hrPausedMs = 0
+      hrPausedAt = args.paused === true ? Date.now() : 0
+      const id = args.deviceId == null ? '' : String(args.deviceId)
+      if (id) {
+        hrDevice =
+          hrDevices.find((d) => d.id === id) ??
+          ({ id, name: String(args.deviceName ?? '心率设备'), rssi: -50, hasHeartRate: true } satisfies HrDevice)
+      } else if (!hrDevice) {
+        hrDevice = { ...HR_DEMO_DEVICE }
+      }
+      hrState = 'connected'
+      return delay(mockHrStatus() as T)
+    }
+    case 'hr_workout_finish': {
+      if (!hrWorkoutStartedAt) return delay(null as T)
+      const elapsed = Math.max(1, mockHrElapsedSec())
+      const coverage = Math.min(1, elapsed / 30)
+      const avg = 132
+      const kcal = Math.round((elapsed / 60) * 8.4 * 10) / 10
+      resetMockHrWorkout()
+      const summary: HrWorkoutSummary = {
+        durationSec: elapsed,
+        measuredSec: Math.round(elapsed * coverage),
+        coverage,
+        samples: elapsed,
+        avgBpm: avg,
+        maxBpm: 158,
+        minBpm: 96,
+        kcal,
+        zones: [
+          { zone: 2, seconds: Math.round(elapsed * 0.2) },
+          { zone: 3, seconds: Math.round(elapsed * 0.5) },
+          { zone: 4, seconds: Math.round(elapsed * 0.3) },
+        ],
+        level: mockHrZone(avg),
+        intensity: 'moderate',
+      }
+      return delay(summary as T)
+    }
+    case 'hr_workout_cancel':
+      resetMockHrWorkout()
+      return delay(mockHrStatus() as T)
+    case 'hr_workout_pause':
+      if (hrWorkoutStartedAt && !hrPausedAt) hrPausedAt = Date.now()
+      return delay(mockHrStatus() as T)
+    case 'hr_workout_resume':
+      if (hrPausedAt) {
+        hrPausedMs += Math.max(0, Date.now() - hrPausedAt)
+        hrPausedAt = 0
+      }
+      return delay(mockHrStatus() as T)
 
     // tracking（跑步前台保活）：纯浏览器开发无需保活，空实现保持契约可见
     case 'tracking_keepalive':

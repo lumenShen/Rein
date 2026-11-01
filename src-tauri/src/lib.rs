@@ -42,6 +42,10 @@ pub fn run() {
             // 但必须 manage 进来 —— 下载线程要用它广播进度、缓存已验签的候选。
             app.manage(modules::update::UpdateHub::new());
 
+            // 心率：蓝牙采集线程与应用级状态。采集线程在首次扫描 / 连接时启动，
+            // 空闲时不占用射频；前端只收节流后的事件（见 modules/heartrate）。
+            app.manage(modules::heartrate::HrService::new(app.handle().clone()));
+
             // 知识库：状态 + 后台索引线程。
             // 索引线程要读写与应用同一份数据库，所以先完成 db::init（其中的迁移已建好 kb_* 表）
             // 并把状态 manage 进去，再启动线程。
@@ -195,6 +199,18 @@ pub fn run() {
             modules::exercise_lib::guide::list_exercise_guides,
             modules::exercise_lib::guide::upsert_exercise_guide,
             modules::exercise_lib::guide::delete_exercise_guide,
+            // heartrate（手环心率：BLE 采集 / 区间与热量积分都在 Rust 线程）
+            modules::heartrate::commands::hr_state,
+            modules::heartrate::commands::hr_set_profile,
+            modules::heartrate::commands::hr_scan_start,
+            modules::heartrate::commands::hr_scan_stop,
+            modules::heartrate::commands::hr_connect,
+            modules::heartrate::commands::hr_disconnect,
+            modules::heartrate::commands::hr_workout_start,
+            modules::heartrate::commands::hr_workout_finish,
+            modules::heartrate::commands::hr_workout_cancel,
+            modules::heartrate::commands::hr_workout_pause,
+            modules::heartrate::commands::hr_workout_resume,
             // program（健康方案：持久化 + 单激活 + 日程重排；计算在前端引擎）
             modules::program::commands::program_list,
             modules::program::commands::program_get_active,

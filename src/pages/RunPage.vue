@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronDown, Play, X } from 'lucide-vue-next'
+import { ChevronDown, Heart, Play, X } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import CountdownOverlay from '@/components/common/CountdownOverlay.vue'
 import GlassThumb from '@/components/common/GlassThumb.vue'
+import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
 import HoldToEnd from '@/components/run/HoldToEnd.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
+import { hrZoneMeta } from '@/config/hr'
+import { useHeartRateStore } from '@/stores/heartRate'
 import { useRunStore, fmtClock, fmtPace } from '@/stores/run'
 import { DISP_MIN_M, HERO_METER_MAX_M } from '@/stores/runGate'
 import { trackingService, type TrackingStatus } from '@/services/trackingService'
@@ -36,8 +39,16 @@ import { useToast } from '@/composables/useToast'
  * 会话（只给气泡提醒，轨迹与累计量全部继承，不再用核对卡挡住主内容）。
  */
 const r = useRunStore()
+const hr = useHeartRateStore()
 const router = useRouter()
 const { toast } = useToast()
+
+/** 心率设备抽屉：跑动中随时能看 / 能连 */
+const hrOpen = ref(false)
+const hrZoneLabel = computed(() => hrZoneMeta(hr.zone)?.label ?? '')
+const hrAria = computed(() =>
+  hr.connected ? `心率 ${hr.bpm ?? '—'} 次每分，打开心率设备` : '连接心率设备',
+)
 
 const endOpen = ref(false)
 const conflictOpen = ref(false)
@@ -333,13 +344,25 @@ const runAscentRate = computed(() => {
 })
 
 const hasGaps = computed(() => r.gapSlowCount + r.gapFastCount + r.gapDropCount > 0)
-/** 消耗是估算：有断档或没有距离时如实标「≈」，并给一句为什么 */
+/** 心率积分只在无距离时兜底热量（与 store 的 kcal 同一回落链）；
+ *  有距离时 ACSM 是主口径，心率数据只展示强度信息。 */
+const hrKcal = computed(() => hr.usableKcal)
+const hrKcalUsed = computed(() => effKm.value == null && hrKcal.value != null)
+/** 消耗是估算：无距离（含心率兜底）/ 有断档时都如实标「≈」并给一句为什么 */
 const kcalApprox = computed(() => hasGaps.value || effKm.value == null)
 const kcalHint = computed(() => {
-  if (!kcalApprox.value) return ''
-  return effKm.value == null
-    ? '≈ 未测得距离：消耗按跑步中等强度估算'
-    : '≈ 消耗按平均速度估算'
+  if (effKm.value != null) {
+    if (!kcalApprox.value) return ''
+    return '≈ 消耗按平均速度估算'
+  }
+  if (hrKcal.value != null) {
+    const parts: string[] = []
+    if (hr.liveAvgBpm != null) parts.push(`平均 ${hr.liveAvgBpm} 次/分`)
+    if (hr.liveCoverage != null) parts.push(`覆盖 ${Math.round(hr.liveCoverage * 100)}%`)
+    // 心率法对个体有 ±20–30% 的误差（Keytel 回归的固有精度），如实标注
+    return `≈ 按心率积分${parts.length > 0 ? `（${parts.join(' · ')}）` : ''}，误差约 ±20–30%`
+  }
+  return '≈ 未测得距离：消耗按跑步中等强度估算'
 })
 
 /**
@@ -1030,6 +1053,22 @@ function bumpKm(delta: number): void {
            竖向叠放（而不是像从前左右各挂一颗）是因为两者读的是同一件事的两面：
            「点有多新」与「谁在记」，眼睛不该在屏幕上跳两处。 -->
       <div class="hud">
+        <!-- 心率：跑动中随时能看 / 能连；与 GPS 同一列，不抢主读数 -->
+        <button
+          v-if="(r.phase === 'running' || r.phase === 'paused') && hr.supported"
+          type="button"
+          class="chip glass-surface hr"
+          :class="{ 'hr-on': hr.connected }"
+          :aria-label="hrAria"
+          @click="hrOpen = true"
+        >
+          <Heart class="hric" :size="14" :stroke-width="2.2" aria-hidden="true" />
+          <template v-if="hr.connected">
+            <b class="num hrbpm">{{ hr.bpm ?? '—' }}</b>
+            <span v-if="hrZoneLabel" class="hrzone">{{ hrZoneLabel }}</span>
+          </template>
+          <template v-else>心率</template>
+        </button>
         <span v-if="gpsChip" class="chip glass-surface gps" :class="gpsChip.tone">
           <i class="gdot" />{{ gpsChip.text }}
         </span>
@@ -1251,6 +1290,26 @@ function bumpKm(delta: number): void {
           </div>
           <p v-if="kcalHint" class="hint left">{{ kcalHint }}</p>
 
+          <!-- 心率读数：平均 / 最高 / 主要区间。热量只在无距离时按心率积分，
+               有距离时 ACSM 是主口径 —— 徽标只在真正用到心率热量时出现。 -->
+          <p v-if="hr.liveAvgBpm != null" class="hrline">
+            <Heart class="hric" :size="15" :stroke-width="2.2" aria-hidden="true" />
+            <span>平均 <b class="num">{{ hr.liveAvgBpm }}</b> 次/分</span>
+            <span>最高 <b class="num">{{ hr.liveMaxBpm ?? '—' }}</b></span>
+            <span v-if="hrZoneLabel">主要在 {{ hrZoneLabel }}区</span>
+            <template v-if="effKm == null">
+              <span v-if="hrKcalUsed" class="hrtag">心率估算消耗</span>
+              <span
+                v-else-if="hr.liveMeasuredSec != null && hr.liveMeasuredSec < 300"
+                class="weak"
+              >心率样本不足 5 分钟，消耗按速度估算</span>
+              <span
+                v-else-if="hr.liveCoverage != null"
+                class="weak"
+              >心率覆盖 {{ Math.round(hr.liveCoverage * 100) }}%，消耗按速度估算</span>
+            </template>
+          </p>
+
           <!-- 记录说明：逐行说清这次「哪些段没算、哪些段补了」。取值互斥
                （每一段墙钟只落一个桶），同一段时间不会在两行里各说一遍。 -->
           <section v-if="runNotes.length > 0" class="sumcard">
@@ -1327,6 +1386,9 @@ function bumpKm(delta: number): void {
         </div>
       </div>
     </main>
+
+    <!-- 心率设备：跑动中随时连/断手环；自动连接的设备在结束时由 store 断开 -->
+    <HeartRateSheet :open="hrOpen" @close="hrOpen = false" />
 
     <!-- 覆盖层：3·2·1 倒数 -->
     <CountdownOverlay :show="countdownOpen" label="" sub="准备开跑" :count-from="3" @done="countdownOpen = false; void onCountdownDone()" />
@@ -1570,7 +1632,8 @@ function bumpKm(delta: number): void {
 
 .gps,
 .stat,
-.nudge {
+.nudge,
+.hr {
   display: flex;
   align-items: center;
   /* 状态点 + 文字是「图标 + 文字」关系，取 --gap-text-inline（8），
@@ -1579,6 +1642,34 @@ function bumpKm(delta: number): void {
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   text-align: left;
+}
+
+/* 心率 chip：未连接时只是「心率」入口，连接后图心变危险色、BPM 保持中性。
+   命中高度补足 44（视觉高度不变）：跑动中点按，热区必须够大。 */
+.hr {
+  position: relative;
+}
+
+.hr::after {
+  content: '';
+  position: absolute;
+  inset: calc(50% - var(--hit-min) / 2) 0;
+}
+
+.hr .hric {
+  color: var(--hero-text-dim);
+}
+
+.hr.hr-on .hric {
+  color: var(--danger);
+}
+
+.hr .hrbpm {
+  font-weight: var(--fw-semibold);
+}
+
+.hr .hrzone {
+  color: var(--hero-text-dim);
 }
 
 /* 四态：wait（还没落点）/ ok（新鲜）/ warn（中断）/ lost（已停累计）。
@@ -1949,6 +2040,41 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   align-self: stretch;
   text-align: left;
   margin: calc(-1 * var(--sp-8)) 0 0;
+}
+
+/* 心率读数：一行事实（平均 / 最高 / 主要区间）+ 热量来源徽标。
+   浅色区用常规前景令牌，不放暗场那套 hero 色。 */
+.hrline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-caption);
+  color: var(--text-2);
+}
+
+.hrline b {
+  color: var(--text-1);
+  font-weight: var(--fw-semibold);
+}
+
+.hrline .hric {
+  color: var(--danger);
+}
+
+.hrline .weak {
+  color: var(--warn-strong);
+}
+
+.hrtag {
+  padding: 0 var(--sp-8);
+  border-radius: var(--radius-full);
+  background: var(--ok-soft);
+  color: var(--ok-strong);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
 }
 
 /* 开始跑步：全屏那颗最大的离散控件 —— 走玻璃材质（模板上的 .glass-surface）。

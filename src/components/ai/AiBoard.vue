@@ -64,7 +64,10 @@ const rings = computed<RingItem[]>(() => {
   // 第三环与下面那格「还可吃」必须同一个口径：环的图例就画在「还可吃」旁边，
   // 从前的环用 `目标 − 已摄入`、数字用 `目标 − 已摄入 − 运动` —— 同一张卡上
   // 两个「还能吃多少」互不相等（图例色 `--c-balance` 与 `stats.left` 同源）。
-  const left = Math.max(0, s.targets.kcal - s.intake.kcal - s.exerciseKcal)
+  // 第三环与下面那格「还可吃」必须同一个口径：目标（TDEE ± 缺口）已含活动里的
+  // 训练消耗，运动消耗不参与「还可吃」的加减（否则同一张卡上两个「还能吃多少」
+  // 互不相等）。图例色 `--c-balance` 与 `stats.left` 同源。
+  const left = Math.max(0, s.targets.kcal - s.intake.kcal)
   return [
     { key: 'intake', value: ratio(s.intake.kcal, s.targets.kcal), colorVar: 'var(--c-intake)' },
     { key: 'exercise', value: ratio(s.exerciseKcal, s.targets.kcal), colorVar: 'var(--c-exercise)' },
@@ -80,7 +83,7 @@ const stats = computed(() => {
     intake: Math.round(s.intake.kcal),
     target: Math.round(s.targets.kcal),
     exercise: Math.round(s.exerciseKcal),
-    left: Math.max(0, Math.round(s.targets.kcal - s.intake.kcal - s.exerciseKcal)),
+    left: Math.max(0, Math.round(s.targets.kcal - s.intake.kcal)),
   }
 })
 

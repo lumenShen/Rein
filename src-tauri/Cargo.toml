@@ -88,6 +88,13 @@ strip = true
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 
+# 心率（modules/heartrate）· 标准蓝牙心率服务 0x180D / 0x2A37。
+# 只挂桌面目标：Android 的 droidplug 需要 JavaVM 初始化与运行时权限，当前在
+# modules/heartrate 里按「不支持」返回，UI 明确说明桌面端可用。
+# 采集、解析、区间与热量积分都在 Rust 后台线程里完成，前端只收 1 Hz 节流样本。
+[target.'cfg(not(target_os = "android"))'.dependencies]
+btleplug = "0.13"
+
 # HEIF/HEIC 解码（modules/media）：Windows 侧经影像组件（WIC）把 HEIC 转成 JPEG。
 # 版本锁 0.61.3 —— 与 Cargo.lock 里 webview2-com 已经引入的那份同一个版本，
 # 免得为了几行解码代码再编译一整套 windows bindings。

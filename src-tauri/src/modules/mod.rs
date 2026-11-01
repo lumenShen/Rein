@@ -9,6 +9,7 @@ pub mod exercise_lib;
 pub mod float;
 pub mod gateway;
 pub mod healthsync;
+pub mod heartrate;
 pub mod kb;
 pub mod ledger;
 pub mod maintenance;

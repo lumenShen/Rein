@@ -22,10 +22,13 @@ const CAL_LINE_RATIO = 0.7
  * 就是改这条线的宽容度：调小则更早预警，代价是「还没吃满」阶段条看着更空。
  *
  * **两种语义别混**（同一根线，含义相反）：
- *   · 热量是**上限**（目标 + 运动加回）：越线 = 吃超了，主数字与「已超」转危险色；
+ *   · 热量是**上限**：越线 = 吃超了，主数字与「已超」转危险色；
  *   · 宏量是**目标**：越线 = 达标了，是好事，所以不上任何危险色。
  * 线本身恒为中性灰、不随超标变色 —— 把「超了」交给数据本身（色条压过灰线）去表达，
  * 比让参考线变色更克制，也避免四根条上出现四根红柱子。
+ *
+ * **运动消耗不抬上限**：目标（TDEE ± 缺口）的活动系数里已经含了训练消耗，再把
+ * `exerciseKcal` 加回等于双重计入。运动消耗只作独立指标（三环里的运动环）展示。
  *
  * **为什么用 span 而不是 ul/li**：本组件要嵌进移动端那枚整条可点的 `<button>`，
  * 而 button 只允许短语内容，`ul` 会构成非法 HTML。版式全部由 flex/grid 承担，语义无损失。
@@ -48,14 +51,15 @@ const data = computed(() => (props.summary === undefined ? n.summary : props.sum
 
 const kcalIntake = computed(() => Math.round(data.value?.intake.kcal ?? 0))
 const kcalTarget = computed(() => Math.round(data.value?.targets.kcal ?? 0))
-const exerciseKcal = computed(() => Math.round(data.value?.exerciseKcal ?? 0))
-const kcalRemaining = computed(() => Math.max(0, kcalTarget.value + exerciseKcal.value - kcalIntake.value))
+// 目标（TDEE ± 缺口/盈余）已含活动系数里的训练消耗，不再把总运动消耗加回 ——
+// 加回等于双重计入（与 store 的 `剩余可吃` 同口径）。
+const kcalRemaining = computed(() => Math.max(0, kcalTarget.value - kcalIntake.value))
 
 /** 目标线位置（条宽 %）＝ 目标的 100% */
 const LINE = CAL_LINE_RATIO * 100
 
-/** 热量上限 = 目标 + 运动加回（与 store 的 `剩余可吃` 同一口径，不会自相矛盾） */
-const ceiling = computed(() => kcalTarget.value + exerciseKcal.value)
+/** 热量口径 = 目标本身（运动消耗不抬上限，见文件头注释） */
+const ceiling = computed(() => kcalTarget.value)
 /** 条的量程：上限 ÷ 0.7 */
 const calDomain = computed(() => Math.max(1, ceiling.value / CAL_LINE_RATIO))
 
@@ -63,9 +67,6 @@ const calDomain = computed(() => Math.max(1, ceiling.value / CAL_LINE_RATIO))
 const pctOf = (ratio: number): number => Math.max(0, Math.min(1, ratio)) * 100
 
 const eatPct = computed(() => pctOf(kcalIntake.value / calDomain.value))
-/** 运动加回：把上限从「目标」抬到「上限」的那一段，正好贴在线前 */
-const exLeft = computed(() => pctOf(kcalTarget.value / calDomain.value))
-const exWidth = computed(() => pctOf(exerciseKcal.value / calDomain.value))
 
 /** 超出上限的大卡数；0 = 没超 */
 const overKcal = computed(() => Math.max(0, kcalIntake.value - ceiling.value))
@@ -99,7 +100,6 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 
     <div class="bar lg">
       <div class="track">
-        <span class="seg ex" :style="{ left: `${exLeft}%`, width: `${exWidth}%` }" />
         <span class="seg eat" :style="{ width: `${eatPct}%` }" />
         <span v-if="overKcal > 0" class="seg over" :style="{ left: `${LINE}%`, width: `${overWidth}%` }" />
       </div>
@@ -110,7 +110,6 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
          会被误读成另一件事） -->
     <div class="legend">
       <span class="li"><i class="dot" style="background: var(--c-intake)" />已吃</span>
-      <span v-if="exerciseKcal > 0" class="li"><i class="dot" style="background: var(--c-exercise)" />运动加回</span>
       <span class="li"><span class="glyph" />目标线</span>
     </div>
 
@@ -259,10 +258,6 @@ const coreMacros = computed(() => macroStatsFrom(data.value).filter((m) => m.key
 .bar.lg .seg.eat {
   left: 0;
   background: var(--c-intake);
-}
-
-.bar.lg .seg.ex {
-  background: var(--c-exercise);
 }
 
 /* 越线那一小段：红条压在灰线上的部分，语义即「吃超了」 */

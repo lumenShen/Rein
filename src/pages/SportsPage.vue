@@ -5,6 +5,7 @@ import { Footprints, ListChecks, PenLine } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import QuickTile from '@/components/common/QuickTile.vue'
+import HeartRateCard from '@/components/health/HeartRateCard.vue'
 import ExerciseVolumeCard from '@/components/exercise/ExerciseVolumeCard.vue'
 import ExerciseWeekCard from '@/components/exercise/ExerciseWeekCard.vue'
 import PlanRecentCard from '@/components/exercise/PlanRecentCard.vue'
@@ -12,6 +13,7 @@ import StrengthProgressCard from '@/components/exercise/StrengthProgressCard.vue
 import AddWorkoutSheet from '@/components/exercise/AddWorkoutSheet.vue'
 import TodoListCard from '@/components/todo/TodoListCard.vue'
 import { useExerciseStore } from '@/stores/exercise'
+import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useTodoStore } from '@/stores/todo'
 import { todayStr } from '@/utils/date'
@@ -21,13 +23,18 @@ const router = useRouter()
 const ex = useExerciseStore()
 const todo = useTodoStore()
 const nutrition = useNutritionStore()
+const hr = useHeartRateStore()
 const today = todayStr()
 
 onMounted(() => {
   void ex.loadWeek(today)
   void todo.loadDay(today)
   void nutrition.loadSummary(today)
-  void nutrition.loadProfile()
+  // 心率区间需要年龄（由生日换算）；画像拉回来后同步给采集线程
+  void nutrition
+    .loadProfile()
+    .then(() => hr.configureProfile(nutrition.profile))
+    .catch(() => {})
 })
 
 const manualOpen = ref(false)
@@ -66,6 +73,9 @@ const manualOpen = ref(false)
         </QuickTile>
       </li>
     </ul>
+
+    <!-- 心率设备：连接手环的标准心率广播；训练时由 Rust 侧按心率积分消耗 -->
+    <HeartRateCard />
 
     <!-- 训练启动：最近使用的三个课程（全部课程在二级页） -->
     <PlanRecentCard />

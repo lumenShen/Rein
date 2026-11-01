@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLayout } from 'animejs'
-import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Info, ListPlus, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Heart, Info, ListPlus, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
@@ -10,6 +10,7 @@ import CountdownOverlay from '@/components/common/CountdownOverlay.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import RingProgress from '@/components/common/RingProgress.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
+import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
 // 这两块按需加载：肌群图本体是 160 KB 的解剖 SVG（三个视图 raw 内联）＋ 一处
 // 只在点开动作详情时才出现的抽屉。它们是沉浸层**内部**的详情块，用户不开到那一屏
 // 就用不到 —— 而沉浸层挂在 App 根上，静态 import 等于让每个路由都背着这 160 KB 首屏。
@@ -30,6 +31,7 @@ import SessionSummaryPane from '@/components/exercise/SessionSummaryPane.vue'
 import ReadinessDialog from '@/components/exercise/ReadinessDialog.vue'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
 import { useExercisePrefs } from '@/stores/exercisePrefs'
+import { useHeartRateStore } from '@/stores/heartRate'
 import { useSessionStore } from '@/stores/session'
 import { usePressGlow } from '@/composables/usePressGlow'
 import { useScrolled } from '@/composables/useScrolled'
@@ -70,6 +72,10 @@ import type { SwapCandidate } from '@/types'
 const s = useSessionStore()
 /** 训练偏好：准备时长（设置 › 训练可改，气泡下一组立即生效） */
 const prefs = useExercisePrefs()
+/** 心率：训练开始自动连上次设备；顶栏只显示读数，点开是设备抽屉 */
+const hr = useHeartRateStore()
+const hrOpen = ref(false)
+const hrConnected = computed(() => hr.connected && hr.bpm != null)
 const lib = useExerciseLibStore()
 const router = useRouter()
 const { toast } = useToast()
@@ -1461,6 +1467,9 @@ function trapFocus(e: KeyboardEvent): void {
            整课进度不再占第二行：逐组明细在全课抽屉里，栏上只留「n/N 组」这条状态 ——
            苹果的做法是「层级靠版式与分组表达，能去掉的就去掉」，而不是同一条栏里
            叠两层进度。三块各自是独立的玻璃体，并排不叠压（同 Dock 的语言）。 -->
+      <!-- 顶栏：左右两组玻璃夹住中间的组数状态。收起与结束各占一侧；
+           心率是训练中随时要看/要连的读数，收进右侧组（与结束并排），
+           中间的组数胶囊仍由 1fr 对称列保证数学居中。 -->
       <header class="ctrl-top">
         <SessionGlassButton h="var(--cap-h)">
           <button class="cbtn min" aria-label="收起运动模式" @click="minimize">
@@ -1476,11 +1485,25 @@ function trapFocus(e: KeyboardEvent): void {
           </button>
         </SessionGlassButton>
 
-        <!-- 结束是这条栏里唯一的「主行动」：苹果的规矩是它单独着色（tinted）当焦点，
-             其余留中性 —— 所以色落在字上，不把整颗胶囊染红 -->
-        <SessionGlassButton h="var(--cap-h)">
-          <button class="cbtn end" @click="endOpen = true">结束</button>
-        </SessionGlassButton>
+        <div class="top-right">
+          <SessionGlassButton v-if="hr.supported" h="var(--cap-h)">
+            <button
+              class="cbtn hrbtn"
+              :class="{ live: hrConnected }"
+              :aria-label="hrConnected ? `心率 ${hr.bpm} 次每分，打开心率设备` : '连接心率设备'"
+              @click="hrOpen = true"
+            >
+              <Heart :size="17" :stroke-width="2.1" aria-hidden="true" />
+              <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
+              <span v-else class="hrword">心率</span>
+            </button>
+          </SessionGlassButton>
+          <!-- 结束是这条栏里唯一的「主行动」：苹果的规矩是它单独着色（tinted）当焦点，
+               其余留中性 —— 所以色落在字上，不把整颗胶囊染红 -->
+          <SessionGlassButton h="var(--cap-h)">
+            <button class="cbtn end" @click="endOpen = true">结束</button>
+          </SessionGlassButton>
+        </div>
       </header>
 
       <!-- 底簇：组格轨（热身态=重量格，做组态=组矩阵）＋ 一行并排的独立控件。
@@ -1670,6 +1693,9 @@ function trapFocus(e: KeyboardEvent): void {
         :exercise-name="displayName"
         @close="adviceOpen = false"
       />
+
+      <!-- 心率设备：训练中随时连/断手环；自动连接的设备在结束时由 store 断开 -->
+      <HeartRateSheet :open="hrOpen" @close="hrOpen = false" />
     </div>
   </div>
 </template>
@@ -1791,7 +1817,8 @@ function trapFocus(e: KeyboardEvent): void {
    （GlassSurface 的折射靠 backdrop-filter，祖先带 transform / filter 会把它废掉）。 */
 .ctrl-top .min,
 .ctrl-top .end,
-.ctrl-top .pcapsule {
+.ctrl-top .pcapsule,
+.ctrl-top .hrbtn {
   height: 100%;
   display: inline-flex;
   align-items: center;
@@ -1801,6 +1828,37 @@ function trapFocus(e: KeyboardEvent): void {
   transition:
     transform var(--dur-slow) var(--ease-spring),
     background-color var(--dur-fast) var(--ease-standard);
+}
+
+/* 右侧组：心率读数 + 结束并排，两者仍是独立玻璃体（不是叠在同一个玻璃里） */
+.ctrl-top .top-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-sm);
+  min-width: 0;
+}
+
+/* 心率读数：未连接时是「心率」两个字（点开去连），已连接时只剩图标 + BPM。
+   已连接用危险色只落在图标上（心率的语义色），数字保持中性。 */
+.ctrl-top .hrbtn {
+  gap: var(--gap-text);
+  padding: 0 var(--sp-10);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+}
+
+.ctrl-top .hrbtn.live {
+  color: var(--text-1);
+}
+
+.ctrl-top .hrbtn.live svg {
+  color: var(--danger);
+}
+
+.ctrl-top .hrword {
+  font-size: var(--fs-footnote);
+  font-weight: var(--fw-regular);
 }
 
 .ctrl-top .min {
@@ -1829,7 +1887,8 @@ function trapFocus(e: KeyboardEvent): void {
 
 .ctrl-top .min:active,
 .ctrl-top .end:active,
-.ctrl-top .pcapsule:active {
+.ctrl-top .pcapsule:active,
+.ctrl-top .hrbtn:active {
   transform: scale(1.04, 0.92);
   transition: transform 120ms var(--ease-out);
 }
