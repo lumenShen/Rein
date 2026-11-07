@@ -200,8 +200,9 @@ onBeforeUnmount(() => {
           @contextmenu.prevent
           @click="onLeftClick"
         >
-          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
-          <span>{{ item.label }}</span>
+          <!-- 两侧圆钮是**图标钮**（kit 三块玻璃 = 左圆 + 药丸 + 右圆）：不落标签，
+               名字进 aria-label（长按更换的提示也在里面） -->
+          <component :is="item.icon" :size="22" :stroke-width="active ? 2.2 : 1.9" />
         </button>
       </template>
       <template #tab="{ item, active }">
@@ -209,15 +210,22 @@ onBeforeUnmount(() => {
           :to="{ name: item.id }"
           class="dock-tab glow-layer"
           :class="{ active }"
+          :aria-current="active ? 'page' : undefined"
         >
-          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
+          <!-- 页签图标 18（kit 校准二 #34：18 Semibold；24 作废） -->
+          <component :is="item.icon" :size="18" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
         </RouterLink>
       </template>
       <template #right="{ item, active }">
-        <RouterLink :to="{ name: item.id }" class="dock-slot glow-layer" :class="{ active }">
-          <component :is="item.icon" :size="24" :stroke-width="active ? 2.4 : 1.9" />
-          <span>{{ item.label }}</span>
+        <RouterLink
+          :to="{ name: item.id }"
+          class="dock-slot glow-layer"
+          :class="{ active }"
+          :aria-label="item.label"
+          :aria-current="active ? 'page' : undefined"
+        >
+          <component :is="item.icon" :size="22" :stroke-width="active ? 2.2 : 1.9" />
         </RouterLink>
       </template>
     </GlassDockAssembly>
@@ -257,8 +265,10 @@ onBeforeUnmount(() => {
   bottom: calc(var(--safe-bottom) + var(--dock-float));
   left: var(--safe-left);
   right: var(--safe-right);
+  /* 整条 Dock 由内容定宽并居中（两侧圆 62 + 药丸 n×66 + 缝 8），不再吃 --frame-max：
+     宽窗里拉满只会把页签摊散，kit 的 Dock 是一块紧凑的居中组件。 */
+  width: fit-content;
   margin: 0 auto;
-  max-width: var(--frame-max);
   height: var(--tabbar-h);
   display: flex;
   z-index: 60;

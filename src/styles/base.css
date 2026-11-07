@@ -869,8 +869,10 @@ html[data-perf='low'] .stage-dark {
   flex: none;
 }
 
+/* 药丸**随页签数走**（kit 的 5-tab 药丸 346 = 5×66 + 内距；3 个页签就是 206）。
+   从前 flex:1 吃满容器，宽窗里三个页签被摊成三份，整条 Dock 读成一根无意义的横条。 */
 .dock-block.pill {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -900,8 +902,10 @@ html[data-perf='low'] .stage-dark {
 }
 
 .dock-tab {
-  flex: 1;
-  min-width: 0;
+  /* 页签定宽 66（kit 校准二 #33：5-tab 药丸 346 / 5 页签 ≈ 66，内缩 4 后视觉 62×54）。
+     页签数变化时药丸跟着变宽，而不是把固定的几个页签摊满容器。 */
+  flex: 0 0 var(--dock-tab-w);
+  width: var(--dock-tab-w);
   height: 100%;
 }
 

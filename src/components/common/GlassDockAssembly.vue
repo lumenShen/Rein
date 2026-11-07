@@ -96,9 +96,11 @@ defineSlots<{
 .dock-assembly {
   display: flex;
   align-items: center;
-  /* 三块玻璃并列留缝、互不叠压（各自都有受光边）：无边界控件之间 8 */
+  /* 三块玻璃并列留缝、互不叠压（各自都有受光边）：无边界控件之间 8。
+     宽度**由内容决定**（两侧圆 62 + 药丸 n×66 + 缝 8×2）—— 拉满容器会把页签摊散，
+     读成一根没有形状的横条；kit 的 Dock 是一块居中的紧凑组件。 */
   gap: var(--gap-sm);
-  width: 100%;
+  width: fit-content;
   height: var(--tabbar-h);
 }
 </style>
