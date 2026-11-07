@@ -42,3 +42,13 @@
 # GlobalFloatService：前台服务由 manifest 按类名实例化，且经 GlobalFloatBridge 静态实例
 # 转发 update / setForm / 前台态（同 RunTrackingService 的保留理由）。
 -keep class com.gozaoo.rein.GlobalFloatService { *; }
+# ---------------------------------------------------------------------------
+# 心率手环的 droidplug 后端（btleplug 的 Android Java 库，源码在
+# src/main/java/{com/nonpolynomial,io/github/gedgygedgy}）。这些类只被 Rust 经
+# JNI 按类名/方法名访问，R8 看不到引用；不整类保留会在 release 包把它们裁掉，
+# 表现是扫描一开就 NoClassDefFoundError / 找不到 native 方法。
+# ---------------------------------------------------------------------------
+-keep class com.nonpolynomial.** { *; }
+-keep class io.github.gedgygedgy.** { *; }
+# 心率权限/初始化桥：Rust 经 JNI 反射调 ensurePermissions，native 方法名也必须保留
+-keep class com.gozaoo.rein.HeartRateBridge { *; }

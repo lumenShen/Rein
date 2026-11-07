@@ -1,4 +1,5 @@
-//! BLE 采集线程（btleplug）。只在桌面目标编译。
+//! BLE 采集线程（btleplug）。桌面与 Android 共用；Android 的 Java 后端由
+//! `HeartRateBridge.kt` 在 Java 线程上完成 droidplug 初始化（见 `android.rs`）。
 //!
 //! 一个专用线程 + current_thread tokio 运行时：蓝牙回调与重连退避都在这里阻塞 /
 //! 等待，不占 Tauri 主线程，也不让 WebView 每帧处理 GATT 事件。
@@ -162,6 +163,10 @@ impl Worker {
     async fn ensure_adapter(&mut self) -> Result<Adapter, String> {
         if let Some(adapter) = &self.adapter {
             return Ok(adapter.clone());
+        }
+        #[cfg(target_os = "android")]
+        if !super::android::platform_ready() {
+            return Err("蓝牙模块初始化失败，请重启应用后再试".into());
         }
         let manager = Manager::new()
             .await

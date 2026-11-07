@@ -13,6 +13,22 @@
     <!-- 户外跑定位：WebView navigator.geolocation 依赖这两项运行时权限 -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- 心率手环 BLE（modules/heartrate 的 btleplug/droidplug 后端）：
+         Android 12+ 用 SCAN/CONNECT 两项运行时权限；SCAN 声明 neverForLocation，
+         表示扫描结果不用于定位，因此 12+ 不必再为蓝牙要定位权限。
+         11 及以下没有这两项，扫描仍受系统的定位权限约束（上面已声明 FINE/COARSE）。
+         BLUETOOTH/ADMIN 只在老系统上存在，maxSdkVersion 防止 12+ 多要安装期权限。 -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- 跑步前台保活：锁屏后维持 GPS 与计时，防止进程被冻结/回收（用户感知为崩溃） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />

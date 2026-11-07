@@ -67,6 +67,8 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
     // 注册跑步保活桥的权限弹窗回调（ActivityResultLauncher 必须在 Activity 创建后注册）
     TrackingBridge.register(this)
+    // 心率手环：在 Java 线程初始化 droidplug，并注册蓝牙权限弹窗回调
+    HeartRateBridge.register(this)
     // 注册 Health Connect 授权界面的回调（同上，必须在 onCreate 注册）。
     // 版本闸：Health Connect 是 API 26+ 才有的东西，Android 7 的机器连这个类都别去碰
     // （它引用的 java.time 靠 desugaring 兜着，能不加载就不加载）。

@@ -172,7 +172,6 @@ impl Measurement {
         ((at_ms - self.started_ms - self.paused_ms - paused_now).max(0) as f64) / 1000.0
     }
 
-    #[cfg(not(target_os = "android"))]
     pub fn profile(&self) -> &HrProfile {
         &self.profile
     }

@@ -8,23 +8,22 @@
 //! - 训练开始才连接、结束即断开，避免长期占用唯一的中心连接（手环同时只能连一个
 //!   中心，手机 App 连着时电脑连不上 —— 这是设备侧限制，UI 会提示）。
 //!
-//! 平台：桌面（btleplug：Windows / macOS / Linux）。Android 的 droidplug 需要
-//! JavaVM 初始化与运行时权限，当前返回 `supported = false`，由 UI 说明桌面可用。
+//! 平台：桌面（btleplug：Windows / macOS / Linux）与 Android（btleplug 的
+//! droidplug 后端）。Android 的 Java 库随 APK 打包，droidplug 的 JNI 初始化与
+//! 运行时权限见 `android.rs` / `HeartRateBridge.kt`；采集状态机仍是同一份 worker。
 
 pub mod calc;
 pub mod commands;
 pub mod models;
-#[cfg(not(target_os = "android"))]
+#[cfg(target_os = "android")]
+mod android;
 pub mod parse;
-#[cfg(not(target_os = "android"))]
 mod worker;
 
 use std::sync::{Arc, Mutex, MutexGuard};
-#[cfg(not(target_os = "android"))]
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
-#[cfg(not(target_os = "android"))]
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -35,10 +34,8 @@ pub const EVENT_STATUS: &str = "hr://status";
 pub const EVENT_SAMPLE: &str = "hr://sample";
 
 /// 扫描多少秒自动停：够用户认出设备，又不让射频一直开着。
-#[cfg(not(target_os = "android"))]
 const SCAN_SECS: u64 = 15;
 /// 样本事件的最小间隔。手环可能 4 Hz 发包，界面 1 Hz 足够，也省 CPU。
-#[cfg(not(target_os = "android"))]
 const SAMPLE_EVENT_MIN_MS: i64 = 900;
 
 pub(crate) fn now_ms() -> i64 {
@@ -46,7 +43,6 @@ pub(crate) fn now_ms() -> i64 {
 }
 
 /// 采集线程命令。`Sample` / `PumpEnded` 带 generation：连接换代后旧泵的残余消息直接丢弃。
-#[cfg_attr(target_os = "android", allow(dead_code))]
 pub(crate) enum Cmd {
     ScanStart,
     ScanStop,
@@ -58,7 +54,6 @@ pub(crate) enum Cmd {
 
 pub struct HrService {
     shared: Arc<Mutex<Shared>>,
-    #[cfg(not(target_os = "android"))]
     cmd_tx: Mutex<Option<UnboundedSender<Cmd>>>,
     app: AppHandle,
 }
@@ -112,7 +107,7 @@ impl HrService {
     pub fn new(app: AppHandle) -> Self {
         Self {
             shared: Arc::new(Mutex::new(Shared {
-                supported: cfg!(not(target_os = "android")),
+                supported: true,
                 state: ConnState::Idle,
                 device: None,
                 devices: Vec::new(),
@@ -124,13 +119,11 @@ impl HrService {
                 measurement: None,
                 last_emit_ms: 0,
             })),
-            #[cfg(not(target_os = "android"))]
             cmd_tx: Mutex::new(None),
             app,
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     pub(crate) fn shared(&self) -> Arc<Mutex<Shared>> {
         Arc::clone(&self.shared)
     }
@@ -160,13 +153,6 @@ impl HrService {
     pub fn scan_start(&self) -> HrStatus {
         {
             let mut shared = lock_shared(&self.shared);
-            if !shared.supported {
-                shared.error = Some("当前平台暂不支持蓝牙心率采集，请在桌面端使用".into());
-                shared.state = ConnState::Idle;
-                drop(shared);
-                self.emit_status();
-                return self.status();
-            }
             // 已连接 / 正在连接时扫描会把状态覆盖成 scanning，也会白耗射频：
             // 换设备必须先断开（UI 同样只在这时给「重新扫描」）。
             if matches!(
@@ -186,6 +172,8 @@ impl HrService {
     }
 
     pub fn scan_stop(&self) -> HrStatus {
+        #[cfg(target_os = "android")]
+        android::clear_pending();
         self.dispatch(Cmd::ScanStop);
         {
             let mut shared = lock_shared(&self.shared);
@@ -200,12 +188,6 @@ impl HrService {
     pub fn connect(&self, id: String, name: Option<String>) -> HrStatus {
         {
             let mut shared = lock_shared(&self.shared);
-            if !shared.supported {
-                shared.error = Some("当前平台暂不支持蓝牙心率采集，请在桌面端使用".into());
-                drop(shared);
-                self.emit_status();
-                return self.status();
-            }
             shared.state = ConnState::Connecting;
             shared.device = Some(HrDevice {
                 id: id.clone(),
@@ -224,6 +206,8 @@ impl HrService {
     }
 
     pub fn disconnect(&self) -> HrStatus {
+        #[cfg(target_os = "android")]
+        android::clear_pending();
         {
             let mut shared = lock_shared(&self.shared);
             shared.state = ConnState::Idle;
@@ -252,10 +236,6 @@ impl HrService {
         {
             let mut shared = lock_shared(&self.shared);
             shared.profile = profile.clone();
-            if !shared.supported {
-                drop(shared);
-                return self.status();
-            }
             let same = shared
                 .measurement
                 .as_ref()
@@ -343,6 +323,18 @@ impl HrService {
     fn dispatch(&self, cmd: Cmd) {
         match self.ensure_worker() {
             Ok(tx) => {
+                #[cfg(target_os = "android")]
+                {
+                    // 扫描/连接先过运行时权限：授权结果回到 android::on_permission_result，
+                    // 由那里把暂存的命令投给采集线程。停扫/断开不需要权限，直接发。
+                    if matches!(
+                        &cmd,
+                        Cmd::ScanStart | Cmd::Connect { .. }
+                    ) {
+                        android::request_permissions(&self.app, cmd);
+                        return;
+                    }
+                }
                 if tx.send(cmd).is_err() {
                     self.set_error("蓝牙采集线程不可用，请重启应用后再试".into());
                 }
@@ -351,7 +343,6 @@ impl HrService {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     fn ensure_worker(&self) -> Result<UnboundedSender<Cmd>, String> {
         let mut guard = self
             .cmd_tx
@@ -362,18 +353,13 @@ impl HrService {
         }
         let (tx, rx) = unbounded_channel();
         worker::spawn(self.app.clone(), self.shared(), tx.clone(), rx);
+        #[cfg(target_os = "android")]
+        android::install(self.app.clone(), self.shared(), tx.clone());
         *guard = Some(tx.clone());
         Ok(tx)
-    }
-
-    #[cfg(target_os = "android")]
-    fn ensure_worker(&self) -> Result<UnboundedSender<Cmd>, String> {
-        Err("当前平台暂不支持蓝牙心率采集，请在桌面端使用".into())
     }
 }
 
 /// 扫描状态与设备列表的共享时间参数（worker 与命令层共用）。
-#[cfg(not(target_os = "android"))]
 pub(crate) const SCAN_TIMEOUT: Duration = Duration::from_secs(SCAN_SECS);
-#[cfg(not(target_os = "android"))]
 pub(crate) const SAMPLE_THROTTLE_MS: i64 = SAMPLE_EVENT_MIN_MS;
