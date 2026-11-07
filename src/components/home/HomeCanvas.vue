@@ -7,20 +7,16 @@ import CanvasTimeline from '@/components/todo/CanvasTimeline.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import CourseDetailSheet from '@/components/campus/CourseDetailSheet.vue'
 import TodoEditorSheet from '@/components/todo/TodoEditorSheet.vue'
-import { MEAL_LABELS, MEAL_META, mealKcal } from '@/config/domain'
 import { useScheduleUndo } from '@/composables/useScheduleUndo'
-import { useDietStore } from '@/stores/diet'
 import { useProgramStore } from '@/stores/program'
 import { useTodoStore } from '@/stores/todo'
 import { parseBlob } from '@/utils/programEngine'
 import { courseOnDate } from '@/utils/programCycle'
-import { minToHHmm } from '@/utils/date'
 import type { Todo } from '@/types'
 
 /**
  * 主页画布：把「今日画布」带上主页——未安排池 + 紧凑时间轴（现在线 / 打勾 / 拖拽改位），
- * 主页从「看今天」升级为「排今天」。餐次记录以摘要行的形式保持在卡片底部，
- * 与状态条（热量）互补。完整编辑（周视图 / AI 排程 / 快排）仍在 /todos 画布。
+ * 主页从「看今天」升级为「排今天」。完整编辑（周视图 / AI 排程 / 快排）仍在 /todos 画布。
  *
  * 方案日程的训练条目点块 = 去课程详情开练（那才是它的主行动），
  * 移动 / 编辑仍走拖拽与块上的铅笔钮。
@@ -28,30 +24,16 @@ import type { Todo } from '@/types'
 const props = defineProps<{ date: string }>()
 
 const router = useRouter()
-const diet = useDietStore()
 const todo = useTodoStore()
 const program = useProgramStore()
 const { applyMove } = useScheduleUndo()
 
 onMounted(() => {
-  void diet.load(props.date)
   void todo.loadAll()
 })
 
 const scheduled = computed(() => todo.allTodos.filter((t) => t.date === props.date && t.startMin != null))
 const pool = computed(() => todo.allTodos.filter((t) => t.date === props.date && t.startMin == null && t.status !== 'done'))
-
-/* 餐次摘要（只读）：保持「吃」在主页时间轴上的存在感 */
-const meals = computed(() =>
-  diet.grouped.map((g) => {
-    const kcal = g.logs.reduce((sum, l) => sum + (mealKcal(l) ?? 0), 0)
-    const at = Math.min(...g.logs.map((l) => {
-      const d = new Date(l.createdAt)
-      return d.getHours() * 60 + d.getMinutes()
-    }))
-    return { mealType: g.mealType, label: MEAL_LABELS[g.mealType], colorVar: MEAL_META[g.mealType].colorVar, timeMin: at, kcal }
-  }),
-)
 
 /* 编辑抽屉（点块 / 点池 chip） */
 const editorOpen = ref(false)
@@ -160,18 +142,6 @@ function onMove(t: Todo, startMin: number): void {
       />
     </div>
 
-    <!-- 餐次摘要行 -->
-    <div v-if="meals.length" class="meals">
-      <PillChip
-        v-for="m in meals"
-        :key="m.mealType"
-        size="sm"
-        class="mchip num"
-      >
-        <i class="dot" :style="{ background: m.colorVar }" />{{ m.label }} {{ minToHHmm(m.timeMin) }} · {{ Math.round(m.kcal) }} 大卡
-      </PillChip>
-    </div>
-
     <TodoEditorSheet :open="editorOpen" :todo="editorTarget" :date="date" @close="editorOpen = false" />
     <CourseDetailSheet
       :open="courseOpen"
@@ -260,14 +230,6 @@ function onMove(t: Todo, startMin: number): void {
 /* CanvasTimeline 的 .ctl/.scroll 都是 height:100% 链，视窗高度从这里给 */
 .cwrap :deep(.ctl) {
   height: 100%;
-}
-
-/* 餐次摘要：chip 本体在 PillChip.vue（size="sm"），这里只留排布 */
-.meals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-sm);
-  margin-top: var(--gap-md);
 }
 
 /* 卡头右侧：两级计数 + 「详情 ›」胶囊。

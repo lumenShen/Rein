@@ -62,7 +62,12 @@ onMounted(async () => {
 
 const dayTodos = computed(() => store.allTodos.filter((t) => t.date === canvasDate.value))
 const scheduled = computed(() => dayTodos.value.filter((t) => t.startMin != null))
-const pool = computed(() => dayTodos.value.filter((t) => t.startMin == null && t.status !== 'done'))
+/** 未安排池 = 当日有日期未定时的 + 无日期（收件箱）的；拖入/快排时落到正在看的一天 */
+const pool = computed(() =>
+  store.allTodos.filter(
+    (t) => (t.date === canvasDate.value || t.date == null) && t.startMin == null && t.status !== 'done',
+  ),
+)
 const doneCount = computed(() => dayTodos.value.filter((t) => t.status === 'done').length)
 
 /* ---------- 周时间线数据 ---------- */
@@ -317,11 +322,12 @@ async function applyGhosts(): Promise<void> {
 const ritualOpen = ref(false)
 
 const ritualCandidates = computed(() => {
-  const inbox = store.allTodos.filter((t) => t.date === null && t.status !== 'done')
   const overdue = store.allTodos.filter(
     (t) => t.date !== null && t.date < today && t.status !== 'done',
   )
-  return [...inbox, ...overdue, ...pool.value]
+  // 池子已含无日期（收件箱）待办；翻到过去日期时池与逾期可能重叠，按 id 去重
+  const ids = new Set(overdue.map((t) => t.id))
+  return [...overdue, ...pool.value.filter((t) => !ids.has(t.id))]
 })
 
 function maybeOpenRitual(): void {
@@ -385,8 +391,8 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
         <button class="daynav" aria-label="后一天" @click="shiftDay(1)">›</button>
       </div>
 
-      <!-- 未安排池 -->
-      <section class="pool" data-testid="pool">
+      <!-- 未安排池：为空时整块不出现 -->
+      <section v-if="pool.length" class="pool" data-testid="pool">
         <header class="row between poolh">
           <b>未安排 <span class="num">{{ pool.length }}</span></b>
           <span class="hint">拖进时间轴，或点卡片快排</span>
@@ -405,9 +411,9 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
             @click="!chipMoved && onSelect(t)"
           >
             <i class="pdot" />{{ t.title }}
+            <em v-if="t.date == null" class="nodate">未定日期</em>
             <em v-if="t.durationMin" class="num">{{ t.durationMin }} 分钟</em>
           </button>
-          <p v-if="!pool.length" class="pool-empty">池子空了 — 该安排的都安排上了。</p>
         </div>
       </section>
 
@@ -653,10 +659,10 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
   color: var(--text-3);
 }
 
-.pool-empty {
-  font-size: var(--fs-footnote);
+/* 无日期待办的标记：比时长注再轻一档，只说明「这条还没定日子」 */
+.pchip .nodate {
   color: var(--text-3);
-  padding: var(--sp-4) 0;
+  opacity: 0.8;
 }
 
 .confirm {

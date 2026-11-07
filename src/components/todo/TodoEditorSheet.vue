@@ -102,7 +102,8 @@ watch(
     if (!open) return
     const t = props.todo
     form.title = t?.title ?? props.initial?.title ?? ''
-    form.date = t?.date ?? props.initial?.date ?? props.date ?? todayStr()
+    // 编辑已有待办时忠实回填（无日期保持空，不能被默认值链顶成今天）；新建才走默认日期
+    form.date = t ? (t.date ?? '') : (props.initial?.date ?? props.date ?? todayStr())
     form.startMin = t?.startMin ?? props.initial?.startMin ?? null
     form.durationMin = t?.durationMin ?? props.initial?.durationMin ?? null
     form.category = t?.category ?? props.initial?.category ?? 'general'
@@ -121,6 +122,13 @@ watch(
   },
 )
 
+/** 不填日期 = 收件箱待办：不进任何一天的时间轴，直到在画布里拖入 / 快排落日期 */
+const noDate = computed(() => !form.date)
+
+function toggleNoDate(): void {
+  form.date = form.date ? '' : (props.date ?? todayStr())
+}
+
 /** <input type="time"> 的 HH:mm 与 startMin 互转；空值 = 无时间段 */
 const timeValue = computed({
   get: () => (form.startMin != null ? minToHHmm(form.startMin) : ''),
@@ -131,6 +139,8 @@ const timeValue = computed({
     }
     const [h, m] = v.split(':').map(Number)
     form.startMin = (h! * 60 + m!) % 1440
+    // 定了时刻就必须有日子，否则这条待办在任何一天的时间轴上都找不到
+    if (!form.date) form.date = props.date ?? todayStr()
   },
 })
 
@@ -469,10 +479,15 @@ onBeforeUnmount(() => {
       <div class="sect"><span>安排</span></div>
 
       <div class="time-row">
-        <label class="tcell">
-          <span class="fb">日期</span>
-          <input v-model="form.date" class="date" type="date" aria-label="日期">
-        </label>
+        <div class="tcell">
+          <span class="fb dhead">
+            日期
+            <button type="button" class="nodate-btn" :class="{ on: noDate }" :aria-pressed="noDate" @click="toggleNoDate">
+              不填日期
+            </button>
+          </span>
+          <input v-model="form.date" class="date" type="date" :disabled="noDate" aria-label="日期">
+        </div>
         <label class="tcell">
           <span class="fb">开始时间</span>
           <input v-model="timeValue" class="date" type="time" aria-label="开始时间">
@@ -732,6 +747,38 @@ onBeforeUnmount(() => {
   color: var(--text-1);
   width: 100%;
   box-sizing: border-box;
+}
+
+.date:disabled {
+  color: var(--text-3);
+  opacity: var(--disabled-opacity);
+}
+
+/* 日期标签行：左标签右「不填日期」开关，同一行两端对齐 */
+.dhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+}
+
+/* 「不填日期」是一枚小开关胶囊：未选中与分类 chip 同底，选中走 soft 底 + strong 字 */
+.nodate-btn {
+  min-height: 20px;
+  padding: var(--sp-2) var(--sp-8);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+
+.nodate-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .chips {
