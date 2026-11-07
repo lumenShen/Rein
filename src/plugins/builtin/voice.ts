@@ -38,4 +38,8 @@ export const voicePlugin = definePlugin({
       action: 'voice-session',
     },
   ],
+  // 桌面顶栏的功能按钮（§7.1 种子三颗之一）：「唤起会话」就地一步。id 不能复用上面工具卡的
+  // 'voice.session' —— TopbarContribution.id 与 ToolContribution.id 是两个命名空间（types.ts
+  // 的注释），前缀错开才不会在埋点里把「顶栏按钮」读成「工具卡」
+  topbar: [{ id: 'voice.topbar', label: '语音', icon: Mic, action: 'voice-session', order: 30 }],
 })

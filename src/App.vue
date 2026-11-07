@@ -20,7 +20,9 @@ import SessionOverlay from '@/components/exercise/SessionOverlay.vue'
 import UpdatePrompt from '@/components/update/UpdatePrompt.vue'
 import GatewayAuthSheet from '@/components/settings/GatewayAuthSheet.vue'
 import ToastHost from '@/components/common/ToastHost.vue'
+import NavEditMask from '@/components/common/NavEditMask.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useNavEdit } from '@/composables/useNavEdit'
 import { DESKTOP_MIN } from '@/config/domain'
 import { toneForRoute } from '@/config/tones'
 import { campusService } from '@/services/campusService'
@@ -36,20 +38,18 @@ import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-/** 桌面工作台：视口 ≥ DESKTOP_MIN 时以三窗格壳（导航轨 + 主人区 + 右侧信息栏）替代底部 TabBar */
+/** 浏览器里的壳分界：视口 ≥ DESKTOP_MIN 走桌面视图。桌面 Tauri 窗口不看它（见 deskShell）。 */
 const isDesktop = useMediaQuery(`(min-width: ${DESKTOP_MIN}px)`)
 
 /**
- * 桌面 Tauri 的两种窗口壳（浏览器 / Android 两个都不挂，DOM 与布局维持原样）：
- *  · 宽窗（≥ DESK_MIN）→ .win-shell--desk：整窗竖排，内容滚在 .desk-main 里；
- *  · 窄窗（无边框窗口的默认 430 宽）→ .win-shell--narrow：**文档滚动模型不变**，
- *    只把标题栏 sticky 在顶上。
- * 为什么要分开：rubberScroll / useScrolled / ActiveWorkoutBar 都是按「文档滚动」写的
- * （document.scrollingElement / window 的 scroll 事件）。无边框只该去掉系统标题栏，
- * 不该顺手把窄窗的滚动容器从 document 换成某个内层 div —— 那会静默打断超范围回弹、
- * 页头的滚动态与运动条跟滚。 */
-const deskChrome = computed(() => isTauriDesktopWindow && isDesktop.value)
-const narrowChrome = computed(() => isTauriDesktopWindow && !isDesktop.value)
+ * 壳层选择（2026-11 起：**桌面端只允许桌面视图**）：
+ *   · 桌面 Tauri 窗口 —— 恒为三窗格壳（导航轨 + 主人区 + 信息栏），「窄窗回退底部
+ *     TabBar」的路径整体退役（.win-shell--narrow 已删）。窗口 minWidth(900) 只是常态
+ *     保障：系统把窗口压得更窄（小屏 / RDP 会话夹到屏幕尺寸）时壳也不换，桌面视图
+ *     在最差宽度下自行收口。
+ *   · 浏览器 —— 仍按宽度响应（e2e 的窄视口手机壳 / 宽屏桌面壳断言都靠它）；
+ *   · Android —— 恒为移动壳（TabBar）。 */
+const deskShell = computed(() => isTauriDesktopWindow || isDesktop.value)
 
 /**
  * 桌面内容形态，由路由 meta.desk 声明（缺省 'grid'）：
@@ -76,6 +76,18 @@ const deskWide = computed(() => route.meta.desk === 'wide')
  */
 const paletteOpen = ref(false)
 
+/* ---------------- 导航编辑态 · 壳层侧守卫 ----------------
+ *
+ * 三个导航容器（移动 Dock / 桌面左栏 / 桌面顶栏）的编辑会话是全局单例
+ * （composables/useNavEdit.ts），壳层在这里只做三件事：
+ *  · 读全局 activeScope 给 mask 与 inert 账（模板绑定见下方）；
+ *  · 键盘守卫：编辑态里 ⌘1-4 / ⌘K / ⌘I 一律忽略 —— 页面在 mask 底下飞走，草稿就悬空了；
+ *  · 壳翻转 / 沉浸页切入时统一 discard() —— 草稿只在内存，半成品永远到不了 localStorage。
+ * 指针路径不在这里堵：由模板上的 inert 账封死（被遮主内容根与非编辑面浮层），
+ * 历史导航（浏览器返回 / Alt+Left）是已知边界 —— 会话跨路由存活，不为它拦 popstate。 */
+const { activeScope: navEditScope, discard: discardNavEdit } = useNavEdit()
+const navEditAnyEditing = computed(() => navEditScope.value !== null)
+
 const deskKeys: Record<string, string> = {
   '1': 'home',
   '2': 'sports',
@@ -84,6 +96,8 @@ const deskKeys: Record<string, string> = {
 }
 
 function onDeskKey(e: KeyboardEvent): void {
+  // 导航编辑态守卫：只堵键盘快捷键（指针路径由 inert 账封死）
+  if (navEditScope.value !== null) return
   const mod = e.metaKey || e.ctrlKey
   if (mod && e.key.toLowerCase() === 'k') {
     e.preventDefault()
@@ -115,7 +129,7 @@ function onDeskKey(e: KeyboardEvent): void {
 watch(
   () => route.name,
   (n) => {
-    if (isDesktop.value && typeof n === 'string') rememberRoute(n)
+    if (deskShell.value && typeof n === 'string') rememberRoute(n)
   },
 )
 
@@ -242,8 +256,8 @@ const updatePrompt = ref(false)
  * 桌面键盘层（⌘K 命令面板、⌘1–4 一级页、⌘I 信息栏）的挂载条件是**设备能力**，
  * 不是窗口宽度：`hover: hover and pointer: fine` = 有实体键盘/精确指针的设备。
  *
- * 为什么与 isDesktop 解耦：三窗格壳（desk-frame）与 ⌘K 面板的渲染是**布局**决策，
- * 跟着宽度走；快捷键是**输入能力**决策，跟着设备走。从前监听器跟着 isDesktop 走，
+ * 为什么与 deskShell 解耦：三窗格壳（desk-frame）的渲染是**布局**决策（桌面恒开、
+ * 浏览器跟宽度）；快捷键是**输入能力**决策，跟着设备走。从前监听器跟着壳走，
  * 于是窄窗口的桌面用户（分屏、半宽、外接显示器上把窗口拉窄）完全没有键盘导航。
  * 触屏（hover: none）依旧不挂监听，与从前一样纯手势操作。
  */
@@ -263,12 +277,21 @@ watch(
    「现在是不是桌面」。写一个属性出去，这些游离子孙就能各自适配 —
    与 data-perf / data-motion / data-immersive 同一条做法。 */
 watch(
-  isDesktop,
+  deskShell,
   (on) => {
     document.documentElement.dataset.shell = on ? 'desk' : 'mobile'
   },
   { immediate: true },
 )
+
+/* 导航编辑态 · 壳翻转收场：桌面 ↔ 移动壳切换会让编辑容器（rail / dock / 顶栏）整个消失，
+   沉浸页（shellVisible=false）同理 —— rail / dock 都藏着，没有编辑面可回。
+   草稿只在内存（useNavEdit 不变量），discard 即回滚，半成品永远到不了 localStorage。
+   （桌面 Tauri 壳恒定不再翻转，这条 watch 实际只在浏览器里随宽度越线触发。） */
+watch(deskShell, () => discardNavEdit())
+watch(shellVisible, (on) => {
+  if (!on) discardNavEdit()
+})
 
 /* 信息栏的开合也写到 <html>：理由同上 —— 靠右缘定位的游离子孙要跟着让位 */
 watch(inspectorOpen, (v) => {
@@ -300,27 +323,36 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 桌面 Tauri：无边框窗口的整窗壳（自绘标题栏 + 内容区；宽窗竖排、窄窗标题栏 sticky）。
+  <!-- 桌面 Tauri：无边框窗口的整窗壳（自绘标题栏 + 内容区，恒为 .win-shell--desk 竖排）。
        浏览器 / Android 上这一层只是一个没有样式的普通 div —— .desk-frame / .app-frame
-       仍按原来的规则决定布局，既有 e2e 的布局断言（430 手机壳 / 宽屏桌面壳）不受影响。 -->
-  <div class="win-shell" :class="{ 'win-shell--desk': deskChrome, 'win-shell--narrow': narrowChrome }">
-    <!-- 窄窗里标题栏是一条玻璃带（内容从它底下滚过，与导航层同一套材质；低画质档
-         会自动退化成实底，不用另写）。宽窗不画底，让环境光一直透到窗口顶边。 -->
+       仍按 deskShell 的规则决定布局（浏览器按宽度），既有 e2e 的布局断言不受影响。 -->
+  <div class="win-shell" :class="{ 'win-shell--desk': isTauriDesktopWindow }">
+    <!-- 标题栏不画底，让环境光一直透到窗口顶边（窄窗玻璃带模型已随「桌面端只允许
+         桌面视图」退役）。
+         nav-edit-live（仅 .win-shell--desk 段生效）：导航编辑态把标题栏提权到 mask(45)
+         之上 —— 窗控三钮恒可点，rail 编辑时窗口不能被编辑态卡死。顶栏功能按钮区
+         是否可交互由 TopbarActions 自读 useNavEdit（仅 activeScope==='topbar'）。 -->
     <AppTitleBar
       v-if="isTauriDesktopWindow"
-      :class="{ 'glass-surface': narrowChrome, 'glass-edge-b': narrowChrome }"
+      :class="{ 'nav-edit-live': navEditAnyEditing }"
     />
     <div class="win-body">
-      <!-- 桌面三窗格壳：沉浸页（运动模式）同样隐藏导航轨 -->
-      <div v-if="isDesktop" class="desk-frame">
+      <!-- 桌面三窗格壳：沉浸页（运动模式）同样隐藏导航轨。
+           导航编辑态的 inert 账（遮罩只挡指针不挡焦点，inert 连焦点一起封）：
+           · rail 仅在自己是 activeScope 时可交互 —— topbar 编辑时它浮在 mask 上且处于
+             正常态，RouterLink / 命令面板 / 全部菜单 hover 全是鼠标路径的路由出口，必须封；
+           · 主内容根（.desk-main / DesktopInspector）任何编辑态都封 —— mask 底下的页面
+             不许 Tab 进去、Enter 触发链接、切路由。 -->
+      <div v-if="deskShell" class="desk-frame">
         <DesktopRail
           v-show="shellVisible"
           data-immersive-shell
+          :inert="navEditAnyEditing && navEditScope !== 'rail'"
           :inspector-open="inspectorOpen"
           @toggle-inspector="toggleInspector"
           @open-palette="paletteOpen = true"
         />
-        <main class="desk-main" :class="{ wide: deskWide }">
+        <main class="desk-main" :class="{ wide: deskWide }" :inert="navEditAnyEditing">
           <!-- 整页包装：平时只是路由出口的壳。页面自己挂了内容层（.page > .rubber-layer）
                时超伸平移落在那一层上（system/rubberScroll 的 layerFor 会下钻找到它）；
                只有没挂内容层的页面才回退到整页平移（那时标题栏会跟着动）。 -->
@@ -334,14 +366,15 @@ onMounted(() => {
         </main>
         <!-- 第三窗格 · 路由上下文信息栏：全页面常驻（沉浸页除外、可 ⌘I 收起），
              保证桌面构图平衡；窄桌面下用户也可以把它让给主内容 -->
-        <DesktopInspector v-show="shellVisible && inspectorOpen" data-immersive-shell />
+        <DesktopInspector v-show="shellVisible && inspectorOpen" data-immersive-shell :inert="navEditAnyEditing" />
       </div>
 
       <!-- 移动端（原结构）：内容居中窄栏 + 底部标签导航 -->
       <div v-else class="app-frame">
         <!-- 整页包装（= 页面级超伸的兜底层）：页面自己挂了内容层时只动内容层，
-             标题栏留在层外不动；没挂内容层的旧页面才整页平移 -->
-        <div data-rubber-shell>
+             标题栏留在层外不动；没挂内容层的旧页面才整页平移。
+             导航编辑态把内容层封掉（与桌面的 .desk-main 同一条 inert 账） -->
+        <div data-rubber-shell :inert="navEditAnyEditing">
           <RouterView v-slot="{ Component }">
             <Transition name="page">
               <component :is="Component" />
@@ -351,6 +384,7 @@ onMounted(() => {
         <TabBar
           v-show="shellVisible"
           data-immersive-shell
+          :inert="navEditAnyEditing && navEditScope !== 'tabbar'"
         />
       </div>
     </div>
@@ -358,25 +392,33 @@ onMounted(() => {
          消失，不补这一层窗口就再也改不了大小；最大化时组件自己隐藏。 -->
     <WindowResizeHandles v-if="isTauriDesktopWindow" />
   </div>
-  <!-- 悬浮运动条：收起完成后才恢复，自身按停靠方向渐入 -->
-  <ActiveWorkoutBar />
+  <!-- 导航编辑态遮罩（z 45）：三个导航容器（Dock / 左栏 / 顶栏）共用一枚 —— 盖谁不盖谁
+       由 z-index 与上面的 inert 账表达，遮罩自身不做判定。吞点击但永不据此退出：
+       退出只有「放弃变更 / 保存布局」两条路。进出淡入淡出写在 .scrim-edit-* 下方。 -->
+  <Transition name="scrim-edit">
+    <NavEditMask v-if="navEditAnyEditing" />
+  </Transition>
+  <!-- 悬浮运动条：收起完成后才恢复，自身按停靠方向渐入。
+       四条常驻浮条（含下面三条）与相位提示条都不属于任何编辑面，却可点、可触发路由
+       或沉浸层 —— 导航编辑态统一挂 inert 封死（属性透传到各自根元素）。 -->
+  <ActiveWorkoutBar :inert="navEditAnyEditing" />
   <!-- 录音悬浮条：录音进行中常驻（可拖拽停靠，轻点进录音页）。受录音模块开关管 -->
-  <RecordFloatBar v-if="recordOn" v-show="shellVisible" data-immersive-shell />
+  <RecordFloatBar v-if="recordOn" v-show="shellVisible" data-immersive-shell :inert="navEditAnyEditing" />
   <!-- 专注悬浮条：番茄钟进行中 / 暂停态常驻（受专注模块开关管）。为什么专注走**底部活动族**
       而不是像抢课那样上移：抢课是「监视器」（抬头看一眼，顶部更合直觉），专注是「活动」——
        与运动、录音一样是「我此刻正在做一件事」的计时，天然与运动互斥（练时不会开番茄），
        同族还共用 useDragDock 的停靠手感与 glass-surface 材质，用户不必为它记第二套交互。 -->
-  <FocusFloatBar v-if="focusOn" v-show="shellVisible" data-immersive-shell />
+  <FocusFloatBar v-if="focusOn" v-show="shellVisible" data-immersive-shell :inert="navEditAnyEditing" />
   <!-- 专注沉浸层：常驻挂载（不走路由），显隐由 system/focusImmersive 的层级驱动（level 0 隐藏）。
        它是全屏层、盖住壳层，与专注浮条同随专注模块开关收放 —— 关掉专注就不该有这一层。 -->
   <FocusImmersive v-if="focusOn" />
   <!-- 专注相位提示条：只在相位切换的系统通知**没送达**时顶部落一条（常驻送达条） -->
-  <FocusNoticeBar v-if="focusOn" />
+  <FocusNoticeBar v-if="focusOn" :inert="navEditAnyEditing" />
   <!-- 语音转写悬浮条：语音会话收起后台转写继续（与录音浮条同套停靠、独立 key）。受语音模块开关管 -->
-  <VoiceFloatBar v-if="voiceOn" v-show="shellVisible" data-immersive-shell />
+  <VoiceFloatBar v-if="voiceOn" v-show="shellVisible" data-immersive-shell :inert="navEditAnyEditing" />
   <!-- 抢课监视器：后台引擎有活儿时顶部落一条，点进选课页（顶部定位，不与底部三条浮条抢位）。
        受模块开关管：关掉抢课（默认关）就不该有任何常驻 UI。 -->
-  <GrabFloatBar v-if="grabOn" v-show="shellVisible" data-immersive-shell />
+  <GrabFloatBar v-if="grabOn" v-show="shellVisible" data-immersive-shell :inert="navEditAnyEditing" />
   <!-- 语音会话视图：单例 runtime 驱动，任何入口可唤起（voiceRuntime.openView） -->
   <VoiceSessionView v-if="voiceOn" />
   <!-- 训练课沉浸层：常驻挂载不走路由（system/sessionImmersive 驱动显隐与形变） -->
@@ -411,15 +453,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* ---------- 桌面 Tauri · 两种窗口壳 ----------
-   宽窗（≥ DESK_MIN）：整窗竖排，标题栏占顶部一条、.win-body 吃剩余高度。桌面三窗格
-   本来就滚在 .desk-main 内部，整窗不产生文档滚动，标题栏天然在滚动容器之外。
-
-   窄窗（无边框窗口的默认 430 宽）：**保持文档滚动不变** —— .app-frame 仍是普通流内块、
-   滚的仍是 document。只让标题栏 position: sticky 粘在视口顶，内容从它底下穿过。
-   （试过把 .win-body 当滚动容器：rubberScroll 的 document.scrollingElement 判定、
-   useScrolled 的滚动目标、ActiveWorkoutBar 的 activeScroller() 全都按文档滚动写，
-   换容器等于静默关掉超范围回弹、页头滚动态与运动条跟滚 —— 无边框不该动滚动模型。） */
+/* ---------- 桌面 Tauri · 窗口壳 ----------
+   桌面端只允许桌面视图（deskShell 平台锁定）：整窗竖排，标题栏占顶部一条、.win-body
+   吃剩余高度。桌面三窗格本来就滚在 .desk-main 内部，整窗不产生文档滚动，标题栏天然在
+   滚动容器之外。旧的窄窗 sticky 段（.win-shell--narrow）已随「窄窗回退 TabBar」一起
+   退役 —— 无边框窗口在 Tauri 侧恒为宽窗模型，宽度地板由 minWidth(900) 保障。 */
 .win-shell--desk {
   height: 100dvh;
   display: flex;
@@ -435,22 +473,31 @@ onMounted(() => {
   height: 100%;
 }
 
-.win-shell--narrow {
-  display: block;
+/* ---------- 导航编辑态 · 标题栏提权 ----------
+   宽窗的标题栏在静态流里（z auto），会被编辑态遮罩（z 45）盖住 —— 提权到 46，
+   窗控三钮恒可点（编辑态卡死窗口是事故级体验）。所有 scope 都提权（rail 编辑时
+   窗控也要可点）；顶栏功能按钮区是否可交互由 TopbarActions 自读 useNavEdit。
+   写 position:relative 而不是动 .titlebar 的定位：定位语义只归本段所有，别的段
+   （浮窗 / 页面内吸顶）各写各的，互不抢 position。
+   :deep 把 scoped 属性锚在 .win-shell--desk（App 自己的元素）上，titlebar 是
+   孙组件（AppTitleBar → TitleBarBase）的根，深选择器与隔壁窄窗规则同一写法。
+   这条样式写在 App.vue（挂载点拥有者），不进 AppTitleBar / TitleBarBase ——
+   TitleBarBase 与浮窗标题栏（FloatTitleBar）共享，按钮区不能泄漏进浮窗。 */
+.win-shell--desk :deep(.titlebar.nav-edit-live) {
+  position: relative;
+  z-index: 46;
 }
 
-/* 标题栏粘在视口顶：z-index 50 —— 低于底部 Dock / TabBar（60），高于页面里那层
-   吸顶页头（30），于是内容滚过去时永远被标题栏压住。 */
-.win-shell--narrow :deep(.titlebar) {
-  position: sticky;
-  top: 0;
-  z-index: 50;
+/* 编辑态遮罩的进出：--dur-fast / --ease-standard（遮罩本体只管那层底色）。
+   类挂的是 NavEditMask 的根元素 —— 子组件根会带上父组件的 scoped 属性 */
+.scrim-edit-enter-active,
+.scrim-edit-leave-active {
+  transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
-/* 40px 的标题栏要从内容高度里还回去：.app-frame 继续用 100dvh 会凭空多出一条 40px
-   的文档滚动（滚到底时底部 Dock 上方多出一截空白）。 */
-.win-shell--narrow .app-frame {
-  min-height: calc(100dvh - var(--titlebar-h));
+.scrim-edit-enter-from,
+.scrim-edit-leave-to {
+  opacity: 0;
 }
 
 .desk-main {

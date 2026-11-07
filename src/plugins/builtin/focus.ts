@@ -19,6 +19,9 @@ export const focusPlugin = definePlugin({
   defaultEnabled: true,
   routes: ['focus'],
   nav: [{ route: 'focus', label: '专注', icon: Timer, surfaces: ['rail'], order: 140 }],
+  // 桌面顶栏的功能按钮（§7.1 种子三颗之一，全部 defaultOn）：「开始/暂停」就地一步，
+  // 与 rail 的「去专注页」不重复；动作由宿主 TopbarActions.vue 接到番茄钟 store 上
+  topbar: [{ id: 'focus.topbar', label: '专注', icon: Timer, action: 'focus-toggle', order: 10 }],
   tools: [
     {
       id: 'focus.open',

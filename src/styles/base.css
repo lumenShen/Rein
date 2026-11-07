@@ -850,34 +850,48 @@ html[data-perf='low'] .stage-dark {
   }
 }
 
-/* ---------- 底部 Dock 的三块玻璃（真实 Dock 与画质预览页的标本共用这一份） ----------
+/* ---------- 底部 Dock 的合并玻璃（真实 Dock 与画质预览页的标本共用这一份） ----------
    为什么放在全局而不是各自的 scoped 里：标本台的意义就是「所见即应用里的那一块」，
    两份各写一套样式必然会漂（标本曾经用暗场令牌 + 自己的一版页签，与真实 Dock
-   长得不像）。几何（fixed 定位 / 高度 / 间距）仍归各自容器，这里只管**三块玻璃的
-   尺寸关系与前景**：
+   长得不像）。几何（fixed 定位 / 高度 / 间距）仍归各自容器，这里只管**合并玻璃里的
+   页签行前景**（2026-11 底栏重构：一块玻璃 = 输入行 + 页签行，输入行样式在
+   DockQuickBar 组件内，两边共用同一个组件所以天然同步）：
 
-     · 两侧正圆定宽、药丸吃掉余量（.dock-block / .pill）；
-     · 页签与独立圆钮共用一套前景：图标在上、微标签在下，未选中 --text-3、
-       选中 --accent-strong（活动底是浅白 / 淡灰的中性底，文字蓝取「压在 soft 或
-       白底上」那一档，不拿实底档的 --accent 直接当文字）；
+     · 页签行（.dock-navs）等分摊开：页签 flex:1 均分玻璃宽 —— 参考构图是
+       「输入条铺满 + 页签摊开」，从前「页签定宽、药丸随数收窄」随左右圆钮退役；
+     · 页签前景：图标在上、微标签在下，未选中 --text-3、选中 --accent-strong
+       （活动底是浅白 / 淡灰的中性底，文字蓝取「压在 soft 或白底上」那一档，
+       不拿实底档的 --accent 直接当文字）；
      · **活动底是一块纯色**（--glass-tab-fill，亮色浅白 / 暗色淡灰，由主题决定）——
        此前是 accent 的顶光渐变，压在玻璃上读成「这一格盖了一块蓝色色板」；这里要的
        只是「这一格被选中」，中性提亮就够。z-index 压到内容下面（.gbody 是
        GlassSurface 的层叠上下文，-1 恰落在玻璃底之上）；
      · 按下一拍快速挤压（volume-preserving squash），松手沿弹簧曲线回弹过冲。 */
+/* 输入行可见时 Dock 高出 --dock-quick-h 一截：避让高度（--dock-top）跟着开关。
+   由 TabBar 把显隐写到 <html data-dock-quick>（AI 页 / 编辑态收起、卸载时撤属性），
+   缺省（无属性）= 纯页签行高度 —— 桌面壳不挂 TabBar，一个像素都不多让。 */
+html[data-dock-quick='on'] {
+  --dock-top: calc(var(--safe-bottom) + var(--dock-float) + var(--tabbar-h) + var(--dock-quick-h));
+}
+
 .dock-block {
   flex: none;
 }
 
-/* 药丸**随页签数走**（kit 的 5-tab 药丸 346 = 5×66 + 内距；3 个页签就是 206）。
-   从前 flex:1 吃满容器，宽窗里三个页签被摊成三份，整条 Dock 读成一根无意义的横条。 */
-.dock-block.pill {
-  flex: 0 1 auto;
-  min-width: 0;
+/* 页签行：等分容器（页签 flex:1），GlassThumb 的 blob 按等分位移；
+   thumb 是 absolute + inset:0，包含块必须落在这一行自己身上。
+   高度减 2px：GlassSurface 自带上下两片 1px 描边 —— 从前药丸显式定高 58（border-box
+   含描边），合并块高随内容走，这 2px 不还回去，AI 页的「输入栏底→底栏顶 = 10」
+   守卫就差 2（layout-guard 实测 8）。 */
+.dock-navs {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: calc(var(--tabbar-h) - 2px);
+  padding: 0 var(--gap-tight);
 }
 
-.dock-tab,
-.dock-slot {
+.dock-tab {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -893,6 +907,10 @@ html[data-perf='low'] .stage-dark {
   font-size: var(--fs-micro);
   font-weight: var(--fw-medium);
   text-decoration: none;
+  /* 摊开式页签：均分玻璃宽（--dock-tab-w 退役 —— 页签不再定宽 66） */
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
   /* 松手后的回弹段：弹簧曲线冲过 1 再收回（压扁 → 拉长 → 回正）。
      时长走令牌而不是写死的 480ms —— 它与丰富档的 blob 位移（GlassThumb 读的就是
      同一个 --dur-slow）必须同长，否则一次点击会看到两块东西用两个节奏动 */
@@ -901,23 +919,8 @@ html[data-perf='low'] .stage-dark {
     color var(--dur-fast) var(--ease-standard);
 }
 
-.dock-tab {
-  /* 页签定宽 66（kit 校准二 #33：5-tab 药丸 346 / 5 页签 ≈ 66，内缩 4 后视觉 62×54）。
-     页签数变化时药丸跟着变宽，而不是把固定的几个页签摊满容器。 */
-  flex: 0 0 var(--dock-tab-w);
-  width: var(--dock-tab-w);
-  height: 100%;
-}
-
-/* 圆钮里只有一颗按钮：撑满整块玻璃（命中区 = 玻璃面积） */
-.dock-slot {
-  width: 100%;
-  height: 100%;
-}
-
 /* 按压段：快速挤压（纵向压得多、横向略胀，近似体积守恒）并即时换色 */
-.dock-tab:active,
-.dock-slot:active {
+.dock-tab:active {
   transform: scale(1.06, 0.9);
   transition:
     transform 120ms var(--ease-out),
@@ -926,8 +929,7 @@ html[data-perf='low'] .stage-dark {
 
 /* 活动落点的底：一块**纯色**（--glass-tab-fill）—— 不带渐变，也不带色相。
    z-index 压到内容下面（.gbody 是 GlassSurface 的层叠上下文，-1 恰落在玻璃底之上） */
-.dock-tab::before,
-.dock-slot::before {
+.dock-tab::before {
   content: '';
   position: absolute;
   z-index: -1;
@@ -940,32 +942,25 @@ html[data-perf='low'] .stage-dark {
   transition: opacity var(--dur-base) var(--ease-standard);
 }
 
-.dock-slot::before {
-  inset: var(--gap-tight);
-}
-
 /* 选中态前景：活动底现在是中性底（浅白 / 淡灰），文字蓝走 --accent-strong ——
    它正是「压在 soft 或白底上的文字」那一档；--accent 是实底档，压在浅底上偏淡 */
-.dock-tab.active,
-.dock-slot.active {
+.dock-tab.active {
   color: var(--accent-strong);
 }
 
-.dock-tab.active::before,
-.dock-slot.active::before {
+.dock-tab.active::before {
   opacity: 1;
 }
 
-/* ---------- 丰富档：液态活动底接管药丸 ----------
+/* ---------- 丰富档：液态活动底接管页签行 ----------
    `.goo` 由调用处（TabBar / 画质预览页的标本）在 motionRich 时加上，同时挂进
    GlassThumb；那一份活动底自己会融合、形变，纯色底必须让位，否则两块叠在一起
    会读成"选中格比别的格亮两档"。写在这里而不是各自的组件里：`.dock-tab` 与
-   `.dock-block` 本来就定义在这一份里，视线不用跨文件。
-   **只让 `.dock-block.pill` 里的让位** —— 两侧圆钮（.dock-slot）没有 blob，
-   它们的纯色底照旧。 */
-html[data-motion='rich'] .dock-block.pill.goo .dock-tab::before {
+   `.dock-navs` 本来就定义在这一份里，视线不用跨文件。 */
+html[data-motion='rich'] .dock-navs.goo .dock-tab::before {
   opacity: 0;
 }
+
 
 /* ---------- 丰富档：按压定向光晕 ----------
    位置由 composables/usePressGlow 写进 `--gx` / `--gy`（按下时一次、按住拖动时按帧更新）；

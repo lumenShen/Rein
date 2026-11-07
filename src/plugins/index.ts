@@ -8,9 +8,13 @@ import './builtin'
 
 export type {
   NavContribution,
+  NavEditScope,
   NavSurface,
   PluginSpec,
   ToolAction,
   ToolContribution,
+  TopbarAction,
+  TopbarContribution,
 } from './types'
 export { definePlugin, pluginById, plugins, routeOwner, toggleablePlugins } from './registry'
+export { KERNEL_NAV, kernelNav, type KernelNavEntry } from './kernelNav'

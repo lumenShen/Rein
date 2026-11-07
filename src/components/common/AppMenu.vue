@@ -1,20 +1,23 @@
 <script lang="ts">
 import type { Component } from 'vue'
 
-/** 菜单项：icon 缺省为纯文字样式；children 生成下一级层叠面板（bind）或内嵌分组（dialog） */
+/** 菜单项：icon 缺省为纯文字样式；children 生成下一级层叠面板（bind）或内嵌分组（dialog）。
+    badge：导航编辑态候选行的「＋」徽标（docs/nav-redesign.md §6.1/§8.3）—— aria-hidden
+    的装饰小圆，挂 data-nav-badge 供编辑剧本寻址；动作语义在整行（点击 = 加回草稿）。 */
 export interface MenuItem {
   label: string
   value: string
   icon?: Component
   danger?: boolean
   disabled?: boolean
+  badge?: '+'
   children?: MenuItem[]
 }
 </script>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight, Plus } from 'lucide-vue-next'
 
 /**
  * AppMenu 统一菜单：bind（锚定触发组件旁弹出，默认）与 dialog（底部操作面板）两种出现方式。
@@ -30,8 +33,13 @@ const props = withDefaults(
     /** bind 模式的锚定元素（触发菜单的按钮/元素） */
     anchor?: HTMLElement | null
     title?: string
+    /** 常开锁（bind 模式专属）：旁路全部四条关闭路径，供导航编辑态的候选面板用 ——
+        rail 编辑态下面板允许被 mask 旁路点击（catcher 不渲染），rail 条目的「−」才点得动；
+        点「＋」若把面板关了（选中即关），编辑流一次就断且回不去。缺省 false，
+        既有消费方（TabBar picker、dialog 模式）零改动。 */
+    locked?: boolean
   }>(),
-  { mode: 'bind', anchor: null, title: undefined },
+  { mode: 'bind', anchor: null, title: undefined, locked: false },
 )
 
 const emit = defineEmits<{
@@ -40,6 +48,13 @@ const emit = defineEmits<{
 }>()
 
 const bindMode = computed(() => props.mode === 'bind' && props.anchor !== null)
+
+/** locked 只影响 bind 模式：dialog 有自己的 mask/取消钮，常开锁对它无意义 */
+const lockedBind = computed(() => props.locked && bindMode.value)
+
+/** 根层面板标题行右侧是否挂了动作（#panel-actions 插槽）——没有就保持原结构 */
+const slots = defineSlots<{ 'panel-actions'?(): unknown }>()
+const hasPanelActions = computed(() => !!slots['panel-actions'])
 
 /** 关闭时保留 levels 供离场动画播放，仅停止渲染 */
 const visibleLevels = computed(() => (props.open ? levels.value : []))
@@ -181,7 +196,9 @@ function onItemClick(a: MenuItem, e: MouseEvent, levelIdx: number): void {
     return
   }
   emit('select', a.value)
-  emit('close')
+  // locked（编辑态候选面板）：select 照发但跳过 close —— 点「＋」不能把面板关掉，
+  // 否则编辑流一次就断且回不去（键盘 Enter 走同一函数，同样被覆盖）
+  if (!lockedBind.value) emit('close')
 }
 
 function closeAll(): void {
@@ -196,8 +213,9 @@ function closeMenu(): void {
 }
 
 function onViewportChange(): void {
-  // 视口变化后锚定位置不可信，直接收起，行为可预期
-  if (props.open && bindMode.value) closeAll()
+  // 视口变化后锚定位置不可信，直接收起，行为可预期（locked 面板旁路：编辑态里
+  // 窗口被拽动不该把候选面板收走 —— 编辑面只有放弃/保存两条退出路径）
+  if (props.open && bindMode.value && !props.locked) closeAll()
 }
 
 /* ---------- 键盘可达：打开即聚焦、方向键行走、Home/End、Esc 归还焦点 ----------
@@ -312,7 +330,8 @@ function onKeydown(e: KeyboardEvent): void {
   if (!props.open) return
   switch (e.key) {
     case 'Escape':
-      closeMenu()
+      // locked 面板旁路：Esc 不关面板（编辑态的退出只有放弃/保存两条路）
+      if (!lockedBind.value) closeMenu()
       return
     case 'ArrowDown':
       if (focusInMenu(e.target)) {
@@ -411,9 +430,11 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
 
 <template>
   <Teleport to="body">
-    <!-- bind：透明点击层（无视觉遮罩）+ 锚定面板 -->
+    <!-- bind：透明点击层（无视觉遮罩）+ 锚定面板。
+         locked（编辑态候选面板）不渲染 catcher：z114 全屏拦截会吃掉 mask 之下
+         各编辑面（rail 条目的「−」）的点击 —— 编辑态里「点面板外」不是退出路径 -->
     <template v-if="bindMode">
-      <div v-if="open" class="catcher" @click="closeAll" @contextmenu.prevent="closeAll" />
+      <div v-if="open && !lockedBind" class="catcher" @click="closeAll" @contextmenu.prevent="closeAll" />
       <TransitionGroup name="am-pop">
         <div
           v-for="(lv, i) in visibleLevels"
@@ -427,7 +448,15 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
         >
           <!-- 超范围平移层：面板自身带定位/入场动画，不能自平移，改包一层只写 transform -->
           <div class="rubber-layer" data-rubber-content>
-            <p v-if="i === 0 && title" class="ptitle">{{ title }}</p>
+            <!-- 根层面板标题行：右侧留给 #panel-actions 具名插槽（导航编辑态的「编辑」钮
+                 与「放弃变更 / 保存布局」落位，rail 与顶栏编辑态用）。没有插槽内容时
+                 结构与从前逐像素相同（ptitle 原样独占一行）。 -->
+            <div v-if="i === 0 && (title || hasPanelActions)" class="ptitle-row">
+              <p v-if="title" class="ptitle">{{ title }}</p>
+              <div v-if="hasPanelActions" class="pactions">
+                <slot name="panel-actions" />
+              </div>
+            </div>
             <button
               v-for="a in lv.items"
               :key="a.value"
@@ -441,6 +470,9 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
             >
               <component :is="a.icon" v-if="a.icon" class="ic" :size="19" :stroke-width="2" />
               <span v-else-if="levelHasIcon(lv.items)" class="ic" aria-hidden="true" />
+              <span v-if="a.badge" class="badge" :data-nav-badge="a.badge" aria-hidden="true">
+                <Plus :size="11" :stroke-width="2.6" />
+              </span>
               <span class="lbl">{{ a.label }}</span>
               <ChevronRight v-if="a.children?.length" class="chev" :size="14" />
             </button>
@@ -478,6 +510,9 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
             >
               <component :is="f.item.icon" v-if="f.item.icon" class="ic" :size="19" :stroke-width="2" />
               <span v-else-if="flatHasIcon" class="ic" aria-hidden="true" />
+              <span v-if="f.item.badge" class="badge" :data-nav-badge="f.item.badge" aria-hidden="true">
+                <Plus :size="11" :stroke-width="2.6" />
+              </span>
               <span class="lbl">{{ f.item.label }}</span>
             </button>
           </template>
@@ -523,6 +558,26 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 标题行带动作（#panel-actions）时的排布：标题吃剩余宽度、动作贴右缘；
+   没有动作时行内只有 ptitle 一个块级孩子，观感与从前一致 */
+.ptitle-row {
+  display: flex;
+  align-items: center;
+}
+
+.ptitle-row .ptitle {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 动作区：右缘与行内文字同线（--pad-row），上下与 .ptitle 的 8/4 对齐 */
+.pactions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding: var(--sp-8) var(--pad-row) var(--sp-4) 0;
 }
 
 .item {
@@ -581,6 +636,21 @@ const flatHasIcon = computed(() => flatActions.value.some((f) => !f.header && !!
   display: grid;
   place-items: center;
   color: var(--text-2);
+}
+
+/* 候选行的「＋」徽标（导航编辑态，§6.1/§8.3）：与 Dock 托盘同一枚圆同一份规格
+   （16px，accent-soft 底 + accent-strong 前景）—— 加回是「动作可用」，移除才是
+   danger。aria-hidden 的装饰：动作在整行（点击 = 加回草稿），徽标只管被看见 */
+.item .badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 /* 文字走 strong 档（实底 --danger 白底约 3.5:1）；下面那条 .ic 是图标，

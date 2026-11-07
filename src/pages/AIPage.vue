@@ -387,6 +387,13 @@ onMounted(() => {
       void ai.sendText(handed)
     }
   }
+  // 底栏快捷输入的「+」递来的草稿：只填不发（人要去加附件，不是要发送）。
+  // 不自动聚焦 —— 导航落地就弹软键盘太霸道，正文已经在输入框里看得见。
+  const handedDraft = ai.takePendingDraft()
+  if (handedDraft) {
+    draft.value = handedDraft
+    void nextTick(() => autoGrow())
+  }
 })
 
 // 分享收件箱：路由带 ?intent=share 时消费预填（冷启动 / 运行中被分享唤起都会走到这里）

@@ -252,6 +252,24 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   /**
+   * 只填不发的交接（底栏快捷输入的「+」：带草稿去 AI 页加附件 —— 人按「+」是想
+   * 补充内容，不是想立刻发出去）。与 pendingPrompt 的差别就在 AI 页那边发不发。
+   */
+  const pendingDraft = ref<string | null>(null)
+
+  /** 递给 AI 页一段草稿（填进输入框，不发送） */
+  function handOffDraft(text: string): void {
+    pendingDraft.value = text
+  }
+
+  /** AI 页取走草稿（取完即清） */
+  function takePendingDraft(): string | null {
+    const t = pendingDraft.value
+    pendingDraft.value = null
+    return t
+  }
+
+  /**
    * 旧版欢迎语入口 —— **现在刻意什么都不做**。
    *
    * 它原来往空会话里插一条「你好，我是 Rein AI……」的**文字气泡**。两个问题：
@@ -1387,6 +1405,9 @@ export const useAiStore = defineStore('ai', () => {
     /** 别的页面递进来的一句话（抢课面板的「交给 AI 排查」） */
     askFrom,
     takePendingPrompt,
+    /** 别的页面递进来的一段草稿（底栏快捷输入的「+」，只填不发） */
+    handOffDraft,
+    takePendingDraft,
     selectChat,
     newChat,
     clearContext,

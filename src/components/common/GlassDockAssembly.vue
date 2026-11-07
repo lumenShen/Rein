@@ -14,13 +14,10 @@ withDefaults(
   defineProps<{
     items: GlassDockItem[]
     active?: string
-    left?: GlassDockItem
-    right?: GlassDockItem
     goo?: boolean
     ariaLabel?: string
-    /** 左右两块玻璃在 DOM 上的稳定标记（落到 data-slot，回归脚本按它寻址） */
-    leftSlot?: string
-    rightSlot?: string
+    /** 这块玻璃在 DOM 上的稳定标记（落到 data-slot，回归脚本按它寻址） */
+    dataSlot?: string
   }>(),
   {
     active: '',
@@ -30,64 +27,39 @@ withDefaults(
 )
 
 defineSlots<{
-  left(props: { item: GlassDockItem; active: boolean }): unknown
+  /** 输入行（底栏合并重构的上排）：真实 Dock 与标本各自渲染内容，几何共用同一份组件/类名 */
+  quick(): unknown
   tab(props: { item: GlassDockItem; active: boolean }): unknown
-  right(props: { item: GlassDockItem; active: boolean }): unknown
 }>()
 </script>
 
 <template>
   <div class="dock-assembly" :aria-label="ariaLabel">
     <GlassSurface
-      v-if="left"
       class="dock-block"
-      :data-slot="leftSlot"
-      width="var(--tabbar-h)"
-      height="var(--tabbar-h)"
-      border-radius="50%"
+      :data-slot="dataSlot"
+      border-radius="var(--radius-xl)"
       fill="var(--glass-fill)"
     >
-      <slot name="left" :item="left" :active="active === left.id">
-        <span class="dock-slot" :class="{ active: active === left.id }">
-          <component :is="left.icon" :size="24" :stroke-width="active === left.id ? 2.4 : 1.9" />
-          <span>{{ left.label }}</span>
-        </span>
-      </slot>
-    </GlassSurface>
-
-    <GlassSurface
-      class="dock-block pill"
-      :class="{ goo }"
-      height="var(--tabbar-h)"
-      border-radius="var(--radius-full)"
-      fill="var(--glass-fill)"
-    >
-      <GlassThumb v-if="goo" :index="Math.max(0, items.findIndex((item) => item.id === active))" :count="items.length" />
-      <template v-for="item in items" :key="item.id">
-        <slot name="tab" :item="item" :active="item.id === active">
-          <span class="dock-tab" :class="{ active: item.id === active }">
-            <component :is="item.icon" :size="24" :stroke-width="item.id === active ? 2.4 : 1.9" />
-            <span>{{ item.label }}</span>
-          </span>
-        </slot>
-      </template>
-    </GlassSurface>
-
-    <GlassSurface
-      v-if="right"
-      class="dock-block"
-      :data-slot="rightSlot"
-      width="var(--tabbar-h)"
-      height="var(--tabbar-h)"
-      border-radius="50%"
-      fill="var(--glass-fill)"
-    >
-      <slot name="right" :item="right" :active="active === right.id">
-        <span class="dock-slot" :class="{ active: active === right.id }">
-          <component :is="right.icon" :size="24" :stroke-width="active === right.id ? 2.4 : 1.9" />
-          <span>{{ right.label }}</span>
-        </span>
-      </slot>
+      <slot name="quick" />
+      <!-- 页签行：等分容器（页签 flex:1），GlassThumb 的 blob 按等分位移 —— 它必须
+           包在玻璃 slot 里面（带 filter 的元素做祖先会让折射整段失效，见其文件头），
+           自己 absolute + inset:0，所以这一行要自持 position:relative -->
+      <div class="dock-navs" :class="{ goo }">
+        <GlassThumb
+          v-if="goo"
+          :index="Math.max(0, items.findIndex((item) => item.id === active))"
+          :count="items.length"
+        />
+        <template v-for="item in items" :key="item.id">
+          <slot name="tab" :item="item" :active="item.id === active">
+            <span class="dock-tab" :class="{ active: item.id === active }">
+              <component :is="item.icon" :size="24" :stroke-width="item.id === active ? 2.4 : 1.9" />
+              <span>{{ item.label }}</span>
+            </span>
+          </slot>
+        </template>
+      </div>
     </GlassSurface>
   </div>
 </template>
@@ -95,12 +67,10 @@ defineSlots<{
 <style scoped>
 .dock-assembly {
   display: flex;
-  align-items: center;
-  /* 三块玻璃并列留缝、互不叠压（各自都有受光边）：无边界控件之间 8。
-     宽度**由内容决定**（两侧圆 62 + 药丸 n×66 + 缝 8×2）—— 拉满容器会把页签摊散，
-     读成一根没有形状的横条；kit 的 Dock 是一块居中的紧凑组件。 */
-  gap: var(--gap-sm);
-  width: fit-content;
-  height: var(--tabbar-h);
+  /* 合并 Dock（2026-11 底栏重构）：一块玻璃装下输入行 + 页签行，宽度随容器
+     （真实 Dock 左右留浮边铺满，标本随 .dockrow）—— 从前「左右圆钮 + 定宽药丸」
+     的三块装配随左右钮一起退役，页签在玻璃内均摊正是参考构图的摊开式页签行。 */
+  width: 100%;
+  height: auto;
 }
 </style>

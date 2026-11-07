@@ -13,6 +13,11 @@
  *
  * 运行：node scripts/e2e-layout-guard.mjs   （先 `npm run dev`，或设 REIN_E2E_URL 指向已构建产物）
  * 退出码非 0 表示有断言失败。
+ *
+ * 修订（2026-11-07）：裁切扫描豁免运动页页头的跑马灯视口 .hr-view —— 7a271fe 起设备入口
+ * 定宽为计数句、长设备名走 mask 跑马灯，轨道（.hr-track，width:max-content）**按设计**比
+ * 视口宽（副本间 24px 循环接缝空档也计入轨道宽），超出部分是空白且被 overflow+mask 裁掉，
+ * 不是内容损失。与下方 inScaledPreview 的「内部本来就被裁」同一性质的豁免。
  */
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -60,7 +65,10 @@ const SCAN = `(() => {
     return el.tagName.toLowerCase() + (cls ? '.' + cls : '')
   }
   const path = (el) => { const p = []; let n = el; while (n && n !== document.body && p.length < 3) { p.unshift(desc(n)); n = n.parentElement } return p.join('>') }
-  const skip = (el) => el.closest('.pblur') || el.closest('svg') || el.tagName === 'SVG'
+  const skip = (el) => el.closest('.pblur') || el.closest('svg') || el.tagName === 'SVG' ||
+    // 跑马灯视口（运动页页头设备入口）按设计裁切更宽的轨道（7a271fe）：轨道超出的
+    // 是副本间 24px 循环接缝的空白，被 overflow+mask 裁掉，不是内容损失
+    !!el.closest('.hr-view')
   // 缩略预览（画布/计时器的小样）内部本来就被裁：它按比例缩小整屏，行高与容器尺寸对不上
   const inScaledPreview = (el) =>
     !!el.closest('.vt.preview') || !!el.closest('.ctl.compact') || !!el.closest('.tlwrap .scroll')

@@ -28,7 +28,6 @@ import {
 
 import { routeOwner } from '@/plugins'
 import { routes } from '@/router'
-import { useDockStore } from '@/stores/dock'
 import { useFeaturesStore } from '@/stores/features'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { MOD, rememberRoute, recentRoutes, toggleInspector } from '@/system/deskShell'
@@ -67,7 +66,6 @@ const emit = defineEmits<{ close: [] }>()
 
 const router = useRouter()
 const features = useFeaturesStore()
-const dock = useDockStore()
 const pomo = usePomodoroStore()
 
 /* ---------- 主入口快捷键（与 App.vue 的全局监听共用一份声明） ---------- */
@@ -195,33 +193,6 @@ const actionCmds = computed<Cmd[]>(() => {
   return base
 })
 
-/* ---------- 底栏左键落点 ----------
-   Dock 左键那颗独立圆钮的「换落点」原先只有长按一条路（TabBar 的长按选择器）：
-   键盘用户碰都碰不到。这里把同一份候选摊成命令 —— 候选规则与 TabBar 的
-   candidates / pickerActions 逐条同源（导航轨条目减掉 Dock 三块玻璃上已有的落点），
-   动作只是 dock.setLeftRoute，业务仍然只此一处。
-   三个内核落点写死在这里：命令面板本来就只读路由表与功能开关（见文件头约束②），
-   为它把 TabBar 那棵树玻璃组件静态拖进主包不划算。 */
-const DOCK_SLOT_ROUTES = ['home', 'me', 'ai']
-
-const dockCandidates = computed(() => {
-  const taken = new Set([...DOCK_SLOT_ROUTES, ...features.nav('tabbar').map((n) => n.route)])
-  return features.nav('rail').filter((n) => !taken.has(n.route))
-})
-
-/** 落点偏好走 localStorage，改了立刻对 Dock 生效；带「当前落点」副标省得猜现在指向哪 */
-const dockCmds = computed<Cmd[]>(() =>
-  dockCandidates.value.map((c) => ({
-    id: 'dock:' + c.route,
-    group: '底栏',
-    label: `底栏左键改为「${c.label}」`,
-    sub: dock.leftRoute === c.route ? '当前落点' : undefined,
-    keywords: 'dock 底栏 左键 导航 落点',
-    icon: c.icon,
-    run: () => dock.setLeftRoute(c.route),
-  })),
-)
-
 /* ---------- 过滤与分组 ---------- */
 const q = ref('')
 
@@ -238,7 +209,6 @@ const all = computed<Cmd[]>(() => {
   return [
     ...recent,
     ...actionCmds.value,
-    ...dockCmds.value,
     ...routeCmds.value.filter((c) => !recentNames.has(c.id.slice(6))),
   ]
 })

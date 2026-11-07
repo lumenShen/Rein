@@ -1,70 +1,98 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { House, Sparkles, User } from 'lucide-vue-next'
+import { Minus } from 'lucide-vue-next'
 
-import AppMenu from '@/components/common/AppMenu.vue'
-import DockHintBubble from '@/components/common/DockHintBubble.vue'
+import DockEditTray from '@/components/mobile/DockEditTray.vue'
+import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
-import { useDockStore } from '@/stores/dock'
-import { useFeaturesStore } from '@/stores/features'
-import { dockHintDismissed, dismissDockHint, dockHintShownToday, markDockHintShown } from '@/system/dockHint'
-import { motionRich } from '@/system/motion'
+import VoiceInputMask from '@/components/ai/VoiceInputMask.vue'
+import { useNavDrag } from '@/composables/useNavDrag'
+import { useNavEdit } from '@/composables/useNavEdit'
 import { usePressGlow } from '@/composables/usePressGlow'
-import type { NavContribution } from '@/plugins'
+import { useToast } from '@/composables/useToast'
+import { useAiStore } from '@/stores/ai'
+import { useNavLayoutStore, type NavEntry } from '@/stores/navLayout'
+import {
+  aiVoiceCancel,
+  aiVoiceInput,
+  aiVoiceSetContinuous,
+  aiVoiceStart,
+  aiVoiceStop,
+  appendVoiceText,
+  onAiVoiceResult,
+  VOICE_TAP_MS,
+  type AiVoiceResult,
+} from '@/system/aiVoiceInput'
+import { motionRich } from '@/system/motion'
 
 /**
- * 底部悬浮 Dock：三块并列的玻璃，装配与画质预览页的标本台同款（圆 + 药丸 + 圆）。
+ * 底部悬浮 Dock · 合并版（2026-11 底栏重构）：**一块玻璃两行** ——
  *
- *   左 · 独立圆钮：**用户自定义落点**（默认课表，长按换一个模块主页面）
- *   中 · 药丸：内核两格（主页 / 我）与插件条目（运动…）按 order 排在一起
- *   右 · 独立圆钮：AI —— 内核功能（不可关），与主页/我 一样由 Dock 自己声明
+ *   上 · AI 快捷输入行（DockQuickBar）：+ / 输入 / 麦克风 / 发送。所有显示底栏的
+ *       页面都带着它（AI 入口从此长在底栏上，不再只有 AI 页有输入框）；发送走
+ *       ai.askFrom（抢课「交给 AI 排查」同一条跨页链路：AI 页挂载时取走即发，
+ *       busy 时落输入框等），「+」把草稿带去 AI 页的完整输入条（附件 / 文档在那边）。
+ *   下 · 页签行：导航布局层（stores/navLayout）解析的页签 —— 内核固定件（主页 / 我 /
+ *       AI）与插件条目（运动…）摊开均分；**长按页签进编辑态**：可移除、可排序、可加回。
  *
- * 材质一律走 GlassSurface（与标本同一个组件、同一组默认参数）：超高档三块各自折射
- * 背后的**页面真实内容**，其余档位退化成普通毛玻璃；弱档由 base.css 全局关掉 blur、
- * 把玻璃顶成实底。三块**并列留缝、互不叠压** —— 各自都带受光边，一叠就会在缝上
- * 出现一道月牙形硬边（与标本台同一条结论）。折射的底**直接用 --glass-fill**
- * （与其余档位、其余玻璃同色）：底再薄一点，页签文字的真图对比度就会掉下去
- * （真图采像素，见 scripts/e2e-perf-glass.mjs 第 6 节）。
+ * 从前两侧的独立圆钮（左 = 自定义落点 / 右 = AI 槽位）随合并退役：右钮的职责交给
+ * 输入行（输入行本身就是 AI 入口），左钮的「快捷落点」由编辑态承接（把模块页签加回
+ * 页签行即常驻）。随它们一起退场的还有落点偏好（stores/dock）与引导气泡（dockHint）。
  *
- * 柔性反馈沿用老 Dock：按下一拍快速挤压（volume-preserving squash），松手沿弹簧
- * 曲线回弹过冲，一段过渡自然带出「压扁 → 拉长 → 回正」，不需要 JS。
+ * 页签行不再是这里的硬编码清单：渲染 = 用户布局 ∩ 注册表 ∩ 启用态（navLayout.items），
+ * 固定件（主页 / 我 / AI）永不入存、位置由容器定；编辑态以草稿为准渲染，退出只有托盘里的
+ * 「放弃变更 / 保存布局」两条路。
+ *
+ * 输入行的显隐：编辑态收起（mask 之上不该有输入面）、AI 页收起（那边有自己的完整
+ * 输入条，双输入是坏构图）。显隐写到 <html data-dock-quick> 上 —— --dock-top 的
+ * 「让位高度」跟着开关，浮层 / 菜单 / Toast 的避让才不会多让一截（见 tokens.css）。
+ *
+ * 材质一律走 GlassSurface（与标本同一个组件、同一组默认参数）：超高档折射背后的
+ * 页面真实内容，其余档位退化成普通毛玻璃；弱档由 base.css 全局关掉 blur。输入行是
+ * 玻璃内的嵌套浅色层（不是又一块玻璃）—— 嵌套不带受光边，不会在缝上画月牙硬边。
  */
-const CORE_TABS: NavContribution[] = [
-  { route: 'home', label: '主页', icon: House, surfaces: ['tabbar'], order: 0 },
-  { route: 'me', label: '我', icon: User, surfaces: ['tabbar'], order: 990 },
-]
 
-/** 右独立圆钮的落点：AI */
-const AI_TAB: NavContribution = { route: 'ai', label: 'AI', icon: Sparkles, surfaces: ['tabbar'], order: 0 }
-
-/** 长按判定：按住这么久就开选择器（松手不跳转） */
+/** 长按判定：按住这么久页签进编辑态（松手不跳转） */
 const LONG_PRESS_MS = 480
+/** 长按位移阈值：超过它是滚动 / 滑动，不是长按（与 useNavDrag、bento 的 slop 同值） */
+const SLOP_PX = 8
+/** 换身吞窗：长按进编辑后第一次 click 吞掉（照 useBentoLayout 的 armClickSwallow 同款） */
+const CLICK_SWALLOW_MS = 400
 
-/** 左钮引导气泡最长驻留：到点自动收起 */
-const HINT_MS = 20000
-
-const features = useFeaturesStore()
-const dock = useDockStore()
+const ai = useAiStore()
+const navLayout = useNavLayoutStore()
+const navEdit = useNavEdit('tabbar')
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 
-/** 药丸页签：内核两格 + 插件条目，按 order 排（关掉「运动」模块，这一格就消失） */
-const tabs = computed(() => [...CORE_TABS, ...features.nav('tabbar')].sort((a, b) => a.order - b.order))
+/** 编辑态（模板顶层绑定，自动解包）：进入后页签行以草稿为准渲染、页签按钮化 */
+const editing = navEdit.editing
 
-/** 左钮候选：导航轨里的模块主页面（已按插件开关过滤），去掉 Dock 里已有的落点 */
-const candidates = computed(() => {
-  const taken = new Set([...tabs.value.map((t) => t.route), AI_TAB.route])
-  return features.nav('rail').filter((n) => !taken.has(n.route))
+/** 输入行显隐：编辑态与 AI 页收起（理由见文件头）。它同时驱动 <html data-dock-quick> */
+const showQuick = computed(() => !editing.value && route.name !== 'ai')
+
+/**
+ * 页签行：布局 ∩ 目录 ∩ 启用态。编辑态以**草稿**为准 —— 草稿里可能有刚从候选加回的
+ * 条目（不在已存布局里），渲染源要并上候选才是完整的「启用目录」，只按 items 找会把它丢掉。
+ */
+const tabs = computed<NavEntry[]>(() => {
+  if (!navEdit.editing.value) return navLayout.items('tabbar')
+  const byId = new Map(
+    [...navLayout.items('tabbar'), ...navLayout.candidates('tabbar')].map((it) => [it.id, it]),
+  )
+  return (navEdit.draft.value ?? [])
+    .map((id) => byId.get(id))
+    .filter((it): it is NavEntry => !!it)
 })
 
-/** 左钮落点：存量落点失效（模块被关）时回落到候选第一项；一个候选都没有就整块不画 */
-const leftTab = computed(
-  () => candidates.value.find((c) => c.route === dock.leftRoute) ?? candidates.value[0] ?? null,
-)
+/** 固定件 id 集（主页 / 我 / AI）：徽标显隐与「做不做拖拽把手」按它判定 —— 固定件无徽标、
+    不可拖，是排序的边界 */
+const fixedIds = computed(() => new Set(tabs.value.filter((t) => t.fixed).map((t) => t.id)))
 
-/** 药丸里当前选中的那一格（-1 = 这一页不在 Dock 上，此时不画任何活动底） */
-const tabIndex = computed(() => tabs.value.findIndex((t) => route.name === t.route))
+/** 页签行里当前选中的那一格（-1 = 这一页不在 Dock 上，此时不画任何活动底） */
+const tabIndex = computed(() => tabs.value.findIndex((t) => route.name === t.id))
 
 /**
  * 液态活动底（丰富档）：挂上之后原来那层纯色活动底让位（见 base.css 的 .goo 规则）。
@@ -75,202 +103,356 @@ const goo = computed(() => motionRich.value && tabIndex.value >= 0)
 
 /** 按压定向光晕（丰富档）：一份监听挂在整个 Dock 上，按 selector 就近点亮被按的那一格 */
 const dockEl = ref<HTMLElement | null>(null)
-usePressGlow(dockEl, '.dock-tab, .dock-slot')
+usePressGlow(dockEl, '.dock-tab')
 
-/* ---------- 左钮：短按直达 / 长按换落点 ---------- */
-const pickerOpen = ref(false)
-/** 菜单锚点：被长按的那颗左钮 —— bind 菜单从它旁边弹出（Dock 贴底，AppMenu 会自动翻到上方） */
-const pickerAnchor = ref<HTMLElement | null>(null)
-let pressTimer: ReturnType<typeof setTimeout> | null = null
-let longPressed = false
+/* ---------- 编辑态拖拽：手势骨架在 useNavDrag（与便当同手感），换位落在草稿里 ---------- */
+const drag = useNavDrag({
+  listEl: dockEl,
+  orderIds: () => navEdit.draft.value ?? [],
+  move: (id, to) => navEdit.moveInDraft(id, to),
+  snapshot: () => navEdit.draft.value?.slice() ?? [],
+  restore: (ids) => {
+    if (navEdit.draft.value) navEdit.draft.value = ids
+  },
+})
 
-/* ---------- 左钮引导气泡：每天一次 / 最长 20s ---------- */
-const hintOpen = ref(false)
-/** 气泡锚点：底栏左钮（模板 ref）。气泡从它右上角弹出 */
-const leftBtnEl = ref<HTMLElement | null>(null)
-let hintTimer: ReturnType<typeof setTimeout> | null = null
+/* ---------- AI 快捷输入行：草稿、跨页发送与语音 ---------- */
+const quickDraft = ref('')
 
-function clearHintTimer(): void {
-  if (hintTimer) {
-    clearTimeout(hintTimer)
-    hintTimer = null
+/** 发送：递给 AI 页即发（askFrom 的约定是「调用方负责跳转」；busy 时那边落输入框不丢话） */
+function sendQuick(): void {
+  const text = quickDraft.value.trim()
+  if (!text) return
+  ai.askFrom(text)
+  quickDraft.value = ''
+  void router.push({ name: 'ai' })
+}
+
+/** 「+」：带草稿去 AI 页的完整输入条（附件 / 文档 / 引用在那边），只填不发 */
+function openFullComposer(): void {
+  const text = quickDraft.value.trim()
+  if (text) ai.handOffDraft(text)
+  quickDraft.value = ''
+  void router.push({ name: 'ai' })
+}
+
+/* 语音输入（按住说话 / 轻点连听）：链路与 AI 页同一条（system/aiVoiceInput），
+   手势结算也同一套 —— 按住松开收尾上屏，轻点转入连听。识别文字先进底栏草稿，
+   由用户自己按发送：半截话不该不打招呼就飞出去。 */
+let voicePressing = false
+let voiceDownAt = 0
+
+function onVoiceWindowUp(): void {
+  if (!voicePressing) return
+  voicePressing = false
+  window.removeEventListener('pointerup', onVoiceWindowUp)
+  window.removeEventListener('pointercancel', onVoiceWindowUp)
+  if (!aiVoiceInput.active) return
+  if (Date.now() - voiceDownAt < VOICE_TAP_MS) {
+    // 轻点 → 转入连听：等「停止信号」（音量占优的发言人停顿）自动结束，或再点一次手动结束
+    aiVoiceSetContinuous()
+  } else {
+    // 按住松开 → 结束并把识别文字送进输入行
+    void aiVoiceStop()
   }
 }
 
-function closeHint(): void {
-  hintOpen.value = false
-  clearHintTimer()
+function onDockVoiceDown(e: PointerEvent): void {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  e.preventDefault() // 不抢焦点：输入行光标与软键盘保持原状
+  voiceDownAt = Date.now()
+  voicePressing = true
+  window.addEventListener('pointerup', onVoiceWindowUp)
+  window.addEventListener('pointercancel', onVoiceWindowUp)
+  void aiVoiceStart('hold').then((ok) => {
+    if (!ok) {
+      onVoiceWindowUp() // 起播失败：先复位本地按压状态再提示
+      if (aiVoiceInput.lastError) toast.toast(aiVoiceInput.lastError)
+    }
+  })
 }
 
-/** 点按左钮时考虑弹出：已「不再提醒」或今天已提示过则不动 */
-function maybeShowHint(): void {
-  if (dockHintDismissed.value || dockHintShownToday()) return
-  markDockHintShown() // 弹出即计入当天：20s 自动收起也算提示过，当天不再打扰
-  hintOpen.value = true
-  clearHintTimer()
-  hintTimer = setTimeout(closeHint, HINT_MS)
-}
-
-/** 「不再提醒」：永久关闭 + 收起 */
-function dismissHint(): void {
-  dismissDockHint()
-  closeHint()
-}
-
-function cancelPress(): void {
-  if (pressTimer) {
-    clearTimeout(pressTimer)
-    pressTimer = null
+/** 识别结果上屏。showQuick 闸门：AI 页自己的语音会话（那边有自己的订阅）不该再被
+    底栏接一手 —— 底栏只在「输入行可见」时认领结果。 */
+function onVoiceDone({ text, reason }: AiVoiceResult): void {
+  if (!showQuick.value) return
+  if (text) {
+    quickDraft.value = appendVoiceText(quickDraft.value, text)
+  } else if (reason === 'error') {
+    toast.toast(aiVoiceInput.lastError || '识别失败')
+  } else if (reason !== 'cancel') {
+    toast.toast('没有识别到内容')
   }
 }
 
-function startPress(e: PointerEvent): void {
-  longPressed = false
-  // 锚点就取被按住的那颗左钮：长按开了菜单之后，菜单要贴着它出现
-  pickerAnchor.value = e.currentTarget as HTMLElement
-  cancelPress()
-  pressTimer = setTimeout(() => {
-    pressTimer = null
-    longPressed = true
-    pickerOpen.value = true
-    closeHint() // 用户已经在长按自定义了：气泡的使命完成，先收起
+onAiVoiceResult(onVoiceDone)
+
+// 语音是页面手势：换页即取消（不把半截话留在运行时里），按压中的窗口监听一并拆掉
+watch(
+  () => route.name,
+  () => {
+    if (aiVoiceInput.active) void aiVoiceCancel()
+  },
+)
+
+/* 显隐写到 <html>：浮层（AppMenu / ActionSheet / Toast）靠 --dock-top 避让底栏，
+   输入行在Editing / AI 页收起时整条 Dock 矮一截，避让高度必须跟着变（tokens.css）。 */
+watch(
+  showQuick,
+  (on) => {
+    document.documentElement.dataset.dockQuick = on ? 'on' : 'off'
+  },
+  { immediate: true },
+)
+
+/* ---------- 页签行：长按进编辑态（仅非编辑态；编辑态里按住页签是拖拽把手） ---------- */
+let tabPressTimer: ReturnType<typeof setTimeout> | null = null
+let tabPressX = 0
+let tabPressY = 0
+let tabLongPressed = false
+
+function cancelTabPress(): void {
+  if (tabPressTimer) {
+    clearTimeout(tabPressTimer)
+    tabPressTimer = null
+  }
+}
+
+function startTabPress(e: PointerEvent): void {
+  // 编辑态优先门：已有会话（含其他容器）时不再起长按 —— 按住页签的语义交给拖拽
+  if (navEdit.activeScope.value !== null) return
+  tabLongPressed = false
+  tabPressX = e.clientX
+  tabPressY = e.clientY
+  cancelTabPress()
+  tabPressTimer = setTimeout(() => {
+    tabPressTimer = null
+    tabLongPressed = true
+    navEdit.enter()
+    armClickSwallow() // 元素换身窗口（RouterLink → button 顶替）漏网的 click 一并吞掉
   }, LONG_PRESS_MS)
 }
 
-function onLeftClick(e: MouseEvent): void {
-  // 长按已经开过选择器：这次抬手不该再当成一次跳转
-  if (longPressed) {
+/** 按住后的位移：超过 slop 是滚动不是长按，取消计时（真机上的长按常先被滚动试探） */
+function onTabPointerMove(e: PointerEvent): void {
+  if (!tabPressTimer) return
+  if (Math.hypot(e.clientX - tabPressX, e.clientY - tabPressY) > SLOP_PX) cancelTabPress()
+}
+
+function onTabClick(e: MouseEvent): void {
+  // 长按已经进过编辑态：这次抬手不该再当成一次跳转（DOM 换身通常已发生，这是兜底）
+  if (tabLongPressed) {
     e.preventDefault()
+    tabLongPressed = false
+  }
+}
+
+/** 编辑态整格点击 = 撤回（「−」徽标是 aria-hidden 的装饰，键盘 Enter / 读屏激活落在
+    整格上 —— 与 rail 编辑态的整格语义同一套）；固定件由 removeFromDraft 拒绝，no-op。
+    长按进编辑后松手的那次 click 会落在换身后的 button 上（旧 RouterLink 已卸载，
+    浏览器把 click 派给 release 目标）—— 那一下是「进编辑」的尾巴，不是撤回指令；
+    拖拽松手的幽灵 click 由 useNavDrag 的吞窗兜住，两件事分开。 */
+function onEditTabClick(id: string): void {
+  if (tabLongPressed) {
+    tabLongPressed = false
     return
   }
-  maybeShowHint()
-  if (leftTab.value) void router.push({ name: leftTab.value.route })
+  navEdit.removeFromDraft(id)
 }
 
-function closePicker(): void {
-  pickerOpen.value = false
-  longPressed = false
+/** 页签按下：编辑态 = 可移动项的拖拽把手（固定件是边界，不做把手）；非编辑态 = 长按计时起点 */
+function onTabDown(e: PointerEvent, id: string): void {
+  if (navEdit.editing.value) {
+    if (fixedIds.value.has(id)) return
+    tabLongPressed = false // 新的一次按下是新手势：清掉长按进编辑的尾巴标记（部分内核不发释放 click）
+    drag.onHandleDown(e, id)
+    return
+  }
+  startTabPress(e)
 }
 
-/** 候选带上各自的模块图标：bind 菜单是「图标 + 文字」版，扫一眼就知道是哪个模块 */
-const pickerActions = computed(() =>
-  candidates.value.map((c) => ({ label: c.label, value: c.route, icon: c.icon })),
-)
+/* ---------- 换身吞窗：只吞「还会导航的旧页签」 ----------
+   与 useBentoLayout 的 armClickSwallow 同款 capture 结构，但收敛了吞的范围：长按进编辑后
+   换身窗口期里点到的仍是 RouterLink（<a class="dock-tab">）才会跳走，要吞；编辑态的新 UI
+   （button 页签 / 「−」徽标 / 托盘）点上去无害，绝不能误吞 —— 安卓上长按松手多半
+   不发 click，全量吞窗会一直挂满 400ms，把进编辑后的第一次真实点按吃掉。 */
+let swallowAt = 0
+function armClickSwallow(): void {
+  swallowAt = Date.now()
+  document.addEventListener('click', onSwallowClick, { capture: true })
+}
+
+function onSwallowClick(e: MouseEvent): void {
+  const stale = !!(e.target as HTMLElement | null)?.closest('a.dock-tab')
+  if (Date.now() - swallowAt < CLICK_SWALLOW_MS && stale) {
+    e.preventDefault()
+    e.stopPropagation()
+    return
+  }
+  // 首个吞不掉的 click（点到编辑态 UI）或出窗：摘掉监听，一次性吞窗只管换身这一段
+  document.removeEventListener('click', onSwallowClick, { capture: true })
+}
 
 const dockItems = computed(() =>
-  tabs.value.map((item) => ({ id: item.route, label: item.label, icon: item.icon })),
+  tabs.value.map((item) => ({ id: item.id, label: item.label, icon: item.icon })),
 )
-const leftItem = computed(() =>
-  leftTab.value
-    ? { id: leftTab.value.route, label: leftTab.value.label, icon: leftTab.value.icon }
-    : undefined,
-)
-const rightItem = { id: AI_TAB.route, label: AI_TAB.label, icon: AI_TAB.icon }
 
 onBeforeUnmount(() => {
-  cancelPress()
-  clearHintTimer()
+  cancelTabPress()
+  voicePressing = false
+  window.removeEventListener('pointerup', onVoiceWindowUp)
+  window.removeEventListener('pointercancel', onVoiceWindowUp)
+  if (aiVoiceInput.active) void aiVoiceCancel()
+  // 吞窗可能已装弹但 click 还没来（长按进编辑后立刻卸载）：摘掉监听，别留悬空的 handler
+  document.removeEventListener('click', onSwallowClick, { capture: true })
+  // data-dock-quick 是本组件写到 <html> 上的：卸载（回到桌面壳）时撤掉，别留悬空让位
+  delete document.documentElement.dataset.dockQuick
 })
 </script>
 
 <template>
-  <nav ref="dockEl" class="dock" aria-label="主导航">
-    <!-- 图标 24 / 标签 10-11 Medium / 图标与标签 2：底部页签的规格（原生三块玻璃
-         与画质预览页的标本共用这份，所以图标尺寸也由装配层给，调用处不再各写 21/22） -->
+  <nav ref="dockEl" class="dock" :class="{ 'is-editing': editing }" aria-label="主导航">
+    <!-- 图标 24 / 标签 10-11 Medium / 图标与标签 2：底部页签的规格（玻璃内前景
+         与画质预览页的标本共用 base.css 那份，图标尺寸由装配层给，调用处不再各写 21/22） -->
     <GlassDockAssembly
       :items="dockItems"
       :active="String(route.name ?? '')"
-      :left="leftItem"
-      :right="rightItem"
       :goo="goo"
-      left-slot="left"
-      right-slot="ai"
+      data-slot="dock"
     >
-      <template #left="{ item, active }">
-        <button
-          ref="leftBtnEl"
-          type="button"
-          class="dock-slot glow-layer"
-          :class="{ active }"
-          :aria-label="`${item.label}（长按更换）`"
-          @pointerdown="startPress($event)"
-          @pointerup="cancelPress"
-          @pointerleave="cancelPress"
-          @pointercancel="cancelPress"
-          @contextmenu.prevent
-          @click="onLeftClick"
-        >
-          <!-- 两侧圆钮是**图标钮**（kit 三块玻璃 = 左圆 + 药丸 + 右圆）：不落标签，
-               名字进 aria-label（长按更换的提示也在里面） -->
-          <component :is="item.icon" :size="22" :stroke-width="active ? 2.2 : 1.9" />
-        </button>
+      <template #quick>
+        <DockQuickBar
+          v-if="showQuick"
+          v-model="quickDraft"
+          @add="openFullComposer"
+          @send="sendQuick"
+          @voice-down="onDockVoiceDown"
+        />
       </template>
       <template #tab="{ item, active }">
-        <RouterLink
-          :to="{ name: item.id }"
+        <!-- 编辑态：页签按钮化 —— 整格点击 = 撤回（键盘 / 读屏可达，「−」只是装饰），
+             可移动项右上角叠「−」徽标、自身是拖拽把手；固定件（主页 / 我 / AI）无徽标
+             不可拖不可撤（aria 保持条目名，不用动作语义骗读屏用户）。非编辑态 RouterLink 原样 -->
+        <button
+          v-if="editing"
+          type="button"
           class="dock-tab glow-layer"
           :class="{ active }"
+          :data-nav-id="item.id"
+          :aria-label="fixedIds.has(item.id) ? undefined : `从底栏移除『${item.label}』`"
           :aria-current="active ? 'page' : undefined"
+          @pointerdown="onTabDown($event, item.id)"
+          @click="onEditTabClick(item.id)"
+          @contextmenu.prevent
         >
           <!-- 页签图标 18（kit 校准二 #34：18 Semibold；24 作废） -->
           <component :is="item.icon" :size="18" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
-        </RouterLink>
-      </template>
-      <template #right="{ item, active }">
+          <span
+            v-if="!fixedIds.has(item.id)"
+            class="dock-badge"
+            data-nav-badge="-"
+            aria-hidden="true"
+            @pointerdown.stop
+            @click.stop="navEdit.removeFromDraft(item.id)"
+          >
+            <Minus :size="11" :stroke-width="2.6" />
+          </span>
+        </button>
         <RouterLink
+          v-else
           :to="{ name: item.id }"
-          class="dock-slot glow-layer"
+          class="dock-tab glow-layer"
           :class="{ active }"
-          :aria-label="item.label"
           :aria-current="active ? 'page' : undefined"
+          @pointerdown="startTabPress"
+          @pointermove="onTabPointerMove"
+          @pointerup="cancelTabPress"
+          @pointercancel="cancelTabPress"
+          @pointerleave="cancelTabPress"
+          @click="onTabClick"
+          @contextmenu.prevent
         >
-          <component :is="item.icon" :size="22" :stroke-width="active ? 2.2 : 1.9" />
+          <component :is="item.icon" :size="18" :stroke-width="active ? 2.4 : 1.9" />
+          <span>{{ item.label }}</span>
         </RouterLink>
       </template>
     </GlassDockAssembly>
 
-    <!-- 长按左钮的选择器：候选来自插件层（关掉模块即从清单中消失）。
-         用 bind 菜单贴着被长按的那颗钮弹（图标 + 文字）——它是「换一个落点」，
-         不是需要遮罩压场的破坏性操作 -->
-    <AppMenu
-      :open="pickerOpen"
-      :anchor="pickerAnchor"
-      title="底栏左键"
-      :actions="pickerActions"
-      @select="dock.setLeftRoute"
-      @close="closePicker"
-    />
+    <!-- 编辑态候选托盘：Dock 上方一条（移动端唯一的候选面）。退出编辑态只有托盘里的
+         「放弃变更 / 保存布局」两条路（useNavEdit 不变量）；进出淡入淡出与气泡同一节奏 -->
+    <Transition name="tray">
+      <DockEditTray v-if="editing" />
+    </Transition>
 
-    <!-- 左钮引导气泡：点按左钮时（每天首次）弹出，提醒它可以长按自定义；最长 20s 自动收起 -->
-    <DockHintBubble
-      :open="hintOpen"
-      :anchor="leftBtnEl"
-      :container="dockEl"
-      :icon="leftItem?.icon"
-      title="底栏左键可自定义"
-      body="长按左下角这个按钮，就能把它换成你常用的模块入口。"
-      @close="closeHint"
-      @dismiss="dismissHint"
-    />
+    <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。输入行收起时不挂：
+         AI 页有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
+    <VoiceInputMask v-if="showQuick" />
   </nav>
 </template>
 
 <style scoped>
-/* 几何归 Dock 自己；三块玻璃的尺寸关系与前景（.dock-block / .dock-tab / .dock-slot）
-   在全局 base.css —— 与画质预览页的标本共用同一份，标本才不会与真实 Dock 长得不像；
-   材质（折射 / 毛玻璃 / 退化）全在 GlassSurface 里。 */
+/* 几何归 Dock 自己：合并玻璃随容器铺满（左右各留 --dock-float 浮边），高度由两行内容
+   定；页签前景（.dock-tab / .dock-navs / .dock-quick）在全局 base.css —— 与画质预览页
+   的标本共用同一份，标本才不会与真实 Dock 长得不像。材质（折射 / 毛玻璃 / 退化）全在
+   GlassSurface 里。 */
 .dock {
   position: fixed;
   bottom: calc(var(--safe-bottom) + var(--dock-float));
-  left: var(--safe-left);
-  right: var(--safe-right);
-  /* 整条 Dock 由内容定宽并居中（两侧圆 62 + 药丸 n×66 + 缝 8），不再吃 --frame-max：
-     宽窗里拉满只会把页签摊散，kit 的 Dock 是一块紧凑的居中组件。 */
-  width: fit-content;
-  margin: 0 auto;
-  height: var(--tabbar-h);
-  display: flex;
+  left: calc(var(--safe-left) + var(--dock-float));
+  right: calc(var(--safe-right) + var(--dock-float));
   z-index: 60;
+}
+
+/* ---------- 编辑态：一切视觉只落在插槽内容里，装配层零改动 ----------
+   GlassDockAssembly / GlassSurface / base.css 的 dock 几何被画质预览页当标本逐像素比对
+   （e2e-perf-glass），徽标与手势样式只在编辑态渲染 / 生效，标本永远不进编辑态。 */
+.dock.is-editing .dock-tab {
+  /* 拖拽面手势前置（useNavDrag 契约 #2）：base.css 给文档滚动层的全局 pan-x pan-y 会把
+     指针事件链接管成 pointercancel —— 安卓上不前置这条，拖拽永不触发。
+     只在编辑态挂：非编辑态不碰手势链，页面滚动照旧 */
+  touch-action: none;
+  cursor: grab;
+}
+
+/* 「−」徽标：可移动页签右上角的小圆。玻璃 overflow:hidden，徽标落在页签内沿
+   （右上角空档：图标居中占 24–42，徽标占 48–64，互不打架） */
+.dock-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-float);
+}
+
+/* 托盘进出：淡入 + 轻微上浮（与气泡同一套节奏）；离场瞬时淡出 */
+.tray-enter-active {
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.tray-leave-active {
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.tray-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.tray-leave-to {
+  opacity: 0;
+}
+
+html[data-motion='off'] .tray-enter-from {
+  transform: none;
 }
 </style>

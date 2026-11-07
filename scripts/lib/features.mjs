@@ -21,3 +21,18 @@ export const GRAB_PLUGIN_ON = `localStorage.setItem('rein.features.v1', JSON.str
 export async function presetFeatureFlags(cdp) {
   await cdp('Page.addScriptToEvaluateOnNewDocument', { source: GRAB_PLUGIN_ON })
 }
+
+/**
+ * 在导航之前把导航布局预置好（`rein.navLayout.v1`，见 `src/stores/navLayout.ts`）。
+ * 与 presetFeatureFlags 同一条时机纪律：navLayout store 在应用启动时就读了 localStorage，
+ * 进页面之后再写它不会生效，必须走 `Page.addScriptToEvaluateOnNewDocument`。
+ *
+ * @param {(method: string, params?: object) => Promise<unknown>} cdp 各剧本自己的 CDP 封装
+ * @param {{ tabbar?: string[], rail?: string[], topbar?: string[] }} payload
+ *   各容器的有序 id（tabbar/rail = 路由名，topbar = 按钮 id）；未给的容器按目录缺省渲染
+ */
+export async function presetNavLayout(cdp, payload) {
+  await cdp('Page.addScriptToEvaluateOnNewDocument', {
+    source: `localStorage.setItem('rein.navLayout.v1', JSON.stringify(${JSON.stringify({ v: 1, ...payload })}))`,
+  })
+}

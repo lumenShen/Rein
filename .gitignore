@@ -114,3 +114,6 @@ src-tauri/resources/test/heic/
 scratch/
 # HarmonyOS 设计文档的批量配图缓存（35MB，可由 fetch-hw-images.mjs 复现）
 docs/design/huawei/img-all/
+
+# Qoder IDE 本地任务笔记（设备本地，不入库）
+.qoder/

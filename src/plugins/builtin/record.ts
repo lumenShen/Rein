@@ -22,4 +22,7 @@ export const recordPlugin = definePlugin({
   toggleable: true,
   defaultEnabled: true,
   routes: ['record'],
+  // 桌面顶栏的功能按钮（§7.1 种子三颗之一）：「开始/停止」就地一步，图标与模块 icon 同源
+  // （AudioLines）；动作由宿主 TopbarActions.vue 接到 system/recorderRuntime 上
+  topbar: [{ id: 'record.topbar', label: '录音', icon: AudioLines, action: 'record-toggle', order: 20 }],
 })

@@ -240,7 +240,9 @@ export async function runAppStage(ctx) {
     /* ---------- A2.1 标题栏 DOM + Win32 样式 ---------- */
     const dom = await main.eval("(() => { const tb = document.querySelector('.titlebar'); const btns = [...document.querySelectorAll('.titlebar .wbtn')]; return { titlebar: !!tb, dragRegion: tb ? tb.getAttribute('data-tauri-drag-region') : null, titlebarH: tb ? Math.round(tb.getBoundingClientRect().height) : null, brand: tb ? tb.querySelector('.brand .word')?.textContent : null, btns: btns.map((b) => b.getAttribute('aria-label')), wbtnCount: btns.length, rzCount: document.querySelectorAll('.rz-zone').length, rzRoot: !!document.querySelector('.rz'), shell: document.querySelector('.win-shell')?.className ?? null } })()")
     ok('A2.1a 主窗口自绘标题栏：.titlebar + 品牌 + 三颗 .wbtn + 拖拽区', dom.titlebar && dom.dragRegion === 'deep' && dom.brand === 'Rein' && dom.wbtnCount === 3 && dom.btns.join('|') === '最小化|最大化|关闭', JSON.stringify(dom))
-    ok('A2.1b 八向缩放热区 DOM = 8（窄窗 .win-shell--narrow）', dom.rzCount === 8 && dom.rzRoot && String(dom.shell).indexOf('win-shell--narrow') >= 0 && Math.abs(dom.titlebarH - 40) <= 1, JSON.stringify({ rz: dom.rzCount, shell: dom.shell, h: dom.titlebarH }))
+    // 2026-11 起：桌面端只允许桌面视图（App.vue deskShell 平台锁定）——真窗口被压到
+    // 430 窄也不回退移动壳，这里反过来当新政策的回归断言用。
+    ok('A2.1b 八向缩放热区 DOM = 8；430 窄窗恒为 .win-shell--desk（窄窗壳已退役）', dom.rzCount === 8 && dom.rzRoot && String(dom.shell).indexOf('win-shell--desk') >= 0 && String(dom.shell).indexOf('win-shell--narrow') < 0 && Math.abs(dom.titlebarH - 40) <= 1, JSON.stringify({ rz: dom.rzCount, shell: dom.shell, h: dom.titlebarH }))
     const mainStyle = win('info', { Hwnd: mainHwnd })
     /* 判据是**非客户区顶部 inset**，不是 WS_CAPTION 样式位：tao 0.35 的 undecorated 实现是
        「保留 WS_CAPTION 位 + 用 WM_NCCALCSIZE 把非客户区归零」，样式位永远在（2026-10-21 实测

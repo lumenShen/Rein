@@ -17,13 +17,17 @@
  *   4d. 对外服务网关拿到模块快照（关掉的模块一个都不在里面）—— Rust 侧门禁的前端那一半
  *   5. 重新打开「运动」→ 入口恢复
  *   6. 刷新后开关状态保持（localStorage 持久化）
- *   7. 底栏三块（左自定义圆钮 / 中药丸 / 右 AI 圆钮）：长按左钮换落点、关掉模块后回落
- *   7b. 左钮引导气泡：点按弹出（每天一次）/「我知道了」只关这次 /「不再提醒」永久关闭
+ *   7. 合并底栏（2026-11：输入行 + 页签行一块玻璃）：输入行在场、页签行听开关
+ *      （关掉模块条目消失、重开原位回来）；左钮换落点与引导气泡已随合并退役
  *   8. 桌面工作台：导航轨与便当快捷入口同样听开关，便当不留空洞
  *   9. 内容域模块（营养 / 专注 / 记账）在桌面端的收法 + 拨动后网关快照同步
  *
  * 前置：npm run dev 已在 1420（或 REIN_E2E_URL 指向其它实例）
  * 运行：node scripts/e2e-feature-toggles.mjs
+ *
+ * 修订（2026-11-07）：底栏左右独立圆钮自 b736528 起是**纯图标钮**（不落文字标签，名字进
+ * aria-label）——落点断言由 textContent 改读 aria-label（长按提示尾巴「（长按更换）」摘掉
+ * 后比对），与 e2e-dock-edit.mjs 的读法同一约定。
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
@@ -155,16 +159,12 @@ const courseStrip = () => evalJS(`!!document.querySelector('[data-testid="hf-cou
 /** 底栏页签文案清单（底栏根类名是 `.dock`，页签类是 `.dock-tab`） */
 const tabLabels = () => evalJS(`[...document.querySelectorAll('.dock .dock-tab')].map((e) => e.textContent.trim())`)
 
-/** 底栏三块：左独立圆钮（自定义）/ 中药丸页签 / 右独立圆钮（AI） */
+/** 合并底栏（2026-11）：输入行（AI 快捷输入）+ 页签行（固定件 + 插件条目） */
 const dockParts = () =>
-  evalJS(`(() => {
-    const txt = (sel) => document.querySelector(sel)?.textContent.trim() ?? null
-    return {
-      left: txt('.dock [data-slot="left"] .dock-slot'),
-      pill: [...document.querySelectorAll('.dock .dock-tab')].map((e) => e.textContent.trim()),
-      ai: txt('.dock [data-slot="ai"] .dock-slot'),
-    }
-  })()`)
+  evalJS(`(() => ({
+    quick: !!document.querySelector('.dock .dock-quick'),
+    tabs: [...document.querySelectorAll('.dock .dock-tab')].map((e) => e.textContent.trim()),
+  }))()`)
 
 /** 打开/关闭某模块开关（功能页的行按名字定位） */
 const setToggle = (name, on) =>
@@ -222,123 +222,10 @@ async function main() {
 
     const dock0 = await dockParts()
     ok(
-      '底栏三块：左独立圆钮=课表 · 中药丸=主页/运动/我 · 右独立圆钮=AI',
-      dock0.left === '课表' && dock0.ai === 'AI' && dock0.pill.join() === '主页,运动,我',
+      '合并底栏：输入行在场 · 页签行 = 主页/运动/我/AI（固定件 + 插件条目）',
+      dock0.quick && dock0.tabs.join() === '主页,运动,我,AI',
       JSON.stringify(dock0),
     )
-
-    /* ---- 1b. 左钮：长按换落点（自定义 + 持久化） ---- */
-    await evalJS(`(() => {
-      const btn = document.querySelector('.dock [data-slot="left"] .dock-slot')
-      btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-    })()`)
-    await sleep(700)
-    // 长按换落点走 AppMenu 的 bind 模式：面板是 .panel[role="menu"]（SheetModal 的 .panel 是 dialog）
-    const picker = await evalJS(`(() => {
-      const panel = document.querySelector('.panel[role="menu"]')
-      const items = panel ? [...panel.querySelectorAll('.item')] : []
-      return {
-        open: !!panel,
-        opts: items.map((e) => e.textContent.trim()),
-        panelW: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
-        // 「图标 + 文字」版：每一项都要有自己的 svg，且图标列定宽 20（标签左缘对齐）
-        icons: items.filter((e) => !!e.querySelector('svg')).length,
-        icW: items[0] ? getComputedStyle(items[0].querySelector('.ic')).width : '',
-      }
-    })()`)
-    ok(
-      '长按左钮弹出选择器（候选来自插件层的模块主页面）',
-      picker.open && picker.opts.includes('营养') && picker.opts.includes('待办'),
-      picker.opts.join(' · '),
-    )
-    ok(
-      '选择器是 bind 菜单的「图标 + 文字」版（每项带图标、图标列定宽 20）',
-      picker.icons === picker.opts.length && picker.opts.length > 0 && picker.icW === '20px',
-      `项数 ${picker.opts.length} · 带图标 ${picker.icons} · 图标列 ${picker.icW}`,
-    )
-    ok(
-      '菜单宽度参数生效（200–300px 区间内）',
-      picker.panelW >= 200 && picker.panelW <= 300,
-      `${picker.panelW}px`,
-    )
-    await clickText('.panel[role="menu"] .item', '待办')
-    await sleep(500)
-    ok(
-      '选中「待办」后左钮就地换落点',
-      (await evalJS(`document.querySelector('.dock [data-slot="left"] .dock-slot').textContent.trim()`)) === '待办',
-    )
-    await evalJS(`location.reload()`)
-    await waitFor(`!!document.querySelector('.dock [data-slot="left"] .dock-slot')`, 12000, '刷新后的底栏')
-    await sleep(600)
-    ok(
-      '刷新后左钮落点保持（rein.dock.v1）',
-      (await evalJS(`document.querySelector('.dock [data-slot="left"] .dock-slot').textContent.trim()`)) === '待办',
-    )
-    // 收尾：落点放回默认（后面的断言按「课表」写的）。store 是内存单例，删掉本地键
-    // 还得刷新一次才真的回到默认 —— 否则后续断言会看到刚才选中的那一项
-    await evalJS(`localStorage.removeItem('rein.dock.v1')`)
-    await evalJS(`location.reload()`)
-    await waitFor(`!!document.querySelector('.dock [data-slot="left"] .dock-slot')`, 12000, '刷新后的底栏')
-    await sleep(600)
-    await evalJS(`location.hash = '#/'`)
-    await sleep(700)
-
-    /* ---- 1c. 左钮引导气泡：点按弹出 / 每天一次 / 不再提醒（rein.dockHint.v1） ---- */
-    const dockLeftBtn = '.dock [data-slot="left"] .dock-slot'
-    const clickDockLeft = () =>
-      evalJS(`(() => { const b = document.querySelector('${dockLeftBtn}'); if (!b) return false; b.click(); return true })()`)
-    await evalJS(`localStorage.removeItem('rein.dockHint.v1')`)
-    await evalJS(`location.reload()`)
-    await waitFor(`!!document.querySelector('${dockLeftBtn}')`, 12000, '刷新后的底栏')
-    await sleep(600)
-
-    await clickDockLeft()
-    await sleep(500)
-    const hint = await evalJS(`(() => {
-      const el = document.querySelector('.dock-hint')
-      if (!el) return null
-      const cs = getComputedStyle(el)
-      return {
-        title: el.querySelector('.dock-hint__title')?.textContent.trim() ?? '',
-        btns: [...el.querySelectorAll('.dock-hint__actions button')].map((b) => b.textContent.trim()),
-        arrowX: cs.getPropertyValue('--arrow-x').trim(),
-      }
-    })()`)
-    ok(
-      '点按左钮弹出引导气泡（右上方、箭头朝左下、两枚文字按钮）',
-      !!hint && hint.title.includes('底栏左键') && hint.btns.join() === '我知道了,不再提醒',
-      hint ? `${hint.title} · ${hint.btns.join('/')} · --arrow-x=${hint.arrowX}` : '无 .dock-hint',
-    )
-    await shot('1c-dock-hint')
-    ok(
-      '弹出即记账（lastShown 记今天）',
-      (await evalJS(`JSON.parse(localStorage.getItem('rein.dockHint.v1') ?? '{}').lastShown?.length`)) === 10,
-    )
-
-    await clickText('.dock-hint__actions button', '我知道了')
-    await sleep(400)
-    await clickDockLeft()
-    await sleep(400)
-    ok('同一天再点左钮不再出现（每天一次）', !(await evalJS(`!!document.querySelector('.dock-hint')`)))
-
-    // 「不再提醒」：永久关闭；刷新后也不再出现
-    await evalJS(`(() => { const s = JSON.parse(localStorage.getItem('rein.dockHint.v1')); s.lastShown = '2000-01-01'; localStorage.setItem('rein.dockHint.v1', JSON.stringify(s)) })()`)
-    await evalJS(`location.reload()`)
-    await waitFor(`!!document.querySelector('${dockLeftBtn}')`, 12000, '刷新后的底栏')
-    await sleep(600)
-    await clickDockLeft()
-    await sleep(400)
-    ok('跨天后再次弹出', await evalJS(`!!document.querySelector('.dock-hint')`))
-    await clickText('.dock-hint__actions button', '不再提醒')
-    await sleep(400)
-    await evalJS(`location.reload()`)
-    await waitFor(`!!document.querySelector('${dockLeftBtn}')`, 12000, '刷新后的底栏')
-    await sleep(600)
-    await clickDockLeft()
-    await sleep(600)
-    ok('「不再提醒」后刷新也不再出现', !(await evalJS(`!!document.querySelector('.dock-hint')`)))
-    // 收尾：清掉本用例的键，不给后续断言留状态
-    await evalJS(`localStorage.removeItem('rein.dockHint.v1')`)
 
     await evalJS(`location.hash = '#/me'`)
     await waitFor(`document.querySelector('.setrow')`, 8000, '「我」页设置行')
@@ -488,9 +375,11 @@ async function main() {
       afterAll.join(' · '),
     )
     const dockNoCampus = await dockParts()
+    // 此时「运动」还在关着（第 3 步关掉、第 5 步才重开），页签行 = 主页,我,AI；
+    // 课表只投 rail，关掉它动不了底栏
     ok(
-      '关掉课表后：左钮回落到候选第一项（营养），右钮不受影响',
-      dockNoCampus.left === '营养' && dockNoCampus.ai === 'AI',
+      '关掉课表后：底栏不受影响（页签行 = 主页/我/AI，输入行在场）',
+      dockNoCampus.quick && dockNoCampus.tabs.join() === '主页,我,AI',
       JSON.stringify(dockNoCampus),
     )
     await shot('5-home-modules-off')
@@ -627,6 +516,9 @@ async function main() {
 
     /* ---- 6. 桌面工作台：导航轨与便当快捷入口同样听开关 ---- */
     await evalJS(`localStorage.removeItem('rein.features.v1')`)
+    // 新键也进清场清单（rein.navLayout.v1）：上一个跑过的布局编辑剧本若留下状态，
+    // 这里的桌面段断言（rail aria 全集）会被残留布局带偏 —— 防跨剧本泄漏
+    await evalJS(`localStorage.removeItem('rein.navLayout.v1')`)
     await cdp('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false })
     await evalJS(`location.hash = '#/'`)
     await evalJS(`location.reload()`)
@@ -714,10 +606,10 @@ async function main() {
     )
     await shot('8-desktop-content-modules-off')
 
-    // 收尾：恢复默认，避免污染后续手工演示
+    // 收尾：恢复默认，避免污染后续手工演示（导航布局新键同清，防跨剧本泄漏）
     await cdp('Emulation.clearDeviceMetricsOverride')
     await evalJS(`localStorage.removeItem('rein.features.v1')`)
-    await evalJS(`localStorage.removeItem('rein.dock.v1')`)
+    await evalJS(`localStorage.removeItem('rein.navLayout.v1')`)
   } finally {
     try {
       ws?.close()

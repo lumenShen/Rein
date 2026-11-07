@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CalendarDays, ChevronRight, Dumbbell, House, Plus, SlidersHorizontal, Sparkles, User } from 'lucide-vue-next'
+import { ChevronRight, Dumbbell, House, Plus, SlidersHorizontal, Sparkles, User } from 'lucide-vue-next'
 
 import GlassSurface from '@/components/common/GlassSurface.vue'
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
+import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
@@ -76,11 +77,8 @@ const TABS = [
   { id: 'home', label: '主页', icon: House },
   { id: 'sports', label: '运动', icon: Dumbbell },
   { id: 'me', label: '我', icon: User },
+  { id: 'ai', label: 'AI', icon: Sparkles },
 ]
-const previewDock = {
-  left: { id: 'schedule', label: '课表', icon: CalendarDays },
-  right: { id: 'ai', label: 'AI', icon: Sparkles },
-}
 const active = ref('sports')
 
 /** 参数调节面板（液态玻璃管线上的 9 个数字）：入口在标本台正下方 */
@@ -166,20 +164,13 @@ const ICON_BTN = 54
           </GlassSurface>
         </div>
 
-        <!-- ③ 组件装配：直接复用生产 Dock 的共享玻璃装配组件 -->
+        <!-- ③ 组件装配：直接复用生产 Dock 的共享玻璃装配组件。
+             输入行传静态复本（DockQuickBar interactive=false）—— 标本要与真实 Dock
+             逐像素同源，合并底栏的上排也是共享组件渲染，几何/类名不可能漂。 -->
         <div ref="dockRowEl" class="dockrow">
-          <GlassDockAssembly
-            :items="TABS"
-            :active="active"
-            :left="previewDock.left"
-            :right="previewDock.right"
-            :goo="motionRich"
-          >
-            <template #left>
-              <button type="button" class="dock-slot glow-layer" aria-label="课表（自定义落点示例）">
-                <CalendarDays :size="21" />
-                <span>课表</span>
-              </button>
+          <GlassDockAssembly :items="TABS" :active="active" :goo="motionRich" data-slot="bench-dock">
+            <template #quick>
+              <DockQuickBar model-value="" :interactive="false" />
             </template>
             <template #tab="{ item, active: itemActive }">
               <button
@@ -191,12 +182,6 @@ const ICON_BTN = 54
               >
                 <component :is="item.icon" :size="22" :stroke-width="itemActive ? 2.4 : 1.9" />
                 <span>{{ item.label }}</span>
-              </button>
-            </template>
-            <template #right>
-              <button type="button" class="dock-slot glow-layer" aria-label="AI">
-                <Sparkles :size="21" />
-                <span>AI</span>
               </button>
             </template>
           </GlassDockAssembly>
@@ -495,8 +480,8 @@ const ICON_BTN = 54
   font-weight: var(--fw-medium);
 }
 
-/* 底栏标本：三块玻璃的尺寸关系与页签前景在 base.css 的 .dock-block / .dock-tab /
-   .dock-slot（与真实 Dock 共用一份，见那里的注释）—— 这里只管这一行的排版 */
+/* 底栏标本：页签行前景在 base.css 的 .dock-navs / .dock-tab（与真实 Dock 共用一份，
+   见那里的注释），输入行是共享的 DockQuickBar（静态复本）—— 这里只管这一行的排版 */
 .dockrow {
   display: flex;
   align-items: center;

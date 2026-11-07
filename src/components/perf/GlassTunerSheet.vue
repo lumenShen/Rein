@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, type ComponentPublicInstance } from 'vue'
-import { CalendarDays, Dumbbell, House, Sparkles, User } from 'lucide-vue-next'
+import { Dumbbell, House, Sparkles, User } from 'lucide-vue-next'
 
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
+import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import {
@@ -35,9 +36,8 @@ const previewItems = [
   { id: 'home', label: '主页', icon: House },
   { id: 'sports', label: '运动', icon: Dumbbell },
   { id: 'me', label: '我', icon: User },
+  { id: 'ai', label: 'AI', icon: Sparkles },
 ]
-const previewLeft = { id: 'schedule', label: '课表', icon: CalendarDays }
-const previewRight = { id: 'ai', label: 'AI', icon: Sparkles }
 
 /** 小数位从步长推出来（0.02 → 2 位、1 → 0 位）：读数、输入框、吸附共用一套 */
 function decimals(step: number): number {
@@ -97,16 +97,16 @@ const stateText = computed(() =>
       <button type="button" class="reset" :disabled="!glassTuned" @click="resetGlassParams">恢复默认</button>
     </template>
 
-    <!-- 暗场预览：直接渲染生产 Dock 的共享玻璃装配，圆角与尺寸不会再漂 -->
+    <!-- 暗场预览：直接渲染生产 Dock 的共享玻璃装配，圆角与尺寸不会再漂。
+         输入行走 DockQuickBar 静态复本（aria-hidden 整层，预览不吃指针） -->
     <div class="stage stage-dark" aria-hidden="true">
       <span class="glow" />
       <span class="grid" />
-      <GlassDockAssembly
-        :items="previewItems"
-        active="sports"
-        :left="previewLeft"
-        :right="previewRight"
-      />
+      <GlassDockAssembly :items="previewItems" active="sports">
+        <template #quick>
+          <DockQuickBar model-value="" :interactive="false" />
+        </template>
+      </GlassDockAssembly>
     </div>
 
     <!-- 参数只作用于折射分支：没开折射时先说清楚，并给一键切档 -->

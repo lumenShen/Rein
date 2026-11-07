@@ -6,12 +6,18 @@
  *     这条是真实踩过的坑 —— 摆放规则一度写在 App.vue 的 :deep 里，特指度压过 base.css
  *     的 .d-full，页面加了 class 却不生效；这里用「量出来的宽度」把它钉死，比读一遍 CSS 可靠。
  *   3 键盘层：⌘K 面板能开、能过滤、能跳转；⌘I 收信息栏并**落盘**；⌘1–4 换一级页
- *   4 游离子孙让位：teleport 到 body 的悬浮主操作（.fab）必须落在信息栏左侧，
- *     不许压在内容栏中间（它的定位公式是按手机那条居中窄栏写的）
- *   5 窄屏不回归：430×932 下没有 .desk-frame / .desk-main，退回 .app-frame
+ *   4 窄屏不回归：430×932 下没有 .desk-frame / .desk-main，退回 .app-frame
  *
  * 运行：node scripts/e2e-desktop-shell.mjs   （先 `npm run dev`，或设 REIN_E2E_URL）
  * 退出码非 0 表示有断言失败。
+ *
+ * 修订（2026-11-07）：
+ *   · 留白断言 34px → 40px —— --desk-gutter 早前由 34 手感值改为 40（HarmonyOS 间隔参数
+ *     PC 档，tokens.css），App.vue 把它映射成 --page-pad-x；nav-redesign.md §8.4 已核实这是
+ *     存量漂移，断言按当前令牌更新（通栏宽度按两侧各 40 重算）。
+ *   · 撤掉「.fab 落在信息栏左侧」断言 —— 悬浮记录钮在 6601259（v0.7.1）被收回内容流
+ *     （它长期盖住饮食库列表最后两行），全应用再无 .fab / 等价 teleport 悬浮主操作，
+ *     「游离子孙让位」契约暂无承载元素，断言随之退役；base.css 的 .fab 桌面规则成了死样式。
  */
 import { chromium } from 'playwright-core'
 
@@ -84,7 +90,7 @@ try {
     }
   })
   check('三窗格壳存在（导航轨 + 主人区 + 信息栏）', shell.frame && !!shell.rail && !!shell.inspector)
-  check('主人区拿到桌面留白 --page-pad-x = 34px', shell.main === '34px', '实测 ' + shell.main)
+  check('主人区拿到桌面留白 --page-pad-x = 40px（--desk-gutter PC 档）', shell.main === '40px', '实测 ' + shell.main)
   check('grid 路由的 .page 是两栏栅格', (shell.cols ?? '').split(' ').length === 2, '实测 ' + shell.cols)
   check('.page 内容上限 = --desk-content 1040', shell.page.maxW === '1040px', '实测 ' + shell.page.maxW)
   check('<html data-shell="desk">（游离子孙据此适配）', shell.dataShell === 'desk', '实测 ' + shell.dataShell)
@@ -116,7 +122,7 @@ try {
     }
   })
   check('.page > .card.d-full 通栏（工具类压过缺省）', fullSpans.fullCol === '1 / -1', '实测 ' + fullSpans.fullCol + ' / 宽 ' + fullSpans.fullW)
-  check('通栏宽度 = 页面内容宽（两侧各留 34px）', fullSpans.fullW > 0 && Math.abs(fullSpans.fullW - (fullSpans.pageW - 68)) <= 2, '通栏 ' + fullSpans.fullW + ' / 页面 ' + fullSpans.pageW)
+  check('通栏宽度 = 页面内容宽（两侧各留 40px）', fullSpans.fullW > 0 && Math.abs(fullSpans.fullW - (fullSpans.pageW - 80)) <= 2, '通栏 ' + fullSpans.fullW + ' / 页面 ' + fullSpans.pageW)
 
   /* 宽形态页面不该被套栅格：AI 页自己那条阅读栏必须留着 */
   await goto(page, '#/ai')
@@ -126,21 +132,6 @@ try {
     return { display: cs.display, w: Math.round(el.getBoundingClientRect().width) }
   })
   check('wide 路由（AI）不套两栏栅格，保持自持阅读栏', wide.display !== 'grid' && wide.w <= 900, 'display ' + wide.display + ' / 宽 ' + wide.w)
-
-  /* 游离子孙：悬浮主操作让开信息栏 */
-  await goto(page, '#/nutrition/foods')
-  const fab = await page.evaluate(() => {
-    const f = document.querySelector('.fab')
-    if (!f) return null
-    const r = f.getBoundingClientRect()
-    const insp = document.querySelector('.inspector')
-    return { inspLeft: insp ? Math.round(insp.getBoundingClientRect().left) : null, fabRight: Math.round(r.right) }
-  })
-  check(
-    'teleport 的悬浮主操作落在信息栏左侧（不压内容栏中部）',
-    !!fab && fab.inspLeft != null && fab.fabRight <= fab.inspLeft,
-    fab ? '按钮右缘 ' + fab.fabRight + ' / 信息栏左缘 ' + fab.inspLeft : '页面上没有 .fab',
-  )
 
   /* ---------- 键盘层 ---------- */
   console.log('键盘层')
@@ -211,4 +202,4 @@ if (failures.length) {
   for (const f of failures) console.log('  · ' + f)
   process.exit(1)
 }
-console.log('桌面壳守卫通过：三窗格 / 栅格与工具类 / 键盘层 / 游离子孙让位 / 窄屏不回归')
+console.log('桌面壳守卫通过：三窗格 / 栅格与工具类 / 键盘层 / 窄屏不回归')

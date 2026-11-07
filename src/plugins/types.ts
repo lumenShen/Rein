@@ -5,11 +5,47 @@ import type { RouteLocationRaw } from 'vue-router'
 export type NavSurface = 'tabbar' | 'rail'
 
 /**
+ * 布局容器键：navLayout 存储 / 编辑态 / mask 的 scope。
+ * 为什么不复用 NavSurface：topbar 不是插件 nav 贡献面（它有自己的 TopbarContribution），
+ * 把它塞进 NavSurface 会让 NavContribution.surfaces 出现永远不该填的值。
+ */
+export type NavEditScope = 'tabbar' | 'rail' | 'topbar'
+
+/**
  * 工具卡的就地动作名。插件声明「做什么」，由承载工具格的页面实现「怎么做」——
  * 这样插件保持纯声明（不持有组件状态、不 import router），页面保留自己的弹层与路由。
  * 新增动作 = 这里加一个字面量 + 承载页面在 ACTIONS 里实现。
  */
 export type ToolAction = 'smart-add' | 'add-workout' | 'voice-session' | 'diet-history'
+
+/**
+ * 顶栏功能按钮的就地动作名。语义同 ToolAction（上面的注释原样适用）：
+ * 插件声明「做什么」，壳层宿主 TopbarActions.vue 实现「怎么做」——
+ * 这样插件保持纯声明（不持有组件状态、不 import router），宿主保留自己的运行时接线。
+ * 新增动作 = 这里加一个字面量 + 宿主在 ACTIONS 表里实现。
+ */
+export type TopbarAction = 'focus-toggle' | 'record-toggle' | 'voice-session'
+
+/**
+ * 顶栏功能按钮贡献：纯数据，不 import router、不持有组件状态。
+ * 与 ToolContribution.id 是**两个独立的命名空间**，但统一用 `<模块>.topbar` 前缀 ——
+ * ToolContribution.id 与渲染 key / 开关埋点共用，前缀错开才不会在埋点里把
+ * 「顶栏按钮」读成「工具卡」，也避免与既有 'voice.session' 这类工具卡 id 撞字符串。
+ */
+export interface TopbarContribution {
+  /** 全局唯一 id，顶栏布局存储（navLayout 的 topbar 字段）用它 */
+  id: string
+  label: string
+  icon: Component
+  /** 就地动作（优先于 to） */
+  action?: TopbarAction
+  /** 纯跳转（与 action 二选一，同 ToolContribution.to） */
+  to?: RouteLocationRaw
+  /** 同容器内升序排列；插件贡献用 100 起步留出插入空间 */
+  order: number
+  /** 用户从未编辑过顶栏时的缺省显隐（缺省 true） */
+  defaultOn?: boolean
+}
 
 /** 导航贡献：一个条目可同时出现在两种容器里（surfaces 决定落点） */
 export interface NavContribution {
@@ -20,6 +56,10 @@ export interface NavContribution {
   surfaces: NavSurface[]
   /** 同容器内升序排列；内核条目占用 0~99，插件用 100 起步留出插入空间 */
   order: number
+  /** 按容器覆盖标签（缺省回落 label）：Dock 药丸显示「主页」、左栏显示「总览」——
+      这枚差别从前由 TabBar / DesktopRail 两份硬编码各自维护，收进目录后是同一枚
+      条目在两个容器上的投影 */
+  labels?: Partial<Record<NavSurface, string>>
 }
 
 /** 主页「常用工具」格里的动作卡 */
@@ -68,4 +108,6 @@ export interface PluginSpec {
   routes?: string[]
   tools?: ToolContribution[]
   nav?: NavContribution[]
+  /** 桌面顶栏的功能按钮贡献（用户可在顶栏编辑态里决定留哪些、什么顺序） */
+  topbar?: TopbarContribution[]
 }

@@ -33,6 +33,9 @@
      顶成它。亮色 = 4% 井压白卡的精确不透明结果（255-(255-29)×0.04 ≈ 246）。 */
   --surface-inset-solid: #f6f6f6;
   --scrim: rgba(0, 0, 0, 0.4); /* 全屏遮罩，弹层统一深浅 */
+  /* 导航编辑态的「退后一层」遮罩（NavEditMask，z 45）：比 --scrim 轻得多 —— 它是层级信号
+     不是模态，只提示「下面的页面暂时不可用」，页面读感还在 */
+  --scrim-edit: rgb(0, 0, 0, 0.05);
   --switch-knob: #ffffff; /* 开关滑块：亮暗色同为白（iOS 规格），暗色下靠影子托底 */
   /* 禁用态的不透明度。全库现在有 8 种各写各的禁用浓度（0.4 / 0.45 / 0.5 / 0.55 …），
      这一档是收编的目标值：**本轮只落令牌**（逐组件替换不在本轮），谁要压暗禁用元素
@@ -575,8 +578,9 @@
   --frame-max: 480px;
   --frame-max-wide: 1240px; /* 桌面工作台 · 主人区内容上限（便当总览/一日脊柱） */
   --tabbar-h: 58px;
-  /* 单个页签的定宽（kit 校准二 #33：346 药丸 / 5 页签 ≈ 66）。药丸宽 = n × 66 + 内距。 */
-  --dock-tab-w: 66px;
+  /* 合并底栏（2026-11）· AI 快捷输入行的高度：一块玻璃 = 输入行 + 页签行，
+     输入行收起（AI 页 / 编辑态 / 桌面壳）时 Dock 矮的就是这一截。 */
+  --dock-quick-h: 56px;
   /* 自绘标题栏（桌面无边框窗口）的高度：主窗口 40 / 浮窗紧凑版 32。
      40 是「44×30 的窗口按钮上下各留 5」的最小整档，也是 Windows 标题栏的常规手感；
      浮窗是 430×92 的固定窗口，标题栏压到 32 才装得下浮条本体（GLOBAL-FLOAT §3.4）。 */
@@ -584,7 +588,10 @@
   --titlebar-h-compact: 32px;
   /* 悬浮 Dock 的几何：离底边的悬浮距离与上缘位置。
      底部悬浮元素（FAB / Toast / ActionSheet）用 --dock-top 避让，别再各自拼公式——
-     那些公式是按「贴底整条 tabbar」算的，Dock 改悬浮后会把 gap 吃掉。 */
+     那些公式是按「贴底整条 tabbar」算的，Dock 改悬浮后会把 gap 吃掉。
+     输入行的让位由 <html data-dock-quick> 开关（TabBar 按显隐写）：输入行可见时
+     Dock 高 --dock-quick-h，其余形态回到纯页签行的高度 —— 桌面壳不挂 TabBar，
+     缺省（无属性）就是旧值，桌面一个像素都不多让。 */
   --dock-float: 14px;
   --dock-top: calc(var(--safe-bottom) + var(--dock-float) + var(--tabbar-h));
   /* 手机屏幕边距取 HarmonyOS 间隔规范的泛手机三边：左右 16 / 顶 36 / 底 28。
@@ -719,6 +726,11 @@ html[data-shell='desk'] {
     --surface-inset: color-mix(in srgb, var(--text-1) 4%, transparent);
     /* 实底等值：4% 井压深卡（--surface #1c1c1e）的精确不透明结果。 */
     --surface-inset-solid: #252527;
+
+    /* 导航编辑态遮罩（亮色 0.05）在暗色下几乎不可见 —— 5% 黑压在 #000 上等于没有。
+       抬到 0.28：仍比 --scrim（0.4）轻 —— 它是层级信号不是模态，双档结构与
+       --glass-scroll-edge 的亮暗思路一致。 */
+    --scrim-edit: rgb(0, 0, 0, 0.28);
 
     --glass-fill: rgba(40, 40, 46, 0.5);
     --glass-rim-hi: rgba(255, 255, 255, 0.45);
