@@ -970,7 +970,7 @@ function requestCloseEditor(): void {
             按字面关键词匹配，零配置、所有设备可用，改完立即生效。
           </template>
           <template v-else-if="mode === 'local'">
-            在设备上运行内置的语义模型，意思相近也能搜到，数据不出设备。首次启用会先在后台建一段时间的索引。
+            在设备上运行本地语义模型（需先下载），意思相近也能搜到，数据不出设备。首次启用会先在后台建一段时间的索引。
           </template>
           <template v-else>
             调用兼容 OpenAI 的云端服务，速度快；索引文本会发送给该服务商。
@@ -1020,8 +1020,8 @@ function requestCloseEditor(): void {
           <h3>本地模型</h3>
         </div>
         <p class="hint">
-          只有最小那颗模型编进安装包；更大的中文模型按需下载，可随时换、可删除。
-          换模型后旧向量会作废，后台会按新模型重算。
+          模型不随安装包分发，按需下载，可随时换、可删除。换模型后旧向量会作废，
+          后台会按新模型重算；没下载模型时检索会自动按关键词进行。
         </p>
         <ul class="models">
           <li
@@ -1053,7 +1053,7 @@ function requestCloseEditor(): void {
                 <Download :size="13" /> 下载
               </button>
               <button
-                v-else-if="!m.bundled"
+                v-else
                 class="btn ghost tiny"
                 :disabled="m.id === localModel || Boolean(modelBusy)"
                 :title="m.id === localModel ? '正在使用中：先换一个模型再删' : '删除已下载的模型文件'"
@@ -1061,7 +1061,6 @@ function requestCloseEditor(): void {
               >
                 <Trash2 :size="13" />
               </button>
-              <span v-else class="chip">内置</span>
             </div>
           </li>
         </ul>

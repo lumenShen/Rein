@@ -291,7 +291,9 @@ async function main() {
 
     const set1 = await kb('settingsSet', { embeddingMode: 'local' })
     ok('settingsSet：切到本地模型', set1.embeddingMode === 'local')
-    ok('settingsSet：本地模型下 embedderReady', (await kb('status')).embedderReady === true)
+    const catalog = await kb('embedModels')
+    ok('本地模型目录：模型都不内置、默认未下载', catalog.models.length > 0 && catalog.models.every((m) => !m.installed))
+    ok('本地模型未下载时不算就绪（检索回落关键词）', (await kb('status')).embedderReady === false)
 
     const set2 = await kb('settingsSet', { embeddingMode: 'cloud', cloudBaseUrl: 'https://api.example.com/v1', cloudModel: 'bge-m3' })
     ok('settingsSet：云端配置落库', set2.cloudBaseUrl === 'https://api.example.com/v1' && set2.cloudModel === 'bge-m3')

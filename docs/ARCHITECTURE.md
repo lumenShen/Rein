@@ -240,7 +240,7 @@
 
 一个库装下多种来源：日程与附件、运动记录与逐组明细、训练课程、饮食与体测、健康方案、语音纪要、历史聊天，以及 AI 从对话中提炼的长期记忆。**长期记忆不是独立系统**，它是 `kb_docs` 的一类来源（`source_type='memory'`），因此天然进入同一套检索；反过来，全部来源又都是 LLM 的检索目标。
 
-- **检索三档**（`kb_settings.embedding_mode`，默认 `keyword`）：`keyword` 纯 FTS5 trigram + 结构化过滤，零依赖全平台可用；`local` 进程内 ONNX Runtime + 内置 int8 模型（bge-small-zh-v1.5），数据不出设备；`cloud` 走 OpenAI 兼容 `/v1/embeddings`（Rust 侧 ureq，不受 WebView CSP 约束）。三档共用同一个 `Embedder` trait 与同一套检索流程，`keyword` 即「无 embedder」。性能实测见 `docs/kb-embed-benchmark.md`。
+- **检索三档**（`kb_settings.embedding_mode`，默认 `keyword`）：`keyword` 纯 FTS5 trigram + 结构化过滤，零依赖全平台可用；`local` 进程内 ONNX Runtime + 按需下载的本地模型，数据不出设备；`cloud` 走 OpenAI 兼容 `/v1/embeddings`（Rust 侧 ureq，不受 WebView CSP 约束）。三档共用同一个 `Embedder` trait 与同一套检索流程，`keyword` 即「无 embedder」。安装包**不内置任何向量模型**，选择 `local` 时先下载模型。性能实测见 `docs/kb-embed-benchmark.md`。
 - **召回阶梯**（`kb/search.rs`）：FTS5 bm25 → 整串 LIKE（trigram 不支持少于 3 字符的查询，中文两字词如「膝盖」必须走这层）→ 二字窗口模糊（中文无分词器时唯一能兜住「膝盖内扣」→「膝盖不要内扣」的手段）。各层结果用 RRF(k=60) 融合，再与向量召回并轨。向量是**暴力扫描**：万级块 × 512 维约 20 MB、单次 5–15 ms，因此不引入任何向量索引库。
 - **分层读取**（对应 OpenViking 的 L0/L1/L2）：检索只回摘要级命中（L0），`kb_read` 默认给概览（L1），确需全文才用 `level:'l2'`。工具返回值的分层纪律直接修掉了 `list_all_workouts` 无分页、`get_plan` 全量返回这类上下文失控问题。
 - **同步靠触发器而非命令层挂点**（迁移 0019）：`todos`/`workouts`/`workout_sets`/`workout_plans`/`meal_logs`/`body_metrics`/`foods`(仅 `is_custom=1`)/`programs`/`program_meals`/`voice_memos`/`ai_chat_messages` 的增改删都会写一行 `kb_dirty`。这样连 `program_schedule_replace` 这种批量直写 `todos` 的旁路也被覆盖，未来新增写入路径同样自动生效。`foods` 只在自建时登记——内置 2722 条种子每次启动都 `INSERT OR IGNORE`，无条件登记会拖垮首启。
@@ -256,7 +256,7 @@
 - **全量注入区（2026-09-19）**：`系统提示词/*.md`（代码播种，随版本更新）+ `用户记忆/*.md`（用户可写，模板只在缺失时创建）**每轮全量进系统提示词**，由 `kb_injection_get` 组装（预算 12,000 字符，按「系统提示词 > 角色设定 > 全局规范 > 其他」截断并置 `truncated`）；`stores/ai.ts` 带 60 秒 TTL 缓存取一次，`chat.ts` 拼成【系统提示词】【用户记忆】段。纯 HTML 注释的模板文件不占预算。其余内容一律靠工具按需检索——这是「注入」与「检索」的分界。
 - **虚拟文件系统**（规范见 `docs/kb-vfs.md`，同文档会播种为只读系统文件 `规范/知识库规范.md` 供 AI 自查）：迁移 0020 给每篇文档加 `path`，统一规则在 `source.rs::build_path`（系统提示词/规范/用户记忆/未分类数据/笔记/文档/语音/日程/运动/课程/饮食/体测/食物/方案/菜单/对话/附件/记忆）。`editable`/`system`/`kind` 做成列；派生文档只读，可写的是知识区（`笔记/`、`文档/`、`未分类数据/`、`语音/`、`视频/`、`用户记忆/` 与领域目录下的用户子目录，kb_files 内容即真源）与记忆（经记忆 API）。`kb_files` 的编辑/改名/删除走 files.rs，id 可传文档 id 或文件 id（`resolve_file_id`）。`read_knowledge` 按 L1/L2 分块分页（`offset`/`limit`/`hasMore`/`nextOffset`），`glob_knowledge` 用 git 语义 glob（`*` 不跨目录、`**` 跨、`a/**/b` 匹配零层目录）。**上传文档时前端把抽取全文自动归档进 `文档/`**（prompt 只带 6000 字截断版并注明归档路径，AI 靠分页读全文）——真机验证：docx 训练安排表 → AI 逐条 `create_todo` 67 条，60 秒完成。**阅读以真源为准（2026-09-12）**：`kb_read` 对 note 源直读 `kb_files.content` 即时切块——`kb_docs.body` 是带 8000 字上限的检索缓存，此前全文超限的 Word 归档会被截断，AI 分页到头也读不到剩余内容；用户侧完整浏览走文件管理器（`FileLibraryPage.vue`，AI 页左上角入口，目录下钻 + 直读原文/分块渐进加载 + 模态预览）。
 - **启动对账**（`worker.rs::reconcile`）：每次启动先播种系统文件（`规范/知识库规范.md` 随版本更新；`系统提示词/*` 随版本更新；`用户记忆/角色设定.md`、`用户记忆/全局规范.md` 只在缺失时建；`未分类数据/` 目录），再把既有源记录全部入队并清孤儿（触发器只对之后的写入生效，老库升级必须靠它），内容未变的条目按 `content_hash` 跳过。
-- **构建前置**：端侧模型与 ORT 运行库不入库，克隆后先跑 `node scripts/fetch-embed-model.mjs` 与 `node scripts/fetch-ort-runtime.mjs --target all`；`src-tauri/build.rs` 会校验并在缺失时给出提示。三端交叉编译不需要任何原生链接配置（`ort` 用 `load-dynamic`、`tokenizers` 用纯 Rust 的 `fancy-regex`，整棵依赖树零 C 代码）。
+- **构建前置**：ORT 运行库不入库，克隆后先跑 `node scripts/fetch-ort-runtime.mjs --target all`；`src-tauri/build.rs` 会校验并在缺失时给出提示。向量模型不再参与构建（默认关键词检索，模型在运行时按需下载）。三端交叉编译不需要任何原生链接配置（`ort` 用 `load-dynamic`、`tokenizers` 用纯 Rust 的 `fancy-regex`，整棵依赖树零 C 代码）。
 
 ## 11. 已知边界（框架阶段的有意取舍）
 

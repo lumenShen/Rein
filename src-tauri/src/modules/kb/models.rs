@@ -96,7 +96,7 @@ pub const DOMAIN_ROOTS: &[&str] = &[
 
 /// 三档检索模式。
 /// - `keyword`：纯 FTS5(trigram) + 结构化过滤，零依赖、全平台、默认。
-/// - `local`：进程内 ONNX Runtime + 内置 int8 模型，数据不出设备。
+/// - `local`：进程内 ONNX Runtime + 按需下载的本地模型，数据不出设备。
 /// - `cloud`：OpenAI 兼容 `/v1/embeddings`，走 Rust 侧 ureq（不受 WebView CSP 约束）。
 pub const MODE_KEYWORD: &str = "keyword";
 pub const MODE_LOCAL: &str = "local";

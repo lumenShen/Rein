@@ -7963,13 +7963,15 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
         mode: kbSettings.embeddingMode,
         docs: kbDocs.length + kbMemories.length,
         chunks: kbDocs.length + kbMemories.length,
-        // keyword 模式下永远不会产生向量，如实回 0 而不是假装有
-        vectors: kbSettings.embeddingMode === 'keyword' ? 0 : kbDocs.length,
+        // keyword 模式下永远不会产生向量；本地模型在 mock 里不可下载，也就没有向量
+        vectors:
+          kbSettings.embeddingMode === 'cloud' && kbSettings.cloudBaseUrl ? kbDocs.length : 0,
         pending: 0,
         indexing: false,
         progress: { phase: 'idle', done: 0, total: 0 },
         lastError: kbSettings.lastError,
-        embedderReady: kbSettings.embeddingMode === 'cloud' ? !!kbSettings.cloudBaseUrl : true,
+        // 本地模型一律未下载：mock 不能下载，检索实际会回落到关键词
+        embedderReady: kbSettings.embeddingMode === 'cloud' ? !!kbSettings.cloudBaseUrl : kbSettings.embeddingMode === 'keyword',
         vecModel: kbSettings.embeddingMode === 'keyword'
           ? null
           : kbSettings.embeddingMode === 'local'
@@ -9017,8 +9019,8 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(plain({
         models: MOCK_EMBED_MODELS.map((m) => ({
           ...m,
-          installed: m.bundled,
-          diskBytes: m.bundled ? m.bytes : 0,
+          installed: false,
+          diskBytes: 0,
           downloading: false,
         })),
         current: kbSettings.localModel,

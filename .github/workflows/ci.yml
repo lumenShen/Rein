@@ -63,9 +63,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      # 端侧 embedding 素材不入库（见 .gitignore），build.rs 会硬校验缺失
-      - name: 拉取端侧模型
-        run: node scripts/fetch-embed-model.mjs
       - name: 系统依赖（Tauri 在 Linux 上要 webkit2gtk）
         run: |
           sudo apt-get update

@@ -1790,6 +1790,18 @@ const MIGRATION_0050: &str = r#"
 ALTER TABLE workouts ADD COLUMN hr_json TEXT;
 "#;
 
+/// 0051 · 取消内置向量模型后的检索模式回落（modules/kb/embed_models.rs）。
+///
+/// 旧版把 bge-small 编进二进制，`local` 模式开箱即用；现在模型改为按需下载，
+/// 原先依赖内置模型的老库会停在「local + 模型不存在」上，检索静默退回关键词。
+/// 这里把它显式落回默认的 keyword（与设置页切档口径一致），并清掉该模型的旧向量。
+/// 已下载其它模型、明确选了语义检索的用户不受影响。
+const MIGRATION_0051: &str = r#"
+UPDATE kb_settings SET embedding_mode = 'keyword'
+ WHERE embedding_mode = 'local' AND local_model = 'bge-small-zh-v1.5-int8';
+DELETE FROM kb_vectors WHERE model_id = 'bge-small-zh-v1.5-int8';
+"#;
+
 const MIGRATIONS: &[&str] = &[
     MIGRATION_0001,
     MIGRATION_0002,
@@ -1841,6 +1853,7 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_0048,
     MIGRATION_0049,
     MIGRATION_0050,
+    MIGRATION_0051,
 ];
 
 /// 通用键值元数据（`app_meta`）读写 —— 全应用**唯一一份**这条 SQL。

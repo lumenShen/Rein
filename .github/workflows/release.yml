@@ -38,8 +38,7 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
-      # 端侧 embedding 素材不入库：模型 + Windows 运行库都得先拉
-      - run: node scripts/fetch-embed-model.mjs
+      # 端侧 embedding 运行库不入库（模型已改为运行时按需下载）
       - run: node scripts/fetch-ort-runtime.mjs --target win-x64
       - name: 构建（前端 + NSIS 安装包）
         run: npx tauri build
@@ -93,7 +92,6 @@ jobs:
           echo "NDK_HOME=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/ndk/* 2>/dev/null | tail -n1)" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$NDK_HOME" >> "$GITHUB_ENV"
       - run: npm ci
-      - run: node scripts/fetch-embed-model.mjs
       - run: node scripts/fetch-ort-runtime.mjs --target android-arm64
       - name: 写入签名配置
         if: steps.keystore.outputs.have == 'true'

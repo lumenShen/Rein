@@ -38,7 +38,11 @@ fn parse_tags(raw: &str) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn kb_status(state: State<AppState>, hub: State<'_, Arc<KbHub>>) -> Result<KbStatus> {
+pub fn kb_status(
+    app: AppHandle,
+    state: State<AppState>,
+    hub: State<'_, Arc<KbHub>>,
+) -> Result<KbStatus> {
     let conn = state.db.lock();
     let s = settings::get(&conn)?;
     let enabled = settings::enabled_sources(&conn)?;
@@ -46,9 +50,18 @@ pub fn kb_status(state: State<AppState>, hub: State<'_, Arc<KbHub>>) -> Result<K
     let vec_model = index::active_vec_model(&conn)?;
     drop(conn);
 
-    // keyword 模式天然就绪（不需要任何外部依赖）；其余模式看是否已报错降级
+    // keyword 模式天然就绪（不需要任何外部依赖）；本地模式还要求模型已下载；
+    // 其余模式看是否已报错降级。
     let last_error = hub.last_error().or(s.last_error.clone());
-    let embedder_ready = s.embedding_mode == MODE_KEYWORD || last_error.is_none();
+    let embedder_ready = match s.embedding_mode.as_str() {
+        MODE_KEYWORD => true,
+        MODE_LOCAL => {
+            let model = embed_models::find(&s.local_model)
+                .unwrap_or_else(embed_models::default_model);
+            embed_models::is_installed(&data_root(&app)?, model) && last_error.is_none()
+        }
+        _ => last_error.is_none(),
+    };
 
     Ok(KbStatus {
         mode: s.embedding_mode.clone(),

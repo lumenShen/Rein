@@ -596,8 +596,7 @@ export interface KbEmbedModelInfo {
   /** 注册表声明的下载体积 */
   bytes: number
   note: string
-  /** 编进二进制的默认模型（离线可用、不可删） */
-  bundled: boolean
+  /** 是否已下载到本机（未下载时不可选用） */
   installed: boolean
   diskBytes: number
   downloading: boolean

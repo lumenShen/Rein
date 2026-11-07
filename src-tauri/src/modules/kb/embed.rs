@@ -5,8 +5,8 @@
 //! 链接配置。配合 `tokenizers` 的 `fancy-regex`（而非默认的 `onig`），整棵依赖树零 C 代码——
 //! 实测三端交叉编译只需指定 NDK 链接器。详见 docs/kb-embed-benchmark.md。
 //!
-//! **本地模型是可选的**（见 `embed_models.rs`）：内置那颗（bge-small-zh-v1.5 int8）
-//! 用 `include_bytes!` 编进二进制当离线默认；其余模型按需下载到 `{app_data}/models/{id}/`，
+//! **本地模型完全可选**（见 `embed_models.rs`）：安装包不内置任何向量模型，
+//! 默认走纯关键词检索；需要语义检索时再按需下载到 `{app_data}/models/{id}/`，
 //! 由本模块从磁盘加载。**换模型必须换 `model_id`**（写进 kb_vectors.model_id），
 //! 否则旧向量会被当成新模型的向量复用，检索结果会静默错乱。
 //!
@@ -27,21 +27,9 @@ use crate::error::{ReinError, Result};
 use super::embed_models::{self, LocalModel, Pooling};
 use super::settings;
 
-/// 内置模型的标识（= 它自己的 model_id），写进 kb_vectors.model_id。换模型必须换这个字符串，
-/// 否则旧向量会被当成新模型的向量复用，检索结果会静默错乱。
-#[allow(dead_code)] // 常量给测试与文档引用；生产路径一律走注册表（cfg.local.id）
-pub const LOCAL_MODEL_ID: &str = embed_models::BUNDLED_ID;
-/// 内置 bge-small-zh-v1.5 的输出维度（动态加载的模型维度从注册表读）。
-#[allow(dead_code)]
-pub const LOCAL_DIM: usize = 512;
 /// 后台索引的 ORT 线程数。实测 2 线程已拿到约 1.8 倍收益，再往上边际很小，
 /// 而核心应留给 UI——索引是后台任务，不该抢前台 CPU。
 const INTRA_THREADS: usize = 2;
-
-const MODEL_BYTES: &[u8] =
-    include_bytes!("../../../resources/models/bge-small-zh-v1.5/model_quantized.onnx");
-const TOKENIZER_BYTES: &[u8] =
-    include_bytes!("../../../resources/models/bge-small-zh-v1.5/tokenizer.json");
 
 /* ---------- 运行库供给 ---------- */
 
@@ -160,26 +148,20 @@ pub struct LocalEmbedder {
 }
 
 impl LocalEmbedder {
-    /// 按注册表加载一个本地模型。内置那颗走 `include_bytes!`，其余从磁盘读；
-    /// 未下载的模型在这里报「先下载」的可操作错误。
+    /// 按注册表加载一个本地模型。未下载的模型在这里报「先下载」的可操作错误。
     pub fn new(data_dir: &Path, model: &'static LocalModel) -> Result<Self> {
         ensure_ort(data_dir)?;
 
-        let mut tokenizer = if model.bundled {
-            Tokenizer::from_bytes(TOKENIZER_BYTES)
-                .map_err(|e| ReinError::Message(format!("加载分词器失败：{e}")))?
-        } else {
-            let path = embed_models::tokenizer_path(data_dir, model.id);
-            if !path.is_file() {
-                return Err(ReinError::Message(format!(
-                    "本地模型「{}」尚未下载（缺 {}），先到知识库设置里下载或换回内置模型",
-                    model.label,
-                    path.display()
-                )));
-            }
-            Tokenizer::from_file(&path)
-                .map_err(|e| ReinError::Message(format!("加载分词器失败（{}）：{e}", path.display())))?
-        };
+        let tokenizer_path = embed_models::tokenizer_path(data_dir, model.id);
+        if !tokenizer_path.is_file() {
+            return Err(ReinError::Message(format!(
+                "本地模型「{}」尚未下载（缺 {}），先到知识库设置里下载",
+                model.label,
+                tokenizer_path.display()
+            )));
+        }
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| ReinError::Message(format!("加载分词器失败（{}）：{e}", tokenizer_path.display())))?;
         tokenizer
             .with_truncation(Some(TruncationParams {
                 max_length: model.max_len,
@@ -193,23 +175,17 @@ impl LocalEmbedder {
             .map_err(|e| ReinError::Message(format!("配置图优化失败：{e}")))?
             .with_intra_threads(INTRA_THREADS)
             .map_err(|e| ReinError::Message(format!("配置线程数失败：{e}")))?;
-        let session = if model.bundled {
-            session
-                .commit_from_memory(MODEL_BYTES)
-                .map_err(|e| ReinError::Message(format!("加载嵌入模型失败：{e}")))?
-        } else {
-            let path = embed_models::onnx_path(data_dir, model.id);
-            if !path.is_file() {
-                return Err(ReinError::Message(format!(
-                    "本地模型「{}」尚未下载（缺 {}），先到知识库设置里下载或换回内置模型",
-                    model.label,
-                    path.display()
-                )));
-            }
-            session
-                .commit_from_file(&path)
-                .map_err(|e| ReinError::Message(format!("加载嵌入模型失败（{}）：{e}", path.display())))?
-        };
+        let model_path = embed_models::onnx_path(data_dir, model.id);
+        if !model_path.is_file() {
+            return Err(ReinError::Message(format!(
+                "本地模型「{}」尚未下载（缺 {}），先到知识库设置里下载",
+                model.label,
+                model_path.display()
+            )));
+        }
+        let session = session
+            .commit_from_file(&model_path)
+            .map_err(|e| ReinError::Message(format!("加载嵌入模型失败（{}）：{e}", model_path.display())))?;
 
         let input_names = session
             .inputs()
@@ -439,7 +415,7 @@ impl Embedder for CloudEmbedder {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmbedConfig {
     pub mode: String,
-    /// 本地模型（mode=local 时生效；注册表里找不到会回落到内置的那颗）
+    /// 本地模型（mode=local 时生效；注册表里找不到会回落到缺省那颗）
     pub local: &'static LocalModel,
     /// (base_url, api_key, model, dim)
     pub cloud: Option<(String, String, String, Option<i64>)>,
@@ -697,8 +673,7 @@ mod tests {
         assert_eq!(e.dim(), 512);
     }
 
-    /// 本地模型是编进二进制的，所以「模型文件存在」这件事由编译期保证。
-    /// 这里只验证运行库按平台选对了供给方式。
+    /// 验证运行库按平台选对了供给方式。
     #[test]
     fn ort_lib_supply_matches_platform() {
         if cfg!(target_os = "windows")
@@ -708,53 +683,6 @@ mod tests {
         } else {
             assert!(ORT_LIB_BYTES.is_empty(), "非 Windows 平台不应内嵌运行库");
         }
-    }
-
-    #[test]
-    fn model_bytes_look_like_onnx() {
-        // ONNX 是 protobuf，但模型的第一个字节不固定；校验体积足够大以免误配空文件
-        assert!(
-            MODEL_BYTES.len() > 1_000_000,
-            "模型体积异常：{}",
-            MODEL_BYTES.len()
-        );
-        assert!(TOKENIZER_BYTES.len() > 1000, "分词器体积异常");
-        let head = String::from_utf8_lossy(&TOKENIZER_BYTES[..64.min(TOKENIZER_BYTES.len())]);
-        assert!(head.contains('{'), "分词器应是 JSON");
-    }
-
-    /// 真实加载 ONNX 模型做一次推理。这条是本地嵌入式接口唯一的实证：
-    /// 它同时覆盖 ORT 动态加载、运行库落盘、模型加载、分词、池化与归一化。
-    #[test]
-    fn local_embedder_loads_model_and_separates_domains() {
-        let dir = std::env::temp_dir().join("rein-kb-embed-selftest");
-        let m = embed_models::default_model();
-        let e = LocalEmbedder::new(&dir, m).expect("本地嵌入器应能加载模型");
-        assert_eq!(e.dim(), LOCAL_DIM);
-        assert_eq!(e.model_id(), LOCAL_MODEL_ID);
-
-        let texts: Vec<String> = ["深蹲", "腿部力量训练", "晚餐吃了什么"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let v = e.embed(&texts).expect("推理应成功");
-        assert_eq!(v.len(), 3);
-        for x in &v {
-            assert_eq!(x.len(), LOCAL_DIM);
-            let norm = x.iter().map(|a| a * a).sum::<f32>().sqrt();
-            assert!((norm - 1.0).abs() < 1e-3, "应已 L2 归一化，实际 {norm}");
-        }
-
-        let cos = |a: &Vec<f32>, b: &Vec<f32>| a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
-        let near = cos(&v[0], &v[1]);
-        let far = cos(&v[0], &v[2]);
-        assert!(
-            near > far + 0.1,
-            "同域（深蹲↔腿部训练 {near:.3}）应明显高于跨域（深蹲↔晚餐 {far:.3}）"
-        );
-
-        // probe 是给 UI 做「测试连接」用的，必须能独立跑通
-        assert_eq!(e.probe().unwrap(), LOCAL_DIM);
     }
 
     /// 未下载的模型要给出可操作的错误，而不是让检索崩掉。
@@ -768,42 +696,6 @@ mod tests {
             Err(e) => e.to_string(),
         };
         assert!(err.contains("尚未下载"), "{err}");
-    }
-
-    /// 自定义嵌入测试：两段文本跑出来该是归一化向量 + 相似度排序。
-    #[test]
-    fn embed_test_ranks_similar_texts_higher() {
-        let dir = std::env::temp_dir().join("rein-kb-embed-test");
-        let cfg = EmbedConfig {
-            mode: crate::modules::kb::models::MODE_LOCAL.into(),
-            local: embed_models::default_model(),
-            cloud: None,
-        };
-        let out = test(
-            &cfg,
-            &dir,
-            &EmbedTestInput {
-                texts: vec![
-                    "膝盖疼怎么练腿".into(),
-                    "膝关节不适时的腿部训练安排".into(),
-                    "今天晚饭吃什么".into(),
-                ],
-                local_model: None,
-                cloud: None,
-            },
-        )
-        .unwrap();
-        assert_eq!(out.dim, LOCAL_DIM as i64);
-        assert_eq!(out.vectors.len(), 3);
-        assert_eq!(out.ranking.len(), 2);
-        let top = &out.ranking[0];
-        assert!(
-            top.text.contains("膝"),
-            "最相近的应是膝关节那句，实际 {}",
-            top.text
-        );
-        assert!(out.ranking[0].score > out.ranking[1].score);
-        assert!(out.model_id.contains("bge-small"));
     }
 
     /// 云端覆盖：给了临时端点就走云端分支，不需要已保存的配置。

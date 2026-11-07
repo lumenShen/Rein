@@ -17,7 +17,7 @@
 
 - 模型 `Xenova/bge-small-zh-v1.5` 的 `onnx/model_quantized.onnx`（int8 动态量化），池化取 `last_hidden_state` 的 CLS 位后做 L2 归一化。
 - 延迟 = warmup 5 次后重复采样的中位数与 p90；短文本 40 次采样、长文本 15 次。
-- 复现：`scripts/fetch-embed-model.mjs` + `scripts/fetch-ort-runtime.mjs --target win-x64` 取产物。
+- 复现：`node scripts/fetch-ort-runtime.mjs --target win-x64` 取运行库；模型文件现在由应用在运行时按需下载（当年的拉取脚本已随内置模型移除）。
 
 ## 三、延迟实测
 
@@ -142,26 +142,27 @@
 ## 十、复现步骤
 
 ```bash
-node scripts/fetch-embed-model.mjs                                  # 23.3 MB，ModelScope 约 4.4 MB/s
 node scripts/fetch-ort-runtime.mjs --target win-x64                 # ORT 1.28.2
 node scripts/fetch-ort-runtime.mjs --target win-arm64
 node scripts/fetch-ort-runtime.mjs --target android-arm64           # Maven AAR
 ```
 
-模型与运行库均在 `.gitignore` 中，克隆仓库后需先执行上述脚本再构建。
+运行库在 `.gitignore` 中，克隆仓库后需先执行上述脚本再构建。向量模型不参与构建：
+默认关键词检索，需要本地语义检索时在应用内按需下载。
 
 ---
 
 # 附录：本地模型可选化（2026-10-07 追加）
 
 > 原评估定下「内置一颗 int8 小模型」；实际用起来，中文语义质量对小模型是硬约束。
-> 于是把本地模型做成**注册表 + 按需下载**：内置那颗仍是离线默认，其余 4 档可选。
+> 于是把本地模型做成**注册表 + 按需下载**。2026-11-07 起安装包不再内置任何模型：
+> 默认关键词检索，5 档模型全部按需下载（`bge-small` 仍是最轻的缺省档）。
 
 ## 可选清单（体积为实测字节数，经 hf-mirror 探测）
 
 | id | 档位 | 维度 | 池化 | 体积 | 说明 |
 |---|---|---|---|---|---|
-| `bge-small-zh-v1.5-int8` | 轻量·内置 | 512 | CLS | 24.4 MB | 随包分发、离线可用 |
+| `bge-small-zh-v1.5-int8` | 轻量·中文 | 512 | CLS | 24.4 MB | 体积最小，缺省本地档；按需下载 |
 | `bge-base-zh-v1.5-int8` | 标准·中文 | 768 | CLS | 103.3 MB | 中文语义明显更细，日常首选 |
 | `bge-large-zh-v1.5-int8` | 高精度·中文 | 1024 | CLS | 327.8 MB | 中文检索天花板一档，桌面优先 |
 | `bge-m3-int8` | 多语·超大 | 1024 | CLS | 586.8 MB | 100+ 语言、长文本；手机不建议 |

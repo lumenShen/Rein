@@ -107,7 +107,7 @@ impl KbHub {
 
     /// 取当前 embedder（按需构建）。keyword 模式返回 None。
     ///
-    /// **调用方必须先放掉数据库锁**：首次构建会加载 23 MB 模型（实测约 130 ms），
+    /// **调用方必须先放掉数据库锁**：首次构建要加载模型（实测约 130 ms），
     /// 持锁构建会让界面的每次查询一起卡住。
     pub fn embedder(&self, cfg: &EmbedConfig) -> Result<Option<Arc<dyn Embedder>>> {
         if cfg.mode == MODE_KEYWORD {
@@ -462,7 +462,7 @@ mod tests {
         let cfg = embed::resolve_config(&conn).unwrap();
         assert_eq!(
             embed::model_id_of(&cfg).as_deref(),
-            Some(crate::modules::kb::embed::LOCAL_MODEL_ID)
+            Some(crate::modules::kb::embed_models::default_model().id)
         );
     }
 

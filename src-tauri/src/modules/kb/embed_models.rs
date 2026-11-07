@@ -1,9 +1,9 @@
 //! 本地嵌入模型注册表 + 按需下载。
 //!
-//! **为什么不是全都编进二进制**：模型从 23 MB（small）到 543 MB（m3），
-//! 编进包等于把安装包撑到几百 MB，而绝大多数用户用不到大模型。
-//! 所以：**small 编进二进制当离线默认**，其余按需下载到
-//! `{app_data}/models/{id}/`（`model.onnx` + `tokenizer.json`），可删可换。
+//! **安装包不内置任何向量模型**：模型从 24 MB（small）到 543 MB（m3），
+//! 编进包等于凭空撑大安装包，而默认的检索模式是纯关键词，绝大多数用户用不到。
+//! 所有模型都按需下载到 `{app_data}/models/{id}/`（`model.onnx` + `tokenizer.json`），
+//! 可删可换。
 //!
 //! **下载源**：主用 `hf-mirror.com`（国内可达，实测 200），回退 ModelScope。
 //! 直连 huggingface.co 在国内多数网络不可达，不作为候选。
@@ -41,31 +41,28 @@ pub struct LocalModel {
     /// model.onnx 的字节数（用于进度与完整性判据）
     pub onnx_bytes: u64,
     pub tokenizer_bytes: u64,
-    /// 编进二进制的那一个（离线可用，删不掉）
-    pub bundled: bool,
     /// HuggingFace 仓库（hf-mirror.com 与 ModelScope 都按这个路径取）
     pub repo: &'static str,
     /// 一句话卖点（UI 直接用）
     pub note: &'static str,
 }
 
-/// 内置那颗模型的 id（历史值，不能改：老库的向量都记着它）。
-pub const BUNDLED_ID: &str = "bge-small-zh-v1.5-int8";
+/// 缺省本地模型的 id（历史值，不能改：老库的 local_model 与向量都记着它）。
+pub const DEFAULT_MODEL_ID: &str = "bge-small-zh-v1.5-int8";
 
 /// 可选的本地嵌入模型（体积为实测字节数，2026-10-07 校验）。
 pub const MODELS: &[LocalModel] = &[
     LocalModel {
-        id: BUNDLED_ID,
-        label: "轻量 · 内置",
+        id: DEFAULT_MODEL_ID,
+        label: "轻量 · 中文",
         tier: "light",
         dim: 512,
         pooling: Pooling::Cls,
         max_len: 512,
         onnx_bytes: 24_010_842,
         tokenizer_bytes: 439_125,
-        bundled: true,
         repo: "Xenova/bge-small-zh-v1.5",
-        note: "随应用内置、离线可用；中文短句与关键词检索够用，占用最小（约 24 MB）",
+        note: "中文短句够用、占用最小；下载约 24 MB，适合先试本地语义检索",
     },
     LocalModel {
         id: "bge-base-zh-v1.5-int8",
@@ -76,7 +73,6 @@ pub const MODELS: &[LocalModel] = &[
         max_len: 512,
         onnx_bytes: 102_868_746,
         tokenizer_bytes: 439_124,
-        bundled: false,
         repo: "Xenova/bge-base-zh-v1.5",
         note: "中文语义明显更细（同义改写、长句都能捞到），下载约 98 MB，日常首选",
     },
@@ -89,7 +85,6 @@ pub const MODELS: &[LocalModel] = &[
         max_len: 512,
         onnx_bytes: 327_363_707,
         tokenizer_bytes: 439_124,
-        bundled: false,
         repo: "Xenova/bge-large-zh-v1.5",
         note: "中文检索天花板一档（MTEB-zh 榜首家族），下载约 312 MB，桌面优先",
     },
@@ -102,7 +97,6 @@ pub const MODELS: &[LocalModel] = &[
         max_len: 512,
         onnx_bytes: 569_694_530,
         tokenizer_bytes: 17_082_821,
-        bundled: false,
         repo: "Xenova/bge-m3",
         note: "100+ 语言、长文本友好；下载约 543 MB，手机不建议",
     },
@@ -115,7 +109,6 @@ pub const MODELS: &[LocalModel] = &[
         max_len: 256,
         onnx_bytes: 118_308_126,
         tokenizer_bytes: 17_082_913,
-        bundled: false,
         repo: "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
         note: "多语种（含中文）折中档；384 维更省内存，下载约 113 MB",
     },
@@ -125,9 +118,9 @@ pub fn find(id: &str) -> Option<&'static LocalModel> {
     MODELS.iter().find(|m| m.id == id)
 }
 
-/// 缺省模型（内置那颗）。
+/// 缺省本地模型（最轻的一档）。
 pub fn default_model() -> &'static LocalModel {
-    find(BUNDLED_ID).expect("内置模型必须在注册表里")
+    find(DEFAULT_MODEL_ID).expect("缺省模型必须在注册表里")
 }
 
 fn data_root(data_dir: &Path) -> PathBuf {
@@ -146,11 +139,8 @@ pub fn tokenizer_path(data_dir: &Path, id: &str) -> PathBuf {
     model_dir(data_dir, id).join("tokenizer.json")
 }
 
-/// 是否已下载就绪（内置模型恒为 true：它在二进制里）。
+/// 是否已下载就绪。
 pub fn is_installed(data_dir: &Path, m: &LocalModel) -> bool {
-    if m.bundled {
-        return true;
-    }
     onnx_path(data_dir, m.id).is_file() && tokenizer_path(data_dir, m.id).is_file()
 }
 
@@ -285,9 +275,6 @@ pub fn download(
     m: &LocalModel,
     on_progress: &mut dyn FnMut(&str, u64, u64),
 ) -> Result<u64> {
-    if m.bundled {
-        return Ok(0); // 内置模型无需下载
-    }
     // 开始前清掉可能残留的取消标志：上一次下载结束后点过一次取消的话，
     // 留下来的标志会让这一次刚开始就被判为「已取消」。
     let _ = take_cancelled(m.id);
@@ -317,11 +304,8 @@ pub fn download(
     Ok(written)
 }
 
-/// 删除一个已下载模型（内置的删不掉）。返回释放的字节数。
+/// 删除一个已下载模型。返回释放的字节数。
 pub fn remove(data_dir: &Path, m: &LocalModel) -> Result<u64> {
-    if m.bundled {
-        return Err(ReinError::Message("内置模型随应用分发，不能删除".into()));
-    }
     let dir = model_dir(data_dir, m.id);
     if !dir.exists() {
         return Ok(0);
@@ -342,9 +326,8 @@ pub struct EmbedModelInfo {
     pub dim: i64,
     pub bytes: i64,
     pub note: String,
-    pub bundled: bool,
     pub installed: bool,
-    /// 磁盘上实际占用（未安装 = 0；内置模型按打包体积计）
+    /// 磁盘上实际占用（未安装 = 0）
     pub disk_bytes: i64,
     /// 当前是否正在下载
     pub downloading: bool,
@@ -374,13 +357,8 @@ pub fn catalog(data_dir: &Path, current: &str, mode: &str) -> EmbedCatalog {
                 dim: m.dim as i64,
                 bytes: (m.onnx_bytes + m.tokenizer_bytes) as i64,
                 note: m.note.to_string(),
-                bundled: m.bundled,
                 installed: is_installed(data_dir, m),
-                disk_bytes: if m.bundled {
-                    (m.onnx_bytes + m.tokenizer_bytes) as i64
-                } else {
-                    disk_bytes(data_dir, m) as i64
-                },
+                disk_bytes: disk_bytes(data_dir, m) as i64,
                 downloading: false,
             })
             .collect(),
@@ -396,13 +374,12 @@ mod tests {
     use crate::modules::kb::embed::Embedder;
 
     #[test]
-    fn registry_ids_are_unique_and_bundled_exists() {
+    fn registry_ids_are_unique_and_default_exists() {
         let mut ids: Vec<_> = MODELS.iter().map(|m| m.id).collect();
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), MODELS.len(), "模型 id 不得重复");
-        assert!(find(BUNDLED_ID).is_some());
-        assert!(default_model().bundled);
+        assert!(find(DEFAULT_MODEL_ID).is_some());
         for m in MODELS {
             assert!(m.dim > 0 && m.onnx_bytes > 0);
             assert!(!m.note.is_empty());
@@ -410,15 +387,15 @@ mod tests {
     }
 
     #[test]
-    fn non_bundled_models_report_not_installed_without_files() {
+    fn models_report_not_installed_without_files() {
         let dir = std::env::temp_dir().join("rein-embed-models-empty");
         let _ = std::fs::remove_dir_all(&dir);
         for m in MODELS {
-            assert_eq!(is_installed(&dir, m), m.bundled, "{} 的安装态判错了", m.id);
+            assert!(!is_installed(&dir, m), "{} 的安装态判错了", m.id);
         }
         let base = find("bge-base-zh-v1.5-int8").unwrap();
         assert_eq!(disk_bytes(&dir, base), 0);
-        assert!(remove(&dir, default_model()).is_err(), "内置模型不可删");
+        assert_eq!(remove(&dir, default_model()).unwrap(), 0, "未下载的模型删除应为空操作");
     }
 
     #[test]
@@ -429,7 +406,7 @@ mod tests {
         assert!(urls[1].starts_with("https://modelscope.cn/"));
     }
 
-    /// 真网络端到端：下载内置那颗模型的副本 → 落盘 → 真加载 → 真嵌入 → 删除。
+    /// 真网络端到端：下载最轻那颗模型 → 落盘 → 真加载 → 真嵌入 → 删除。
     ///
     /// 为什么值得留：下载链路的每一环（URL 有效性、重定向、流式写盘、体积下界判据、
     /// ONNX 能被 ORT 打开）都只有真下才能真正验证；模型源换域名时这条会先红。
@@ -438,7 +415,6 @@ mod tests {
     #[test]
     #[ignore]
     fn download_small_model_over_network() {
-        // 用内置那颗的仓库与体积，但按「未内置」的方式走下载路径
         let src = default_model();
         let m = LocalModel {
             id: "bge-small-zh-v1.5-int8-dltest",
@@ -449,7 +425,6 @@ mod tests {
             max_len: src.max_len,
             onnx_bytes: src.onnx_bytes,
             tokenizer_bytes: src.tokenizer_bytes,
-            bundled: false,
             repo: src.repo,
             note: "测试用",
         };
