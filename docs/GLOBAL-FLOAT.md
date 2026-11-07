@@ -58,20 +58,42 @@ show = 开关开 && supported && 有沉浸会话 && 应用不在前台 && 用户
 ### 3.3 结束确认
 
 程序内浮条用 `ActionSheet` 二次确认；全局浮窗没有抽屉容器，改为**同窗内联确认**：
-点「结束」后窗口临时长高到 `confirm` 形状（430×172，底部锚定），上半是 ActionSheet 的
+点「结束」后窗口临时长高到 `confirm` 形状（430×172），上半是 ActionSheet 的
 标题原文（说明后果那句话），下半是两条动作 + 取消，**文案逐字取自同一份 `end.actions`**。
 取消 / 完成即回到 `bar`；`confirm` 是临时形状，不进持久化偏好。
 
-### 3.4 两态：bar / blob
+桌面长高由**浮窗前端自己完成**：直接调 `global_float_set_form('confirm')` 改尺寸，
+再把窗口上移 80（底边锚定，钳制到工作区上界之内），并记住原 y 以便取消时还原；
+确认全程不发 `form` 动作回主窗口（主窗口对 confirm 无事可做）。取消 / 完成 / 失焦 /
+隐藏都会收回确认态并还原高度与位置。
+
+### 3.4 两态与停靠：bar / blob（桌面与程序内浮条同款手势）
 
 - bar：默认形态，宽 = 430（内容 406，与 430 宽应用窗口里的浮条逐像素同宽），高 = 92（标题栏 32 + 浮条 56 + 余量）。
 - blob：64×64 泊车形态（状态点 + 读数，读数取快照 `blob` 字段，与程序内 `#blob` 插槽同源），轻点展开回 bar。
 - confirm：430×172 的临时形状，只在结束确认期间出现（见 §3.3）；取消/完成回到 bar。
-- 三种形状都由 Rust 的 `global_float_set_form` 改尺寸（右/下边锚定），前端只发形状名。
-- 拖拽：桌面由窗口自身移动（标题栏 / 浮条拖动区），Android 由 `WindowManager` 拖动并吸附左右边。
-- 形态持久化：bar / blob 记在 localStorage（两端同一份偏好）；窗口位置桌面由窗口自己持有
-  （拖动后 hide / show 不丢；**跨进程重启回到右下角默认位**，不做跨重启位置记忆 —— 多屏/DPI 变化下
-  恢复旧坐标反而可能落在屏幕外），Android 记左右吸附边 + y。
+- 三种形状都由 Rust 的 `global_float_set_form` **只改尺寸、不动位置**；窗口位置由浮窗前端全权持有。
+
+桌面手势与 `composables/useDragDock`（程序内浮条）逐条同源，手感参数同一份：
+
+- 整条 bar / 整块 blob 任意位置按下即可拖（**不再用原生 drag region** —— 它在 mousedown
+  就把指针让给系统移动循环，测不到速度也收不到点击）。按下缩放 0.97、拖起缩放 1.03 +
+  浮起阴影；位移越过 8px 才算抓住，此前松手是点按（按钮照常触发）；拖拽后短暂窗口内的
+  那次幽灵点击被吞咽，防止松手误触按钮。
+- 拖拽中窗口跟随指针（`setPosition`，rAF 节流），越界走橡皮筋阻尼（以当前显示器工作区为界）。
+- 松手解算：|v| ≥ 0.35px/ms 为轻弹 —— 横向→左/右吸附为 **blob** 并记住松手高度，
+  纵向→顶/底停靠为 **bar**；慢速释放用投影 p+v·180 取最近槽位。
+- 落位用可打断弹簧（stiffness 160 / damping 22，与程序内同一组常量）；飞行途中再次按下
+  以当前位置接管为新拖拽。动效档 off / 系统减弱动效时直接落位。
+- 四个槽位：顶/底 = bar 水平居中、距工作区边 12；左/右 = blob 贴工作区边、纵向按 sideY 比例。
+- 标题栏「泊车为方块」= 吸附到最近一侧；blob 轻点 = 展开回上一次的全宽条槽位（顶/底）。
+- 持久化：形态 bar/blob 记 `rein.float.form.v1`（主窗口持有）；停靠槽位 slot/barSlot/sideY 记
+  `rein.float.dock.v1`（浮窗持有，与程序内浮条的持久化同构）。槽位相对工作区表达，
+  **跨重启按当前显示器工作区重算**（多屏/DPI 变化也落在屏内）；hide/show 不丢位。
+  首次建窗落在默认槽（工作区底边居中，边距 12）。
+- 手势只在「桌面 Tauri + 有会话 + 非确认态」生效；浏览器预览空转，Android 仍由
+  `WindowManager` 拖动吸附左右边 + 长按泊车 + 轻点展开（原生近似，见 §2 / §11）。
+- 浮窗被限制在**当前显示器工作区**内（与程序内浮条限制在视口内同义）；拖拽不跨屏。
 
 ### 3.5 桌面标题栏（自绘，两窗口同一份实现）
 
@@ -86,7 +108,9 @@ show = 开关开 && supported && 有沉浸会话 && 应用不在前台 && 用户
 - **只在桌面平台的 Tauri 环境渲染**（`isTauri` 且非 Android）：浏览器预览与 Android 不出现，
   现有 e2e 的布局断言不受影响。
 
-浮窗标题栏：同一套语言的高 32 紧凑版 —— 左侧拖拽区 + 会话标题，右侧「泊车为方块」与「关闭」。
+浮窗标题栏：同一套语言的高 32 紧凑版 —— 左侧会话标题 + 状态点，右侧「泊车为方块」与「关闭」。
+**浮窗里不挂原生 drag region**（TitleBarBase 以 `native-drag=false` 复用）：整壳拖拽由
+浮窗自己的指针手势接管（§3.4），原生拖拽区会吞掉指针事件、让轻弹测速失效。
 blob 态隐藏标题栏（64×64 放不下，且泊车就是「最小化到只剩读数」）。
 
 ## 4. 前端结构
@@ -101,6 +125,7 @@ src/components/float/      # 与程序内浮条共用的内容组件与快照构
   WorkoutFloatContent.vue  #   同上（两行版）
   snapshot.ts              #   buildFocusSnapshot(pomo) / buildWorkoutSnapshot(rt) / endSheet 文案
 src/system/globalFloat.ts  # 主窗口侧运行时：状态机（显示时机 / 形态 / 关闭抑制）、快照推送、动作执行
+src/composables/useFloatDock.ts # 浮窗窗口级停靠手势：拖窗 / 轻弹 / 弹簧 / 橡皮筋 / 槽位持久化（useDragDock 的窗口版）
 src/services/floatService.ts # IPC 封装（§5.1 命令表）
 src/pages/GlobalFloatPage.vue        # 三级设置页（开关 / 授权状态 / 权限开关教程 / 出现与收起）
 src/components/layout/AppTitleBar.vue          # 主窗口自绘标题栏
@@ -166,6 +191,15 @@ export interface GlobalFloatStatus {
   visible: boolean
 }
 
+/** 浮窗所在显示器的工作区（逻辑像素，虚拟屏幕坐标，与 LogicalPosition 同口径）。
+ *  读不到显示器时回零矩形；非 Windows 平台恒零（原生浮层不用它）。 */
+export interface GlobalFloatWorkArea {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export type GlobalFloatActionName = 'pause' | 'resume' | 'complete' | 'end' | 'open' | 'immerse' | 'close' | 'form'
 export interface GlobalFloatAction {
   action: GlobalFloatActionName
@@ -184,7 +218,8 @@ export interface GlobalFloatAction {
 | `global_float_close` | — | `()` | hide 窗口 | stop 服务 |
 | `global_float_push` | `payload: GlobalFloatStatePayload` (JSON) | `()` | 缓存 + `emit_to("float", "rein://float/state")`（载荷字符串） | 缓存 + JNI `update` |
 | `global_float_latest` | — | `string` | 最近一次 payload（无则空串） | 同 |
-| `global_float_set_form` | `form: 'bar' \| 'blob' \| 'confirm'` | `()` | 改窗口尺寸（右/下边锚定；confirm = 结束确认的临时长高 430×172） | JNI `setForm` |
+| `global_float_set_form` | `form: 'bar' \| 'blob' \| 'confirm'` | `()` | **只改窗口尺寸，不动位置**（位置由浮窗前端持有；confirm = 结束确认的临时长高 430×172） | JNI `setForm` |
+| `global_float_work_area` | — | `GlobalFloatWorkArea` | 浮窗所在显示器工作区（逻辑像素；current_monitor 优先，回退 primary；读不到回零矩形） | 零矩形（原生浮层自己量屏幕） |
 | `global_float_request_permission` | — | `GlobalFloatStatus` | 空操作 | 跳「在其他应用上显示」设置页 |
 | `global_float_take_action` | — | `string` | 恒空串 | 读走即清：浮层按钮产生的动作 JSON（冷启动兜底） |
 
@@ -195,8 +230,11 @@ export interface GlobalFloatAction {
 | `rein://float/state` | Rust → 浮窗 | `GlobalFloatStatePayload`（JSON 字符串透传） |
 | `rein://float/action` | 浮窗 → 主窗口 | `GlobalFloatAction` |
 
-浮窗启动时先 `invoke('global_float_latest')` 渲染首帧，再 `listen('rein://float/state')`；每次收到 state 后回发
-`{ action: 'form', form }`? **不**：形态由主窗口决定并随 payload 下发，浮窗只渲染。
+浮窗启动时先 `invoke('global_float_latest')` 渲染首帧，再 `listen('rein://float/state')`。
+形态偏好仍由主窗口持久化（`rein.float.form.v1`）并随 payload 下发，但**切换由浮窗发起**：
+手势 / 按钮先直接调 `global_float_set_form` 改尺寸（跟手，不等主窗口往返），再发
+`{ action: 'form', form }` 给主窗口落偏好 + 推新载荷；浮窗对本地发起的形态做乐观渲染，
+回声到达前不被旧 payload 回滚。confirm 完全在浮窗本地（§3.3），不回发动作。
 
 Android 原生浮层 → 前端：JNI 侧 `evaluateJavascript` 派发
 `window.dispatchEvent(new CustomEvent('rein-float-action', { detail: <GlobalFloatAction JSON> }))`；
@@ -239,7 +277,7 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 | skipTaskbar | true（tao 用 ITaskbarList.DeleteTab：**不进任务栏**；Alt+Tab 仍可能出现，系统级取消需 WS_EX_TOOLWINDOW，见 §11） |
 | resizable / maximizable / minimizable | false / false / false |
 | focusable | true（要能点按钮；点它不顺带抢走主窗口的「失焦」判定） |
-| 初始位置 | 主屏工作区右下角，边距 24；用户拖动后位置由 Tauri 窗口本身持有 |
+| 初始位置 | 主屏工作区**底边居中**（默认槽，边距 12）；页面载入后按持久化槽位落位（§3.4）。hide/show 不丢位；跨重启按槽位重算 |
 
 浮窗隐藏（不销毁）→ 再开时先 `global_float_push` 最新 payload 再 show，避免闪旧帧。
 
@@ -250,7 +288,9 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 - 主窗口：`core:window:allow-minimize` / `allow-toggle-maximize` / `allow-maximize` / `allow-unmaximize` /
   `allow-is-maximized` / `allow-close` / `allow-show` / `allow-set-focus` / `allow-start-dragging` /
   `allow-start-resize-dragging`
-- 浮窗：`core:event:allow-listen` / `allow-emit` / `allow-unlisten` / `allow-start-dragging`
+- 浮窗：`core:event:allow-listen` / `allow-emit` / `allow-unlisten` / `allow-start-dragging` /
+  `core:window:allow-set-position`（自定义拖窗；读取类 outer-position / inner-size / current-monitor /
+  scale-factor 已在 `core:window:default` 里）
 
 ## 8. 扩展路径（不在本轮）
 
@@ -261,8 +301,10 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 
 1. 程序内浮条行为、文案、动画**零变化**（既有 e2e 全绿）。
 2. 桌面：主窗口无系统标题栏；自绘标题栏可拖 / 双击最大化 / 三颗控制钮可用 / 八向可缩放；浅色暗色都正常。
-3. 桌面：专注或训练进行中，主窗口失焦 → 浮窗出现在右下角、置顶、无系统边框、内容与浮条一致；
+3. 桌面：专注或训练进行中，主窗口失焦 → 浮窗出现在默认槽（工作区底边居中）、置顶、无系统边框、内容与浮条一致；
    主窗口回焦 → 浮窗消失；点击浮窗暂停 / 继续 / 结束（内联确认）/ 打开 / 沉浸都生效。
+   手势与程序内浮条同款：整壳可拖、轻弹左右泊车为 blob、轻弹上下停靠为 bar、慢放最近槽位、
+   弹簧落位、blob 轻点展开回 bar、泊车键吸附最近侧；槽位跨重启按工作区重算。
 4. Android：未授权时「设置 › 全局浮窗」页如实提示且只有程序内浮条；授权后离开应用出现原生浮层，
    按钮可暂停 / 继续 / 结束；关掉应用内开关 / 会话结束 → 浮层消失。
 5. `npm run contract` / `lint` / `typecheck` / `build` / `cargo clippy -- -D warnings` 全绿。
@@ -330,13 +372,33 @@ Kotlin `object GlobalFloatBridge`（`com.gozaoo.rein`），全部 `@JvmStatic`�
 - **UIA 里相位与读数是同一个节点**（名字形如 `专注中 24:57`），旧助手用「第一个 mm:ss」
   取读数会抓到番茄钟卡片上的 `00:00`。现在 `phaseOf` 剥掉读数、`statOf` 优先取带相位的那个名字。
 
+**2026-11-07 手势改造复跑实测（三条）**：
+
+1. **本类自动化会话里 Rust 命令通道可能整体挂起**：从应用自己的 webview（CDP 9233 通了）
+   `invoke('global_float_status')` 8s 不返回，`global_float_push/open` 同样超时 —— 与上面
+   2026-10-21 第 2 条同症状且更重。于是 `trackFocus` 卡在第一个 `await isFocused()`、
+   `appFocused` 恒 true，浮窗显示闸与一切手势真机断言都驱动不到（临时配置 `focus: false`
+   也救不了：初读那条 IPC 本身就挂）。**浮窗真机验收必须在 IPC 健康的交互式桌面会话跑**；
+   自动化会话里如实标「不可判」，不要把环境挂起当成代码回归。
+   专项工装：`scratch/verify-float-gestures.mjs`（Win32/UIA 断言默认槽 / 泊车吸边 / 展开回槽 /
+   confirm 底边锚定 / 合成拖拽轻弹；CDP 探针先判 IPC 死活）。
+2. **Vue Boolean prop 缺省会被 cast 成 false**：TitleBarBase 的 `nativeDrag?: boolean` 若不
+   withDefaults 显式给 true，主窗口（不传该 prop）会命中 `=== false` 分支被卸掉 drag region
+   （真机 A2.1a 实测抓到）。浮窗传 false 不受影响，故只坏主窗口 —— 隐蔽，改这类开关 prop 必给默认值。
+3. **共享 WebView2 profile 会带着上一轮会话残局**：`REIN_DATA_DIR` 只重定向 Rust 侧数据目录，
+   localStorage（番茄钟 live / 浮窗偏好）在 `%LOCALAPPDATA%/<identifier>/EBWebView` 全进程共享。
+   真机工装起跑前先认「继续 / 开始专注」两种按钮，别假设空闲态。
+
 ## 11. 已知限制（有意取舍）
 
 1. **训练课读数靠主窗口心跳**：训练的统计行含计时读数，由主窗口每秒推一次；主窗口被系统节流
    （最小化久了）时可能停在最后一秒。专注不走这条路 —— 它的 clock 由浮窗本地推算，断流也准。
    真机若复现，给训练也加 clock 即可（快照字段已预留位置，改构造器一处）。
-2. **窗口位置不跨重启**：桌面浮窗拖动后 hide / show 不丢位，但进程重启回到右下角默认位
-   （多屏 / DPI 变化下恢复旧坐标可能落在屏幕外，宁可回默认），见 §3.4。
+2. **桌面拖拽不跨屏**：浮窗限制在当前显示器工作区内（与程序内浮条限制在视口内同义），
+   越界走橡皮筋。位置以**槽位**持久化（相对工作区），跨重启按当前工作区重算，多屏/DPI
+   变化也落在屏内；首次建窗到页面载入之间可能先在默认槽闪一帧再落到持久化槽位。
+   Android 原生浮层仍是「拖拽吸附左右边 + 长按泊车」的近似，未搬轻弹/弹簧（原生侧无编译
+   验证环境，改动风险大于收益）。
 3. **Android 玻璃是近似的**：原生浮层用 GradientDrawable 半透明底 + 圆角 + 描边重建浮条观感，
    不跑 backdrop-filter 折射（系统浮层里没有可采样的背后内容）。文案 / 按钮 / 色点语义与程序内一致。
 4. **Android 前台服务常驻通知**：浮窗服务在整个会话期间是一条 LOW 重要度通知（系统要求），

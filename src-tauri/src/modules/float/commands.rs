@@ -1,4 +1,4 @@
-//! 全局沉浸浮窗命令族（docs/GLOBAL-FLOAT.md §5.2，共 8 条）。
+//! 全局沉浸浮窗命令族（docs/GLOBAL-FLOAT.md §5.2，共 9 条）。
 //!
 //! 薄壳：只做「平台分支 + 组装返回值」，实现分别在 `mod.rs` 的桌面 / Android 段。
 //! 全部是**同步 fn** —— Tauri 同步命令跑在主线程，建窗 / 改尺寸才安全（改 async 会在
@@ -184,6 +184,32 @@ pub fn global_float_set_form(
     {
         let _ = (webview, form);
         Ok(())
+    }
+}
+
+/// 浮窗所在显示器的工作区（逻辑像素，虚拟屏幕坐标；前端 `GlobalFloatWorkArea`，§5.1）。
+/// 浮窗前端用它算停靠槽位与橡皮筋边界。其它平台回零矩形（原生浮层自己量屏幕）。
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalFloatWorkArea {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// 工作区查询：桌面读浮窗所在显示器（§5.2）；其它平台恒零矩形，前端据此跳过落位。
+#[tauri::command]
+pub fn global_float_work_area(webview: tauri::Webview<tauri::Wry>) -> Result<GlobalFloatWorkArea> {
+    #[cfg(target_os = "windows")]
+    {
+        let (x, y, width, height) = super::desktop_work_area(&webview);
+        Ok(GlobalFloatWorkArea { x, y, width, height })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = webview;
+        Ok(GlobalFloatWorkArea { x: 0.0, y: 0.0, width: 0.0, height: 0.0 })
     }
 }
 

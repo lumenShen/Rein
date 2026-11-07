@@ -63,6 +63,34 @@ html.float-win body {
   overflow: hidden;
 }
 
+/* ---------- 手势反馈（与程序内 .dock-body 同一档） ----------
+   按下 0.97 / 拖起 1.03 + 浮起阴影。窗口只比壳大两侧各 12，1.03 的放大上下各裁不到
+   2px（圆角极值处），阴影由窗口自带的 DWM shadow 补深度 —— 手感与程序内一致。 */
+.float-shell,
+.float-blob {
+  transition:
+    transform var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+}
+
+.float-shell.pressing,
+.float-blob.pressing {
+  transform: scale(0.97);
+}
+
+.float-shell.dragging,
+.float-blob.dragging {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-float-lift);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-shell,
+  .float-blob {
+    transition: none;
+  }
+}
+
 /* ---------- 条内容区 ----------
    紧凑标题栏 32 由 TitleBarBase 给，剩下的高度全给内容：
    bar 态内容在窗口里垂直居中（focus 内容高 34 → 上下各 12；workout 高 38 → 上下各 10，
@@ -88,7 +116,7 @@ html.float-win body {
 
 /* ---------- blob 泊车态 ----------
    与 .dock-body.is-blob 同一套：64×64 / 圆角 20 / 竖排 / gap 4。
-   拖动与轻点展开在 FloatApp 里自己判位移（原生 drag region 会吞掉点击）。 */
+   拖动与轻点展开由 useFloatDock 的整壳手势接管（与条同源，位移越过 8px 才算拖）。 */
 .float-blob {
   position: relative;
   width: 100%;

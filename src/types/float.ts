@@ -100,6 +100,17 @@ export interface GlobalFloatStatus {
   visible: boolean
 }
 
+/**
+ * 浮窗所在显示器的工作区（逻辑像素，虚拟屏幕坐标，与 LogicalPosition 同口径）。
+ * 浮窗前端用它算停靠槽位与橡皮筋边界；读不到显示器 / 非 Windows 时为零矩形。
+ */
+export interface GlobalFloatWorkArea {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 /** 浮窗发给主窗口的动作名（两端同一份） */
 export type GlobalFloatActionName =
   | 'pause'

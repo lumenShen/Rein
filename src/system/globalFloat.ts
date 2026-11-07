@@ -235,7 +235,7 @@ export function setFloatEnabled(on: boolean): void {
   void sync()
 }
 
-/** 切换形态（浮窗标题栏的泊车键 / blob 轻点） */
+/** 切换形态（浮窗标题栏泊车键 / blob 轻点 / 拖拽轻弹，经 form 动作回到这里落偏好） */
 export function setFloatForm(form: GlobalFloatForm): void {
   floatForm.value = form
   try {
@@ -243,8 +243,8 @@ export function setFloatForm(form: GlobalFloatForm): void {
   } catch {
     /* 同上 */
   }
-  // 形态由主窗口决定：先让原生侧改窗口尺寸，再把新载荷推过去（顺序不能反，
-  // 否则浮窗会先按旧尺寸渲染一帧）
+  // 先让原生侧归一尺寸再推新载荷（顺序不能反，否则浮窗会先按旧尺寸渲染一帧）。
+  // 桌面浮窗发起的切换通常已自己改过尺寸，这一步是幂等 no-op；Android / 外部调用仍靠它。
   void (async () => {
     if (!isTauri) return
     try {
@@ -360,17 +360,10 @@ async function handleAction(raw: GlobalFloatAction | null | undefined): Promise<
       }
       break
     case 'form':
-      // bar / blob 是持久形态（用户偏好）；confirm 只是结束确认期的临时长高，
-      // 不进偏好 —— 也正因为如此，它只改窗口形状，不动已下发的载荷。
-      if (raw.form === 'confirm') {
-        try {
-          await floatService.setForm('confirm')
-        } catch {
-          /* 长高失败就挤在 bar 高度里渲染：内容可截断，动作仍然可点 */
-        }
-      } else if (raw.form === 'bar' || raw.form === 'blob') {
-        setFloatForm(raw.form)
-      }
+      // bar / blob 是持久形态（用户偏好）。浮窗手势已先直接调 set_form 改尺寸（跟手），
+      // 这里只落偏好 + 推新载荷（set_form 幂等，重复调用是 no-op）；
+      // confirm 长高完全在浮窗本地锚定，不会经这条动作回来。
+      if (raw.form === 'bar' || raw.form === 'blob') setFloatForm(raw.form)
       break
   }
   // 动作改变状态后立即刷新一次（不必等 1s 心跳）：open/close 之外，暂停/结束都会改快照

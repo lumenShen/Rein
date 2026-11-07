@@ -10,10 +10,13 @@ import FocusFloatBlob from '@/components/float/FocusFloatBlob.vue'
 import FocusFloatContent from '@/components/float/FocusFloatContent.vue'
 import WorkoutFloatBlob from '@/components/float/WorkoutFloatBlob.vue'
 import WorkoutFloatContent from '@/components/float/WorkoutFloatContent.vue'
+import { useFloatDock } from '@/composables/useFloatDock'
 import { useLiquidGlass } from '@/composables/useLiquidGlass'
+import { floatService } from '@/services/floatService'
 import { isTauri } from '@/services/transport'
 import { liquidGlass, perfMode, type PerfMode } from '@/system/perf'
 import { motionLevel, type MotionLevel } from '@/system/motion'
+import { isTauriDesktopWindow } from '@/system/windowChrome'
 import { fmtClockSec } from '@/utils/clock'
 import type {
   GlobalFloatAction,
@@ -37,10 +40,13 @@ import type {
  *  · 渲染：外壳用与程序内浮条同一套 .glass-surface + useLiquidGlass；条 / 方块内容与
  *    程序内**是同一批组件**（components/float/*），所以状态点、文案、按钮顺序不会漂。
  *  · 发动作：所有按钮都只把 GlobalFloatAction 发回 `rein://float/action`，真正的状态机
- *    在主窗口的 globalFloat（浮窗不持有任何状态，也就不存在两个真源）。
+ *    在主窗口的 globalFloat（浮窗不持有任何会话状态，也就不存在两个真源）。
+ *  · 拖拽停靠：useFloatDock 持有**窗口位置** —— 与程序内浮条同款手势（整壳拖、轻弹
+ *    左右泊车 / 上下停靠、弹簧落位、橡皮筋边界）。形态切换先直接调 set_form 改尺寸
+ *    （跟手），再发 form 动作给主窗口落偏好；confirm 长高完全在本地锚定。
  *
- * 窗口形态（bar 430×92 / blob 64×64 / confirm 430×172）由 Rust 改，本页只发
- * `{ action: 'form', form }`。confirm 只为结束确认临时长高，不进持久化偏好。
+ * 窗口形状尺寸（bar 430×92 / blob 64×64 / confirm 430×172）由 Rust 改，位置由本页持有。
+ * confirm 只为结束确认临时长高，不进持久化偏好。
  *
  * 浏览器直接打开 float.html（没有 Tauri）时：不启动事件通道、不发动作，渲染「等待会话」
  * 空态 —— 这一页是独立入口，任何未捕获异常都会在桌面端表现为一个空白浮窗。
@@ -107,6 +113,39 @@ const emptyHint = isTauri
   ? '专注或训练进行中时，这里会显示控制条'
   : '浏览器预览：系统浮窗只在桌面 / Android 应用里出现'
 
+/* ---------- 拖拽停靠（窗口位置的唯一持有者） ---------- */
+
+/** 本地发起的形态切换正在等主窗口回声：期间不被旧 payload 的 form 回滚（见 applyPayload） */
+let formEchoPending = false
+let formEchoAt = 0
+
+const {
+  pressing,
+  dragging,
+  onPointerDown,
+  parkToSide,
+  expandToBar,
+  redock,
+  openConfirm,
+  closeConfirm,
+} = useFloatDock({
+  form,
+  active: computed(() => isTauriDesktopWindow && displaySnapshot.value != null && !confirmOpen.value),
+  changeForm: async (next) => {
+    formEchoPending = true
+    formEchoAt = Date.now()
+    // 先改尺寸再渲染新形态：避免 blob 内容先在 430 宽的窗里拉成一帧
+    try {
+      await floatService.setForm(next)
+    } catch {
+      /* 改尺寸失败不影响内容：下一次主窗口归一形状会再改一次 */
+    }
+    form.value = next
+    if (next === 'blob') confirmOpen.value = false
+    sendAction({ action: 'form', form: next })
+  },
+})
+
 /* ---------- 载荷与首帧 ---------- */
 
 const PERF_VALUES = ['low', 'high', 'ultra', 'extreme'] as const
@@ -161,10 +200,20 @@ function applyPayload(raw: unknown): void {
   const payload = data as Partial<GlobalFloatStatePayload>
   if (!isSnapshot(payload.snapshot)) return
   snapshot.value = payload.snapshot
-  form.value = payload.form === 'blob' ? 'blob' : 'bar'
+  const incoming: GlobalFloatForm = payload.form === 'blob' ? 'blob' : 'bar'
+  if (formEchoPending) {
+    // 本地刚切过形态：主窗口回声到达前忽略旧 form（心跳可能抢在动作处理前推一帧旧值）；
+    // 3s 还没等到回声（主窗口已关等）就放弃保护，照常接受载荷
+    if (incoming === form.value || Date.now() - formEchoAt > 3000) {
+      formEchoPending = false
+      form.value = incoming
+    }
+  } else {
+    form.value = incoming
+  }
   applyTiers(payload.perf, payload.motion)
   nowMs.value = Date.now()
-  if (form.value === 'blob') confirmOpen.value = false
+  if (form.value === 'blob' && confirmOpen.value) cancelEnd()
   // 结束确认期间会话进入结束（end 消失）：确认已无意义，收回并让窗口恢复 bar 高度
   if (confirmOpen.value && !payload.snapshot.end) cancelEnd()
 }
@@ -184,24 +233,24 @@ function onPrimary(): void {
   sendAction({ action: primary.id })
 }
 
-/** 结束按钮：进入内联确认，并请主窗口把窗口临时长高（放得下完整标题与两条动作文案） */
+/** 结束按钮：进入内联确认，窗口临时长高（底边锚定由 useFloatDock 落实，不发 form 动作） */
 function startEnd(): void {
-  if (!displaySnapshot.value?.end) return
+  if (!displaySnapshot.value?.end || confirmOpen.value) return
   confirmOpen.value = true
-  sendAction({ action: 'form', form: 'confirm' })
+  void openConfirm()
 }
 
 function cancelEnd(): void {
   if (!confirmOpen.value) return
   confirmOpen.value = false
-  sendAction({ action: 'form', form: 'bar' })
+  void closeConfirm()
 }
 
-/** 确认某个结束选项：先发会话动作，再请窗口回到 bar 高度（顺序与主窗口的预期一致） */
+/** 确认某个结束选项：先发会话动作，再收回确认高度（位置还原由 useFloatDock 落实） */
 function pickEnd(option: string): void {
   confirmOpen.value = false
   sendAction({ action: 'end', option })
-  sendAction({ action: 'form', form: 'bar' })
+  void closeConfirm()
 }
 
 function onOpen(): void {
@@ -212,17 +261,12 @@ function onImmerse(): void {
   sendAction({ action: 'immerse' })
 }
 
-function park(): void {
-  sendAction({ action: 'form', form: 'blob' })
-}
-
-function expandFromBlob(): void {
-  sendAction({ action: 'form', form: 'bar' })
-}
-
 function closeWindow(): void {
   // 窗口马上要被主窗口收走：本地先退出确认态，避免下次显示时还挂着一行「确认」
-  confirmOpen.value = false
+  if (confirmOpen.value) {
+    confirmOpen.value = false
+    void closeConfirm()
+  }
   sendAction({ action: 'close' })
 }
 
@@ -238,9 +282,9 @@ function onKeydown(e: KeyboardEvent): void {
 /**
  * 浮窗失焦 / 被隐藏时收回结束确认。
  *
- * 关键在「也要发 form bar」：确认态把窗口临时长高了，如果只把本地状态改回 bar，
- * 下次显示时窗口仍是 172 高、而内容只有一条浮条，底部会空出一大块。主窗口收到
- * form bar 会把窗口归一回 92 高（即使此刻窗口是隐藏的，下次 show 前也会再归一一次）。
+ * 关键在「也要还原窗口高度与位置」：确认态把窗口临时长高了，如果只把本地状态改回 bar，
+ * 下次显示时窗口仍是 172 高、而内容只有一条浮条，底部会空出一大块。closeConfirm 会把
+ * 尺寸归一回 92 并还原确认前的位置（即使此刻窗口是隐藏的，下次 show 前也会再归一一次）。
  */
 function onWindowBlur(): void {
   cancelEnd()
@@ -248,56 +292,7 @@ function onWindowBlur(): void {
 
 function onVisibilityChange(): void {
   if (document.visibilityState === 'hidden') cancelEnd()
-}
-
-/* ---------- blob 拖动 + 轻点展开 ----------
- * blob 整块既是「拖窗口」又是「轻点展开」，不能直接用 data-tauri-drag-region：
- * 原生 drag region 在 mousedown 时就把点击让给系统移动循环，点击事件不再回到 webview，
- * 于是「轻点展开」永远收不到。这里自己判位移：超过 4px 才调 startDragging（原生接管移动），
- * 没超过就是一次轻点。
- */
-let dragOrigin: { x: number; y: number } | null = null
-let blobDragging = false
-
-function onBlobPointerDown(e: PointerEvent): void {
-  if (!isTauri || e.button !== 0) return
-  dragOrigin = { x: e.clientX, y: e.clientY }
-  blobDragging = false
-  window.addEventListener('pointermove', onBlobPointerMove)
-  window.addEventListener('pointerup', onBlobPointerUp, { once: true })
-  window.addEventListener('pointercancel', onBlobPointerUp, { once: true })
-}
-
-function onBlobPointerMove(e: PointerEvent): void {
-  if (!dragOrigin || blobDragging) return
-  if (Math.hypot(e.clientX - dragOrigin.x, e.clientY - dragOrigin.y) < 4) return
-  blobDragging = true
-  void startWindowDrag()
-}
-
-async function startWindowDrag(): Promise<void> {
-  try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    await getCurrentWindow().startDragging()
-  } catch {
-    /* 拖不动（权限缺失 / 非桌面）就留在原地：内容仍然可点 */
-  }
-  // 原生移动循环会吞掉 pointerup：主动收掉监听，别留下悬空的全局 handler
-  cleanupBlobDrag()
-}
-
-function onBlobPointerUp(): void {
-  const wasDragging = blobDragging
-  cleanupBlobDrag()
-  if (!wasDragging) expandFromBlob()
-}
-
-function cleanupBlobDrag(): void {
-  dragOrigin = null
-  blobDragging = false
-  window.removeEventListener('pointermove', onBlobPointerMove)
-  window.removeEventListener('pointerup', onBlobPointerUp)
-  window.removeEventListener('pointercancel', onBlobPointerUp)
+  else void redock() // 重新显示：按持久化槽位落位（hide/show 不丢位，换屏后重算）
 }
 
 /* ---------- 生命周期 ---------- */
@@ -317,6 +312,8 @@ async function bootstrap(): Promise<void> {
   } catch {
     /* 事件通道不可用：空态已能自证，不抛未捕获异常 */
   }
+  // 首帧形态已知后按持久化槽位落位（Rust 建窗只给默认槽，这里纠正到用户停的位置）
+  await redock()
 }
 
 onMounted(() => {
@@ -339,7 +336,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('blur', onWindowBlur)
   document.removeEventListener('visibilitychange', onVisibilityChange)
-  cleanupBlobDrag()
 })
 </script>
 
@@ -362,6 +358,7 @@ onBeforeUnmount(() => {
       <FloatTitleBar
         title="Rein 浮窗"
         :show-actions="false"
+        :native-drag="false"
       />
       <div class="float-empty">
         <p class="fe-title">等待会话</p>
@@ -369,17 +366,19 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- 泊车形态：64×64 玻璃方块（轻点展开回条，拖动整窗移动） -->
+    <!-- 泊车形态：64×64 玻璃方块（轻点展开回条，整块可拖；手势与条同源，见 useFloatDock） -->
     <div
       v-else-if="shape === 'blob'"
       class="float-blob glass-surface"
+      :class="{ pressing, dragging }"
       :style="glassStyle"
       role="button"
       tabindex="0"
       aria-label="展开浮条"
-      @pointerdown="onBlobPointerDown"
-      @keydown.enter="expandFromBlob"
-      @keydown.space.prevent="expandFromBlob"
+      @pointerdown="onPointerDown"
+      @click="expandToBar"
+      @keydown.enter="expandToBar"
+      @keydown.space.prevent="expandToBar"
     >
       <GlassFilter
         :id="glassFilterId"
@@ -395,12 +394,15 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <!-- 条 / 确认形态：同一块玻璃壳 + 常驻紧凑标题栏 -->
+    <!-- 条 / 确认形态：同一块玻璃壳 + 常驻紧凑标题栏。
+         整壳自定义拖拽（useFloatDock）：不挂原生 drag region —— 它会吞掉指针事件，
+         轻弹测速与按钮点击就都没了。确认态 active=false，手势自动让位。 -->
     <section
       v-else
       class="float-shell glass-surface"
+      :class="{ pressing, dragging }"
       :style="glassStyle"
-      data-tauri-drag-region="deep"
+      @pointerdown="onPointerDown"
     >
       <GlassFilter
         :id="glassFilterId"
@@ -410,7 +412,8 @@ onBeforeUnmount(() => {
         :title="titleLabel"
         :kind="titleKind"
         :tone="titleTone"
-        @park="park"
+        :native-drag="false"
+        @park="parkToSide"
         @close="closeWindow"
       />
 

@@ -252,6 +252,7 @@ pub fn run() {
             modules::float::commands::global_float_push,
             modules::float::commands::global_float_latest,
             modules::float::commands::global_float_set_form,
+            modules::float::commands::global_float_work_area,
             modules::float::commands::global_float_request_permission,
             modules::float::commands::global_float_take_action,
             // ai

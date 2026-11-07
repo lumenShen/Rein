@@ -11,10 +11,17 @@ import { isTauriDesktopWindow, toggleMaximizeWindow } from '@/system/windowChrom
  * 元素），而主窗口标题栏与浮窗标题栏是两个组件、视觉必须同一套 —— 所以按钮类
  * （.wbtn / .wbtn-danger）放在 base.css，见那里的注释。
  */
-defineProps<{
-  /** 浮窗紧凑版：高 32（--titlebar-h-compact），左右内边距也收一档 */
-  compact?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 浮窗紧凑版：高 32（--titlebar-h-compact），左右内边距也收一档 */
+    compact?: boolean
+    /** 挂原生 drag region（默认开）。全局浮窗传 false：整壳拖拽由 useFloatDock 的指针
+     *  手势接管 —— 原生拖拽区在 mousedown 就把指针让给系统移动循环，测不到轻弹速度。
+     *  必须给显式默认值：Boolean prop 缺省时被 Vue  cast 成 false，会把主窗口的拖拽区卸掉。 */
+    nativeDrag?: boolean
+  }>(),
+  { nativeDrag: true },
+)
 
 const root = ref<HTMLElement | null>(null)
 
@@ -22,6 +29,7 @@ const root = ref<HTMLElement | null>(null)
 const DRAG_REGION = 'deep'
 
 function setDragEnabled(on: boolean): void {
+  if (props.nativeDrag === false) return
   root.value?.setAttribute('data-tauri-drag-region', on ? DRAG_REGION : 'false')
 }
 
@@ -57,7 +65,7 @@ function restoreDragRegion(): void {
 }
 
 function onMouseDown(e: MouseEvent): void {
-  if (!isTauriDesktopWindow || e.button !== 0) return
+  if (!isTauriDesktopWindow || props.nativeDrag === false || e.button !== 0) return
   if (isInteractive(e.target)) return
   // 单击：确保拖拽区是开着的（可能还停在上一次双击的临时关闭窗口里）
   if (e.detail === 1) {
@@ -77,7 +85,7 @@ function onMouseDown(e: MouseEvent): void {
  * 因此不会出现「原生切一次 + 这里再切一次」的来回抵消。
  */
 function onDoubleClick(e: MouseEvent): void {
-  if (!isTauriDesktopWindow) return
+  if (!isTauriDesktopWindow || props.nativeDrag === false) return
   if (isInteractive(e.target)) return
   restoreDragRegion()
   void toggleMaximizeWindow()
@@ -97,7 +105,7 @@ onBeforeUnmount(() => {
     ref="root"
     class="titlebar"
     :class="{ compact }"
-    data-tauri-drag-region="deep"
+    :data-tauri-drag-region="nativeDrag === false ? undefined : DRAG_REGION"
     @mousedown="onMouseDown"
     @dblclick="onDoubleClick"
   >

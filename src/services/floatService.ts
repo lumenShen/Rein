@@ -10,7 +10,7 @@
  * 同一套「缓存 + 轮询收敛」）；调用方不要假设 open 之后 status 立刻为 true。
  * 契约见 docs/GLOBAL-FLOAT.md §5。
  */
-import type { GlobalFloatStatePayload, GlobalFloatStatus, GlobalFloatWindowShape } from '@/types'
+import type { GlobalFloatStatePayload, GlobalFloatStatus, GlobalFloatWindowShape, GlobalFloatWorkArea } from '@/types'
 import { invoke } from './transport'
 
 export const floatService = {
@@ -30,8 +30,12 @@ export const floatService = {
   /** 最近一次推送的载荷（浮窗首帧用；无则空串） */
   latest: () => invoke<string>('global_float_latest'),
 
-  /** 切换浮窗窗口形状：bar 全宽条 / blob 64×64 泊车方块 / confirm 结束确认的临时长高 */
+  /** 切换浮窗窗口形状：bar 全宽条 / blob 64×64 泊车方块 / confirm 结束确认的临时长高。
+   *  只改尺寸、不动位置 —— 位置由浮窗前端持有（拖拽 / 停靠 / confirm 锚定） */
   setForm: (form: GlobalFloatWindowShape) => invoke<void>('global_float_set_form', { form }),
+
+  /** 浮窗所在显示器工作区（逻辑像素）：停靠槽位与橡皮筋边界的量尺；非桌面回零矩形 */
+  workArea: () => invoke<GlobalFloatWorkArea>('global_float_work_area'),
 
   /** Android：跳「在其他应用上显示」授权页；桌面空操作 */
   requestPermission: () => invoke<GlobalFloatStatus>('global_float_request_permission'),

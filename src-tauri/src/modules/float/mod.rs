@@ -112,9 +112,10 @@ const WINDOW_LABEL: &str = "float";
 const WINDOW_URL: &str = "float.html";
 #[cfg(target_os = "windows")]
 const STATE_EVENT: &str = "rein://float/state";
-/// 初始位置：主屏工作区右下角的边距（逻辑像素，§6.2）
+/// 默认槽（工作区底边居中）距工作区底边的呼吸边距（逻辑像素，§3.4 / §6.2）。
+/// 页面载入后会按持久化槽位重新落位；这里只保证首帧不闪在系统默认位置。
 #[cfg(target_os = "windows")]
-const CORNER_MARGIN: f64 = 24.0;
+const EDGE_GAP: f64 = 12.0;
 
 /// 当前形状。窗口可能还没建（前端先 setForm 再 open），所以形状得在 Rust 侧记着，
 /// 建窗时直接按它定尺寸，避免「先按 bar 建出来、再改 blob」闪一帧。
@@ -170,17 +171,18 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .always_on_top(true)
         .skip_taskbar(true)
         .shadow(true)
-        // 先不显示：位置算好再 show，否则会在系统默认位置闪一帧再跳到右下角
+        // 先不显示：位置算好再 show，否则会在系统默认位置闪一帧再跳到默认槽
         .visible(false)
         .focused(false)
         .build()?;
-    place_bottom_right(&window, width, height);
+    place_default_slot(&window, width, height);
     Ok(window)
 }
 
+/// 首次建窗落在默认槽：主屏**工作区**底边居中（已扣掉任务栏）。
+/// 之后窗口位置由浮窗前端全权持有（拖拽 / 停靠 / 持久化槽位，§3.4），Rust 不再挪它。
 #[cfg(target_os = "windows")]
-fn place_bottom_right(window: &WebviewWindow, width: f64, height: f64) {
-    // 用主屏**工作区**（已扣掉任务栏）而不是整块屏幕：任务栏在底部时浮窗才不会压住它
+fn place_default_slot(window: &WebviewWindow, width: f64, height: f64) {
     let monitor = window
         .primary_monitor()
         .ok()
@@ -194,12 +196,37 @@ fn place_bottom_right(window: &WebviewWindow, width: f64, height: f64) {
     let scale = monitor.scale_factor();
     let physical_width = (width * scale).round() as i32;
     let physical_height = (height * scale).round() as i32;
-    let margin = (CORNER_MARGIN * scale).round() as i32;
-    let x = work.position.x + work.size.width as i32 - physical_width - margin;
-    let y = work.position.y + work.size.height as i32 - physical_height - margin;
+    let gap = (EDGE_GAP * scale).round() as i32;
+    let x = work.position.x + (work.size.width as i32 - physical_width) / 2;
+    let y = work.position.y + work.size.height as i32 - physical_height - gap;
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         eprintln!("[float] 浮窗定位失败：{e}");
     }
+}
+
+/// 浮窗所在显示器的工作区（逻辑像素，虚拟屏幕坐标）。浮窗前端用它算停靠槽位与
+/// 橡皮筋边界 —— 与 `LogicalPosition` 同口径，前端不再做 DPI 换算。
+/// 读不到显示器时回零矩形（前端据此跳过落位，窗口留在原处）。
+#[cfg(target_os = "windows")]
+pub(crate) fn desktop_work_area(webview: &tauri::Webview<tauri::Wry>) -> (f64, f64, f64, f64) {
+    let app = webview.app_handle();
+    let float_window = app.get_webview_window(WINDOW_LABEL);
+    let monitor = float_window
+        .as_ref()
+        .and_then(|w| w.current_monitor().ok().flatten())
+        .or_else(|| float_window.as_ref().and_then(|w| w.primary_monitor().ok().flatten()))
+        .or_else(|| webview.window().current_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        return (0.0, 0.0, 0.0, 0.0);
+    };
+    let work = monitor.work_area();
+    let scale = monitor.scale_factor();
+    (
+        work.position.x as f64 / scale,
+        work.position.y as f64 / scale,
+        work.size.width as f64 / scale,
+        work.size.height as f64 / scale,
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -240,18 +267,15 @@ pub(crate) fn desktop_set_form(webview: &tauri::Webview<tauri::Wry>, form: &str)
         // 窗口还没建：形状已记下，open 建窗时按它定尺寸（前端就是先 setForm 再 open）
         return;
     };
-    if let Err(e) = resize_anchored(&window, shape) {
+    if let Err(e) = resize_only(&window, shape) {
         eprintln!("[float] 浮窗改尺寸失败：{e}");
     }
 }
 
-/// 改尺寸但保持右 / 下边钉在原处。
-///
-/// 右下角定位的浮窗如果只 set_size，左上角不动 → 视觉上整块往右下「长」，
-/// 泊车/展开时会甩出去一截。所以按「旧尺寸 - 新尺寸」把窗口位置补回去，
-/// 只让左 / 上边收缩（bar → blob 时正好往右下角收）。
+/// 只改尺寸，**不动位置**：窗口位置由浮窗前端全权持有（拖拽 / 停靠 / confirm 底边锚定
+/// 都在前端算，§3.4）。Rust 若再按旧锚点补位置，会和前端的弹簧落位互相打架。
 #[cfg(target_os = "windows")]
-fn resize_anchored(window: &WebviewWindow, shape: FloatShape) -> tauri::Result<()> {
+fn resize_only(window: &WebviewWindow, shape: FloatShape) -> tauri::Result<()> {
     let (width, height) = shape.size();
     let scale = window.scale_factor()?;
     let current = window.inner_size()?;
@@ -262,14 +286,7 @@ fn resize_anchored(window: &WebviewWindow, shape: FloatShape) -> tauri::Result<(
     {
         return Ok(()); // 已经是目标形状：不重复 set_size，免得闪一下
     }
-    let delta_x = (current.width as f64 - target_width).round() as i32;
-    let delta_y = (current.height as f64 - target_height).round() as i32;
-    let position = window.outer_position()?;
-    window.set_size(LogicalSize::new(width, height))?;
-    window.set_position(PhysicalPosition::new(
-        position.x + delta_x,
-        position.y + delta_y,
-    ))
+    window.set_size(LogicalSize::new(width, height))
 }
 
 /* ==========================================================================

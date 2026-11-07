@@ -26,8 +26,10 @@ const props = withDefaults(
     tone?: GlobalFloatTone
     /** 右侧两颗窗口按钮是否出现（空态没有可泊 / 可关的会话） */
     showActions?: boolean
+    /** 原生拖拽区开关：全局浮窗整壳由 useFloatDock 接管，传 false（见 TitleBarBase） */
+    nativeDrag?: boolean
   }>(),
-  { showActions: true },
+  { showActions: true, nativeDrag: true },
 )
 
 const emit = defineEmits<{ park: []; close: [] }>()
@@ -44,7 +46,10 @@ const dotClass = computed(() => {
 </script>
 
 <template>
-  <TitleBarBase compact>
+  <TitleBarBase
+    compact
+    :native-drag="nativeDrag"
+  >
     <template #left>
       <span
         class="tb-dot"

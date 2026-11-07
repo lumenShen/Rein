@@ -7909,6 +7909,8 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay('' as unknown as T)
     case 'global_float_set_form':
       return delay(undefined as T)
+    case 'global_float_work_area':
+      return delay({ x: 0, y: 0, width: 0, height: 0 } as T)
     case 'global_float_request_permission':
       return delay({ supported: false, permitted: false, visible: false } as T)
     case 'global_float_take_action':
