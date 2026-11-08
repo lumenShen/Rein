@@ -57,9 +57,6 @@ import { motionRich } from '@/system/motion'
 const LONG_PRESS_MS = 480
 /** 长按位移阈值：超过它是滚动 / 滑动，不是长按（与 useNavDrag、bento 的 slop 同值） */
 const SLOP_PX = 8
-/** 换身吞窗：长按进编辑后第一次 click 吞掉（照 useBentoLayout 的 armClickSwallow 同款） */
-const CLICK_SWALLOW_MS = 400
-
 const ai = useAiStore()
 const navLayout = useNavLayoutStore()
 const navEdit = useNavEdit('tabbar')
@@ -237,7 +234,6 @@ function startTabPress(e: PointerEvent): void {
     tabPressTimer = null
     tabLongPressed = true
     navEdit.enter()
-    armClickSwallow() // 元素换身窗口（RouterLink → button 顶替）漏网的 click 一并吞掉
   }, LONG_PRESS_MS)
 }
 
@@ -247,12 +243,15 @@ function onTabPointerMove(e: PointerEvent): void {
   if (Math.hypot(e.clientX - tabPressX, e.clientY - tabPressY) > SLOP_PX) cancelTabPress()
 }
 
-function onTabClick(e: MouseEvent): void {
-  // 长按已经进过编辑态：这次抬手不该再当成一次跳转（DOM 换身通常已发生，这是兜底）
+/** 非编辑态点按 = 跳转。长按已经进过编辑态的那次抬手 click 在这里被吃掉：
+    元素换身（v-if 顶替）后 click 落在换身后的 button 上，不拦就是「进编辑的尾巴
+    顺手切了页」；部分安卓内核长按松手不发 click，无 click 就无跳转，天然兼容。 */
+function onTabActivate(id: string): void {
   if (tabLongPressed) {
-    e.preventDefault()
     tabLongPressed = false
+    return
   }
+  void router.push({ name: id })
 }
 
 /** 编辑态整格点击 = 撤回（「−」徽标是 aria-hidden 的装饰，键盘 Enter / 读屏激活落在
@@ -279,27 +278,6 @@ function onTabDown(e: PointerEvent, id: string): void {
   startTabPress(e)
 }
 
-/* ---------- 换身吞窗：只吞「还会导航的旧页签」 ----------
-   与 useBentoLayout 的 armClickSwallow 同款 capture 结构，但收敛了吞的范围：长按进编辑后
-   换身窗口期里点到的仍是 RouterLink（<a class="dock-tab">）才会跳走，要吞；编辑态的新 UI
-   （button 页签 / 「−」徽标 / 托盘）点上去无害，绝不能误吞 —— 安卓上长按松手多半
-   不发 click，全量吞窗会一直挂满 400ms，把进编辑后的第一次真实点按吃掉。 */
-let swallowAt = 0
-function armClickSwallow(): void {
-  swallowAt = Date.now()
-  document.addEventListener('click', onSwallowClick, { capture: true })
-}
-
-function onSwallowClick(e: MouseEvent): void {
-  const stale = !!(e.target as HTMLElement | null)?.closest('a.dock-tab')
-  if (Date.now() - swallowAt < CLICK_SWALLOW_MS && stale) {
-    e.preventDefault()
-    e.stopPropagation()
-    return
-  }
-  // 首个吞不掉的 click（点到编辑态 UI）或出窗：摘掉监听，一次性吞窗只管换身这一段
-  document.removeEventListener('click', onSwallowClick, { capture: true })
-}
 
 const dockItems = computed(() =>
   tabs.value.map((item) => ({ id: item.id, label: item.label, icon: item.icon })),
@@ -311,8 +289,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onVoiceWindowUp)
   window.removeEventListener('pointercancel', onVoiceWindowUp)
   if (aiVoiceInput.active) void aiVoiceCancel()
-  // 吞窗可能已装弹但 click 还没来（长按进编辑后立刻卸载）：摘掉监听，别留悬空的 handler
-  document.removeEventListener('click', onSwallowClick, { capture: true })
   // data-dock-quick 是本组件写到 <html> 上的：卸载（回到桌面壳）时撤掉，别留悬空让位
   delete document.documentElement.dataset.dockQuick
 })
@@ -372,9 +348,13 @@ onBeforeUnmount(() => {
             <Minus :size="11" :stroke-width="2.6" />
           </span>
         </button>
-        <RouterLink
+        <!-- 非编辑态也是 button（2026-11-08）：RouterLink 的 href 在安卓上长按弹原生
+             链接预览（「主页 http://…」气泡）并 pointercancel 掉长按手势 —— 编辑态进不去，
+             @contextmenu.prevent 也拦不住（WebView 原生层先动）。移动 Dock 的页签没有
+             「新标签打开 / 复制链接」语义，button + 程序化导航一根筋到底。 -->
+        <button
           v-else
-          :to="{ name: item.id }"
+          type="button"
           class="dock-tab glow-layer"
           :class="{ active }"
           :aria-current="active ? 'page' : undefined"
@@ -383,12 +363,12 @@ onBeforeUnmount(() => {
           @pointerup="cancelTabPress"
           @pointercancel="cancelTabPress"
           @pointerleave="cancelTabPress"
-          @click="onTabClick"
+          @click="onTabActivate(item.id)"
           @contextmenu.prevent
         >
           <component :is="item.icon" :size="18" :stroke-width="active ? 2.4 : 1.9" />
           <span>{{ item.label }}</span>
-        </RouterLink>
+        </button>
       </template>
     </GlassDockAssembly>
 

@@ -909,6 +909,11 @@ html[data-dock-quick='on'] {
      600 在 10px 上会把「主页 / 我」糊成一团粗点 */
   font-size: var(--fs-micro);
   font-weight: var(--fw-medium);
+  /* 安卓 WebView 对 <a> 的长按预览已随 RouterLink→button 退役；这两条兜住
+     残余的原生行为（文本选择 / 触控呼出），长按手势只属于「进编辑态」 */
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
   text-decoration: none;
   /* 摊开式页签：均分玻璃宽（--dock-tab-w 退役 —— 页签不再定宽 66） */
   flex: 1 1 0;
