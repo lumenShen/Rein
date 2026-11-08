@@ -92,7 +92,9 @@ function addCapped(id: string): void {
   align-items: center;
   gap: var(--gap-sm) var(--gap-md);
   padding: var(--gap-sm) var(--gap-md);
-  border-radius: var(--radius-full);
+  /* 圆角走卡片档（--radius-l 20）：托盘是多行面板（chips 换行 + 操作行），
+     胶囊 999px 在两行内容上读成怪异的大圆弧（用户实测截图）。 */
+  border-radius: var(--radius-l);
   border: 0.5px solid var(--line);
   background: var(--surface);
   color: var(--text-2);

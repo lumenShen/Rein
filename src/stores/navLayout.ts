@@ -63,6 +63,10 @@ export interface NavEntry {
 interface CatalogItem extends NavEntry {
   /** 仅 topbar：从未编辑时的缺省显隐（§types.ts 的 TopbarContribution.defaultOn） */
   defaultOn: boolean
+  /** 原生条目 = 目录声明里带本容器 surface 的条目。false = 跨容器并入的合并条目
+   *  （tabbar 目录并入 rail 目录，2026-11-08）—— 只进编辑候选与显式保存过的布局，
+   *  从未编辑时的缺省布局不含它们（缺省 Dock 仍是 主页,运动,我,AI）。 */
+  inDefault: boolean
   /** 归属插件 id（null = 内核条目，恒启用） */
   pluginId: string | null
   /** 声明序：从未编辑时的缺省排布按它排 */
@@ -113,6 +117,7 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
           action: t.action,
           to: t.to,
           defaultOn: t.defaultOn !== false,
+          inDefault: true,
           pluginId: t.pluginId,
           order: t.order,
         })
@@ -126,6 +131,7 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
           icon: k.icon,
           fixed: k.fixed.includes(scope),
           defaultOn: true,
+          inDefault: true,
           pluginId: null,
           order: k.order,
         })
@@ -137,9 +143,30 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
           icon: n.icon,
           fixed: false,
           defaultOn: true,
+          inDefault: true,
           pluginId: n.pluginId,
           order: n.order,
         })
+      }
+      // 底栏候选池向桌面左栏看齐（2026-11-08 用户定稿：多加些页面进底栏）：rail 目录
+      // 整并进 tabbar 目录。**必须并进目录本身** —— 只并 candidates 的话，托盘里加进的
+      // rail 页面保存后，渲染层按「失效 id 只过滤不写回」静默丢弃（用户实测：加课表 →
+      // 保存 → 页签消失）。inDefault=false 让缺省布局不含合并条目。
+      if (scope === 'tabbar') {
+        const seen = new Set(items.map((i) => i.id))
+        for (const n of features.navCatalog('rail')) {
+          if (seen.has(n.route)) continue
+          items.push({
+            id: n.route,
+            label: n.label,
+            icon: n.icon,
+            fixed: false,
+            defaultOn: true,
+            inDefault: false,
+            pluginId: n.pluginId,
+            order: n.order,
+          })
+        }
       }
     }
     // 按声明序收敛 + 同 id 去重：内核与插件贡献撞 id 属声明错误，渲染层不做第二份裁决
@@ -161,6 +188,7 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
     if (!stored) {
       return catalog
         .filter((c) => scope !== 'topbar' || c.defaultOn)
+        .filter((c) => scope !== 'tabbar' || c.inDefault)
         .map((c) => c.id)
     }
     // 固定件就位：声明序最小的固定件排最前（tabbar/rail = 主页/总览），其余殿后（tabbar = 我）
@@ -209,15 +237,7 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
     const features = useFeaturesStore()
     const catalog = catalogOf(scope, features)
     const inLayout = new Set(resolveIds(scope, catalog))
-    // 底栏候选池向桌面左栏看齐（2026-11-08 用户定稿：多加些页面进底栏）：rail 目录里
-    // 的页面也能加进底栏编辑 —— 「哪些页面合适」以桌面 rail 的注册面为准。默认布局
-    // 不受影响（resolveIds 只消费本容器目录，仍是 主页,运动,我,AI）；固定件照旧不进候选。
-    const pool = [...catalog]
-    if (scope === 'tabbar') {
-      const seen = new Set(pool.map((c) => c.id))
-      for (const c of catalogOf('rail', features)) if (!seen.has(c.id)) pool.push(c)
-    }
-    return pool
+    return catalog
       .filter((c) => !c.fixed && !inLayout.has(c.id))
       .filter((c) => c.pluginId === null || features.isEnabled(c.pluginId))
       .map(toEntry)
