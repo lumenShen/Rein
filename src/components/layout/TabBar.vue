@@ -412,8 +412,9 @@ onBeforeUnmount(() => {
 .dock {
   position: fixed;
   bottom: calc(var(--safe-bottom) + var(--dock-float));
-  left: calc(var(--safe-left) + var(--dock-float));
-  right: calc(var(--safe-right) + var(--dock-float));
+  /* 左右 = 页面栅格（与卡片边缘对齐；安全区的 20px 硬底只该管竖向手势带） */
+  left: var(--page-pad-x);
+  right: var(--page-pad-x);
   z-index: 60;
 }
 

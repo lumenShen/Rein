@@ -209,7 +209,15 @@ export const useNavLayoutStore = defineStore('navLayout', () => {
     const features = useFeaturesStore()
     const catalog = catalogOf(scope, features)
     const inLayout = new Set(resolveIds(scope, catalog))
-    return catalog
+    // 底栏候选池向桌面左栏看齐（2026-11-08 用户定稿：多加些页面进底栏）：rail 目录里
+    // 的页面也能加进底栏编辑 —— 「哪些页面合适」以桌面 rail 的注册面为准。默认布局
+    // 不受影响（resolveIds 只消费本容器目录，仍是 主页,运动,我,AI）；固定件照旧不进候选。
+    const pool = [...catalog]
+    if (scope === 'tabbar') {
+      const seen = new Set(pool.map((c) => c.id))
+      for (const c of catalogOf('rail', features)) if (!seen.has(c.id)) pool.push(c)
+    }
+    return pool
       .filter((c) => !c.fixed && !inLayout.has(c.id))
       .filter((c) => c.pluginId === null || features.isEnabled(c.pluginId))
       .map(toEntry)

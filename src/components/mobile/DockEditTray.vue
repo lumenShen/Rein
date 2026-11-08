@@ -82,8 +82,8 @@ function addCapped(id: string): void {
    它是每帧合成的预算位（ARCHITECTURE §5 的折射名单纪律）。 */
 .dock-edit-tray {
   position: fixed;
-  left: var(--safe-left);
-  right: var(--safe-right);
+  left: var(--page-pad-x);
+  right: var(--page-pad-x);
   bottom: calc(var(--safe-bottom) + var(--dock-float) + var(--dock-h) + var(--gap-md));
   /* Dock(60) 之上、Toast(120) 之下：编辑托盘是 Dock 的随行面，不与菜单 / 提示抢层级 */
   z-index: 61;

@@ -455,7 +455,11 @@ async function main() {
         onColor: getComputedStyle(onTab).color,
         probe: { name: 'Dock 未选中页签玻璃', x: r.left + 3, y: r.top + r.height / 2 },
         // 活动底：采页签左侧的底（避开居中的图标与微标签），量的是选中态的真实衬底
-        onProbe: { name: 'Dock 选中页签的活动底', x: rOn.left + 8, y: rOn.top + rOn.height / 2 },
+        // 活动底：采页签左侧的底（避开居中的图标与微标签），量的是选中态的真实衬底。
+        // 页签铺满导航区（2026-11-08）后首个页签贴着玻璃左缘，left+8 会落进玻璃圆角的
+        // 曲率带（边沿暗影 + 边缘折射），量出的衬底发绿发暗 —— 内移到 20（圆角带之外、
+        // 图标之前），与微标签实际読字位置同区。
+        onProbe: { name: 'Dock 选中页签的活动底', x: rOn.left + 20, y: rOn.top + rOn.height / 2 },
       }
     })()`
     const scrollContentUnderDock = `window.scrollTo(0, Math.round(document.documentElement.scrollHeight * 0.55))`
