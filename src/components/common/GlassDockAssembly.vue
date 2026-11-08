@@ -73,4 +73,14 @@ defineSlots<{
   width: 100%;
   height: auto;
 }
+
+/* 两行堆叠是本组件的**构图契约**：输入行在上、页签行在下。GlassSurface 的 .gbody
+   默认 row + 水平居中——插槽里的两个兄弟会并排成两列，页签行被挤到内容宽
+   （真机 412px 实测：页签行只剩 80px、每签 18px 宽、文字竖排糊字，e2e 断言只查
+   顺序没查几何所以桌面上一路绿灯）。转纵向 + 拉伸，两行各铺满玻璃宽，
+   页签行的 flex:1 均分这才成立；:deep 提特异度，压过 .gbody 的 scoped 声明。 */
+.dock-assembly :deep(.gbody) {
+  flex-direction: column;
+  align-items: stretch;
+}
 </style>

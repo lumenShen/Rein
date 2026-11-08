@@ -107,6 +107,13 @@ function probeMetrics(): Metrics {
   s.right = 'var(--safe-right)'
   s.bottom = 'var(--safe-bottom)'
   const br = probeEl.getBoundingClientRect()
+  // 底部让位区 = TabBar 本体 + 合并输入行。底栏两行化（2026-11）后 Dock 高
+  // 114（58 + 输入行 56），只让 --tabbar-h 的话浮条底部停靠会扎进输入行里，
+  // 被 Dock 整条盖住（真机 430×930 实测：浮条 752..812 vs Dock 753..869）。
+  // TabBar 把输入行显隐写在 <html data-dock-quick>（AI 页 / 编辑态收起），
+  // 这里跟着它加一截 —— 显隐变化时 useDragDock 的 observer 会重落位。
+  const quickH =
+    document.documentElement.dataset.dockQuick === 'on' ? numToken('--dock-quick-h', 56) : 0
   return {
     vw,
     vh,
@@ -114,7 +121,7 @@ function probeMetrics(): Metrics {
     safeT: tl.top,
     safeR: Math.max(0, vw - br.right),
     safeB: Math.max(0, vh - br.bottom),
-    tabH: numToken('--tabbar-h', 58),
+    tabH: numToken('--tabbar-h', 58) + quickH,
   }
 }
 
@@ -501,11 +508,32 @@ export function useDragDock(posEl: Ref<HTMLElement | null>, options?: { storageK
     { flush: 'post' },
   )
 
+  // 底栏输入行显隐（TabBar 写 <html data-dock-quick>）改变 Dock 实际占高：
+  // 已停靠的浮条要跟着重落位，否则导航一次就被长高了的 Dock 盖进里面。
+  // 拖拽 / 弹簧飞行中不抢（落位以结束态为准，弹簧 settle 自己会取新度量）。
+  let quickObserver: MutationObserver | null = null
+
   onMounted(() => {
     window.addEventListener('resize', onResize)
+    quickObserver = new MutationObserver(() => {
+      if (dragging.value || settling) return
+      if (!placed) return
+      refreshMetrics()
+      syncSize()
+      const c = slotCenter(slot.value)
+      cx = c.x
+      cy = c.y
+      writePos()
+    })
+    quickObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-dock-quick'],
+    })
   })
 
   onBeforeUnmount(() => {
+    quickObserver?.disconnect()
+    quickObserver = null
     detach()
     stopSpring()
     window.removeEventListener('resize', onResize)

@@ -804,6 +804,18 @@ async function main() {
       const cs = getComputedStyle(document.documentElement)
       return Object.fromEntries(${JSON.stringify(TOKEN_KEYS)}.map((k) => [k, cs.getPropertyValue(k).trim()]))
     })()`)
+    // 档位列表（.modes）的选中行高亮是**页面内容**，且随切档变化（超高 ↔ 极致）。
+    // 底栏两行化（114 高）后列表恰好躺进 Dock 输入行的半透明层后面 —— 两帧内容不同，
+    // 透过玻璃就是成片通道差。它比的是玻璃材质，背后内容必须逐像素一致：在**两帧之前**
+    // 隐掉整列（tier-equiv 是两帧之间注入的，只作用于 extreme 帧 —— 放那里会让 extreme
+    // 帧独缺这块内容，diff 反而炸到全带，实测 12323px）。
+    await evalJS(`(() => {
+      const s = document.createElement('style')
+      s.id = 'modes-hide'
+      s.textContent = '.modes{visibility:hidden}'
+      document.head.appendChild(s)
+    })()`)
+    await sleep(200)
     const ultraFrame = await shot('tier-ultra')
 
     ok('档位分段控件里有「极致」（4 档）', await pickTier('极致'), '找不到「极致」分段')
