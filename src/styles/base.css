@@ -872,6 +872,7 @@ html[data-perf='low'] .stage-dark {
    缺省（无属性）= 纯页签行高度 —— 桌面壳不挂 TabBar，一个像素都不多让。 */
 html[data-dock-quick='on'] {
   --dock-top: calc(var(--safe-bottom) + var(--dock-float) + var(--tabbar-h) + var(--dock-quick-h));
+  --dock-h: calc(var(--tabbar-h) + var(--dock-quick-h));
 }
 
 .dock-block {
@@ -888,7 +889,9 @@ html[data-dock-quick='on'] {
   display: flex;
   align-items: stretch;
   height: calc(var(--tabbar-h) - 2px);
-  padding: 0 var(--gap-tight);
+  /* 页签**强制铺满**导航区：不加内边距，flex:1 的页签从玻璃左缘吃到右缘
+     （2026-11-08 用户定稿——「拉伸底部按钮直至填充整个导航区」）。 */
+  padding: 0;
 }
 
 .dock-tab {

@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { Plus } from 'lucide-vue-next'
 
 import { useNavEdit } from '@/composables/useNavEdit'
-import { useNavLayoutStore, type NavEntry } from '@/stores/navLayout'
+import { useNavLayoutStore, TABBAR_MAX, type NavEntry } from '@/stores/navLayout'
 
 /**
  * Dock 编辑托盘（mobile 区）：Dock 上方的一条，移动端唯一的候选面 —— 桌面「全部菜单」
@@ -33,6 +33,16 @@ const chips = computed<NavEntry[]>(() => {
   const inDraft = new Set(draft.value ?? [])
   return enabled.value.filter((it) => !inDraft.has(it.id))
 })
+
+/** 页签数上限（TABBAR_MAX=5，固定件计入）：满了就禁用加回并提示 —— 静默拒绝会让
+    用户以为 chip 坏了。 */
+const full = computed(() => (draft.value?.length ?? 0) >= TABBAR_MAX)
+
+/** 加回：满员时提示而不落草稿 */
+function addCapped(id: string): void {
+  if (full.value) return
+  addToDraft(id)
+}
 </script>
 
 <template>
@@ -44,8 +54,9 @@ const chips = computed<NavEntry[]>(() => {
         type="button"
         class="tray-chip"
         :data-nav-id="c.id"
-        :aria-label="`加回${c.label}`"
-        @click="addToDraft(c.id)"
+        :aria-label="full ? `底栏最多 ${TABBAR_MAX} 个，先移除一个再加回${c.label}` : `加回${c.label}`"
+        :disabled="full"
+        @click="addCapped(c.id)"
       >
         <span class="tray-badge" data-nav-badge="+" aria-hidden="true">
           <Plus :size="11" :stroke-width="2.6" />
@@ -53,7 +64,8 @@ const chips = computed<NavEntry[]>(() => {
         <component :is="c.icon" :size="16" :stroke-width="1.9" />
         <span>{{ c.label }}</span>
       </button>
-      <span v-if="chips.length === 0" class="tray-empty">从页签上移除的模块会出现在这里</span>
+      <span v-if="chips.length === 0 && !full" class="tray-empty">从页签上移除的模块会出现在这里</span>
+      <span v-else-if="full" class="tray-empty">底栏最多 {{ TABBAR_MAX }} 个：先摘掉一个页签，再来加回</span>
     </div>
     <div class="tray-actions">
       <button type="button" class="tray-btn" @click="discard()">放弃变更</button>
@@ -63,7 +75,8 @@ const chips = computed<NavEntry[]>(() => {
 </template>
 
 <style scoped>
-/* Dock 上方一条：Dock 底 = safe-bottom + dock-float，顶再 + tabbar-h —— 再让一格 --gap-md。
+/* Dock 上方一条：Dock 底 = safe-bottom + dock-float，Dock 总高走 --dock-h
+   （两行 Dock = 页签行 + 输入行；纯页签形态回落 tabbar-h）—— 再让一格 --gap-md。
    布局键要并上 --safe-bottom：手机手势带上 Dock 整体上浮，托盘跟着抬，不然压在 Dock 上。
    材质与 DockHintBubble 同族（实底 + 描边 + 卡片影）：编辑态的临时面不上 backdrop-filter，
    它是每帧合成的预算位（ARCHITECTURE §5 的折射名单纪律）。 */
@@ -71,7 +84,7 @@ const chips = computed<NavEntry[]>(() => {
   position: fixed;
   left: var(--safe-left);
   right: var(--safe-right);
-  bottom: calc(var(--safe-bottom) + var(--dock-float) + var(--tabbar-h) + var(--gap-md));
+  bottom: calc(var(--safe-bottom) + var(--dock-float) + var(--dock-h) + var(--gap-md));
   /* Dock(60) 之上、Toast(120) 之下：编辑托盘是 Dock 的随行面，不与菜单 / 提示抢层级 */
   z-index: 61;
   display: flex;

@@ -53,7 +53,9 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import AiBoard from '@/components/ai/AiBoard.vue'
-import { MEAL_LABELS, MEAL_ORDER, suggestMeal } from '@/config/domain'
+import { DESKTOP_MIN, MEAL_LABELS, MEAL_ORDER, suggestMeal } from '@/config/domain'
+import { useMediaQuery } from '@/composables/useMediaQuery'
+import { isTauriDesktopWindow } from '@/system/windowChrome'
 import { useToast } from '@/composables/useToast'
 import { kbService } from '@/services/kbService'
 import { useAiStore } from '@/stores/ai'
@@ -75,6 +77,15 @@ const ai = useAiStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+
+/**
+ * 输入条是否**并入底栏 Dock**（2026-11-08 用户定稿：AI 页与其他页共用一块大玻璃）。
+ * 并入 = .composer Teleport 进 TabBar 的 #dock-ai-composer 宿主（移动端 / 窄浏览器）；
+ * 桌面三窗格没有 TabBar，输入条留在页内（贴窗口下缘），与底栏无从合并。
+ * 判定与 App 的 deskShell 同源：桌面 Tauri 恒否、浏览器看宽度。
+ */
+const isDesktop = useMediaQuery(`(min-width: ${DESKTOP_MIN}px)`)
+const embedInDock = computed(() => !(isTauriDesktopWindow || isDesktop.value))
 
 /** 该消息的气泡元数据（推理过程段 / 思考计时 / 是否被吸收） */
 function metaOf(m: AiMessage): ReturnType<typeof ai.getMeta> {
@@ -978,7 +989,12 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
          视口底部定位、直接压到 Dock 上（超出安全区）。挪出来之后：正文永远在它上面，
          玻璃仍然浮在页面上（两侧页边距 + 与 Dock 之间 10px 空气），只是没有东西从它
          下面穿过 —— 这也正是「挡住」的来源。折射名单见 .chips / .cbar 的注释。 -->
-    <div class="composer">
+    <!-- 输入条并入底栏（embedInDock）：.composer 整块 Teleport 进 TabBar 的
+         #dock-ai-composer 宿主 —— 引用 / @纪要 / 附图 / 文档芯片与输入行一起住进
+         那块大玻璃，与其他页面的合成 Dock 同一构图；桌面（:disabled）留在页内贴窗下缘。
+         Teleport disabled 时内容原位渲染，样式零拷贝。 -->
+    <Teleport to="#dock-ai-composer" :disabled="!embedInDock">
+    <div class="composer" :class="{ embedded: embedInDock }">
       <!-- 快捷操作条已撤掉：原来这里是两颗玻璃药丸「分析今日饮食」「草稿箱」。
            两颗都有问题：
              · 「分析今日饮食」—— analyzeToday 是三句**写死**的话（看 nutrition store
@@ -1092,6 +1108,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
         </div>
       </GlassSurface>
     </div>
+    </Teleport>
 
     <!-- 三个隐藏入口：系统相机 / 图库多选 / 文件（图片+Office+文本/Markdown） -->
     <input ref="fileEl" type="file" :accept="UPLOAD_ACCEPT" hidden @change="onFile">
@@ -1213,6 +1230,10 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 /* 桌面：没有底部 Dock（TabBar 只在移动端渲染），底栏贴着窗口下缘 */
 .desk-main .page {
   --cb-bottom: 26px;
+  /* 页面盒高度改吃 .desk-main（= 100dvh - 标题栏）：100dvh 是手机构图
+     （页面 = 整窗），桌面下多出标题栏那一截，输入条（bottom:26）会整个沉到
+     可视区外 —— 真机截图里发送键被窗口底边切掉一半，就是这 40px。 */
+  height: 100%;
 }
 
 /* 消息长按菜单：长按窗口内禁用原生文本选择，避免与「长按弹菜单」抢手势。
@@ -1405,6 +1426,18 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
    位置用 --cb-bottom 而不是写死：移动端要让开 Dock（--dock-top + --cb-gap），
    桌面没有 Dock（TabBar 只在移动端渲染），取页面自己的 padding-bottom。
    这条间距是 e2e-layout-guard.mjs 的断言之一（输入栏底 → Dock 顶 = 10）。 */
+/* 并入底栏（.embedded，Teleport 进 TabBar 的宿主）：页内 absolute 的定位与宽度
+   全部作废 —— 在 Dock 玻璃里做一根普通列，左右内缩与输入行（DockQuickBar）同档
+   （--gap-tight），让玻璃的圆角包住整组内容。芯片行 / 引用条的自身间距不动。 */
+.composer.embedded {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  margin: 0 var(--gap-tight) var(--gap-tight);
+}
+
 .composer {
   position: absolute;
   left: var(--page-pad-x);
@@ -2101,5 +2134,16 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
      于是滚动区仍与 .page 同宽，气泡的影子不会被裁。 */
   max-width: calc(var(--chat-col) + 2 * var(--page-pad-x));
   margin-inline: auto;
+}
+</style>
+
+<style>
+/* [data-rubber-shell] 是壳层元素（App 自己的 div），AI 的 scoped 属性够不着它 ——
+   height:100% 的父链断在这里（shell 高度 auto，页面 100% 退化成内容高，实测 611），
+   输入条因此悬在半空 / 沉出可视区。桌面壳下把 shell 撑满 desk-main：AI 页的
+   height:100% 才有确定的父高。只命中桌面壳（data-shell=desk），移动壳不受影响；
+   其余桌面页不受扰（页面各自的高度声明在 shell 之内照常生效，超高照旧走 desk-main 滚动）。 */
+html[data-shell='desk'] main.desk-main > [data-rubber-shell] {
+  height: 100%;
 }
 </style>

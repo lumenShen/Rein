@@ -30,6 +30,13 @@ import { useFeaturesStore } from '@/stores/features'
 
 export const NAV_LAYOUT_STORE_KEY = 'rein.navLayout.v1'
 
+/**
+ * 手机底栏页签数上限（2026-11-08 用户定稿：**最多 5 个**）。固定件（主页 / 我 / AI）
+ * 计入配额 —— 用户最多再加 2 个模块页签。超出的加回请求被托盘拒绝（带提示），
+ * 渲染层对存量超长布局做裁剪兜底（TabBar 的 tabs computed）。
+ */
+export const TABBAR_MAX = 5
+
 /** 存储载荷：只存编辑过的容器 —— 字段缺省 = 该容器从未编辑过 → 按目录缺省渲染，绝不写键 */
 interface NavLayoutPayload {
   v: 1

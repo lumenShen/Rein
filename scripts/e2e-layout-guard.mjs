@@ -143,10 +143,14 @@ const SPACING = `(() => {
     }
   }
   if (location.hash === '#/ai') {
-    // 悬浮条（dock 样式）：**玻璃外缘**到 Dock 顶 = 10px（--cb-gap）——不是压在一起。
-    // 量 .cbar（玻璃本体）而不是 .inbar：输入行退在玻璃的描边之内，会多算 1px（实测 11）。
-    const bar = rect('.cbar') || rect('.inbar'), dock = rect('.dock')
-    if (bar && dock) out.checks.push({ name: 'AI 输入栏底→底栏顶', got: Math.round(dock.top - bar.bottom), want: 10 })
+    // AI 页输入条已**并入底栏**（2026-11-08：.composer Teleport 进 #dock-ai-composer，
+    // 与其他页面同一块大玻璃）—— 旧的「输入栏底→底栏顶 = 10」不变量随合并作废，
+    // 改守「.cbar 在 .dock 玻璃内部」（嵌入成立 = 引用 / 附图芯片与输入行都住进 Dock）。
+    const bar = document.querySelector('.dock .cbar'), dock = document.querySelector('.dock')
+    if (bar && dock) {
+      const b = bar.getBoundingClientRect(), d = dock.getBoundingClientRect()
+      out.checks.push({ name: 'AI 输入条并入底栏（.cbar 在 .dock 内）', got: b.top >= d.top && b.bottom <= d.bottom ? 1 : 0, want: 1 })
+    }
   }
   return out
 })()`

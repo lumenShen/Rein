@@ -12,7 +12,7 @@ import { useNavEdit } from '@/composables/useNavEdit'
 import { usePressGlow } from '@/composables/usePressGlow'
 import { useToast } from '@/composables/useToast'
 import { useAiStore } from '@/stores/ai'
-import { useNavLayoutStore, type NavEntry } from '@/stores/navLayout'
+import { useNavLayoutStore, TABBAR_MAX, type NavEntry } from '@/stores/navLayout'
 import {
   aiVoiceCancel,
   aiVoiceInput,
@@ -70,21 +70,29 @@ const toast = useToast()
 /** 编辑态（模板顶层绑定，自动解包）：进入后页签行以草稿为准渲染、页签按钮化 */
 const editing = navEdit.editing
 
-/** 输入行显隐：编辑态与 AI 页收起（理由见文件头）。它同时驱动 <html data-dock-quick> */
-const showQuick = computed(() => !editing.value && route.name !== 'ai')
+/** 输入行形态：AI 页把**完整输入条**并进 Dock（AIPage 的 .composer Teleport 进
+ *  #dock-ai-composer 宿主，见 AIPage），其余页是 DockQuickBar；编辑态两样都收
+ *  （托盘与徽标独占这块玻璃）。data-dock-quick 因此在 AI 页也保持 on ——
+ *  避让高度（--dock-top / --dock-h）必须按两行算。 */
+const quickBar = computed(() => !editing.value && route.name !== 'ai')
+const aiEmbed = computed(() => !editing.value && route.name === 'ai')
+const showQuick = computed(() => !editing.value)
 
 /**
- * 页签行：布局 ∩ 目录 ∩ 启用态。编辑态以**草稿**为准 —— 草稿里可能有刚从候选加回的
- * 条目（不在已存布局里），渲染源要并上候选才是完整的「启用目录」，只按 items 找会把它丢掉。
+ * 页签行：布局 ∩ 目录 ∩ 启用态，**上限 TABBAR_MAX（5）**——超出的不渲染
+ * （存量超长布局来自旧版本或「启用模块变多」，裁掉而不是挤成一团）。
+ * 编辑态以**草稿**为准 —— 草稿里可能有刚从候选加回的条目（不在已存布局里），
+ * 渲染源要并上候选才是完整的「启用目录」，只按 items 找会把它丢掉。
  */
 const tabs = computed<NavEntry[]>(() => {
-  if (!navEdit.editing.value) return navLayout.items('tabbar')
+  if (!navEdit.editing.value) return navLayout.items('tabbar').slice(0, TABBAR_MAX)
   const byId = new Map(
     [...navLayout.items('tabbar'), ...navLayout.candidates('tabbar')].map((it) => [it.id, it]),
   )
   return (navEdit.draft.value ?? [])
     .map((id) => byId.get(id))
     .filter((it): it is NavEntry => !!it)
+    .slice(0, TABBAR_MAX)
 })
 
 /** 固定件 id 集（主页 / 我 / AI）：徽标显隐与「做不做拖拽把手」按它判定 —— 固定件无徽标、
@@ -172,10 +180,10 @@ function onDockVoiceDown(e: PointerEvent): void {
   })
 }
 
-/** 识别结果上屏。showQuick 闸门：AI 页自己的语音会话（那边有自己的订阅）不该再被
-    底栏接一手 —— 底栏只在「输入行可见」时认领结果。 */
+/** 识别结果上屏。quickBar 闸门：AI 页自己的语音会话（那边有自己的订阅与遮罩）
+    不该再被底栏接一手 —— 底栏只在「DockQuickBar 这条输入行」可见时认领结果。 */
 function onVoiceDone({ text, reason }: AiVoiceResult): void {
-  if (!showQuick.value) return
+  if (!quickBar.value) return
   if (text) {
     quickDraft.value = appendVoiceText(quickDraft.value, text)
   } else if (reason === 'error') {
@@ -321,13 +329,18 @@ onBeforeUnmount(() => {
       data-slot="dock"
     >
       <template #quick>
+        <!-- AI 页：这里渲染的是**宿主** —— AIPage 的完整输入条（引用 / @纪要 / 附图 /
+             文档芯片 + 输入行）Teleport 进来，合成同一块玻璃的大 Dock；其余页是
+             DockQuickBar。宿主常驻 DOM（v-show）：Teleport 目标必须在 AIPage 挂载前
+             就存在，否则首帧定位失败。 -->
         <DockQuickBar
-          v-if="showQuick"
+          v-if="quickBar"
           v-model="quickDraft"
           @add="openFullComposer"
           @send="sendQuick"
           @voice-down="onDockVoiceDown"
         />
+        <div v-show="aiEmbed" id="dock-ai-composer" class="dock-ai-host" />
       </template>
       <template #tab="{ item, active }">
         <!-- 编辑态：页签按钮化 —— 整格点击 = 撤回（键盘 / 读屏可达，「−」只是装饰），
@@ -385,9 +398,9 @@ onBeforeUnmount(() => {
       <DockEditTray v-if="editing" />
     </Transition>
 
-    <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。输入行收起时不挂：
-         AI 页有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
-    <VoiceInputMask v-if="showQuick" />
+    <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。只在 DockQuickBar
+         这条输入行挂：AI 页的输入条有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
+    <VoiceInputMask v-if="quickBar" />
   </nav>
 </template>
 
