@@ -4,7 +4,7 @@ import { ChevronRight, Dumbbell, House, Plus, SlidersHorizontal, Sparkles, User 
 
 import GlassSurface from '@/components/common/GlassSurface.vue'
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
-import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
+import ComposerBar from '@/components/common/ComposerBar.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
@@ -165,12 +165,12 @@ const ICON_BTN = 54
         </div>
 
         <!-- ③ 组件装配：直接复用生产 Dock 的共享玻璃装配组件。
-             输入行传静态复本（DockQuickBar interactive=false）—— 标本要与真实 Dock
+             输入行传静态复本（ComposerBar interactive=false）—— 标本要与真实 Dock
              逐像素同源，合并底栏的上排也是共享组件渲染，几何/类名不可能漂。 -->
         <div ref="dockRowEl" class="dockrow">
           <GlassDockAssembly :items="TABS" :active="active" :goo="motionRich" data-slot="bench-dock">
             <template #quick>
-              <DockQuickBar model-value="" :interactive="false" />
+              <ComposerBar model-value="" :interactive="false" />
             </template>
             <template #tab="{ item, active: itemActive }">
               <button
@@ -481,7 +481,7 @@ const ICON_BTN = 54
 }
 
 /* 底栏标本：页签行前景在 base.css 的 .dock-navs / .dock-tab（与真实 Dock 共用一份，
-   见那里的注释），输入行是共享的 DockQuickBar（静态复本）—— 这里只管这一行的排版 */
+   见那里的注释），输入行是共享的 ComposerBar（静态复本）—— 这里只管这一行的排版 */
 .dockrow {
   display: flex;
   align-items: center;

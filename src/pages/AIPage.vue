@@ -18,15 +18,14 @@ import {
   Quote,
   RotateCcw,
   Search,
-  SendHorizontal,
   SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-vue-next'
 
 import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
+import ComposerBar from '@/components/common/ComposerBar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import GlassSurface from '@/components/common/GlassSurface.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import HistoryDrawer from '@/components/ai/HistoryDrawer.vue'
@@ -154,10 +153,8 @@ function editDraft(d: FoodDraft): void {
  *  前端替它执行就又变成一块设定好的卡片。 */
 function askFromBoard(text: string): void {
   draft.value = text
-  void nextTick(() => {
-    autoGrow()
-    inputEl.value?.focus()
-  })
+  // 长高由 ComposerBar 监听 modelValue 自己做；这里只管把焦点交回去
+  void nextTick(() => composerEl.value?.focus())
 }
 
 function deleteDraft(id: string): void {
@@ -183,7 +180,8 @@ function fmtDraftTime(iso: string): string {
 }
 
 const draft = ref('')
-const inputEl = ref<HTMLTextAreaElement | null>(null)
+/** 全局唯一的输入条（ComposerBar）：AI 页与底栏是同一个组件 —— 聚焦、长高、锚定都交给它 */
+const composerEl = ref<InstanceType<typeof ComposerBar> | null>(null)
 const fileEl = ref<HTMLInputElement | null>(null)
 const galleryEl = ref<HTMLInputElement | null>(null)
 const cameraEl = ref<HTMLInputElement | null>(null)
@@ -195,8 +193,8 @@ const UPLOAD_ACCEPT = `${IMAGE_ACCEPT},.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv
 /* ---------- 「+」添加菜单（bind 式：锚定按钮弹出，带图标） ---------- */
 
 const camMenuOpen = ref(false)
-/** 锚定元素：输入栏左侧的 + 按钮 */
-const camBtn = ref<HTMLElement | null>(null)
+/** 锚定元素：输入条左侧的 + 按钮（ComposerBar 暴露的 addButton） */
+const camBtn = computed(() => composerEl.value?.addButton ?? null)
 
 /** 附图上限：超过后提示，防止消息体撑爆模型上下文 */
 const MAX_ATTACHMENTS = 9
@@ -344,10 +342,7 @@ function onHistSelect(value: string): void {
     void router.push({ name: 'ai-knowledge' })
   } else if (value === 'search') {
     draft.value = '搜一下我的历史记录：'
-    void nextTick(() => {
-      autoGrow()
-      inputEl.value?.focus()
-    })
+    void nextTick(() => composerEl.value?.focus())
   } else if (value === 'drafts') {
     openDrafts()
   } else {
@@ -371,7 +366,6 @@ function onPickMemo(m: VoiceMemo): void {
   if (memoRefs.value.some((x) => x.id === m.id)) return
   memoRefs.value = [...memoRefs.value, m]
   draft.value = draft.value.slice(0, -1) // 去掉触发的 @
-  void nextTick(() => autoGrow())
 }
 
 function removeMemoRef(id: string): void {
@@ -393,7 +387,6 @@ onMounted(() => {
     // 比默默丢掉强 —— 人至少看得见「有话没发出去」。
     if (ai.busy) {
       draft.value = handed
-      void nextTick(() => autoGrow())
     } else {
       void ai.sendText(handed)
     }
@@ -403,7 +396,6 @@ onMounted(() => {
   const handedDraft = ai.takePendingDraft()
   if (handedDraft) {
     draft.value = handedDraft
-    void nextTick(() => autoGrow())
   }
 })
 
@@ -423,7 +415,6 @@ watch(
     if (typeof v === 'string' && v) {
       draft.value = v
       void router.replace({ query: { ...route.query, ask: undefined } })
-      void nextTick(() => autoGrow())
     }
   },
   { immediate: true },
@@ -455,15 +446,6 @@ async function scrollToBottom(): Promise<void> {
   listEl.value?.scrollTo({ top: listEl.value.scrollHeight })
 }
 
-/** 文本域自适应高度：随内容增高，上限 5 行，发送后复位 */
-function autoGrow(): void {
-  const el = inputEl.value
-  if (!el) return
-  el.style.height = '0'
-  const max = 5 * 22 // 5 行 × line-height 约 22px
-  el.style.height = `${Math.min(el.scrollHeight, max)}px`
-}
-
 /** 文本是否疑似 Markdown（含至少两种语法特征） */
 function looksLikeMarkdown(text: string): boolean {
   let hits = 0
@@ -492,8 +474,6 @@ function send(): void {
     t = `（以下内容为 Markdown 格式）\n${t}`
   }
   draft.value = ''
-  // 复位输入框高度
-  if (inputEl.value) inputEl.value.style.height = ''
   const atts = attachments.value
   attachments.value = []
   docAtt.value = null
@@ -706,10 +686,7 @@ function onVoiceDown(e: PointerEvent): void {
 function onVoiceDone({ text, reason }: AiVoiceResult): void {
   if (text) {
     draft.value = appendVoiceText(draft.value, text)
-    void nextTick(() => {
-      autoGrow()
-      inputEl.value?.focus()
-    })
+    void nextTick(() => composerEl.value?.focus())
   } else if (reason === 'error') {
     toast.toast(aiVoiceInput.lastError || '识别失败')
   } else if (reason !== 'cancel') {
@@ -983,12 +960,11 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
       </div>
     </div>
 
-    <!-- 底栏：**悬浮的 dock 栏外观，但它自己占一行** —— 不在滚动容器里（.msgs 的兄弟）。
-         放进滚动区里时，正文会从它背后滚过去：芯片之间、芯片与输入条之间的缝里露出被
-         切断的行（用户报的「下面被挡住了」），而把它改成 overflow:visible 又会让它按
-         视口底部定位、直接压到 Dock 上（超出安全区）。挪出来之后：正文永远在它上面，
-         玻璃仍然浮在页面上（两侧页边距 + 与 Dock 之间 10px 空气），只是没有东西从它
-         下面穿过 —— 这也正是「挡住」的来源。折射名单见 .chips / .cbar 的注释。 -->
+    <!-- 底栏：**页内悬浮、独占一行** —— 不在滚动容器里（.msgs 的兄弟）。
+         放进滚动区里时，正文会从它背后滚过去：芯片与输入行之间的缝里露出被切断的行
+         （用户报的「下面被挡住了」）。挪出来之后：正文永远在它上面，不露半截字。
+         2026-11-09：输入条不再是独立玻璃，而是 ComposerBar 的一层薄底；
+         移动端整块 Teleport 进 Dock（与页签行同一块玻璃），桌面留在页内贴窗下缘。 -->
     <!-- 输入条并入底栏（embedInDock）：.composer 整块 Teleport 进 TabBar 的
          #dock-ai-composer 宿主 —— 引用 / @纪要 / 附图 / 文档芯片与输入行一起住进
          那块大玻璃，与其他页面的合成 Dock 同一构图；桌面（:disabled）留在页内贴窗下缘。
@@ -1068,45 +1044,24 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
         </p>
       </div>
 
-      <!-- 输入栏（dock 栏本体，这一组里**唯一**折射的一块）：底比 Dock 的页签厚一档
-           （--surface-translucent）—— 这里承载占位文字与用户输入，底太薄时底下的正文
-           会把它压到读不清（实测：0.52 的玻璃底上占位只有 3.2:1；这一档把底线拉到
-           4.7:1 以上）。两侧圆钮是它内部的浅色层，命中区整块可点。 -->
-      <GlassSurface class="cbar" border-radius="var(--radius-full)" fill="var(--surface-translucent)">
-        <div class="inbar row">
-          <button ref="camBtn" class="cam" aria-label="添加附件" @click="openCamMenu">
-            <Plus :size="21" :stroke-width="2.4" />
-          </button>
-          <textarea
-            ref="inputEl"
-            v-model="draft"
-            rows="1"
-            :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : '吃了什么？例如：一碗米饭'"
-            @keydown.enter.exact.prevent="send"
-            @input="autoGrow"
-          />
-          <!-- 语音输入：按住说话（松开上屏）/ 轻点连听（停顿自动结束，再点即停）。
-               持续手势：touch-action 关掉浏览器把按压当滚动起点的默认处理 -->
-          <button
-            class="vbtn"
-            aria-label="语音输入：按住说话，轻点连听"
-            data-testid="ai-voice-btn"
-            @pointerdown="onVoiceDown"
-            @contextmenu.prevent
-          >
-            <Mic :size="19" :stroke-width="2.2" />
-          </button>
-          <button
-            class="send"
-            :class="{ ready: !!draft.trim() || attachments.length > 0 || !!docAtt || memoRefs.length > 0 }"
-            aria-label="发送"
-            :disabled="ai.busy || (!draft.trim() && attachments.length === 0 && !docAtt && memoRefs.length === 0)"
-            @click="send"
-          >
-            <SendHorizontal :size="18" />
-          </button>
-        </div>
-      </GlassSurface>
+      <!-- 输入栏：全局唯一的 ComposerBar（2026-11-09 统一）—— 与其余页面**同一个组件、
+           同一层薄底、同一道同心圆角**；AI 页只是多带一串待发送芯片（引用 / 纪要 /
+           附图 / 文档）。不再有独立的 .cbar 玻璃：输入框不再自成一块表面。
+           flush：行本体的外边距归 .composer.embedded 管，芯片与输入行落在同一条内缩线上。 -->
+      <ComposerBar
+        ref="composerEl"
+        v-model="draft"
+        class="cbar"
+        flush
+        :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : '吃了什么？例如：一碗米饭'"
+        :sendable="!!draft.trim() || attachments.length > 0 || !!docAtt || memoRefs.length > 0"
+        :busy="ai.busy"
+        add-label="添加附件"
+        voice-testid="ai-voice-btn"
+        @add="openCamMenu"
+        @send="send"
+        @voice-down="onVoiceDown"
+      />
     </div>
     </Teleport>
 
@@ -1416,26 +1371,26 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   margin-top: var(--safe-top);
 }
 
-/* 底栏：**悬浮在滚动区之上**，内容从玻璃下方走过。
+/* 底栏：**悬浮在滚动区之上**，内容从它下方走过。
    （此前它被特意移出滚动容器、独占一行，理由是那两颗 chips 之间的缝会漏出
    被切断的行 —— 见上方「快捷操作条已撤掉」那段。chips 一撤，这个阻塞点就不存在了：
-   剩下的唯一一块玻璃是输入条 `.cbar`，它是整幅药丸、没有缝，内容从它背后走
-   只会整块被模糊/折射盖住，不会露出半截字。所以改回 overlay ——
-   这才是液态玻璃该有的样子：玻璃浮在内容上，内容在它下面流。）
+   底栏只剩输入条本体，整幅、没有缝。2026-11-09 起输入条也不再是一块玻璃，
+   而是 ComposerBar 的一层薄底（--field-fill）：在页内它是贴着窗口下缘的一条输入行，
+   在移动端则整块并入 Dock —— 两种落点都不会露出半截字。）
 
-   位置用 --cb-bottom 而不是写死：移动端要让开 Dock（--dock-top + --cb-gap），
-   桌面没有 Dock（TabBar 只在移动端渲染），取页面自己的 padding-bottom。
-   这条间距是 e2e-layout-guard.mjs 的断言之一（输入栏底 → Dock 顶 = 10）。 */
+   位置用 --cb-bottom 而不是写死：移动端并入 Dock 后本段定位作废（见 .embedded），
+   桌面没有 Dock（TabBar 只在移动端渲染），取页面自己的 padding-bottom。 */
 /* 并入底栏（.embedded，Teleport 进 TabBar 的宿主）：页内 absolute 的定位与宽度
-   全部作废 —— 在 Dock 玻璃里做一根普通列，左右内缩与输入行（DockQuickBar）同档
-   （--gap-tight），让玻璃的圆角包住整组内容。芯片行 / 引用条的自身间距不动。 */
+   全部作废 —— 在 Dock 玻璃里做一根普通列，左右内缩与页签行同档（--gap-tight），
+   输入行自身 flush（外边距归这里管）：芯片行与输入行落在同一条内缩线上，
+   底边直接与页签行衔接（与其余页面同一个构图）。芯片行 / 引用条的自身间距不动。 */
 .composer.embedded {
   position: static;
   left: auto;
   right: auto;
   bottom: auto;
   width: auto;
-  margin: 0 var(--gap-tight) var(--gap-tight);
+  margin: var(--gap-tight) var(--gap-tight) 0;
 }
 
 .composer {
@@ -1932,6 +1887,13 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   padding: 0 var(--sp-2) var(--sp-8);
 }
 
+/* 空态不占位：TransitionGroup 没有 chip 时也渲染这层壳，壳的 8px 下内距会把
+   输入行顶下去 —— AI 页的 Dock 因此比其余页面高 8px（统一输入条后是显眼的错位）。
+   :empty 只管「没有元素子节点」这一态，chip 进出动效不受影响（注释节点不算）。 */
+.memo-refs:empty {
+  display: none;
+}
+
 .memo-chip {
   display: inline-flex;
   align-items: center;
@@ -1976,136 +1938,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   line-height: inherit;
 }
 
-/* 输入条内部：底与描边由 GlassSurface 给（`.cbar`），这里只排布控件 ——
-   8px 内边距 + 40px 圆钮 = 56px 高，与 Dock 的 58px 同档。
-   （圆钮 40 是**尺寸**几何，与 34 的通用图标钮不同档：输入条要贴着 Dock 的
-   58px 读成同一条底栏，缩到 34 就成了「细一号的输入框」。） */
-.inbar {
-  width: 100%;
-  gap: var(--gap-sm);
-  padding: var(--sp-8);
-}
-
-.cam {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  /* 玻璃上的图标钮：与卡面角标同一配方（--text-1 的 9%），不再是实底灰 */
-  background: color-mix(in srgb, var(--text-1) 9%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-1);
-  /* transform 必须显式带上：scoped transition 会覆盖 base.css 里 button 的全局过渡，
-     少了它 :active 的 scale(0.96) 就变成瞬贴 */
-  transition:
-    background-color var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard);
-}
-
-/* 输入条三颗圆钮的视觉是 40，热区补到 44：外扩 2px 落在 8px 间距里，
-   不会互相压住，也不改输入条 56px 的高度。 */
-.cam::after,
-.vbtn::after,
-.send::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: var(--hit-min);
-  height: var(--hit-min);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-}
-
-.cam:active {
-  background: color-mix(in srgb, var(--text-1) 16%, transparent);
-}
-
-/* 语音输入钮（与 .cam 同配方）。按住说话是持续手势：
-   touch-action 关掉滚动/长按的浏览器默认处理，长按不弹系统菜单也不起滚动 */
-.vbtn {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--text-1) 9%, transparent);
-  color: var(--text-1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  touch-action: none;
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition:
-    background-color var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard);
-}
-
-.vbtn:active {
-  background: color-mix(in srgb, var(--text-1) 16%, transparent);
-}
-
-.inbar textarea {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fs-subhead);
-  font-family: inherit;
-  border: none;
-  outline: none;
-  background: transparent;
-  resize: none;
-  /* 22px 是行盒几何（5 行 × 22 = 110 的 max-height 跟它同源），不是间距 */
-  line-height: 22px;
-  padding: var(--sp-8) 0;
-  max-height: 110px; /* 5 行 × 22px */
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.inbar textarea::-webkit-scrollbar {
-  display: none;
-}
-
-/* 占位文字按正文档读：--text-3 在亮色只有 3.2:1、暗色约 3.6:1（实测），够不着 AA。
-   这里按 --text-1 的 64% 合成而不是直接取某个灰：同一个 alpha 在两色下都落在
-   「亮 ≈4.7:1 / 暗 ≈6.9:1」—— 因为它是与输入框底色合成的，底越暗前景就越亮。
-   正在输入的正文是 --text-1，两色下都在 13:1 以上（亮色实测 13.76:1，底 232/232/234）。 */
-.inbar textarea::placeholder {
-  color: color-mix(in srgb, var(--text-1) 64%, transparent);
-}
-
-.send {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--text-1) 9%, transparent);
-  color: var(--text-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 同 .cam：transform 不能不写，否则覆盖掉全局 button 的按压过渡 */
-  transition:
-    background-color var(--dur-fast) var(--ease-standard),
-    transform var(--dur-fast) var(--ease-standard);
-}
-
-/* 有文字或附图时点亮（Kimi 式：灰 → 主色）。主操作不玻璃化 —— 与 Dock 的 .accent、
-   页头的主操作钮同一条约定：实底主色才是「点这里」的那一个。 */
-.send.ready {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.send:disabled {
-  opacity: var(--disabled-opacity);
-}
+/* 输入条内部（控件排布 / 圆钮 / 文本域 / 发送态）统一在 common/ComposerBar.vue ——
+   AI 页与其余页面是**同一个组件**，这里不再保留第二份 .inbar / .cam / .vbtn / .send
+   样式（两份定义必然漂，是这个仓付过代价的教训）。 */
 
 /* 引用条 / 纪要 chips / 附图 chips 的入场：可打断的 CSS transition，不用 @keyframes ——
    连拍、连选时会连续插入，transition 能被下一次进入直接接管而不会各播各的。

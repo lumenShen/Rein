@@ -3,7 +3,7 @@ import { computed, nextTick, ref, type ComponentPublicInstance } from 'vue'
 import { Dumbbell, House, Sparkles, User } from 'lucide-vue-next'
 
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
-import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
+import ComposerBar from '@/components/common/ComposerBar.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import {
@@ -98,13 +98,13 @@ const stateText = computed(() =>
     </template>
 
     <!-- 暗场预览：直接渲染生产 Dock 的共享玻璃装配，圆角与尺寸不会再漂。
-         输入行走 DockQuickBar 静态复本（aria-hidden 整层，预览不吃指针） -->
+         输入行走 ComposerBar 静态复本（aria-hidden 整层，预览不吃指针） -->
     <div class="stage stage-dark" aria-hidden="true">
       <span class="glow" />
       <span class="grid" />
       <GlassDockAssembly :items="previewItems" active="sports">
         <template #quick>
-          <DockQuickBar model-value="" :interactive="false" />
+          <ComposerBar model-value="" :interactive="false" />
         </template>
       </GlassDockAssembly>
     </div>

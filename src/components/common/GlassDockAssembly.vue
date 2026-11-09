@@ -38,7 +38,7 @@ defineSlots<{
     <GlassSurface
       class="dock-block"
       :data-slot="dataSlot"
-      border-radius="var(--radius-xl)"
+      border-radius="var(--dock-radius)"
       fill="var(--glass-fill)"
     >
       <slot name="quick" />

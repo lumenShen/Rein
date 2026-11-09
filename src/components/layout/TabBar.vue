@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Minus } from 'lucide-vue-next'
 
 import DockEditTray from '@/components/mobile/DockEditTray.vue'
-import DockQuickBar from '@/components/mobile/DockQuickBar.vue'
+import ComposerBar from '@/components/common/ComposerBar.vue'
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
 import VoiceInputMask from '@/components/ai/VoiceInputMask.vue'
 import { useNavDrag } from '@/composables/useNavDrag'
@@ -29,7 +29,7 @@ import { motionRich } from '@/system/motion'
 /**
  * 底部悬浮 Dock · 合并版（2026-11 底栏重构）：**一块玻璃两行** ——
  *
- *   上 · AI 快捷输入行（DockQuickBar）：+ / 输入 / 麦克风 / 发送。所有显示底栏的
+ *   上 · AI 快捷输入行（ComposerBar）：+ / 输入 / 麦克风 / 发送。所有显示底栏的
  *       页面都带着它（AI 入口从此长在底栏上，不再只有 AI 页有输入框）；发送走
  *       ai.askFrom（抢课「交给 AI 排查」同一条跨页链路：AI 页挂载时取走即发，
  *       busy 时落输入框等），「+」把草稿带去 AI 页的完整输入条（附件 / 文档在那边）。
@@ -44,8 +44,9 @@ import { motionRich } from '@/system/motion'
  * 固定件（主页 / 我 / AI）永不入存、位置由容器定；编辑态以草稿为准渲染，退出只有托盘里的
  * 「放弃变更 / 保存布局」两条路。
  *
- * 输入行的显隐：编辑态收起（mask 之上不该有输入面）、AI 页收起（那边有自己的完整
- * 输入条，双输入是坏构图）。显隐写到 <html data-dock-quick> 上 —— --dock-top 的
+ * 输入行的显隐：只剩编辑态收起（mask 之上不该有输入面）。AI 页也常驻同一根
+ * ComposerBar（从 AIPage Teleport 进来），不再「AI 页有、别的页没有」——两个入口
+ * 从此是同一个组件、同一层薄底。显隐写到 <html data-dock-quick> 上 —— --dock-top 的
  * 「让位高度」跟着开关，浮层 / 菜单 / Toast 的避让才不会多让一截（见 tokens.css）。
  *
  * 材质一律走 GlassSurface（与标本同一个组件、同一组默认参数）：超高档折射背后的
@@ -67,8 +68,9 @@ const toast = useToast()
 /** 编辑态（模板顶层绑定，自动解包）：进入后页签行以草稿为准渲染、页签按钮化 */
 const editing = navEdit.editing
 
-/** 输入行形态：AI 页把**完整输入条**并进 Dock（AIPage 的 .composer Teleport 进
- *  #dock-ai-composer 宿主，见 AIPage），其余页是 DockQuickBar；编辑态两样都收
+/** 输入行形态：AI 页把**同一根输入条**（AIPage 里的 ComposerBar）Teleport 进
+ *  #dock-ai-composer 宿主，其余页由底栏自己渲染 ComposerBar —— 两边是**同一个组件**，
+ *  外观 / 圆角 / 薄底 / 回车语义完全一致，差别只在发送落点与芯片。编辑态两样都收
  *  （托盘与徽标独占这块玻璃）。data-dock-quick 因此在 AI 页也保持 on ——
  *  避让高度（--dock-top / --dock-h）必须按两行算。 */
 const quickBar = computed(() => !editing.value && route.name !== 'ai')
@@ -178,7 +180,7 @@ function onDockVoiceDown(e: PointerEvent): void {
 }
 
 /** 识别结果上屏。quickBar 闸门：AI 页自己的语音会话（那边有自己的订阅与遮罩）
-    不该再被底栏接一手 —— 底栏只在「DockQuickBar 这条输入行」可见时认领结果。 */
+    不该再被底栏接一手 —— 底栏只在「底栏这条 ComposerBar」可见时认领结果。 */
 function onVoiceDone({ text, reason }: AiVoiceResult): void {
   if (!quickBar.value) return
   if (text) {
@@ -201,7 +203,7 @@ watch(
 )
 
 /* 显隐写到 <html>：浮层（AppMenu / ActionSheet / Toast）靠 --dock-top 避让底栏，
-   输入行在Editing / AI 页收起时整条 Dock 矮一截，避让高度必须跟着变（tokens.css）。 */
+   输入行在编辑态收起时整条 Dock 矮一截，避让高度必须跟着变（tokens.css）。 */
 watch(
   showQuick,
   (on) => {
@@ -305,11 +307,11 @@ onBeforeUnmount(() => {
       data-slot="dock"
     >
       <template #quick>
-        <!-- AI 页：这里渲染的是**宿主** —— AIPage 的完整输入条（引用 / @纪要 / 附图 /
-             文档芯片 + 输入行）Teleport 进来，合成同一块玻璃的大 Dock；其余页是
-             DockQuickBar。宿主常驻 DOM（v-show）：Teleport 目标必须在 AIPage 挂载前
-             就存在，否则首帧定位失败。 -->
-        <DockQuickBar
+        <!-- AI 页：这里渲染的是**宿主** —— AIPage 的输入条（同一颗 ComposerBar +
+             引用 / @纪要 / 附图 / 文档芯片）Teleport 进来，合成同一块玻璃的大 Dock；
+             其余页是底栏自己渲染的 ComposerBar。宿主常驻 DOM（v-show）：Teleport 目标
+             必须在 AIPage 挂载前就存在，否则首帧定位失败。 -->
+        <ComposerBar
           v-if="quickBar"
           v-model="quickDraft"
           @add="openFullComposer"
@@ -378,8 +380,8 @@ onBeforeUnmount(() => {
       <DockEditTray v-if="editing" />
     </Transition>
 
-    <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。只在 DockQuickBar
-         这条输入行挂：AI 页的输入条有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
+    <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。只在底栏这条
+         ComposerBar 可见时挂：AI 页的输入条有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
     <VoiceInputMask v-if="quickBar" />
   </nav>
 </template>

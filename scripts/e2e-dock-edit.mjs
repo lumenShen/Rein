@@ -12,7 +12,7 @@
  *
  * 剧本：
  *   0. 基线：默认页签行 = 主页,运动,我,AI，输入行在场（未编辑过的容器按目录缺省渲染）
- *   1. 输入行显隐：AI 页收起（那边有完整输入条），回主页恢复
+ *   1. 输入行：AI 页也是同一个 ComposerBar（在 .dock / #dock-ai-composer 内），回主页同源
  *   2. 长按**页签** 480ms 进编辑态：mask / 托盘出现、页签按钮化、可移动项带「−」徽标、
  *      固定件（主页 / 我 / AI）无徽标、输入行收起、长按不跳转
  *   3. 点 mask 不退出编辑态（退出只有放弃 / 保存两条路）
@@ -277,18 +277,30 @@ async function main() {
     const state0 = await editState()
     ok('默认无编辑态（mask / 托盘都不在）', !state0.mask && !state0.tray, JSON.stringify(state0))
 
-    /* ---- 1. 输入行显隐：AI 页收起（那边有完整输入条，双输入是坏构图） ---- */
+    /* ---- 1. 输入行：AI 页与其余页面是同一个 ComposerBar（2026-11-09 全局统一） ---- */
     await evalJS(`location.hash = '#/ai'`)
     await sleep(900)
+    const aiQuick = await evalJS(`(() => {
+      const q = document.querySelector('.dock .dock-quick')
+      return {
+        inDock: !!q && !!q.closest('.dock'),
+        inHost: !!q && !!q.closest('#dock-ai-composer'),
+        hasTextarea: !!q?.querySelector('textarea.qk-input'),
+        chipsInDock: !!document.querySelector('.dock .composer'),
+      }
+    })()`)
     ok(
-      'AI 页输入行收起、页签行照常（AI 高亮）',
-      !(await evalJS(`!!document.querySelector('.dock .dock-quick')`)) &&
+      'AI 页输入行 = 同一个 ComposerBar（在 Dock 玻璃内、文本域同源）、页签行照常（AI 高亮）',
+      aiQuick.inDock && aiQuick.inHost && aiQuick.hasTextarea && aiQuick.chipsInDock &&
         (await pillSeq()).join() === '主页,运动,我,AI',
-      (await pillSeq()).join(' · '),
+      JSON.stringify(aiQuick) + ' · ' + (await pillSeq()).join(' · '),
     )
     await evalJS(`location.hash = '#/'`)
     await sleep(700)
-    ok('回主页输入行恢复', await evalJS(`!!document.querySelector('.dock .dock-quick')`))
+    ok(
+      '回主页输入行仍是同一个组件（textarea.qk-input）',
+      await evalJS(`!!document.querySelector('.dock .dock-quick textarea.qk-input')`),
+    )
 
     /* ---- 2. 长按页签进编辑态 ---- */
     await longPressPill('运动')

@@ -855,7 +855,7 @@ html[data-perf='low'] .stage-dark {
    两份各写一套样式必然会漂（标本曾经用暗场令牌 + 自己的一版页签，与真实 Dock
    长得不像）。几何（fixed 定位 / 高度 / 间距）仍归各自容器，这里只管**合并玻璃里的
    页签行前景**（2026-11 底栏重构：一块玻璃 = 输入行 + 页签行，输入行样式在
-   DockQuickBar 组件内，两边共用同一个组件所以天然同步）：
+   ComposerBar 组件内，两边共用同一个组件所以天然同步）：
 
      · 页签行（.dock-navs）等分摊开：页签 flex:1 均分玻璃宽 —— 参考构图是
        「输入条铺满 + 页签摊开」，从前「页签定宽、药丸随数收窄」随左右圆钮退役；
@@ -903,7 +903,9 @@ html[data-dock-quick='on'] {
   /* 图标与微标签之间的最小呼吸：HarmonyOS 底部页签给 2，3 会让 58 高的页签里
      图标与标签读成两块不相干的东西（--gap-text 就是这一档） */
   gap: var(--gap-text);
-  border-radius: var(--radius-full);
+  /* 同心圆（2026-11-09）：页签圆角跟着玻璃外圈走 —— 外圈 28、向内一档 24，
+     与输入行 / 活动底同一道弧，不再各写 999px（见 tokens.css 的 --dock-radius 链） */
+  border-radius: var(--dock-radius-in);
   color: var(--text-3);
   /* 底部页签标签：Caption_M 10 Medium（文档「图标 24 / 标签 10–11 Medium」）；
      600 在 10px 上会把「主页 / 我」糊成一团粗点 */
@@ -944,7 +946,9 @@ html[data-dock-quick='on'] {
   /* 四边同档：原来左右 5 / 上下 4 是为了让椭圆底更像药丸，但 58 高的页签里
      这 1px 差读不出来，只让「同类一档」这条断掉 —— 统一用 --gap-tight 4 */
   inset: var(--gap-tight);
-  border-radius: var(--radius-full);
+  /* 活动底与玻璃外圈同心：外圈 28 − 内缩 4 = 24（页签高 48，24 正好是半径上限，
+     因此它仍是一条贴边的胶囊；换外圈半径时这条自动跟随，不必回来改） */
+  border-radius: var(--dock-radius-in);
   background: var(--glass-tab-fill);
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-standard);
