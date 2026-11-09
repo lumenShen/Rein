@@ -43,12 +43,12 @@ const emit = defineEmits<{
   <div class="dock-quick" :class="{ static: !interactive }" :aria-hidden="interactive ? undefined : 'true'">
     <button
       type="button"
-      class="qk-btn"
+      class="qk-btn qk-add"
       :tabindex="interactive ? undefined : -1"
       aria-label="打开 AI，添加图片或文件"
       @click="emit('add')"
     >
-      <Plus :size="21" :stroke-width="2.4" />
+      <Plus :size="22" :stroke-width="2" />
     </button>
     <input
       class="qk-input"
@@ -61,7 +61,11 @@ const emit = defineEmits<{
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       @keydown.enter.exact.prevent="emit('send')"
     >
+    <!-- 空态 = 麦克风、有字 = 发送（对齐参考构图：参考图空态没有独立发送钮）。
+         两个钮都常驻 DOM（v-show 开关）：e2e 的「打字后发送钮」断言与读屏可达性
+         都按「存在且可按」算；藏起来的那颗 tabindex 由 v-show 自然不可达。 -->
     <button
+      v-show="!modelValue.trim()"
       type="button"
       class="qk-btn qk-voice"
       data-testid="dock-voice-btn"
@@ -70,9 +74,10 @@ const emit = defineEmits<{
       @pointerdown="emit('voice-down', $event)"
       @contextmenu.prevent
     >
-      <Mic :size="19" :stroke-width="2.2" />
+      <Mic :size="22" :stroke-width="2" />
     </button>
     <button
+      v-show="!!modelValue.trim()"
       type="button"
       class="qk-btn qk-send"
       :class="{ ready: !!modelValue.trim() }"
@@ -81,7 +86,7 @@ const emit = defineEmits<{
       aria-label="发送到 AI"
       @click="emit('send')"
     >
-      <SendHorizontal :size="18" />
+      <SendHorizontal :size="21" :stroke-width="2" />
     </button>
   </div>
 </template>
@@ -105,8 +110,9 @@ const emit = defineEmits<{
   pointer-events: none;
 }
 
-/* 圆钮 40 = 尺寸几何（与 AI 页 .cam/.vbtn/.send 同档）；热区 ::after 外扩到 44，
-   多出的 2px 落在 8px 间距里，互不压住。 */
+/* 纯图标钮（2026-11-08 像素级对齐参考构图）：参考图的 ＋ / 麦克风没有圆片底，
+   就是直接压在输入胶囊上的图标 —— 灰圆片让输入行读成「三颗钮的工具栏」，
+   而参考是「一条输入条」。40×40 保留为触控几何，::after 外扩 44 热区不动。 */
 .qk-btn {
   position: relative;
   display: flex;
@@ -116,10 +122,10 @@ const emit = defineEmits<{
   height: 40px;
   flex: none;
   border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--text-1) 9%, transparent);
-  color: var(--text-1);
+  background: transparent;
+  color: var(--text-2);
   transition:
-    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
     transform var(--dur-fast) var(--ease-standard);
 }
 
@@ -135,7 +141,8 @@ const emit = defineEmits<{
 }
 
 .qk-btn:active {
-  background: color-mix(in srgb, var(--text-1) 16%, transparent);
+  color: var(--text-1);
+  transform: scale(0.92);
 }
 
 /* 语音是持续手势：touch-action 关掉浏览器把按压当滚动/长按起点的默认处理 */
@@ -162,10 +169,10 @@ const emit = defineEmits<{
   color: color-mix(in srgb, var(--text-1) 64%, transparent);
 }
 
-/* 有话待发时点亮（与 AI 页 .send.ready 同一条「主操作实底主色」的约定） */
+/* 有话待发时点亮：没有圆片底可填，主操作改**accent 前景**（参考图里按钮都是
+   纯描边，实底圆片会让发送钮在窄输入行里重新读成一颗「工具钮」） */
 .qk-send.ready {
-  background: var(--accent);
-  color: var(--on-accent);
+  color: var(--accent-strong);
 }
 
 .qk-send:disabled {
