@@ -14,7 +14,7 @@ import { fmtRelativeTime, humanBytes } from '@/utils/format'
 import type { PairStatus, SyncPeerInfo, SyncRunResult, SyncRunStats, SyncStatus } from '@/types'
 
 /**
- * 多设备同步（三级页，入口在「设置 › 多设备同步」）。
+ * 设备（三级页，入口在「设置 › 能力与连接 › 设备」；route name / path 仍为 settings-sync）。
  *
  * 三张卡片，顺序就是用户的心智顺序：
  *   1. 本机是谁（名字 / 指纹 / 有多少条在账上）
@@ -252,7 +252,7 @@ onUnmounted(() => {
 
 <template>
   <div class="page">
-    <PageHeader title="多设备同步" back />
+    <PageHeader title="设备" back />
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 

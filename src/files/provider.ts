@@ -22,7 +22,11 @@ export const KB_PROVIDER_ID = 'kb'
 const DERIVED_REASON = '这是应用数据的只读投影，改内容要回它自己的页面'
 const SYSTEM_REASON = '系统文件随应用版本更新，不可修改'
 
-function toMs(v: string | null | undefined): number | undefined {
+/**
+ * SQLite 时间串 → 毫秒。`YYYY-MM-DD HH:MM:SS` 按 UTC 解析（补 T/Z），坏值返回 undefined。
+ * 导出给同样要读 `KbEntry.updatedAt` 的投影页面复用，避免各页再抄一份解析规则。
+ */
+export function toMs(v: string | null | undefined): number | undefined {
   if (!v) return undefined
   // SQLite 存的是 `YYYY-MM-DD HH:MM:SS`（UTC），补上 T/Z 才不会被当本地时间
   const iso = v.includes('T') ? v : `${v.replace(' ', 'T')}Z`

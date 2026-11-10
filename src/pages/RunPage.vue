@@ -10,7 +10,6 @@ import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
 import HeartRateSummary from '@/components/health/HeartRateSummary.vue'
 import HoldToEnd from '@/components/run/HoldToEnd.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { hrZoneMeta } from '@/config/hr'
 import { useHeartRateStore } from '@/stores/heartRate'
 import { useRunStore, fmtClock, fmtPace } from '@/stores/run'
@@ -1174,20 +1173,6 @@ function bumpKm(delta: number): void {
             <button class="gbtn glass-surface glow-layer" @click="bumpKm(0.5)">+ 0.5</button>
           </div>
           <p v-else class="meta">不限时长与距离，随时结束并保存</p>
-
-          <!-- 自动暂停：慢下来就停表。它是「这次记录可不可信」的一部分，
-               所以放在开跑前、与目标同级，而不是埋进设置页。 -->
-          <div class="pfrow row between">
-            <span class="pf-l">
-              <span class="pf-lab">自动暂停</span>
-              <small class="pf-desc">慢于 {{ fmtPace(r.autoPausePaceSec) }}/km 自动停表 · 快起来自动继续</small>
-            </span>
-            <ToggleSwitch
-              :model-value="r.autoPauseOn"
-              label="自动暂停"
-              @update:model-value="r.autoPauseOn = $event"
-            />
-          </div>
 
           <!-- 定位就绪行：只有「原生前台保活 + 已授权」才敢承诺锁屏也继续记录。
                状态是缓存 + 异步刷新的语义，首读必须重试（见 refreshTrackStatus）——
@@ -2409,34 +2394,7 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   color: var(--danger);
 }
 
-/* ---------- 准备页：自动暂停开关 + 定位就绪行 ---------- */
-
-/* 与目标同级的设置行：左文右开关（开关自己是 51×31 的受控组件，
-   行高由它的文案撑开）。 */
-.pfrow {
-  width: min(320px, 100%);
-  gap: var(--gap-md);
-  margin-top: var(--sp-4);
-}
-
-.pf-l {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-text);
-  min-width: 0;
-  text-align: left;
-}
-
-.pf-lab {
-  font-size: var(--fs-subhead);
-  font-weight: var(--fw-semibold);
-  color: var(--text-1);
-}
-
-.pf-desc {
-  font-size: var(--fs-caption);
-  color: var(--text-2);
-}
+/* ---------- 准备页：定位就绪行 ---------- */
 
 /* 定位就绪行：13px 二级色。它是这一屏唯一敢说「锁屏也继续记录」的地方，
    所以给足字号 —— 承诺的话要能读清（能不能说由 readyLine 判定）。 */

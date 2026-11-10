@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
-import { Footprints, Heart, ListChecks, PenLine } from 'lucide-vue-next'
+import { Footprints, Heart, ListChecks, PenLine, Settings2 } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import QuickTile from '@/components/common/QuickTile.vue'
@@ -113,6 +113,18 @@ const hrAria = computed(() =>
               </span>
             </span>
           </span>
+        </button>
+        <!-- 运动设置：与心率胶囊并排的 38×38 圆钮（齿轮）。
+             心率胶囊的宽度由 sizer 钉死、自身 flex:none，这颗钮同样不参与收缩 ——
+             窄屏下只让标题块让位，不缩两颗入口。 -->
+        <button
+          type="button"
+          class="hdr-btn"
+          data-testid="sports-settings-entry"
+          aria-label="运动设置"
+          @click="router.push({ name: 'sports-settings' })"
+        >
+          <Settings2 :size="19" />
         </button>
       </template>
     </PageHeader>

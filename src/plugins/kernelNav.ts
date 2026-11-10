@@ -3,7 +3,7 @@ import { House, Sparkles, User } from 'lucide-vue-next'
 import type { NavContribution, NavSurface } from './types'
 
 /**
- * 内核导航目录：主页（总览）与「我」两枚条目的**纯数据**清单。
+ * 内核导航目录：主页（总览）与「关于你」两枚条目的**纯数据**清单。
  *
  * 为什么不经 definePlugin（与 registry.ts 同一条分层纪律，这里也不 import Pinia/router）：
  * 若给 home/me 造一个「shell 插件」，`plugins` 数组会多出一个 id —— App.vue 的
@@ -23,7 +23,7 @@ export interface KernelNavEntry extends NavContribution {
  * 内核条目只有两枚，三个刻意决定：
  * 1. `labels` 按容器覆盖 —— Dock 药丸显示「主页」、左栏显示「总览」，从前是两份硬编码，
  *    收进目录后是同一枚条目的两个投影；
- * 2. `me` 只投 `tabbar` —— 左栏的「我」保持为 DesktopRail 模板里的壳层固定件（与
+ * 2. `me` 只投 `tabbar` —— 左栏的「关于你」保持为 DesktopRail 模板里的壳层固定件（与
  *    logo/命令面板/信息栏同簇），桌面始终有一个位置固定的个人入口；将来要放开，
  *    把 `me` 加投 `rail` 并摘掉 `fixed` 即可，容器无需改结构；
  * 3. AI 曾是 Dock 的右独立圆钮槽位（不进布局）；2026-11 底栏合并重构（输入行 + 页签行
@@ -42,7 +42,7 @@ export const KERNEL_NAV: readonly KernelNavEntry[] = [
   },
   {
     route: 'me',
-    label: '我',
+    label: '关于你',
     icon: User,
     surfaces: ['tabbar'],
     order: 990,

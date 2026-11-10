@@ -233,16 +233,23 @@ async function main() {
     await evalJS(`location.hash = '#/me'`)
     await sleep(500)
 
-    /* ---------- A. 我页 · 个人约束 ---------- */
+    /* ---------- A. 关于你 · 身体数据与训练约束 ---------- */
     await waitFor(`location.hash.includes('/me')`)
-    ok('A1 我页加载且约束卡存在', await evalJS(
-      `[...document.querySelectorAll('h2')].some(h => h.textContent.includes('个人约束'))`,
-    ))
-    const summary0 = await evalJS(`[...document.querySelectorAll('.clist b')].map(b => b.textContent).join('/')`)
-    ok('A2 默认摘要展示', typeof summary0 === 'string' && summary0.includes('天'), summary0)
+    // 约束编辑入口在健康大卡里；profile 未到位前是 disabled，等它可点再断言
+    await waitFor(
+      `!!document.querySelector('[data-testid="about-constraints-edit"]') && !document.querySelector('[data-testid="about-constraints-edit"]').disabled`,
+      10000,
+      '关于你页约束入口可用',
+    )
+    ok('A1 关于你页加载且约束入口存在且可点', true)
 
     // 打开编辑抽屉
-    await clickButton('编辑')
+    await evalJS(`document.querySelector('[data-testid="about-constraints-edit"]')?.click()`)
+    await waitFor(`[...document.querySelectorAll('button')].some(b => b.textContent.trim() === '保存')`, 6000, '约束抽屉出现')
+    const days0 = await evalJS(
+      `document.querySelector('[aria-label="增加 每周训练"]')?.closest('.stepper')?.textContent.replace(/\\s+/g, '') ?? ''`,
+    )
+    ok('A2 抽屉默认值可读（每周训练带单位「天」）', days0.includes('天'), days0)
     await waitFor(`[...document.querySelectorAll('.__sheet, .sheet, [class*=panel]')].length > 0 || [...document.querySelectorAll('button')].some(b => b.textContent.trim() === '保存')`, 4000, '编辑抽屉出现')
     ok('A3 编辑抽屉打开（含保存按钮）', await evalJS(
       `[...document.querySelectorAll('button')].some(b => b.textContent.trim() === '保存')`,
@@ -290,11 +297,30 @@ async function main() {
       `[...document.querySelectorAll('.chips .chip.on')].length === 2`,
     ))
     await clickButton('保存')
-    await sleep(600)
-    const sumText = () => evalJS(`[...document.querySelectorAll('.clist b')].map(b => b.textContent).join('/')`)
-    const s1 = await sumText()
-    ok('A6 保存后摘要更新（5天/时段/居家/忌口2项）',
-      s1.includes('5 天') && s1.includes('早晨') && s1.includes('午间') && s1.includes('居家徒手') && s1.includes('海鲜、花生'), s1)
+    await waitFor(`!document.querySelector('[role="dialog"]')`, 6000, '约束抽屉关闭')
+    await sleep(500)
+    // 重开抽屉回读控件值（/me 不再有约束摘要卡，改读抽屉本身）
+    await evalJS(`document.querySelector('[data-testid="about-constraints-edit"]')?.click()`)
+    await waitFor(`!!document.querySelector('[role="dialog"]')`, 6000, '约束抽屉重开')
+    await sleep(400)
+    const saved = await evalJS(`(() => {
+      const days = document.querySelector('[aria-label="增加 每周训练"]')?.closest('.stepper')?.textContent.replace(/\\s+/g, '') ?? ''
+      const chipsOf = (label) => {
+        const crow = [...document.querySelectorAll('.crow')].find((c) => (c.querySelector('.rlabel')?.textContent ?? '').includes(label))
+        return [...(crow?.querySelectorAll('.chip.on') ?? [])].map((e) => e.textContent.trim())
+      }
+      return { days, slots: chipsOf('运动时段'), equip: chipsOf('器械条件'), diet: chipsOf('忌口') }
+    })()`)
+    ok(
+      'A6 保存后重开抽屉回读到 5 天 / 早晨·午间 / 居家徒手 / 海鲜·花生',
+      saved.days.includes('5天') &&
+        saved.slots.includes('早晨') && saved.slots.includes('午间') &&
+        saved.equip.includes('居家徒手') &&
+        saved.diet.includes('海鲜') && saved.diet.includes('花生'),
+      JSON.stringify(saved),
+    )
+    await evalJS(`document.querySelector('[role="dialog"] [aria-label="关闭"]')?.click()`)
+    await sleep(500)
 
     /* ---------- B. 方案页 · 约束向导 + 三档对比矩阵 + 强度预览 ---------- */
     // ProfilePage 重构后 /me 不再有「健康方案」跳转钮，直接 hash 跳转（与 N3 同方式）
@@ -304,7 +330,7 @@ async function main() {
     ok('B1 方案页进入 setup 态（内联约束向导）', true)
 
     const preview0 = await evalJS(`document.querySelector('.pv-value')?.textContent ?? ''`)
-    ok('B1b 约束即时预览（继承我页约束）', preview0.includes('5 练') && preview0.includes('居家徒手'), preview0)
+    ok('B1b 约束即时预览（继承关于你页约束）', preview0.includes('5 练') && preview0.includes('居家徒手'), preview0)
 
     ok('B1c 约束 chips 可点（6 天）', await clickButton('6 天', '.pod'))
     await waitFor(`!!document.querySelector('.warn-note')`, 2000, '高频提醒')

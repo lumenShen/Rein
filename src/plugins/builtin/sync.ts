@@ -3,9 +3,9 @@ import { Cloud } from 'lucide-vue-next'
 import { definePlugin } from '../registry'
 
 /**
- * 多设备同步模块（可开关，见「打开或关闭功能」）。
+ * 设备（同步）模块（可开关，见「打开或关闭功能」）。
  *
- * 它没有导航条目与工具卡 —— 唯一的入口是「设置 › 多设备同步」那张卡，所以关闭的
+ * 它没有导航条目与工具卡 —— 唯一的入口是「设置 › 能力与连接 › 设备」那张卡，所以关闭的
  * 效果是：那张卡与 `settings-sync` 路由一起收起，命令面板与桌面信息栏里的入口同时消失。
  *
  * **不给 Rust 侧加门闩**，理由与抢课恰好相反：`SyncHub` 那条线程不做任何网络轮询，
@@ -15,7 +15,7 @@ import { definePlugin } from '../registry'
  */
 export const syncPlugin = definePlugin({
   id: 'sync',
-  name: '多设备同步',
+  name: '设备',
   desc: '设备间端到端加密同步',
   icon: Cloud,
   accent: '--mod-campus',

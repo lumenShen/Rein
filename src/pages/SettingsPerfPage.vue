@@ -15,7 +15,7 @@ import { PERF_MODES, perfMode, setPerfMode, supportsSvgBackdrop, type PerfMode }
 import { GLASS_PARAM_SPECS } from '@/system/glassParams'
 
 /**
- * 画质预览（三级页，入口在「设置 › 性能」）：**超高档的液态玻璃长什么样**。
+ * 画质预览（三级页，入口在「设置 › 外观与性能」）：**超高档的液态玻璃长什么样**。
  *
  * 这一页要回答三个问题，从上到下就是这个顺序：
  *   1. 这一档在我这台设备上到底生效了吗（能力探测 + 当前档位，如实说）

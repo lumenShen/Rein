@@ -50,7 +50,7 @@ const CATEGORY_ICONS: Record<HealthCategoryKey, Component> = {
 }
 
 /**
- * 第三方数据管理（三级页，入口在「设置 › 第三方数据管理」）。
+ * 健康数据（三级页，入口在「设置 › 连接应用 › Android › 健康数据」）。
  *
  * 手机厂商的运动 App（小米运动健康 / 华为运动健康 …）把数据写进**系统的 Health Connect**，
  * 本页让 Rein 从那里读进来、也可以把 Rein 自己记的运动回写出去。
@@ -463,7 +463,7 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
 
 <template>
   <div class="page">
-    <PageHeader title="第三方数据管理" back />
+    <PageHeader title="健康数据" back />
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 

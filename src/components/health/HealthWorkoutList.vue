@@ -8,7 +8,7 @@ import type { HealthSyncWorkout, WorkoutType } from '@/types'
 /**
  * 第三方运动记录行列表（只读）。
  *
- * 只服务「第三方数据管理」页：把「手机同步进来的」与「没填开始时间、回写时被跳过的本机
+ * 只服务「健康数据」页：把「手机同步进来的」与「没填开始时间、回写时被跳过的本机
  * 记录」两组按同一形状列出来。刻意不复用 exercise 域的 WorkoutRow —— 那个组件要完整的
  * Workout 形状（effort / sessionId / createdAt），还带删除入口；这里只要用户最关心的
  * 几列，而且是只读的（补填与删除仍在「全部运动记录」页）。

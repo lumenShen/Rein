@@ -1245,6 +1245,9 @@ export const useRunStore = defineStore('run', () => {
     await hr.finishWorkout()
     const hrSummary = hr.lastSummary
     const hrKcal = hr.usableKcal
+    // 落库的 hr 必须是纯 JSON（store 里取出来是 reactive 代理，mock 的
+    // structuredClone 会炸 DataCloneError —— 见 heartRate.summaryForIpc 的注释）
+    const hrForIpc = hr.summaryForIpc()
     // 强度档按平均配速分档；无距离（配速算不出）时才借心率测量给出的档
     const tier: Intensity =
       paceSec != null
@@ -1280,7 +1283,7 @@ export const useRunStore = defineStore('run', () => {
           intensity: tier,
           kcal: kcalFinal,
           note: noteParts.length > 0 ? noteParts.join(' · ') : null,
-          hr: hrSummary,
+          hr: hrForIpc,
           sets: [], // 跑步无逐组重量
         })
       } catch (e) {

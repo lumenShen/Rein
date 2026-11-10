@@ -14,8 +14,11 @@
 //!   动作全部走「静态缓存 + 命令返回上次快照」，前端按轮询收敛（与 `modules/tracking`
 //!   同一套做法）—— 这里的每条命令都只是「扔一次 JNI + 读缓存」，不要指望同步返回值。
 //!
-//! 为什么 8 条命令全是同步 `fn`：Tauri 的同步命令跑在主线程，建窗 / 改尺寸 / 挪位置
-//! 这些 Win32 窗口操作只有主线程安全。改成 `async` 会被丢到线程池，建窗时直接 panic。
+//! 为什么 8 条命令全是同步 `fn`：Tauri 的同步命令跑在主线程，改尺寸 / 挪位置
+//! 这些 Win32 窗口操作只有主线程安全。**唯一的例外是建窗**（`desktop_open`）：
+//! 它必须扔到独立线程去做 —— 本命令跑在 WebView2 的请求处理栈内，在那里同步
+//! `build()` 会与等回执的浏览器进程互相等待，把整个应用的 IPC 一起拖死
+//! （详见 `desktop_open` 的文档注释，0.7.11 踩过）。
 //!
 //! JNI 字符串是**运行期契约**：方法名 / 描述串写错编译期发现不了，运行期就是
 //! NoSuchMethodError 崩进程。§5.4 的每一行都逐字抄在 `android_imp` 里，改 Kotlin 时
@@ -136,26 +139,65 @@ pub(crate) fn desktop_visible(webview: &tauri::Webview<tauri::Wry>) -> bool {
         .unwrap_or(false)
 }
 
-/// 显示浮窗（不存在就建）。返回 false = 建窗失败，命令层据此回 `supported: false`
+/// 建窗在途标记：失焦与快照变化可能连发两次 open，各起一个建窗线程的话
+/// 第二次 build 会因 label 已存在而失败。置位期间后来的 open 直接当「会成功」返回。
+#[cfg(target_os = "windows")]
+static CREATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 显示浮窗（不存在就建）。返回 false = 建不了，命令层据此回 `supported: false`
 /// 让前端降级为程序内浮条 —— **降级铁律**：任何一步失败都不得影响程序内浮条与计时。
+///
+/// **建窗为什么必须在独立线程**：本命令是同步命令，跑在 WebView2
+/// `WebResourceRequested` 的处理栈内（tauri v2 的 ipc 自定义协议把同步命令派发在
+/// 主线程）。在这个栈里**同步**建第二个 WebView，建窗握手要与浏览器进程对话，
+/// 而浏览器进程此刻正挂着「等本条 ipc 请求返回」—— 两边互相等待，建窗永不完成，
+/// 之后整个应用的 IPC（含跑步的落盘 / 保存 / 结束）全部挂死，直到重启进程。
+/// 实测 0.7.11：`build()` 卡在 `wait_with_pump`，主线程还能泵 Win32 消息所以窗口
+/// 看似响应，但所有 ipc:// 请求从此无人应答。
+/// 独立线程调 `build()`：Tauri 会把建窗投递回事件循环，事件循环在本命令返回
+/// （浏览器进程出栈）后才处理它，握手自然完成 —— 这也是 Tauri 异步命令建窗的
+/// 官方姿势。首次 open 返回时窗口多半还没建好（visible=false），前端靠心跳对齐。
 #[cfg(target_os = "windows")]
 pub(crate) fn desktop_open(webview: &tauri::Webview<tauri::Wry>) -> bool {
+    use std::sync::atomic::Ordering;
     let app = webview.app_handle();
-    let window = match app.get_webview_window(WINDOW_LABEL) {
-        Some(window) => window,
-        None => match create_window(app) {
-            Ok(window) => window,
-            Err(e) => {
-                eprintln!("[float] 浮窗创建失败，前端将降级为程序内浮条：{e}");
+    match app.get_webview_window(WINDOW_LABEL) {
+        Some(window) => {
+            // 已存在的窗口只 show（不重建）：页面里的表单、事件监听与已渲染的读数都还在
+            if let Err(e) = window.show() {
+                eprintln!("[float] 浮窗显示失败：{e}");
+            }
+            true
+        }
+        None => {
+            if CREATING.swap(true, Ordering::SeqCst) {
+                return true; // 上一次 open 的建窗还在途：当作会成功，前端下轮对齐
+            }
+            let app = app.clone();
+            let spawned = std::thread::Builder::new()
+                .name("rein-float-open".into())
+                .spawn(move || {
+                    let outcome = create_window(&app);
+                    CREATING.store(false, Ordering::SeqCst);
+                    match outcome {
+                        Ok(window) => {
+                            if let Err(e) = window.show() {
+                                eprintln!("[float] 浮窗显示失败：{e}");
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[float] 浮窗创建失败，前端将降级为程序内浮条：{e}")
+                        }
+                    }
+                });
+            if spawned.is_err() {
+                // 连建窗线程都起不来：如实回失败，前端降级
+                CREATING.store(false, Ordering::SeqCst);
                 return false;
             }
-        },
-    };
-    // 已存在的窗口只 show（不重建）：页面里的表单、事件监听与已渲染的读数都还在
-    if let Err(e) = window.show() {
-        eprintln!("[float] 浮窗显示失败：{e}");
+            true
+        }
     }
-    true
 }
 
 #[cfg(target_os = "windows")]

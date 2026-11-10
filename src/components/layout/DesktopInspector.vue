@@ -53,6 +53,9 @@ const GROUP_OF: Record<string, AsideGroup> = {
   'sports-plan-edit': 'sports',
   'sports-exercises': 'sports',
   'sports-records': 'sports',
+  'sports-settings': 'sports',
+  'sports-settings-run': 'sports',
+  'sports-settings-course': 'sports',
   'session-run': 'sports',
   ai: 'ai',
   'ai-models': 'ai',
@@ -72,12 +75,18 @@ const GROUP_OF: Record<string, AsideGroup> = {
   'campus-course-select': 'campus',
   'campus-grab-tasks': 'campus',
   me: 'account',
+  'me-folder': 'account',
+  'me-program': 'account',
   settings: 'account',
   'settings-features': 'account',
   'settings-float': 'account',
   'settings-sync': 'account',
+  'settings-health': 'account',
   'settings-update': 'account',
   'settings-perf': 'account',
+  'settings-apps': 'account',
+  'settings-apps-external': 'account',
+  'settings-appearance': 'account',
 }
 
 /** 提问占位文案随分组走：占位符是这块地方唯一能教用户「可以问什么」的位置 */
@@ -88,7 +97,7 @@ const ASK_HINT: Record<AsideGroup, string> = {
   nutrition: '今天还能吃点什么？',
   ledger: '本月餐饮花了多少？',
   campus: '明天几点有课？',
-  account: '怎么开启多设备同步？',
+  account: '怎么添加一台设备？',
 }
 
 /** AI 页的常用问句：把「能问什么」摊开，比一个空输入框有用 */
@@ -491,7 +500,7 @@ function askQuick(q: string): void {
         <li v-if="features.isEnabled('sync')">
           <button class="nav-row pressable" @click="router.push({ name: 'settings-sync' })">
             <Cloud :size="16" class="nav-ic" />
-            <span class="col nav-txt"><b>多设备同步</b><em>同一网段直连</em></span>
+            <span class="col nav-txt"><b>设备</b><em>同一网段直连</em></span>
             <ArrowRight :size="14" class="nav-go" />
           </button>
         </li>

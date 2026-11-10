@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 设置页「外部访问」分区：对外服务网关的开关 / 绑定模式 / 端口 / 配对令牌 /
+ * 外部访问页 / 设置页的「外部访问」分区：对外服务网关的开关 / 绑定模式 / 端口 / 配对令牌 /
  * 已授权与被拦下的程序 / 允许的网页来源（Origin 白名单）/ 最近访问记录。
  *
  * 只接管理面里「看一眼、改一下、撤一个」这半张脸（`gateway_status` / `gateway_set_enabled` /
@@ -46,6 +46,9 @@ import {
 } from '@/types'
 
 const { toast } = useToast()
+
+/** `showHeader=false` 供独立的「外部访问」四级页使用：页头已有标题，卡内不再重复一遍 */
+const props = withDefaults(defineProps<{ showHeader?: boolean }>(), { showHeader: true })
 
 /** 设置页只看最近这些条访问记录（最小实现，不做筛选）；后端把 limit 夹在 [1, 500]。 */
 const AUDIT_LIMIT = 20
@@ -256,7 +259,7 @@ onUnmounted(() => {
 
 <template>
   <section class="card d-full" data-testid="settings-external-access">
-    <header class="row between ghead">
+    <header v-if="props.showHeader" class="row between ghead">
       <h2 class="gtitle">外部访问</h2>
       <span class="t-2">{{ stateHint }}</span>
     </header>

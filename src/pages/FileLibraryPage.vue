@@ -19,6 +19,7 @@ import {
   PackageOpen,
   PinOff,
   Trash2,
+  X,
 } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -91,9 +92,16 @@ const NAMESPACES: readonly { name: string; hint: string }[] = [
 
 /* ---------- 文件管理器（浏览态） ---------- */
 
-const explorer = ref<{ refresh: () => Promise<void>; navigate: (p: string) => Promise<void>; path: string } | null>(null)
+const explorer = ref<{
+  refresh: () => Promise<void>
+  navigate: (p: string) => Promise<void>
+  path: string
+  importFiles?: () => void
+} | null>(null)
 /** 文件管理器当前所在目录（根目录时展示「最近内容」卡片，别的目录不展示） */
 const explorerPath = computed(() => explorer.value?.path ?? '')
+/** `?import=1` 落地提示条：一次性消费，按钮点击才打开选择器（保留用户手势）。 */
+const uploadHint = ref(false)
 
 const recent = ref<KbHit[]>([])
 const recentLoaded = ref(false)
@@ -626,11 +634,29 @@ async function refreshExplorer(): Promise<void> {
   await explorer.value?.refresh()
 }
 
+/** 提示条里的「选择文件」：这一步必须是真实手势，不能挂在 onMounted 里自动点。
+ *  浏览器/WebView 对无用户激活的 input.click() 会静默拒绝。 */
+function pickImport(): void {
+  explorer.value?.importFiles?.()
+  dismissUploadHint()
+}
+
+/** 消费后把 query 去掉：页内再导航时不该一直挂着提示条。 */
+function dismissUploadHint(): void {
+  uploadHint.value = false
+  const query = { ...route.query }
+  delete query.import
+  delete query.upload
+  void router.replace({ path: route.path, query })
+}
+
 onMounted(async () => {
   // 深链只消费一次：进来时看 query，页面内的浏览都不再读它
   const q = route.query
   const qdir = typeof q.dir === 'string' ? q.dir : ''
   const qpath = typeof q.path === 'string' ? q.path : ''
+  // `?import=1`（关于你 › 上传文件）：只显形一次提示条，不自动弹选择器
+  if (q.import === '1' || q.upload === '1') uploadHint.value = true
   void loadUsage()
   // 子组件的实例要等挂载完才拿得到，深链目录因此晚一拍下发
   if (qdir) void nextTick().then(() => explorer.value?.navigate(qdir))
@@ -908,6 +934,20 @@ onMounted(async () => {
 
     <!-- 浏览：文件管理器（虚拟滚动 / 多选 / 拖放 / 回收站 / 操作队列都在组件里） -->
     <template v-else>
+      <!-- 「关于你 › 上传文件」的落地提示：无用户手势时自动弹选择器会被浏览器拒绝，
+           所以这里只说明一次，按钮点击才真正调 importFiles() -->
+      <div v-if="uploadHint" class="card d-full upload-hint" data-testid="file-upload-hint">
+        <Paperclip :size="16" class="uh-ic" />
+        <span class="uh-copy">
+          <b>从设备选择文件</b>
+          <em>导入后先落在「未分类数据」，Rein 会按内容归类。</em>
+        </span>
+        <button class="btn" data-testid="file-upload-pick" @click="pickImport">选择文件</button>
+        <button class="uh-close" aria-label="关闭导入提示" @click="dismissUploadHint">
+          <X :size="15" />
+        </button>
+      </div>
+
       <FileExplorer ref="explorer" :landmarks="NAMESPACES" @open="(it) => it.docId && openDoc(it.docId)" />
 
       <!-- 最近内容：跨工作区的「最近动过」，列不出来（它跨目录），所以单列一张卡。
@@ -952,6 +992,62 @@ onMounted(async () => {
 .card.list {
   margin-top: var(--gap-md);
   padding: var(--sp-6) var(--pad-card);
+}
+
+/* 「关于你 › 上传文件」落地提示条：一张窄卡，不抢文件管理器的位置 */
+.upload-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+  margin-top: var(--sp-2);
+  margin-bottom: var(--gap-md);
+}
+
+.uh-ic {
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.uh-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-text);
+}
+
+.uh-copy b {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+
+.uh-copy em {
+  font-style: normal;
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.uh-close {
+  position: relative;
+  width: var(--control-icon);
+  height: var(--control-icon);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* 34 的视觉尺寸不为了触控放大；热区撑到 44（与页头圆钮同一纪律） */
+.uh-close::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
 }
 
 .sec {

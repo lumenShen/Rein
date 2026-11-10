@@ -6,13 +6,13 @@
  * 只有真渲染一遍才验证得了；同时它也是回归网：哪天工具格又冒出硬编码卡片，断言会立刻红。
  *
  * 剧本：
- *   1. 「我」页的设置行 → 二级页「设置」三组齐备
- *   2. 「设置 › 打开或关闭功能」→ 十个模块开关（营养 / 记账 / 专注 / 语音 / 录音 / 多设备同步 /
+ *   1. 「关于你」页头齿轮 → 二级页「设置」三组齐备
+ *   2. 「设置 › 打开或关闭功能」→ 十个模块开关（营养 / 记账 / 专注 / 语音 / 录音 / 设备 /
  *      运动 / 课表 / 抢课 / 健康方案）；抢课是课表的子模块且默认关
  *   3. 关掉「运动」→ 工具格无「记运动」、底栏无「运动」页签、直链 /#/sports 被拦回主页
  *   4. 关掉「课表」/「健康方案」→ 工具格对应卡片消失、直链 /#/program 被拦回主页
  *   4b. 关掉「营养 / 记账 / 专注」→ 吃卡整块不渲染、两格状态卡收起、三条直链被拦
- *   4c. 关掉「语音 / 录音 / 多设备同步」→ 录音纪要 chip 消失、设置页番茄钟与同步卡收起、
+ *   4c. 关掉「语音 / 录音 / 设备」→ 录音纪要 chip 消失、设置页「设备」行收起、
  *       两条直链（/#/record、/#/settings/sync）被拦
  *   4d. 对外服务网关拿到模块快照（关掉的模块一个都不在里面）—— Rust 侧门禁的前端那一半
  *   5. 重新打开「运动」→ 入口恢复
@@ -211,7 +211,7 @@ async function main() {
     await waitFor(`document.querySelectorAll('.hf-member, .hf-chip').length > 0`, 8000, '主页页脚挂载')
     await sleep(400)
 
-    /* ---- 1. 我 › 设置 ---- */
+    /* ---- 1. 关于你 › 设置 ---- */
     const beforeTools = await toolTitles()
     ok(
       '默认页脚含 记运动 / 健康方案 成员；未连教务时课表条不出现',
@@ -222,34 +222,37 @@ async function main() {
 
     const dock0 = await dockParts()
     ok(
-      '合并底栏：输入行在场 · 页签行 = 主页/运动/我/AI（固定件 + 插件条目）',
-      dock0.quick && dock0.tabs.join() === '主页,运动,我,AI',
+      '合并底栏：输入行在场 · 页签行 = 主页/运动/关于你/AI（固定件 + 插件条目）',
+      dock0.quick && dock0.tabs.join() === '主页,运动,关于你,AI',
       JSON.stringify(dock0),
     )
 
     await evalJS(`location.hash = '#/me'`)
-    await waitFor(`document.querySelector('.setrow')`, 8000, '「我」页设置行')
-    await clickText('.setrow', '设置')
+    await waitFor('document.querySelector(`[data-testid="about-settings-entry"]`)', 10000, '「关于你」页设置齿轮')
+    await evalJS(`document.querySelector('[data-testid="about-settings-entry"]')?.click()`)
     await waitFor(`document.querySelector('h1')?.textContent === '设置'`, 8000, '设置二级页挂载')
-    ok('「我 › 设置」进入二级页', true)
-    const groups = await evalJS(`[...document.querySelectorAll('.card .gtitle')].map((e) => e.textContent.trim())`)
-    // 设置页的分组会长（性能组就是后加的）——钉住「第一组是功能、最后一组是关于、顺序稳定」，
-    // 而不是把当时的组名清单抄死在断言里
+    ok('「关于你 › 设置」进入二级页', true)
+    const groups = await evalJS(
+      `[...document.querySelectorAll('[data-testid^="settings-group-"] .gtitle')].map((e) => e.textContent.trim())`,
+    )
+    // 设置页只剩三组（能力与连接 / 通用 / 关于）；番茄钟与训练已移回各自模块
+    const cardTitles = await evalJS(`[...document.querySelectorAll('h2')].map((e) => e.textContent.trim())`)
     ok(
-      '设置页分组齐备（功能在最前、关于在最后）',
-      groups[0] === '功能' && groups.at(-1) === '关于' && groups.includes('番茄钟'),
+      '设置页三组齐备（能力与连接 / 通用 / 关于），不再有番茄钟与训练卡',
+      groups.join() === '能力与连接,通用,关于' &&
+        !cardTitles.some((t) => t.includes('番茄钟') || t.includes('训练')),
       groups.join(' · '),
     )
     await shot('1-settings')
     await shotDark('1-settings-dark')
 
     /* ---- 2. 打开或关闭功能 ---- */
-    await clickText('.frow', '打开或关闭功能')
+    await clickText('.settings-row', '打开或关闭功能')
     await waitFor(`document.querySelector('h1')?.textContent === '打开或关闭功能'`, 8000, '功能开关页挂载')
     const rows = await evalJS(`[...document.querySelectorAll('.prow .ptxt b')].map((e) => e.textContent.trim())`)
     ok(
       '开关页列出十个可开关模块（抢课缩进挂在课表下面）',
-      rows.join() === '营养,记账,专注,语音,录音,多设备同步,运动,课表,抢课,健康方案',
+      rows.join() === '营养,记账,专注,语音,录音,设备,运动,课表,抢课,健康方案',
       rows.join(' · '),
     )
     const switches = await evalJS(`document.querySelectorAll('.prow [role="switch"]').length`)
@@ -375,11 +378,11 @@ async function main() {
       afterAll.join(' · '),
     )
     const dockNoCampus = await dockParts()
-    // 此时「运动」还在关着（第 3 步关掉、第 5 步才重开），页签行 = 主页,我,AI；
+    // 此时「运动」还在关着（第 3 步关掉、第 5 步才重开），页签行 = 主页,关于你,AI；
     // 课表只投 rail，关掉它动不了底栏
     ok(
-      '关掉课表后：底栏不受影响（页签行 = 主页/我/AI，输入行在场）',
-      dockNoCampus.quick && dockNoCampus.tabs.join() === '主页,我,AI',
+      '关掉课表后：底栏不受影响（页签行 = 主页/关于你/AI，输入行在场）',
+      dockNoCampus.quick && dockNoCampus.tabs.join() === '主页,关于你,AI',
       JSON.stringify(dockNoCampus),
     )
     await shot('5-home-modules-off')
@@ -426,10 +429,10 @@ async function main() {
     }
     await shot('4b-home-content-modules-off')
 
-    /* ---- 4c. 语音 / 录音 / 多设备同步：入口与设置卡一起收 ---- */
+    /* ---- 4c. 语音 / 录音 / 设备：入口与设置行一起收 ---- */
     await evalJS(`location.hash = '#/settings/features'`)
     await waitFor(`document.querySelector('h1')?.textContent === '打开或关闭功能'`, 8000, '功能开关页')
-    for (const name of ['语音', '录音', '多设备同步']) {
+    for (const name of ['语音', '录音', '设备']) {
       ok(`关闭「${name}」开关`, (await setToggle(name, false)) === 'clicked')
     }
     await sleep(400)
@@ -456,20 +459,21 @@ async function main() {
       (await evalJS(`location.hash`)) === '#/',
       await evalJS(`location.hash`),
     )
-    // 设置页：番茄钟配置卡属「专注」、同步卡属「多设备同步」，都应随模块一起收
+    // 设置页：番茄钟配置在专注页、训练准备时长在运动设置；设备行随 sync 模块收起
     await evalJS(`location.hash = '#/settings'`)
     await waitFor(`document.querySelector('h1')?.textContent === '设置'`, 8000, '设置二级页')
     await sleep(400)
     const groupsOff = await evalJS(
-      `[...document.querySelectorAll('.card .gtitle')].map((e) => e.textContent.trim())`,
+      `[...document.querySelectorAll('[data-testid^="settings-group-"] .gtitle')].map((e) => e.textContent.trim())`,
     )
+    const devicesRow = await evalJS(`!!document.querySelector('[data-testid="settings-row-devices"]')`)
+    const cardsOff = await evalJS(`[...document.querySelectorAll('h2')].map((e) => e.textContent.trim())`)
     ok(
-      '设置页的番茄钟与多设备同步两张卡随模块收起，其余分组仍在',
-      !groupsOff.includes('番茄钟') &&
-        !groupsOff.includes('多设备同步') &&
-        groupsOff.includes('性能') &&
-        groupsOff.includes('关于'),
-      groupsOff.join(' · '),
+      '设置页：设备行随模块收起，三组仍在，不再有番茄钟 / 训练卡',
+      !devicesRow &&
+        groupsOff.join() === '能力与连接,通用,关于' &&
+        !cardsOff.some((t) => t.includes('番茄钟') || t.includes('训练')),
+      `设备行=${devicesRow}｜${groupsOff.join(' · ')}`,
     )
     await shot('4c-settings-modules-off')
 

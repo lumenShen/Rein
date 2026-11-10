@@ -117,3 +117,9 @@ docs/design/huawei/img-all/
 
 # Qoder IDE 本地任务笔记（设备本地，不入库）
 .qoder/
+
+# Mimosa 安全扫描的本地历史与基线快照（29MB：run-*.json + 按会话存的 *.source，
+# 机器/会话生成，可重扫复现，不入库）
+.mimosa/
+# ZCode 插件的本地运行标记（plugin_root，按机器生成）
+.v2c/

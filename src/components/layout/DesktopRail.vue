@@ -177,19 +177,19 @@ function onAllClick(): void {
     >
       <PanelRight :size="20" :stroke-width="2" />
     </button>
-    <!-- 「我」：正常态 RouterLink；编辑态换成 dead button（无点击处理）—— RouterLink 的
+    <!-- 「关于你」：正常态 RouterLink；编辑态换成 dead button（无点击处理）—— RouterLink 的
          跳转语义在编辑态必须消失，与 .navs 条目的按钮化同一条理由（§6.2/§4.3） -->
     <RouterLink
       v-if="!editing"
       :to="{ name: 'me' }"
       class="ric me"
       :class="{ on: route.name === 'me' }"
-      aria-label="我"
-      data-label="我"
+      aria-label="关于你"
+      data-label="关于你"
     >
       <User :size="21" :stroke-width="route.name === 'me' ? 2.2 : 1.9" />
     </RouterLink>
-    <button v-else type="button" class="ric me gated" aria-label="我" data-label="我" aria-disabled="true" tabindex="-1">
+    <button v-else type="button" class="ric me gated" aria-label="关于你" data-label="关于你" aria-disabled="true" tabindex="-1">
       <User :size="21" :stroke-width="2" />
     </button>
     <!-- 全部菜单：列出所有注册功能的悬浮入口（RailAllMenu），也是编辑态的入口与出口 -->

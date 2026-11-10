@@ -23,6 +23,7 @@ import {
   Square,
   Target,
   Timer,
+  User,
   Wallet,
 } from 'lucide-vue-next'
 
@@ -85,7 +86,9 @@ function groupOf(path: string): string {
   if (path.startsWith('/nutrition')) return '营养'
   if (path.startsWith('/campus')) return '课表'
   if (path.startsWith('/ledger')) return '记账'
-  if (path.startsWith('/settings') || path === '/me') return '设置'
+  // 「关于你」是独立分组：`/me` 与它名下的文件夹 / 程序数据投影都落这里
+  if (path === '/me' || path.startsWith('/me/')) return '关于你'
+  if (path.startsWith('/settings')) return '设置'
   if (path.startsWith('/program')) return '健康方案'
   return '今天'
 }
@@ -101,6 +104,7 @@ function iconOf(path: string): Component {
   if (path.startsWith('/nutrition')) return Apple
   if (path.startsWith('/campus')) return GraduationCap
   if (path.startsWith('/ledger')) return Wallet
+  if (path.startsWith('/me')) return User
   if (path.startsWith('/settings')) return Settings2
   if (path.startsWith('/program')) return Target
   if (path.startsWith('/focus')) return Timer
@@ -185,7 +189,7 @@ const actionCmds = computed<Cmd[]>(() => {
     { id: 'act:update', group: '动作', label: '检查软件更新', sub: '版本与更新通道', icon: Download, run: () => void router.push({ name: 'settings-update' }) },
   )
   if (features.isEnabled('sync')) {
-    base.push({ id: 'act:sync', group: '动作', label: '多设备同步', sub: '同一网段直连', icon: Cloud, run: () => void router.push({ name: 'settings-sync' }) })
+    base.push({ id: 'act:sync', group: '动作', label: '设备', sub: '同一网段直连', icon: Cloud, run: () => void router.push({ name: 'settings-sync' }) })
   }
   if (features.isEnabled('campus')) {
     base.push({ id: 'act:schedule', group: '动作', label: '打开我的课表', sub: '本周课程', keywords: '课程表 上课', icon: CalendarDays, run: () => void router.push({ name: 'campus-schedule' }) })

@@ -16,8 +16,8 @@ await page.evaluate(() => {
 })
 await page.waitForTimeout(200)
 
-// 打开个人约束抽屉（便当格里的「编辑」）
-await page.getByText('个人约束', { exact: true }).first().click()
+// 打开个人约束抽屉（关于你 › 健康大卡里的「编辑」）
+await page.locator('[data-testid="about-constraints-edit"]').click()
 await page.waitForTimeout(700)
 
 // 拖到最大档
@@ -76,7 +76,7 @@ await page.waitForTimeout(150)
 await page.locator('.save').click()
 await page.waitForTimeout(900)
 console.log('保存后抽屉关闭: ' + ((await page.locator('.panel').count()) === 0))
-await page.getByText('个人约束', { exact: true }).first().click()
+await page.locator('[data-testid="about-constraints-edit"]').click()
 await page.waitForTimeout(600)
 const back = await page.evaluate(() => ({
   y: document.querySelector('.bsel[aria-label="出生年份"]')?.value,
@@ -95,7 +95,7 @@ await dark.evaluate(() => {
     for (const el of document.querySelectorAll(sel)) el.style.display = 'none'
   }
 })
-await dark.getByText('个人约束', { exact: true }).first().click()
+await dark.locator('[data-testid="about-constraints-edit"]').click()
 await dark.waitForTimeout(700)
 await dark.screenshot({ path: 'docs/shots/constraints-dark.png' })
 await browser.close()

@@ -23,6 +23,27 @@ export const routes = [
     meta: { tab: '运动' },
   },
   {
+    path: '/sports/settings',
+    name: 'sports-settings',
+    component: () => import('@/pages/SportsSettingsPage.vue'),
+    // 运动设置（入口 = 运动页页头齿轮）；归 `sports` 插件，模块关闭时直链同样被守卫拦回
+    meta: { title: '运动设置' },
+  },
+  {
+    path: '/sports/settings/run',
+    name: 'sports-settings-run',
+    component: () => import('@/pages/RunSettingsPage.vue'),
+    // 跑步设置：自动暂停 + 后台记录状态与权限教程
+    meta: { title: '跑步设置' },
+  },
+  {
+    path: '/sports/settings/course',
+    name: 'sports-settings-course',
+    component: () => import('@/pages/CourseSettingsPage.vue'),
+    // 课程设置：训练准备时长
+    meta: { title: '课程设置' },
+  },
+  {
     path: '/ai',
     name: 'ai',
     component: () => import('@/pages/AIPage.vue'),
@@ -74,14 +95,50 @@ export const routes = [
     path: '/me',
     name: 'me',
     component: () => import('@/pages/ProfilePage.vue'),
-    meta: { tab: '我' },
+    // 底栏标签来自 plugins/kernelNav.ts，两处一起改（meta.tab 只决定 document.title）
+    meta: { tab: '关于你' },
+  },
+  {
+    path: '/me/folder',
+    name: 'me-folder',
+    component: () => import('@/pages/AboutFolderPage.vue'),
+    // 关于你的文件夹投影：query `key`（必填，WorkspaceGroupKey）+ `path`（可选，嵌套目录）
+    meta: { title: '文件夹' },
+  },
+  {
+    path: '/me/program',
+    name: 'me-program',
+    component: () => import('@/pages/ProgramDataPage.vue'),
+    // 程序数据索引：按物理目录列系统与自动生成的只读投影
+    meta: { title: '程序数据' },
   },
   {
     path: '/settings',
     name: 'settings',
     component: () => import('@/pages/SettingsPage.vue'),
-    // 二级内容页：保留底部导航，页头提供返回键（入口在「我 › 设置」）
+    // 二级内容页：保留底部导航，页头提供返回键（入口在「关于你 › 设置」）
     meta: { title: '设置' },
+  },
+  {
+    path: '/settings/apps',
+    name: 'settings-apps',
+    component: () => import('@/pages/ConnectedAppsPage.vue'),
+    // 三级页：连接应用（平台页签 + 真实行 + 占位行；入口在「设置 › 能力与连接 › 连接应用」）
+    meta: { title: '连接应用' },
+  },
+  {
+    path: '/settings/apps/external',
+    name: 'settings-apps-external',
+    component: () => import('@/pages/ExternalAccessPage.vue'),
+    // 四级页：外部访问（内嵌 ExternalAccessSection；入口在连接应用页底）
+    meta: { title: '外部访问' },
+  },
+  {
+    path: '/settings/appearance',
+    name: 'settings-appearance',
+    component: () => import('@/pages/AppearanceSettingsPage.vue'),
+    // 三级页：外观与性能（画质 + 动效；入口在「设置 › 通用 › 外观与性能」）
+    meta: { title: '外观与性能' },
   },
   {
     path: '/settings/features',
@@ -101,16 +158,16 @@ export const routes = [
     path: '/settings/sync',
     name: 'settings-sync',
     component: () => import('@/pages/SyncPage.vue'),
-    // 三级页：多设备同步（入口在「设置 › 多设备同步」）
-    meta: { title: '多设备同步' },
+    // 三级页：设备（入口在「设置 › 能力与连接 › 设备」；路径与 route name 保持不变）
+    meta: { title: '设备' },
   },
   {
     path: '/settings/health',
     name: 'settings-health',
     component: () => import('@/pages/HealthDataPage.vue'),
-    // 三级页：第三方数据管理（入口在「设置 › 第三方数据管理」）。
+    // 三级页：健康数据（入口在「设置 › 连接应用 › Android › 健康数据」）。
     // 只有 Android 有 Health Connect，桌面端进得来但整页是说明性的禁用态。
-    meta: { title: '第三方数据管理' },
+    meta: { title: '健康数据' },
   },
   {
     path: '/settings/update',
@@ -123,7 +180,7 @@ export const routes = [
     path: '/settings/perf',
     name: 'settings-perf',
     component: () => import('@/pages/SettingsPerfPage.vue'),
-    // 三级页：画质预览（入口在「设置 › 性能 › 液态玻璃预览」）
+    // 三级页：画质预览（入口在「设置 › 外观与性能 › 液态玻璃预览」）
     meta: { title: '画质预览', desk: 'wide' },
   },
   {

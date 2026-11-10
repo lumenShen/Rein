@@ -71,7 +71,7 @@ import type { SwapCandidate } from '@/types'
  * （重量曲线数据源）。只有「结束 → 二级确认」才结束会话。
  */
 const s = useSessionStore()
-/** 训练偏好：准备时长（设置 › 训练可改，气泡下一组立即生效） */
+/** 训练偏好：准备时长（运动 › 运动设置 › 课程设置可改，气泡下一组立即生效） */
 const prefs = useExercisePrefs()
 /** 心率：训练开始自动连上次设备；顶栏只显示读数，点开是设备抽屉 */
 const hr = useHeartRateStore()

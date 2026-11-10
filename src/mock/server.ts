@@ -10467,7 +10467,7 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
                   { key: 'factory-1', label: 'AI 聊天、长期记忆与语音纪要（含录音）', count: 90, bytes: 1_877_095 },
                   { key: 'factory-2', label: 'AI 配置：模型、提供商与密钥', count: 3, bytes: null },
                   { key: 'factory-3', label: 'AI 工作区文件与知识库索引', count: 12, bytes: 33_554_432 },
-                  { key: 'factory-4', label: '多设备同步：配对、设备身份与对账数据', count: 0, bytes: null },
+                  { key: 'factory-4', label: '设备：配对、设备身份与对账数据', count: 0, bytes: null },
                   { key: 'factory-5', label: '应用设置与凭据（语音凭据、更新设置等）', count: 9, bytes: null },
                   { key: 'factory-6', label: '更新安装包与嵌入模型缓存', count: null, bytes: 92_630_976 },
                   { key: 'factory-7', label: '教务救援导出脚本', count: null, bytes: 0 },

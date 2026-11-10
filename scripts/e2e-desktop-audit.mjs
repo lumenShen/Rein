@@ -38,7 +38,13 @@ const DESK = { w: 1512, h: 945 }
 const MID = [MID_PORTRAIT, MID_LANDSCAPE]
 
 /** 代表路由：够覆盖几种构图（卡片流 / 宽画布 / 列表 / 设置表单 / 对话），不必全量 */
-const ROUTES = ['#/', '#/sports', '#/ai', '#/settings', '#/todos', '#/ledger', '#/me']
+const ROUTES = [
+  '#/', '#/sports', '#/ai', '#/settings', '#/todos', '#/ledger', '#/me',
+  // 2026-11 「关于你」投影 + 设置三组 + 运动设置链：桌面审计也要量到这些新页
+  '#/me/folder?key=health', '#/me/program', '#/settings/apps',
+  '#/settings/apps/external', '#/settings/appearance',
+  '#/sports/settings', '#/sports/settings/run', '#/sports/settings/course',
+]
 
 /** 点击靶下限：指针视口下的可见交互元素（触屏那套 44px 是另一回事，这里按鼠标精度） */
 const MIN_TARGET = 22

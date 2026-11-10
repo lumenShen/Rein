@@ -31,7 +31,7 @@ import { PREPARE_SEC } from '@/system/motionSpring'
  * 交互：rest 点一下跳过；set 的准备 / 做组点一下**暂停**（装卸杠铃片的等待
  * 不该吃进节拍），再点继续——暂停时长直接从起点挪走，墙钟不撒谎。到点后
  * 不给暂停，而且超出预期多久会一直亮在副文案里（「已超 n 秒」）。
- * 准备时长是用户偏好（stores/exercisePrefs，设置 › 训练可改）。
+ * 准备时长是用户偏好（stores/exercisePrefs，运动 › 运动设置 › 课程设置可改）。
  */
 
 type Stage = 'prepare' | 'act' | 'due' | 'rest'

@@ -18,6 +18,10 @@ export const sportsPlugin = definePlugin({
     'sports-plan-edit',
     'sports-exercises',
     'sports-records',
+    // 运动设置链：入口是运动页页头齿轮，模块关闭时与其它运动路由一起被守卫拦回主页
+    'sports-settings',
+    'sports-settings-run',
+    'sports-settings-course',
     'session-run',
   ],
   nav: [{ route: 'sports', label: '运动', icon: Dumbbell, surfaces: ['tabbar', 'rail'], order: 120 }],

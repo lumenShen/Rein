@@ -458,7 +458,7 @@ async function main() {
     /* ---------- 5 其它页标题同样固定 ---------- */
     await cdp('Page.addScriptToEvaluateOnNewDocument', { source: pinHigh })
     for (const [route, title] of [
-      ['#/me', '我'],
+      ['#/me', '关于你'],
       ['#/nutrition', '营养全览'],
       ['#/ledger', '记账'],
     ]) {

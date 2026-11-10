@@ -421,9 +421,11 @@ function init(): void {
   watch(currentSnapshot, () => void sync(), { flush: 'post' })
   watch([floatEnabled, appFocused, dismissed], () => void sync())
 
-  // 心跳：训练课的 stat 含计时读数、专注的 clock 也要保持新鲜；推送很便宜（一条 IPC）
+  // 心跳：训练课的 stat 含计时读数、专注的 clock 也要保持新鲜；推送很便宜（一条 IPC）。
+  // 「该显示但还没 shown」也要对齐：桌面首次建窗是异步的（Rust 侧 open 立即返回
+  // visible=false），没有这条收敛，浮窗要等到下一次焦点/快照变化才会真正出现。
   pushTimer = setInterval(() => {
-    if (shown) void sync()
+    if (shown || wantVisible()) void sync()
   }, 1000)
 
   void consumeNativeAction()

@@ -351,6 +351,18 @@ export const useHeartRateStore = defineStore('heartRate', () => {
     lastSummary.value = null
   }
 
+  /**
+   * 总结快照的**纯 JSON 副本**，专门喂 `session_finish` 的 `hr` 字段。
+   * 从 store 上取 `lastSummary` 拿到的是 Vue 的 reactive 代理：Tauri 的 JSON
+   * 序列化能吞下它，但浏览器 mock 对整份 Workout 做 `structuredClone` 时
+   * 代理会直接抛 `DataCloneError` —— 保存从此失败，总结页卡死可无限重试。
+   * （踩过：电脑端「无法停止并结束」排查中顺带钉死的一条。）
+   */
+  function summaryForIpc(): HrWorkoutSummary | null {
+    const s = lastSummary.value
+    return s == null ? null : (JSON.parse(JSON.stringify(s)) as HrWorkoutSummary)
+  }
+
   /* ---------- 派生 ---------- */
 
   const connected = computed(() => status.value.state === 'connected')
@@ -459,5 +471,6 @@ export const useHeartRateStore = defineStore('heartRate', () => {
     finishWorkout,
     cancelWorkout,
     clearFinished,
+    summaryForIpc,
   }
 })

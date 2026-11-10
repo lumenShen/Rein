@@ -34,7 +34,7 @@ const ROUTES = [
   ['#/', '今天'],
   ['#/sports', '运动'],
   ['#/ai', 'AI'],
-  ['#/me', '我'],
+  ['#/me', '关于你'],
   ['#/nutrition', '营养全览'],
   ['#/nutrition/adjust', '饮食调整'],
   ['#/nutrition/foods', '饮食库'],

@@ -36,6 +36,10 @@ const ROUTES = [
   '#/settings/features', '#/settings/float', '#/settings/update', '#/settings/perf', '#/ai/models', '#/ai/knowledge', '#/ai/files',
   '#/sports/plans', '#/sports/exercises', '#/sports/records', '#/campus/schedule',
   '#/campus/settings', '#/campus/program', '#/campus/course-select', '#/record',
+  // 2026-11 「关于你」投影 + 设置三组 + 运动设置链
+  '#/me/folder?key=health', '#/me/program', '#/settings/apps',
+  '#/settings/apps/external', '#/settings/appearance',
+  '#/sports/settings', '#/sports/settings/run', '#/sports/settings/course',
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

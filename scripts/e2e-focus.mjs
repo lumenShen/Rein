@@ -701,25 +701,52 @@ async function main() {
     )
     await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
 
-    /* 设置页番茄钟卡（档位预设 + 提示音开关） */
-    await goto('#/me')
-    await waitFor(`!!document.querySelector('.setrow')`, 10000, '「我」页设置行')
-    await evalJS(`[...document.querySelectorAll('button, a, [role=button]')].find((e) => e.textContent.includes('设置'))?.click()`)
-    await waitFor(`document.querySelector('h1')?.textContent === '设置'`, 15000, '设置二级页')
-    await sleep(400)
-    const settingsCard = await evalJS(`(() => {
-      const h = [...document.querySelectorAll('h2')].find((e) => e.textContent.trim() === '番茄钟')
-      if (!h) return null
-      const sec = h.closest('section')
-      return { text: sec.textContent.replace(/\\s+/g, ' ').trim(), presets: ['利落', '沉浸', '深流'].filter((k) => sec.textContent.includes(k)).length }
+    /* 专注页的设置抽屉（番茄钟配置已从设置页移回本页）：
+       不回到 /me 找卡，直接断言「专注设置」里的时长 / 轮次 / 提示音仍能改。 */
+    const pickerOpened = await evalJS(`(() => {
+      const btn = document.querySelector('[aria-label="专注设置"]')
+      if (!btn) return false
+      btn.click()
+      return true
+    })()`)
+    await sleep(500)
+    const picker = await evalJS(`(() => {
+      const dlg = document.querySelector('[role="dialog"]')
+      if (!dlg) return null
+      const text = dlg.textContent || ''
+      return {
+        hasFocus: text.includes('专注时长'),
+        hasRounds: text.includes('长休间隔'),
+        hasChime: !!dlg.querySelector('[role="switch"][aria-label="结束提示音"]'),
+      }
     })()`)
     ok(
-      '设置页「番茄钟」卡：保留原名 + 三个时长档位预设',
-      !!settingsCard && settingsCard.presets === 3,
-      settingsCard ? `预设命中 ${settingsCard.presets}/3｜${settingsCard.text.slice(0, 120)}` : '未找到「番茄钟」卡',
+      '专注页「专注设置」抽屉：专注时长 / 长休间隔 / 结束提示音三项都在',
+      pickerOpened && !!picker && picker.hasFocus && picker.hasRounds && picker.hasChime,
+      picker ? JSON.stringify(picker) : '未打开设置抽屉',
     )
-    await shot('focus-settings-light')
-    await shotDark('focus-settings-dark')
+
+    const settingsBefore = await evalJS(
+      `JSON.parse(localStorage.getItem(${JSON.stringify(SETTINGS_KEY)}) || '{}')`,
+    )
+    await evalJS(`document.querySelector('[aria-label="增加 专注时长"]')?.click()`)
+    await evalJS(`document.querySelector('[aria-label="增加 长休间隔"]')?.click()`)
+    await evalJS(`document.querySelector('[role="switch"][aria-label="结束提示音"]')?.click()`)
+    await sleep(400)
+    const settingsAfter = await evalJS(
+      `JSON.parse(localStorage.getItem(${JSON.stringify(SETTINGS_KEY)}) || '{}')`,
+    )
+    ok(
+      '抽屉里改专注时长 / 长休间隔 / 提示音立即落到 rein.pomodoro.settings.v1',
+      settingsAfter.focusMin === (settingsBefore.focusMin ?? 25) + 5 &&
+        settingsAfter.roundsBeforeLongBreak === (settingsBefore.roundsBeforeLongBreak ?? 4) + 1 &&
+        settingsAfter.chime === !settingsBefore.chime,
+      `before=${JSON.stringify(settingsBefore)} after=${JSON.stringify(settingsAfter)}`,
+    )
+    await evalJS(`document.querySelector('[role="dialog"] [aria-label="关闭"]')?.click()`)
+    await sleep(300)
+    await shot('focus-settings-picker-light')
+    await shotDark('focus-settings-picker-dark')
 
     /* ---------- 控制台零错误 ---------- */
     ok('全流程控制台零 error / 零未捕获异常', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '))

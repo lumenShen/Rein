@@ -319,8 +319,8 @@ async function main() {
 
     const aria0 = await railAria()
     ok(
-      'rail aria 全集含壳层簇（命令面板 / 信息栏 / 我）与「全部菜单」',
-      aria0.includes('总览') && aria0.includes('命令面板') && aria0.includes('显示或隐藏信息栏') && aria0.includes('我') && aria0.includes('全部菜单'),
+      'rail aria 全集含壳层簇（命令面板 / 信息栏 / 关于你）与「全部菜单」',
+      aria0.includes('总览') && aria0.includes('命令面板') && aria0.includes('显示或隐藏信息栏') && aria0.includes('关于你') && aria0.includes('全部菜单'),
       aria0.join(' · '),
     )
 

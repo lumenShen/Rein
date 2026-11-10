@@ -6,7 +6,7 @@ import { ref, watch } from 'vue'
  * 与功能开关 / Dock 落点同一档：换设备重配也无所谓的那种）。
  *
  * 现在只有「准备时长」：每组开始前「准备姿势」的倒计时秒数。训练气泡
- * （SessionStageBubble）与设置页的训练卡共用这一份，改完下一组立即生效。
+ * （SessionStageBubble）与「运动 › 运动设置 › 课程设置」共用这一份，改完下一组立即生效。
  */
 
 export const PREP_SEC_DEFAULT = 5

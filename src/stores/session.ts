@@ -1427,7 +1427,9 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
         intensity,
         kcal,
         note: noteParts.join(' · '),
-        hr: hrSummary,
+        // 纯 JSON 副本：store 取出的 hrSummary 是 reactive 代理，过 mock 的
+        // structuredClone 会炸 DataCloneError（见 heartRate.summaryForIpc）
+        hr: useHeartRateStore().summaryForIpc(),
         sets: buildSetRows(),
       })
     } catch (e) {

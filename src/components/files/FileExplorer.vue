@@ -2126,8 +2126,9 @@ onMounted(async () => {
   void loadTrashCount()
 })
 
-/** 宿主（页面）通过实例引用做三件事：刷新、深链跳目录、判断是否停在根目录 */
-defineExpose({ refresh, navigate, path })
+/** 宿主（页面）通过实例引用做四件事：刷新、深链跳目录、判断是否停在根目录、
+ *  以及从外部（`?import=1` 提示条）打开导入选择器 —— 调用点必须在用户手势里。 */
+defineExpose({ refresh, navigate, path, importFiles: pickUpload })
 </script>
 
 <template>
