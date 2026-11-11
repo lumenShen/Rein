@@ -3,6 +3,7 @@
 
 pub mod ai;
 pub mod campus;
+pub mod connected_apps;
 pub mod diet;
 pub mod exercise;
 pub mod exercise_lib;

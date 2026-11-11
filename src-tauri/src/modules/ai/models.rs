@@ -297,6 +297,25 @@ pub struct AiChatMessage {
     /// food-parse 等结构化消息的 JSON
     pub payload: Option<String>,
     pub created_at: String,
+    /// 所属回合的锚点消息 id（= 回合内最后一条 terminal assistant，或没有 terminal 时的最后一条 assistant）。
+    /// 派生列：由 `ai_chat_append` 维护，历史行由 0054 迁移 / 分页前的懒回填补齐。
+    pub anchor_id: Option<String>,
+}
+
+/// 一页会话消息：按完整回合切页，游标是数值 seq 边界（不要求对应消息仍存在）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiChatPage {
+    /// 按 seq 升序；整回合，不跨页切分 user 回合。
+    pub messages: Vec<AiChatMessage>,
+    /// 该会话的消息总数（不受本页截断影响），供虚拟列表估算总高度。
+    pub total: i64,
+    pub has_more_before: bool,
+    pub has_more_after: bool,
+    /// 上一页的 exclusive 上界（`has_more_before=false` 时为 None）。
+    pub next_before_seq: Option<i64>,
+    /// 下一页的 exclusive 下界（`has_more_after=false` 时为 None）。
+    pub next_after_seq: Option<i64>,
 }
 
 /// 追加消息（id 为前端生成的唯一串，重复调用幂等）
@@ -316,6 +335,8 @@ pub struct AiChatMessageInput {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatSearchHit {
+    /// 命中消息 id：供 `ai_chat_page_around` 跳转并高亮。
+    pub message_id: String,
     pub chat_id: String,
     pub chat_title: String,
     pub seq: i64,

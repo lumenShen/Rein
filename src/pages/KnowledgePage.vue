@@ -17,6 +17,7 @@ import {
   Search,
   Settings2,
   Sparkles,
+  Star,
   Trash2,
   X,
 } from 'lucide-vue-next'
@@ -31,6 +32,7 @@ import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { kbService, onKbIndexProgress, onKbModelProgress } from '@/services/kbService'
 import { humanBytes } from '@/utils/format'
 import { useAiStore } from '@/stores/ai'
+import { useMemoryStore } from '@/stores/memory'
 import { useToast } from '@/composables/useToast'
 import {
   KB_MEMORY_LABELS,
@@ -41,14 +43,16 @@ import {
   type KbEmbedTestResult,
   type KbHit,
   type KbIndexEvent,
-  type KbMemory,
-  type KbMemoryDiffEntry,
-  type KbMemoryDuplicate,
-  type KbMemoryStats,
   type KbModelEvent,
   type KbSettings,
   type KbSourceType,
   type KbStatus,
+  type MemoryDuplicate,
+  type MemoryShard,
+  type MemoryShardEvent,
+  type MemoryShardOrigin,
+  type MemoryShardState,
+  type MemoryShardStats,
 } from '@/types'
 
 /** 知识库 · 二级页。信息架构按到访频率排布：
@@ -58,6 +62,7 @@ import {
 
 const toast = useToast()
 const ai = useAiStore()
+const memory = useMemoryStore()
 const router = useRouter()
 
 const status = ref<KbStatus | null>(null)
@@ -97,9 +102,9 @@ const testRunning = ref(false)
 const testA = ref<KbEmbedTestResult | null>(null)
 const testB = ref<KbEmbedTestResult | null>(null)
 
-/** 记忆库整理辅助：疑似重复对 + 最近整理审计 */
-const duplicates = ref<KbMemoryDuplicate[]>([])
-const memoryDiffs = ref<KbMemoryDiffEntry[]>([])
+/** 记忆库整理辅助：疑似重复对 + 最近分片事件 */
+const duplicates = ref<MemoryDuplicate[]>([])
+const events = ref<MemoryShardEvent[]>([])
 const dupOpen = ref(false)
 
 const testLines = computed(() =>
@@ -114,23 +119,35 @@ const query = ref('')
 const hits = ref<KbHit[] | null>(null)
 const searching = ref(false)
 
-const memories = ref<KbMemory[]>([])
-const memoryStats = ref<KbMemoryStats | null>(null)
-/** 记忆列表视角：false（默认）只看活跃；true 连归档一起看（归档可恢复） */
-const showArchived = ref(false)
+const memories = ref<MemoryShard[]>([])
+const memoryStats = ref<MemoryShardStats | null>(null)
+/** 三态视角（服务端过滤；默认只看活跃） */
+const stateFilter = ref<MemoryShardState | 'all'>('active')
+/** 来源筛选（默认 curated = 手动/梦境/重要，避免对话分片淹没列表） */
+const originFilter = ref<MemoryShardOrigin | 'all' | 'curated'>('curated')
 const maintaining = ref(false)
-const consolidating = ref(false)
 /** 信噪比详情的展开态（默认只给一句结论，数字墙收起来） */
 const snrDetail = ref(false)
 
-/** 显著性低于 0.15 视为「低信号」：界面标出来，和 Rust 侧 STALE_SALIENCE 一致 */
-const STALE_SALIENCE = 0.15
+const stateFilters: { value: MemoryShardState | 'all'; label: string }[] = [
+  { value: 'active', label: '活跃' },
+  { value: 'dormant', label: '休眠' },
+  { value: 'archived', label: '归档' },
+  { value: 'all', label: '全部' },
+]
 
-const visibleMemories = computed(() =>
-  showArchived.value ? memories.value : memories.value.filter((m) => !m.archivedAt),
-)
+const originFilters: { value: MemoryShardOrigin | 'all' | 'curated'; label: string }[] = [
+  { value: 'curated', label: '精选' },
+  { value: 'manual_write', label: '手动' },
+  { value: 'dream_summary', label: '梦境' },
+  { value: 'marked_important', label: '重要' },
+  { value: 'conversation', label: '对话' },
+  { value: 'all', label: '全部' },
+]
 
-const archivedCount = computed(() => memories.value.filter((m) => m.archivedAt).length)
+const visibleMemories = computed(() => memories.value)
+
+const archivedCount = computed(() => memoryStats.value?.archived ?? 0)
 
 /* ---------- 检索设置抽屉 ---------- */
 
@@ -178,17 +195,26 @@ const progressPct = computed(() => {
   return Math.min(100, Math.round((p.done / p.total) * 100))
 })
 
+/** 记忆分片的服务端过滤参数：列表默认 active + curated，切 chip 时重新拉取。 */
+function fetchShards(): Promise<MemoryShard[]> {
+  return kbService.memoryShards(
+    stateFilter.value === 'all' ? 'all' : stateFilter.value,
+    originFilter.value,
+    500,
+  )
+}
+
 async function refresh(): Promise<void> {
-  const [s, st, mem, stats] = await Promise.all([
+  const [s, st, mem, memStats] = await Promise.all([
     kbService.settingsGet(),
     kbService.status(),
-    kbService.memories(undefined, 'all'),
-    kbService.memoryStats(),
+    fetchShards(),
+    kbService.memoryShardStats(),
   ])
   settings.value = s
   status.value = st
   memories.value = mem
-  memoryStats.value = stats
+  memoryStats.value = memStats
   mode.value = s.embeddingMode
   localModel.value = s.localModel
   cloudBaseUrl.value = s.cloudBaseUrl ?? ''
@@ -297,39 +323,91 @@ async function runEmbedTest(): Promise<void> {
 
 async function loadMemoryAudit(): Promise<void> {
   try {
-    const [dups, diffs] = await Promise.all([
-      kbService.memoryDuplicates(undefined, 12),
-      kbService.memoryDiffs(5),
+    const [dups, evts] = await Promise.all([
+      kbService.memoryShardDuplicates(undefined, 12),
+      kbService.memoryShardEvents(12),
     ])
     duplicates.value = dups
-    memoryDiffs.value = diffs
+    events.value = evts
   } catch {
     /* 审计是锦上添花，取不到就不显示 */
   }
 }
 
-/** 审计条目的一句话描述（抽取/整理/维护都写在同一张表里） */
-function diffLabel(d: KbMemoryDiffEntry): string {
-  const p = d.payload
-  if (p.maintain) return `自动维护：检查 ${p.checked ?? 0} 条，归档 ${p.archived ?? 0} 条`
-  const parts: string[] = []
-  if (p.added) parts.push(`新增 ${p.added}`)
-  if (p.updated) parts.push(`更新 ${p.updated}`)
-  if (p.deleted) parts.push(`删除 ${p.deleted}`)
-  if (p.archived) parts.push(`归档 ${p.archived}`)
-  if (p.restored) parts.push(`复活 ${p.restored}`)
-  if (!parts.length) parts.push(`跳过 ${p.skipped ?? 0}`)
-  return `记忆变更（${p.candidates ?? 0} 条候选）：${parts.join(' · ')}`
+/** 事件的一句话描述（history 是分片的唯一真相源） */
+function eventLabel(e: MemoryShardEvent): string {
+  const label: Record<MemoryShardEvent['event'], string> = {
+    birth: '诞生',
+    search_hit: '检索命中',
+    manual_mark: '标记重要',
+    manual_edit: '手动编辑',
+    manual_archive: '归档',
+    manual_restore: '恢复',
+    dream_consolidate: '梦境合并',
+    dream_revive: '梦境唤醒',
+    dream_supersede: '梦境替换',
+  }
+  const name = label[e.event] ?? e.event
+  return e.content ? `${name}：${e.content}` : name
 }
 
-/** 只刷新记忆区（记忆操作后调用；不必整页重来） */
+function originLabel(origin: MemoryShardOrigin): string {
+  const labels: Record<MemoryShardOrigin, string> = {
+    conversation: '对话',
+    dream_summary: '梦境',
+    manual_write: '手动',
+    marked_important: '重要',
+  }
+  return labels[origin] ?? origin
+}
+
+function stateLabel(state: MemoryShardState): string {
+  return state === 'active' ? '活跃' : state === 'dormant' ? '休眠' : '归档'
+}
+
+function formatStability(days: number): string {
+  if (!Number.isFinite(days)) return '—'
+  if (days >= 365) return `${(days / 365).toFixed(1)} 年`
+  return `${days.toFixed(days >= 10 ? 0 : 1)} 天`
+}
+
+/** 查看原文：带会话 id 跳到 AI 页，由 AIPage 读 query 后定位 anchor。 */
+function openAnchor(m: MemoryShard): void {
+  if (!m.anchorMessageId || !m.chatId) return
+  void router.push({
+    name: 'ai',
+    query: { anchor: m.anchorMessageId, chat: m.chatId },
+  })
+}
+
+/** 只刷新记忆区（记忆操作后调用；不必整页重来）——按当前 chip 的服务端过滤重取 */
 async function refreshMemories(): Promise<void> {
   const [mem, stats] = await Promise.all([
-    kbService.memories(undefined, 'all'),
-    kbService.memoryStats(),
+    fetchShards(),
+    kbService.memoryShardStats(),
   ])
   memories.value = mem
   memoryStats.value = stats
+}
+
+async function setStateFilter(value: MemoryShardState | 'all'): Promise<void> {
+  if (stateFilter.value === value) return
+  stateFilter.value = value
+  try {
+    await refreshMemories()
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : String(e))
+  }
+}
+
+async function setOriginFilter(value: MemoryShardOrigin | 'all' | 'curated'): Promise<void> {
+  if (originFilter.value === value) return
+  originFilter.value = value
+  try {
+    await refreshMemories()
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : String(e))
+  }
 }
 
 /** 索引进度推送：worker 每推进一轮推一条，就地更新状态条（不必等下一次 kb_status 快照） */
@@ -567,24 +645,21 @@ async function readAll(): Promise<void> {
 
 async function removeMemory(id: number): Promise<void> {
   try {
-    await kbService.memoryDelete(id)
+    await memory.remove(id)
     confirmDel.value = null
     await refreshMemories()
-    // 让下一轮对话的认知注入立刻反映改动，而不是等 TTL 过期
-    ai.invalidateCognitionCache()
     toast.toast('已删除该条记忆')
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : String(e))
   }
 }
 
-/** 归档：软删除，退出注入与检索，可在「显示归档」里恢复 */
+/** 归档：软删除，退出注入与检索，可在「归档」视角里恢复 */
 async function archiveMemory(id: number): Promise<void> {
   try {
-    await kbService.memoryArchive(id)
+    await memory.archive(id)
     await refreshMemories()
-    ai.invalidateCognitionCache()
-    toast.toast('已归档（可在「显示归档」里恢复）')
+    toast.toast('已归档（可在「归档」里恢复）')
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : String(e))
   }
@@ -592,10 +667,20 @@ async function archiveMemory(id: number): Promise<void> {
 
 async function restoreMemory(id: number): Promise<void> {
   try {
-    await kbService.memoryRestore(id)
+    await memory.restore(id)
     await refreshMemories()
-    ai.invalidateCognitionCache()
     toast.toast('已恢复到活跃记忆')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : String(e))
+  }
+}
+
+/** 标记重要：origin 改为 marked_important，强度地板更高，自动注入优先 */
+async function markImportantMemory(id: number): Promise<void> {
+  try {
+    await memory.markImportant(id)
+    await refreshMemories()
+    toast.toast('已标记为重要记忆')
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : String(e))
   }
@@ -617,18 +702,17 @@ function tapDeleteMemory(id: number): void {
   }, 3000)
 }
 
-/** 本地维护：衰减 + 自动归档长期闲置的低信号记忆（无模型调用） */
+/** 本地维护：按记忆强度重算 active/dormant/archived（无模型调用） */
 async function runMaintain(): Promise<void> {
   maintaining.value = true
   try {
-    const r = await kbService.memoryMaintain()
+    const r = await memory.sweep()
     await refreshMemories()
     await loadMemoryAudit()
-    ai.invalidateCognitionCache()
     toast.toast(
       r.archived > 0
-        ? `检查 ${r.checked} 条，归档 ${r.archived} 条低信号记忆`
-        : `检查 ${r.checked} 条，没有需要归档的`,
+        ? `检查 ${r.checked} 条：活跃 ${r.activated}、休眠 ${r.dormant}、归档 ${r.archived}`
+        : `检查 ${r.checked} 条：活跃 ${r.activated}、休眠 ${r.dormant}，没有新归档`,
     )
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : String(e))
@@ -637,16 +721,27 @@ async function runMaintain(): Promise<void> {
   }
 }
 
-/** AI 整理（“做梦”）：合并重叠、统一分类、归档噪声、清理归档区（一次模型调用） */
+/** AI 整理（Dream）：四类维护动作（合并/替换/摘要/唤醒），一次模型调用 */
 async function runConsolidate(): Promise<void> {
-  consolidating.value = true
   try {
-    const changed = await ai.consolidateMemoriesNow(true)
+    const changed = await memory.dreamNow(true)
     await refreshMemories()
     await loadMemoryAudit()
-    toast.toast(changed > 0 ? `AI 已整理 ${changed} 处记忆` : '记忆库很健康，无需调整')
-  } finally {
-    consolidating.value = false
+    if (changed > 0) {
+      // 成功 toast 由 memoryDream（force 且 changes>0）统一发出，这里不再重复
+      return
+    }
+    const reason = memory.dreamError
+    if (reason === 'no_model') toast.toast('还没有配置默认模型，已跳过整理')
+    else if (reason === 'cooldown') toast.toast('距离上次整理还不到 3 小时')
+    else if (reason === 'insufficient_material') toast.toast('最近对话太少，暂时不用整理')
+    else if (reason === 'no_material') toast.toast('最近没有可整理的会话')
+    else if (reason === 'running') toast.toast('另一次整理正在进行')
+    else if (reason === 'disabled') toast.toast('定期整理已关闭')
+    else if (reason) toast.toast(`本次未整理：${reason}`)
+    else toast.toast('记忆库很健康，无需调整')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : String(e))
   }
 }
 
@@ -654,23 +749,22 @@ async function runConsolidate(): Promise<void> {
 const memorySummary = computed(() => {
   const s = memoryStats.value
   if (!s) return ''
-  const parts: string[] = []
-  if (s.injected >= s.active) {
-    parts.push(`${s.active} 条活跃记忆，全部会注入对话`)
-  } else {
-    parts.push(`${s.active} 条活跃记忆，其中 ${s.injected} 条会注入对话（上限 ${s.limit}）`)
+  const parts = [`${s.active} 条活跃、${s.dormant} 条休眠记忆（含对话分片）`]
+  if (s.injected > 0) {
+    parts.push(`${s.injected} 条会注入对话（预算 ${s.budgetTokens} tokens）`)
   }
   if (s.noiseRatio > 0.3) {
-    parts.push(`${Math.round(s.noiseRatio * 100)}% 近期没用上，建议整理`)
+    parts.push(`${Math.round(s.noiseRatio * 100)}% 处于休眠，建议整理`)
   }
+  if (s.atCap) parts.push('分片总量已达软上限，对话分片暂停新建')
   return parts.join('；')
 })
 
-/** 长期记忆的解释：置信度 / 显著性是内部术语，衰减与归档规则只在标题行 InfoHint 里讲一次 */
+/** 长期记忆的解释：衰减公式 / 三态可见性 / 注入预算，只在标题行 InfoHint 里讲一次 */
 const memoryHint = [
-  '置信度与显著性是模型内部指标：置信度是 AI 对这条记忆的确信程度；显著性是衰减后仍被使用的强度。',
-  '显著性低于 0.15 的条目标为「低信号」。长期没用到、显著性变低的条目会被自动归档，在「显示归档」里可以恢复。',
-  '记忆按条数与字符上限注入对话，「注入」一栏即当前会注入对话的条数。',
+  '记忆按分片保存，记忆强度 = base_weight × (floor + (1-floor) × e^(-闲置天数/稳定期))。稳定期越长，衰减越慢。',
+  '活跃会进入自动注入；休眠不进自动注入，但可被主动检索命中并唤醒；归档只保留溯源，可手动恢复。',
+  '自动注入严格只读：不会因为「被读到」而续命。注入预算 2000 tokens、最多 8 条；数字墙统计含对话分片，列表默认只显示精选来源。',
 ].join('\n\n')
 
 /* ---------- 新建笔记（已有笔记的浏览与编辑在文件库） ---------- */
@@ -773,13 +867,38 @@ function requestCloseEditor(): void {
       </section>
 
       <!-- 长期记忆（桌面右栏下格，条目按多栏流铺开） -->
-      <section class="card card-memory">
+      <section class="card card-memory" data-testid="kb-memory-card">
         <div class="card-head">
           <Brain :size="16" />
           <h2>长期记忆</h2>
           <span class="chip num">{{ visibleMemories.length }}</span>
-          <!-- 显著性 / 置信度是内部术语，衰减与归档规则也只讲一次：收进标题行 InfoHint -->
+          <!-- 衰减 / 三态可见性 / 注入预算只讲一次：收进标题行 InfoHint -->
           <InfoHint title="长期记忆怎么运转" :content="memoryHint" />
+        </div>
+
+        <!-- 三态 + 来源筛选：过滤在服务端做，切 chip 重新拉取 -->
+        <div class="mem-filters" role="group" aria-label="记忆状态">
+          <button
+            v-for="f in stateFilters"
+            :key="f.value"
+            class="chip"
+            :class="{ on: stateFilter === f.value }"
+            @click="setStateFilter(f.value)"
+          >
+            {{ f.label }}<span v-if="f.value === 'archived' && archivedCount" class="num"> {{ archivedCount }}</span>
+          </button>
+        </div>
+        <div class="mem-filters" role="group" aria-label="记忆来源">
+          <span class="filter-label">来源</span>
+          <button
+            v-for="f in originFilters"
+            :key="f.value"
+            class="chip"
+            :class="{ on: originFilter === f.value }"
+            @click="setOriginFilter(f.value)"
+          >
+            {{ f.label }}
+          </button>
         </div>
 
         <!-- 健康度：一句结论 + 可展开的详情（数字墙默认收起） -->
@@ -791,43 +910,54 @@ function requestCloseEditor(): void {
           <div v-show="snrDetail" class="snr-detail">
             <div class="snr-grid">
               <div><b class="num">{{ memoryStats.active }}</b><span>活跃</span></div>
-              <div><b class="num">{{ memoryStats.injected }}</b><span>注入（上限 {{ memoryStats.limit }}）</span></div>
-              <div><b class="num">{{ Math.round(memoryStats.signalRatio * 100) }}%</b><span>注入覆盖率</span></div>
-              <div>
-                <b class="num" :class="{ bad: memoryStats.noiseRatio > 0.3 }">{{ Math.round(memoryStats.noiseRatio * 100) }}%</b>
-                <span>低信号占比</span>
-              </div>
+              <div><b class="num">{{ memoryStats.dormant }}</b><span>休眠</span></div>
+              <div><b class="num">{{ memoryStats.archived }}</b><span>归档</span></div>
+              <div><b class="num">{{ memoryStats.injected }}</b><span>注入（预算 {{ memoryStats.budgetTokens }} tokens）</span></div>
             </div>
             <p class="snr-line">
-              最近维护：{{ memoryStats.lastMaintainAt ?? '从未' }} · 最近 AI 整理：{{ memoryStats.lastConsolidateAt ?? '从未' }}
+              最近维护：{{ memoryStats.lastSweepAt ?? '从未' }} · 最近 AI 整理：{{ memoryStats.lastDreamAt ?? '从未' }}
             </p>
+            <p class="snr-line">数字墙统计含对话分片；列表默认只看精选来源。</p>
           </div>
           <div class="mem-actions">
             <button class="btn ghost" :disabled="maintaining" @click="runMaintain">
               <RefreshCw :size="14" /> {{ maintaining ? '维护中…' : '衰减维护' }}
             </button>
-            <button class="btn ghost" :disabled="consolidating" @click="runConsolidate">
-              <Sparkles :size="14" /> {{ consolidating ? 'AI 整理中…' : 'AI 整理' }}
-            </button>
-            <button class="link" @click="showArchived = !showArchived">
-              {{ showArchived ? '隐藏归档' : `显示归档${archivedCount ? `（${archivedCount}）` : ''}` }}
+            <button class="btn ghost" :disabled="memory.dreaming" @click="runConsolidate">
+              <Sparkles :size="14" /> {{ memory.dreaming ? 'AI 整理中…' : 'AI 整理' }}
             </button>
           </div>
         </div>
 
         <ul v-if="visibleMemories.length" class="mems">
-          <li v-for="m in visibleMemories" :key="m.id" :class="{ 'is-archived': m.archivedAt }">
+          <li
+            v-for="m in visibleMemories"
+            :key="m.id"
+            :class="{ 'is-archived': m.state === 'archived' }"
+            data-testid="kb-memory-item"
+          >
             <div class="mem-head">
               <span class="type">{{ KB_MEMORY_LABELS[m.memType] ?? m.memType }}</span>
               <span v-if="m.topic" class="topic">{{ m.topic }}</span>
               <span v-if="m.category" class="cat">{{ m.category }}</span>
-              <span v-if="m.archivedAt" class="badge arch">已归档 · {{ m.archivedReason ?? '手动' }}</span>
-              <span v-else-if="m.salience < STALE_SALIENCE" class="badge stale">低信号</span>
+              <span class="badge origin">{{ originLabel(m.origin) }}</span>
+              <span class="badge state" :class="m.state">{{ stateLabel(m.state) }}</span>
+              <span class="metric num">
+                稳定期 {{ formatStability(m.stability) }} · 强度 {{ m.effectiveWeight.toFixed(2) }}
+              </span>
             </div>
             <p class="mem-text">{{ m.content }}</p>
             <div class="mem-ops">
               <button
-                v-if="m.archivedAt"
+                v-if="m.anchorMessageId && m.chatId"
+                class="op wide"
+                aria-label="查看记忆原文"
+                @click="openAnchor(m)"
+              >
+                查看原文
+              </button>
+              <button
+                v-if="m.state === 'archived'"
                 class="op"
                 aria-label="恢复该条记忆"
                 @click="restoreMemory(m.id)"
@@ -836,6 +966,15 @@ function requestCloseEditor(): void {
               </button>
               <button v-else class="op" aria-label="归档该条记忆" @click="archiveMemory(m.id)">
                 <Archive :size="16" />
+              </button>
+              <button
+                v-if="m.origin !== 'marked_important'"
+                class="op"
+                aria-label="标记为重要记忆"
+                title="标记重要：提高强度地板，自动注入优先"
+                @click="markImportantMemory(m.id)"
+              >
+                <Star :size="16" />
               </button>
               <button
                 v-if="confirmDel === m.id"
@@ -863,8 +1002,8 @@ function requestCloseEditor(): void {
           title="还没有长期记忆"
           hint="默认会在每次会话结束时自动提炼。也可以直接对 AI 说「记住……」"
         />
-        <!-- 整理线索：疑似重复（本地向量算出，喂给 AI 整理当重点怀疑对象）+ 最近变更审计 -->
-        <div v-if="duplicates.length || memoryDiffs.length" class="audit">
+        <!-- 整理线索：疑似重复（本地向量算出，喂给 AI 整理当重点怀疑对象）+ 最近分片事件 -->
+        <div v-if="duplicates.length || events.length" class="audit">
           <div v-if="duplicates.length" class="dup">
             <button class="dup-head" @click="dupOpen = !dupOpen">
               <Sparkles :size="13" />
@@ -881,16 +1020,16 @@ function requestCloseEditor(): void {
               点「AI 整理」会把它们当重点：能合的合并成一条，措辞更全的留下。
             </p>
           </div>
-          <div v-if="memoryDiffs.length" class="diffs">
-            <span class="diffs-head">最近整理</span>
-            <p v-for="(d, i) in memoryDiffs.slice(0, 3)" :key="`${i}-${d.at}`" class="diff-line">
-              <span class="mono">{{ d.at.slice(0, 16) }}</span> {{ diffLabel(d) }}
+          <div v-if="events.length" class="diffs">
+            <span class="diffs-head">最近事件</span>
+            <p v-for="(e, i) in events.slice(0, 3)" :key="`${i}-${e.at}-${e.shardId}`" class="diff-line">
+              <span class="mono">{{ e.at.slice(0, 16) }}</span> {{ eventLabel(e) }}
             </p>
           </div>
         </div>
         <!-- 衰减与归档的完整解释在标题行 InfoHint 里，卡面只留一行结论 -->
         <p v-if="visibleMemories.length" class="foot">
-          <StatusChip tone="neutral" size="sm">长期没用上的会自动归档</StatusChip>
+          <StatusChip tone="neutral" size="sm">休眠不进自动注入，归档可恢复</StatusChip>
         </p>
       </section>
 
@@ -1307,6 +1446,23 @@ function requestCloseEditor(): void {
   background: var(--accent-soft);
   color: var(--accent);
 }
+/* 记忆三态 / 来源筛选：chip 变成按钮后补回触控高度与无边框 */
+.mem-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
+}
+.mem-filters .chip {
+  border: none;
+  cursor: pointer;
+  min-height: var(--control-sm);
+}
+.filter-label {
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+}
 
 /* 检索 */
 .searchbar {
@@ -1517,6 +1673,26 @@ input {
   background: var(--danger-soft);
   color: var(--danger-strong);
 }
+/* 分片来源 / 三态徽标 */
+.badge.origin {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.badge.state.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge.state.dormant {
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+}
+.badge.state.archived {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.metric {
+  color: var(--text-3);
+}
 .mem-text {
   margin-top: var(--sp-4);
   font-size: var(--fs-footnote);
@@ -1551,6 +1727,13 @@ input {
 }
 .op:active {
   opacity: 0.6;
+}
+/* 「查看原文」是文字按钮，仍沿用 .op 的 32px 热区 */
+.op.wide {
+  width: auto;
+  padding: var(--sp-6) var(--sp-10);
+  color: var(--accent);
+  font-size: var(--fs-caption);
 }
 .op.del-arm {
   padding: var(--sp-6) var(--sp-12);

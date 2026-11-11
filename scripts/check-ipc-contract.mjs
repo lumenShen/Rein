@@ -5,7 +5,8 @@
  *
  * 三方集合必须完全一致：
  *   1. Rust：src-tauri/src/lib.rs 的 generate_handler![...]
- *   2. 前端：src/services/*.ts 里 invoke('<cmd>') / invoke<T>('<cmd>') 的命令名
+ *   2. 前端：src/services/*.ts 与 src/**\/*.vue 里 invoke('<cmd>') / invoke<T>('<cmd>') 的命令名
+ *      （第二窗口如 src/float/FloatApp.vue 不经过 service，直接 invoke）
  *   3. mock：src/mock/server.ts **顶层** switch 的 case '<cmd>'
  *      （4 空格缩进；更深的缩进是命令内部 switch 的分支，不是命令）
  *
@@ -27,16 +28,35 @@ function rustCommands() {
   return out
 }
 
-/** 前端 services：invoke(...) / invoke<T>(...) 的第一个字面量参数 */
+/** 收集一份源码里的 invoke<…>('cmd') / invoke('cmd') 命令名 */
+function collectInvokes(src, out) {
+  for (const m of src.matchAll(/\binvoke\s*(?:<[\s\S]*?>)?\s*\(\s*'([a-z][a-z0-9_]+)'/g)) {
+    out.add(m[1])
+  }
+}
+
+/** src 下所有 .vue（独立 Tauri 窗口可能直接 invoke，不经过 services） */
+function walkVue(dir, out = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) walkVue(path, out)
+    else if (entry.name.endsWith('.vue')) out.push(path)
+  }
+  return out
+}
+
+/** 前端 services + 独立窗口里的直接 invoke，第一个字面量参数 */
 function serviceCommands() {
   const dir = join(root, 'src/services')
   const out = new Set()
   for (const file of readdirSync(dir)) {
     if (!file.endsWith('.ts')) continue
-    const src = readFileSync(join(dir, file), 'utf8')
-    for (const m of src.matchAll(/\binvoke\s*(?:<[\s\S]*?>)?\s*\(\s*'([a-z][a-z0-9_]+)'/g)) {
-      out.add(m[1])
-    }
+    collectInvokes(readFileSync(join(dir, file), 'utf8'), out)
+  }
+  // 契约守护要盯住**所有**直接调用点：`src/float/FloatApp.vue` 这类第二窗口
+  // 不经过 service，漏扫时命令可以只在 Rust + mock 存在而在真实前端无人调用。
+  for (const file of walkVue(join(root, 'src'))) {
+    collectInvokes(readFileSync(file, 'utf8'), out)
   }
   return out
 }

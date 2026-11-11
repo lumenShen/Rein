@@ -109,6 +109,10 @@ export type ProcessSegment =
 
 export interface AiMessage {
   id: string
+  /** 会话内单调 seq（分页游标；仅从持久化历史恢复时存在，本地新消息为 undefined） */
+  seq?: number
+  /** 所属回合的锚点消息 id（后端 anchor_id；与 MemoryShard.anchorMessageId 同值） */
+  anchorId?: string | null
   role: AiRole
   kind: AiMessageKind
   at: string
@@ -587,6 +591,8 @@ export interface AiChatMessage {
   mime: string | null
   payload: string | null
   createdAt: string
+  /** 所属回合的锚点消息 id（后端派生列；无 assistant 的回合、旧 mock 数据为 null/缺省） */
+  anchorId?: string | null
 }
 
 export interface AiChatMessageInput {

@@ -21,8 +21,8 @@ use super::turn::{run_turn, RunContext, ToolExecutor, TurnHooks, TurnInput};
 use super::models::{AgentEvent, AgentRunParams, ToolOutcome, AGENT_EVENT};
 use super::probe::{probe_model, AgentProbeResult};
 
-/// 前端工具执行超时（web_search / web_fetch 等慢工具要留足时间）
-const TOOL_RESULT_TIMEOUT: Duration = Duration::from_secs(120);
+/// 前端工具执行超时：必须覆盖「确认 60s + 终端命令 90s + 余量」（plan §0.2）。
+const TOOL_RESULT_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// 读取模型配置行（探测与 run 共用）
 fn load_model(state: &State<'_, AppState>, model_id: i64) -> Result<crate::modules::ai::models::AiModel> {

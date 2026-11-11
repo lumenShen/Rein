@@ -387,7 +387,10 @@ pub fn health_sync_step(
 /// 预览卡与指标详情抽屉共用这一份：前者自己切最近 14 天的窗口画条形，
 /// 后者把全部行当 raw 数据列表展示。行数 = 指标数 × 有值的天数（≤ 16×90），
 /// 量级很小，不分页。
-#[tauri::command]
+///
+/// `async`：这是「关于你」首屏四路中的一路；读数本身很快，但不该和索引线程
+/// 抢主线程（同步命令拿不到 DB 锁时会原地阻塞窗口消息泵）。
+#[tauri::command(async)]
 pub fn health_metrics_all(state: State<AppState>) -> Result<Vec<HealthMetricSeries>> {
     let conn = state.db.lock();
     let mut stmt = conn.prepare(

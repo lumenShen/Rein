@@ -11,7 +11,9 @@
  *      程序数据卡在最后一项；点进 `/me/program` 后 13 行且最后一行是「记忆」。
  *   2. `/settings` 三组（能力与连接 / 通用 / 关于）与七行入口。
  *   3. 运动设置两级入口：`/sports` 页头齿轮 → `/sports/settings` → 跑步设置 / 课程设置。
- *   4. `/settings/apps` 平台页签存在、Android 页签下有真实健康数据行；页底外部访问入口
+ *   4. `/settings/apps` 平台页签存在、Android 页签下 8 个原生行 + 健康数据行；
+ *      行右侧是真实状态 pill（不是 `+` / `✓`）；点日历行打开抽屉、连接、打开 AI 开关；
+ *      旧 `localStorage` 占位键被清除；健康行进既有 `/settings/health`；页底外部访问入口
  *      能进 `/settings/apps/external`，网关卡与开关在。
  *
  * 断言只用 `data-testid` 与文本，不依赖 scoped CSS 类名；平台相关断言**不写死是哪个平台**
@@ -390,27 +392,187 @@ async function main() {
       JSON.stringify(tabs),
     )
 
+    /* 旧占位/AI 前端键只做一次性清理：写入后重载，行状态仍只来自原生，键被删除。 */
+    await evalJS(`(() => {
+      localStorage.setItem('rein.connectedApps.placeholder.v1', JSON.stringify(['calendar']))
+      localStorage.setItem('rein.connectedApps.v1', JSON.stringify(['calendar']))
+      localStorage.setItem('rein.connectedApps.ai.v1', '1')
+      return true
+    })()`)
+    await evalJS(`location.reload()`)
+    await waitFor(`document.readyState === 'complete'`, 12000, '重载完成')
+    await waitId('connected-apps-page', 12000, '连接应用页重载')
     await clickId('apps-tab-android')
-    await waitId('apps-row-health')
-    const healthRow = await evalJS(`(() => {
-      const row = ${sel('apps-row-health')}
+    await waitId('apps-row-health', 12000, 'Android 健康行')
+    await waitFor(
+      `localStorage.getItem('rein.connectedApps.placeholder.v1') === null &&
+       localStorage.getItem('rein.connectedApps.v1') === null &&
+       localStorage.getItem('rein.connectedApps.ai.v1') === null`,
+      5000,
+      '旧 localStorage 键清理',
+    )
+    const legacy = await evalJS(`(() => ({
+      placeholder: localStorage.getItem('rein.connectedApps.placeholder.v1'),
+      compat: localStorage.getItem('rein.connectedApps.v1'),
+      ai: localStorage.getItem('rein.connectedApps.ai.v1'),
+      calendar: document.querySelector('[data-testid="apps-toggle-calendar"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+    }))()`)
+    ok(
+      '4.2 旧占位键/兼容键/AI 键被一次性清除，行状态不来自 localStorage',
+      legacy.placeholder === null &&
+        legacy.compat === null &&
+        legacy.ai === null &&
+        legacy.calendar === '连接',
+      JSON.stringify(legacy),
+    )
+
+    const androidRows = await evalJS(`(() => {
+      const ids = ['alarm', 'usage', 'calendar', 'contacts', 'filesystem', 'location', 'notification', 'sms']
       return {
-        text: row?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
-        label: row?.querySelector('[data-testid="connected-app-health"]')?.getAttribute('aria-label') ?? null,
+        native: ids.filter((id) => document.querySelector('[data-testid="apps-row-' + id + '"]')).length,
+        health: !!document.querySelector('[data-testid="apps-row-health"]'),
+        pills: [...document.querySelectorAll('[data-testid^="apps-toggle-"]')]
+          .map((e) => e.textContent.replace(/\\s+/g, ' ').trim()),
       }
     })()`)
     ok(
-      '4.2 Android 页签下有真实健康数据行',
-      !!healthRow.text && healthRow.text.includes('健康数据'),
-      JSON.stringify(healthRow),
+      '4.3 Android 页签：8 个原生行 + 健康行；右侧是真实状态 pill（不再是 + / ✓）',
+      androidRows.native === 8 &&
+        androidRows.health &&
+        androidRows.pills.every((p) => p !== '+' && p !== '✓') &&
+        androidRows.pills.length >= 9,
+      `${androidRows.native} 个原生行 / pill ${androidRows.pills.slice(0, 4).join(' · ')}`,
     )
     await shot('4-connected-apps')
+
+    /* 健康数据行仍是既有路由入口（不是抽屉）。 */
+    await clickId('connected-app-health')
+    await waitH1('健康数据')
+    ok(
+      '4.3b 健康数据行仍跳 /settings/health',
+      (await evalJS(`location.hash`)).includes('/settings/health'),
+      String(await evalJS(`location.hash`)),
+    )
+    await goto('#/settings/apps', '连接应用')
+    await waitId('connected-apps-page')
+    await clickId('apps-tab-android')
+    await waitId('apps-row-calendar', 8000, '回到 Android 日历行')
+
+    /* 行 → 抽屉；权限读写分开；未连接时 AI 开关禁用。 */
+    await clickId('connected-app-calendar')
+    await waitId('connected-app-sheet', 8000, '日历抽屉')
+    const sheet = await evalJS(`(() => ({
+      status: document.querySelector('[data-testid="connected-app-status"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+      read: document.querySelector('[data-testid="connected-app-permission-read_calendar"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+      write: document.querySelector('[data-testid="connected-app-permission-write_calendar"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+      aiDisabled: document.querySelector('[data-testid="connected-app-ai-toggle"]')?.disabled === true,
+      writeToggle: !!document.querySelector('[data-testid="connected-app-write-toggle"]'),
+      connect: !!document.querySelector('[data-testid="connected-app-connect"]'),
+    }))()`)
+    ok(
+      '4.4 点日历行 → 抽屉：状态「未连接」，读取/写入权限分行，AI 开关禁用',
+      sheet.status === '未连接' &&
+        !!sheet.read &&
+        !!sheet.write &&
+        sheet.read.includes('读取日历') &&
+        sheet.write.includes('写入日历') &&
+        sheet.aiDisabled &&
+        sheet.writeToggle &&
+        sheet.connect,
+      JSON.stringify(sheet),
+    )
+
+    /* 连接 → AI 开 → 行 pill 变「已连接 · AI」。 */
+    await clickId('connected-app-connect')
+    await waitFor(`${text('connected-app-status')} === '已连接'`, 8000, '抽屉状态已连接')
+    // connect() 的 busy 锁在状态落地后还要走完 refresh/finally；开关可用才是真正空闲。
+    await waitFor(
+      `document.querySelector('[data-testid="connected-app-ai-toggle"]')?.disabled === false`,
+      8000,
+      '连接动作结束（AI 开关可用）',
+    )
+    const afterConnect = await evalJS(`(() => ({
+      aiDisabled: document.querySelector('[data-testid="connected-app-ai-toggle"]')?.disabled === true,
+      writeDisabled: document.querySelector('[data-testid="connected-app-write-toggle"]')?.disabled === true,
+    }))()`)
+    ok(
+      '4.5 点「连接」→ 已连接；AI / 写入开关都可用',
+      !afterConnect.aiDisabled && !afterConnect.writeDisabled,
+      JSON.stringify(afterConnect),
+    )
+    await clickId('connected-app-ai-toggle')
+    await waitFor(
+      `document.querySelector('[data-testid="connected-app-ai-toggle"]')?.getAttribute('aria-checked') === 'true'`,
+      8000,
+      'AI 开关打开',
+    )
+    const aiIds = await evalJS(`(async () => {
+      const { useConnectedAppsStore } = await import('/src/stores/connectedApps.ts')
+      return useConnectedAppsStore().aiEnabledAppIds()
+    })()`)
+    ok('4.6 打开「允许 AI 使用」→ aiEnabledAppIds() 含 calendar', aiIds.includes('calendar'), aiIds.join(','))
+    await clickId('connected-app-sheet-close')
+    await waitFor(`!document.querySelector('[data-testid="connected-app-sheet"]')`, 8000, '抽屉关闭')
+    const connectedPill = await evalJS(text('apps-toggle-calendar'))
+    ok('4.7 关闭抽屉后行 pill 是「已连接 · AI」', connectedPill === '已连接 · AI', String(connectedPill))
+
+    /* 「去授权」「不支持」两枚 pill 的投影（mock 下用状态注入，不伪造连接）。 */
+    await evalJS(`(async () => {
+      const { useConnectedAppsStore } = await import('/src/stores/connectedApps.ts')
+      const s = useConnectedAppsStore()
+      s.statuses['alarm'] = { ...s.statuses['alarm'], enabled: true, connected: false, aiEnabled: false, writeAllowed: false, availability: 'partial', roots: [] }
+      s.statuses['usage'] = { ...s.statuses['usage'], enabled: false, connected: false, aiEnabled: false, writeAllowed: false, availability: 'unsupported', supported: false, roots: [] }
+      return true
+    })()`)
+    await waitFor(`${text('apps-toggle-alarm')} === '去授权'`, 5000, '去授权 pill')
+    await waitFor(`${text('apps-toggle-usage')} === '不支持'`, 5000, '不支持 pill')
+    const pills = await evalJS(`(() => ({
+      alarm: document.querySelector('[data-testid="apps-toggle-alarm"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+      usage: document.querySelector('[data-testid="apps-toggle-usage"]')?.textContent.replace(/\\s+/g, ' ').trim() ?? null,
+    }))()`)
+    ok(
+      '4.8 真实状态 pill：缺权限 → 去授权；平台不支持 → 不支持',
+      pills.alarm === '去授权' && pills.usage === '不支持',
+      JSON.stringify(pills),
+    )
+    await evalJS(`(async () => {
+      const { useConnectedAppsStore } = await import('/src/stores/connectedApps.ts')
+      await useConnectedAppsStore().refresh()
+      return true
+    })()`)
+
+    /* 其余平台页签与 iOS 说明。 */
+    await clickId('apps-tab-ios')
+    await waitFor(
+      `(document.querySelector('[data-testid="apps-empty"]')?.parentElement?.textContent ?? document.body.textContent).includes('iOS 尚未支持')`,
+      5000,
+      'iOS 说明',
+    )
+    const ios = await evalJS(`(() => ({
+      note: (document.querySelector('[data-testid="apps-empty"]')?.parentElement?.textContent ?? '').includes('iOS 尚未支持') ||
+        document.body.textContent.includes('iOS 尚未支持'),
+      rows: document.querySelectorAll('[data-testid^="apps-row-"]').length,
+    }))()`)
+    ok('4.9 iOS 页签只有说明、没有 app 行', ios.note && ios.rows === 0, JSON.stringify(ios))
+
+    await clickId('apps-tab-windows')
+    await waitId('apps-row-win-desktop', 5000, 'Windows 桌面行')
+    ok(
+      '4.10 Windows 页签有桌面 / 命令行行',
+      !!(await evalJS(has('apps-row-win-terminal'))),
+    )
+    await clickId('apps-tab-mac')
+    await waitId('apps-row-mac-desktop', 5000, 'Mac 桌面行')
+    ok('4.11 Mac 页签有 Mac 桌面行', !!(await evalJS(has('apps-row-mac-desktop'))))
+    await clickId('apps-tab-linux')
+    await waitId('apps-row-linux-documents', 5000, 'Linux 文稿行')
+    ok('4.12 Linux 页签有 Linux 文稿行', !!(await evalJS(has('apps-row-linux-documents'))))
 
     await clickId('apps-external-entry')
     await waitH1('外部访问')
     await waitId('external-access-page')
     ok(
-      '4.3 页底外部访问入口能进 /settings/apps/external，网关卡与开关在',
+      '4.13 页底外部访问入口能进 /settings/apps/external，网关卡与开关在',
       !!(await evalJS(has('settings-external-access'))) &&
         !!(await evalJS(has('gateway-toggle-enabled'))),
     )

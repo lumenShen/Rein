@@ -1,3 +1,15 @@
+<script lang="ts">
+/**
+ * 未匹配项的热量换算基准：首次出现时的克重（估算值按编辑比例缩放）。
+ *
+ * 放在模块级而不是每个实例里：虚拟列表会把消息行卸载/重挂载，
+ * 实例级 WeakMap 一丢，用户把 100g 改成 200g 后重新滚回来，
+ * 显示热量会从 2× 估算掉回 1× 估算。条目对象引用稳定（原地修改、数组浅拷贝），
+ * 所以模块级 WeakMap 正好以它为键。
+ */
+const baseGrams = new WeakMap<object, number>()
+</script>
+
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import { Pencil, Repeat2, Search, Trash2 } from 'lucide-vue-next'
@@ -35,8 +47,8 @@ watch(
   { immediate: true },
 )
 
-/** 未匹配项的热量换算基准：首次出现时的克重（估算值按编辑比例缩放） */
-const baseGrams = new WeakMap<object, number>()
+/** 未匹配项的热量换算基准：首次出现时的克重（估算值按编辑比例缩放）。
+ *  基准住在模块级（见文件顶部 `<script>`），行卸载重挂后不丢。 */
 
 /* 行身份：条目对象原地修改、数组浅拷贝，引用即稳定身份；
    用索引作 key 会在删除中间行时让后续行的编辑态/焦点串位 */

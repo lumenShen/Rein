@@ -24,11 +24,13 @@ import type {
   KbMetaInput,
   KbMemoryDiffEntry,
   KbMemoryDuplicate,
+  KbMemoryOverview,
   KbMemoryScope,
   KbMemoryStats,
   KbMemoryType,
   KbModelEvent,
   KbQuery,
+  KbRootStat,
   KbSettings,
   KbSettingsInput,
   KbStatus,
@@ -37,9 +39,26 @@ import type {
   KbTrashResult,
   KbUsageCleanResult,
   KbUsageReport,
+  DreamAction,
+  DreamApplyResult,
+  DreamBeginResult,
   MemoryApplyResult,
   MemoryCandidate,
+  MemoryDuplicate,
+  MemoryInjectResult,
   MemoryMaintainResult,
+  MemorySearchResult,
+  MemoryShard,
+  MemoryShardDetail,
+  MemoryShardEvent,
+  MemoryShardOrigin,
+  MemoryShardOverview,
+  MemoryShardState,
+  MemoryShardStats,
+  ShardApplyResult,
+  ShardPatch,
+  ShardSweepResult,
+  ShardWriteAction,
 } from '@/types'
 import { invoke, isTauri } from './transport'
 
@@ -77,6 +96,86 @@ export const kbService = {
   memories: (memType?: KbMemoryType, scope?: KbMemoryScope) =>
     invoke<KbMemory[]>('kb_memories', { memType, scope }),
 
+  /**
+   * 「关于你」首屏聚合：活跃记忆 + 概况 + 注入块。
+   *
+   * 从同一次全表读算出三份视图 —— 页面不要再并发发 memories / memoryStats /
+   * cognition 三条命令各读一遍（那等于三次全表扫描 + 三次 salience 计算）。
+   */
+  memoryOverview: () => invoke<KbMemoryOverview>('kb_memory_overview', {}),
+
+  /* ---------- 记忆分片（kb/shard，方案 §7.4） ---------- */
+
+  /** 记忆分片列表；scope 默认 active，origin 传 curated = 手动/梦境/重要三类 */
+  memoryShards: (
+    scope?: MemoryShardState | 'all',
+    origin?: MemoryShardOrigin | 'all' | 'curated',
+    limit = 200,
+    offset = 0,
+  ) => invoke<MemoryShard[]>('memory_shard_list', { scope, origin, limit, offset }),
+
+  memoryShard: (id: number) => invoke<MemoryShardDetail>('memory_shard_get', { id }),
+
+  memoryShardApply: (actions: ShardWriteAction[], chatId?: string, messageIds?: string[]) =>
+    invoke<ShardApplyResult>('memory_shard_apply', { actions, chatId, messageIds }),
+
+  memoryShardUpdate: (id: number, patch: ShardPatch) =>
+    invoke<MemoryShard>('memory_shard_update', { id, patch }),
+
+  memoryShardDelete: (id: number) => invoke<boolean>('memory_shard_delete', { id }),
+
+  memoryShardArchive: (id: number, reason?: string) =>
+    invoke<boolean>('memory_shard_archive', { id, reason }),
+
+  memoryShardRestore: (id: number) => invoke<boolean>('memory_shard_restore', { id }),
+
+  memoryShardMarkImportant: (id: number, note?: string) =>
+    invoke<MemoryShard>('memory_shard_mark_important', { id, note }),
+
+  /** 主动检索：命中且 relevance 达标才写 search_hit；这是唯一会「续命」的读路径 */
+  memorySearch: (
+    query: string,
+    topK = 8,
+    includeDormant = true,
+    includeArchived = false,
+    reviveArchived = false,
+  ) =>
+    invoke<MemorySearchResult>('memory_shard_search', {
+      query,
+      topK,
+      includeDormant,
+      includeArchived,
+      reviveArchived,
+    }),
+
+  /** 自动注入：严格只读，不写 history/stability/state；默认不含对话分片 */
+  memoryInject: (query?: string, budgetTokens = 2000, maxShards = 8, includeConversation = false) =>
+    invoke<MemoryInjectResult>('memory_shard_inject', {
+      query,
+      budgetTokens,
+      maxShards,
+      includeConversation,
+    }),
+
+  memoryShardOverview: () => invoke<MemoryShardOverview>('memory_shard_overview', {}),
+
+  memoryShardStats: () => invoke<MemoryShardStats>('memory_shard_stats', {}),
+
+  memoryShardSweep: () => invoke<ShardSweepResult>('memory_shard_sweep', {}),
+
+  memoryShardDuplicates: (threshold?: number, limit = 30) =>
+    invoke<MemoryDuplicate[]>('memory_shard_duplicates', { threshold, limit }),
+
+  memoryShardEvents: (limit = 20) => invoke<MemoryShardEvent[]>('memory_shard_events', { limit }),
+
+  memoryDreamBegin: (force = false) => invoke<DreamBeginResult>('memory_dream_begin', { force }),
+
+  memoryDreamApply: (runId: string, actions: DreamAction[]) =>
+    invoke<DreamApplyResult>('memory_dream_apply', { runId, actions }),
+
+  memoryDreamCancel: (runId: string, error?: string) =>
+    invoke<void>('memory_dream_cancel', { runId, error }),
+
   /** 落库一次记忆抽取/整理结果（抽取与整理本身在前端调模型完成） */
   memoryApply: (candidates: MemoryCandidate[], chatId?: string, messageIds?: string[]) =>
     invoke<MemoryApplyResult>('kb_memory_apply', { candidates, chatId, messageIds }),
@@ -96,7 +195,10 @@ export const kbService = {
   /** 记忆库信噪比概况（注入覆盖率 / 噪声占比 / 归档数 / 上次整理时间） */
   memoryStats: () => invoke<KbMemoryStats>('kb_memory_stats', {}),
 
-  /** 上报「刚完成一次 LLM 整理」，用于周期任务的节流 */
+  /**
+   * 上报「刚完成一次 LLM 整理」，用于周期任务的节流。
+   * @deprecated 分片层已降为 no-op；保留一版，下一版删除。
+   */
   memoryConsolidated: () => invoke<void>('kb_memory_consolidated', {}),
 
   /** 按路径模式列文档：* 不跨目录、** 跨目录、? 单字符 */
@@ -161,6 +263,12 @@ export const kbService = {
    * 所以排序、分组、状态列都不用再逐个查询；`path` 为空 = 根目录。
    */
   listDir: (path: string) => invoke<KbDirListing>('kb_list_dir', { path }),
+
+  /**
+   * 根层统计：每个顶层目录的直接子项数 + 节点更新时间。
+   * 关于你首屏用它代替 `listDir('')` —— 只回几十行数字，不扫 assets、不建条目。
+   */
+  rootStats: () => invoke<KbRootStat[]>('kb_root_stats', {}),
 
   /** 删除 = 移进回收站（目录连整棵子树一起走）。可撤销：trashRestore */
   trash: (id: number) => invoke<KbTrashResult>('kb_trash', { id }),
@@ -229,7 +337,10 @@ export const kbService = {
   /** 取喂给系统提示词的紧凑认知块 */
   cognition: () => invoke<KbCognition>('kb_cognition', {}),
 
-  /** 上报「这些记忆被注入过」，用于后续排序 */
+  /**
+   * 上报「这些记忆被注入过」，用于后续排序。
+   * @deprecated 自动注入已改为严格只读；保留一版，下一版删除。
+   */
   memoryBump: (ids: number[]) => invoke<void>('kb_memory_bump', { ids }),
 }
 

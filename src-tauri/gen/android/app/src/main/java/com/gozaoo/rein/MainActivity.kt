@@ -69,6 +69,8 @@ class MainActivity : TauriActivity() {
     TrackingBridge.register(this)
     // 心率手环：在 Java 线程初始化 droidplug，并注册蓝牙权限弹窗回调
     HeartRateBridge.register(this)
+    // 连接本机应用：注册运行时权限 / SAF 选择器回调（launcher 必须在 onCreate 注册）
+    ConnectedAppsBridge.register(this)
     // 注册 Health Connect 授权界面的回调（同上，必须在 onCreate 注册）。
     // 版本闸：Health Connect 是 API 26+ 才有的东西，Android 7 的机器连这个类都别去碰
     // （它引用的 java.time 靠 desugaring 兜着，能不加载就不加载）。
@@ -139,6 +141,8 @@ class MainActivity : TauriActivity() {
   override fun onResume() {
     super.onResume()
     GlobalFloatBridge.onAppForeground(this, true)
+    // 用户从系统设置 / 权限弹窗 / SAF 回来时立刻重算连接应用状态
+    ConnectedAppsBridge.refresh(this)
   }
 
   override fun onPause() {

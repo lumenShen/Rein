@@ -59,7 +59,8 @@ pub fn list_dir(conn: &Connection, path: &str) -> Result<KbDirListing> {
     let mut docs: Vec<DocRow> = Vec::new();
     {
         let mut stmt = conn.prepare(
-            "SELECT id, path, source_type, title, kind, editable, system, occurred_on, updated_at
+            "SELECT id, path, source_type, title, kind, editable, system, occurred_on, updated_at,
+                    LENGTH(CAST(body AS BLOB))
              FROM kb_docs WHERE path >= ?1 AND path < ?2 ORDER BY path LIMIT ?3",
         )?;
         let rows = stmt.query_map(rusqlite::params![lo, hi, MAX_SCAN + 1], |r| {
@@ -73,6 +74,7 @@ pub fn list_dir(conn: &Connection, path: &str) -> Result<KbDirListing> {
                 system: r.get::<_, i64>(6)? != 0,
                 occurred_on: r.get(7)?,
                 updated_at: r.get(8)?,
+                body_bytes: r.get(9)?,
             })
         })?;
         for row in rows {
@@ -251,6 +253,11 @@ pub fn list_dir(conn: &Connection, path: &str) -> Result<KbDirListing> {
         seen.insert(path);
     }
 
+    // 按路径索引一次：下面每个派生文档都要找它的文件节点。从前是
+    // `nodes.iter().find(...)` —— 文档数 × 节点数，大目录（2000 条）时是平方级。
+    let nodes_by_path: std::collections::HashMap<&str, &NodeRow> =
+        nodes.iter().map(|n| (n.path.as_str(), n)).collect();
+
     // 文件条目：派生文档优先（它带来源类别与标题），其后是纯文件节点
     for d in &docs {
         let Some(name) = direct(&d.path) else { continue };
@@ -260,8 +267,8 @@ pub fn list_dir(conn: &Connection, path: &str) -> Result<KbDirListing> {
         if !seen.insert(d.path.clone()) {
             continue;
         }
-        let node = nodes.iter().find(|n| n.path == d.path);
-        let bytes = d_bytes(node, d.id, &asset_bytes, conn);
+        let node = nodes_by_path.get(d.path.as_str()).copied();
+        let bytes = d_bytes(node, d.body_bytes, &asset_bytes);
         entries.push(KbEntry {
             id: d.id,
             file_id: node.map(|n| n.id),
@@ -348,23 +355,88 @@ pub fn list_dir(conn: &Connection, path: &str) -> Result<KbDirListing> {
     })
 }
 
+/// 根层统计：每个顶层目录的「直接子项数」与目录节点更新时间。
+///
+/// 为什么单开一条：关于你首屏只需要 13 个 root 的数字，而 [`list_dir`] 为了给出
+/// 这 13 个数字会把整棵树（docs / files / assets 三张表）扫进 Rust 再归并。
+/// 这里把计数压进 SQLite 的 `GROUP BY`：只回几十行，不实例化任何 `KbEntry`，
+/// 也不碰 assets 表。口径与 `list_dir("")` 的 `child_count` 严格一致：
+/// **只数后代**（第 2 段起的路径），直接子文件的 `child_count` 本就是 0。
+pub fn root_stats(conn: &Connection) -> Result<Vec<KbRootStat>> {
+    // 每个 root 的子项名集合：取路径第 2 段。
+    // 与 list_dir("") 的 child_names 严格同口径。注意根层列举的特殊之处：目录节点
+    // 自己的路径也带斜杠（`未分类数据/空目录`），因此**直接子目录节点也算一个子项**
+    // （与 `list_dir("笔记")` 里的同名目录显示 0 项不同 —— 那是既有行为，此处不改，
+    // 因为关于你用的正是根层口径）。回收站与 list_dir 一样整棵排除。
+    let mut stmt = conn.prepare(
+        "SELECT root, COUNT(DISTINCT seg) AS n
+         FROM (
+           SELECT substr(path, 1, instr(path, '/') - 1) AS root,
+                  CASE WHEN instr(substr(path, instr(path, '/') + 1), '/') > 0
+                       THEN substr(path, instr(path, '/') + 1,
+                                   instr(substr(path, instr(path, '/') + 1), '/') - 1)
+                       ELSE substr(path, instr(path, '/') + 1)
+                  END AS seg
+           FROM kb_docs WHERE instr(path, '/') > 0
+           UNION ALL
+           SELECT substr(path, 1, instr(path, '/') - 1),
+                  CASE WHEN instr(substr(path, instr(path, '/') + 1), '/') > 0
+                       THEN substr(path, instr(path, '/') + 1,
+                                   instr(substr(path, instr(path, '/') + 1), '/') - 1)
+                       ELSE substr(path, instr(path, '/') + 1)
+                  END
+           FROM kb_files WHERE trashed_at IS NULL AND instr(path, '/') > 0
+         )
+         WHERE seg <> '' AND root <> '' AND root <> ?1
+         GROUP BY root",
+    )?;
+    let mut stats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+    for row in stmt.query_map([TRASH_ROOT], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+    })? {
+        let (root, n) = row?;
+        stats.insert(root, n);
+    }
+    drop(stmt);
+
+    // 根目录节点自己的更新时间（隐式目录没有节点 → 空串，前端不显示"更新于"）
+    let mut updated: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut stmt = conn.prepare(
+        "SELECT path, updated_at FROM kb_files
+         WHERE kind = ?1 AND trashed_at IS NULL AND path <> '' AND instr(path, '/') = 0",
+    )?;
+    for row in stmt.query_map([FILE_KIND_FOLDER], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
+        let (path, at) = row?;
+        updated.insert(path, at);
+    }
+    drop(stmt);
+
+    // 并集：有后代的目录 ∪ 有空目录节点的目录（后者 count=0，与 list_dir 同）
+    let mut out: Vec<KbRootStat> = Vec::new();
+    let names: std::collections::BTreeSet<&String> = stats.keys().chain(updated.keys()).collect();
+    for name in names {
+        out.push(KbRootStat {
+            name: name.clone(),
+            child_count: stats.get(name).copied().unwrap_or(0),
+            updated_at: updated.get(name).cloned().unwrap_or_default(),
+        });
+    }
+    Ok(out)
+}
+
 /// 文件条目的体积：本体字节优先（多模态），其次真实文件正文，最后派生正文。
 fn d_bytes(
     node: Option<&NodeRow>,
-    doc_id: i64,
+    doc_body_bytes: i64,
     asset_bytes: &std::collections::HashMap<i64, i64>,
-    conn: &Connection,
 ) -> i64 {
     if let Some(n) = node {
         let a = asset_bytes.get(&n.id).copied().unwrap_or(0);
         return n.bytes + a;
     }
-    conn.query_row(
-        "SELECT LENGTH(CAST(body AS BLOB)) FROM kb_docs WHERE id = ?1",
-        [doc_id],
-        |r| r.get::<_, i64>(0),
-    )
-    .unwrap_or(0)
+    doc_body_bytes
 }
 
 /// 按虚拟路径取**一个**条目的富元数据（AI 的 `present_file`：把工作区里的一个文件
@@ -446,6 +518,11 @@ struct DocRow {
     system: bool,
     occurred_on: Option<String>,
     updated_at: String,
+    /// 正文占用字节数（列存储长度）。**随主查询一起取回**：从前派生文档若没有对应的
+    /// 文件节点，每行都要再发一次 `SELECT LENGTH(body) FROM kb_docs WHERE id=?` ——
+    /// 一层目录 2000 条就是 2000 次额外查询（典型的 N+1）。SQLite 的 LENGTH 只按
+    /// 存储格式算长度、不解析正文，放进主查询几乎不增加成本。
+    body_bytes: i64,
 }
 
 struct NodeRow {
@@ -494,6 +571,52 @@ mod tests {
         assert_eq!(by_name("运动").unwrap().child_count, 1);
         assert_eq!(by_name("笔记").unwrap().child_count, 1);
         assert!(l.entries.iter().all(|e| !is_trash_path(&e.path)));
+    }
+
+    #[test]
+    fn root_stats_match_list_dir_child_counts() {
+        let conn = db();
+        let id = files::write(&conn, "运动/知识/跑步计划.md", "每周三次").unwrap();
+        index::apply_one(&conn, "note", &id.to_string()).unwrap();
+        files::write(&conn, "笔记/膝盖.md", "避免深蹲").unwrap();
+        // 显式空目录：只有节点、没有后代 → child_count 与 list_dir 一样是 0
+        governance::mkdir(&conn, "用户记忆/空目录", "测试", "user").unwrap();
+        // 再放一个后代进去 → 变成 1
+        files::write(&conn, "用户记忆/空目录/a.md", "备注").unwrap();
+        // 一个只有空目录节点的 root：必须被并进统计（count=0），不能整行消失
+        governance::mkdir(&conn, "未分类数据/孤立空目录", "测试", "user").unwrap();
+        // 回收站里的东西两边都不该出现（写接口拒绝直写回收站，走正常删除路径）
+        let tid = files::write(&conn, "笔记/待删.md", "x").unwrap();
+        files::trash(&conn, tid).unwrap();
+
+        let l = list_dir(&conn, "").unwrap();
+        let stats = root_stats(&conn).unwrap();
+        assert!(stats.iter().all(|s| s.name != TRASH_ROOT), "回收站不该进统计");
+
+        // 口径必须与 list_dir("") 的每个 folder 条目逐项相等
+        for e in l.entries.iter().filter(|e| e.kind == KIND_FOLDER) {
+            let s = stats.iter().find(|s| s.name == e.name);
+            assert_eq!(
+                s.map(|s| s.child_count),
+                Some(e.child_count),
+                "root {} 的 child_count 与 list_dir 不一致",
+                e.name
+            );
+        }
+        // list_dir 里没有条目但统计里有的（隐式目录），只可能是 0 后代 —— 允许
+        for s in &stats {
+            if !l.entries.iter().any(|e| e.name == s.name) {
+                assert_eq!(s.child_count, 0, "{} 只应来自空目录节点", s.name);
+            }
+        }
+        assert_eq!(
+            stats
+                .iter()
+                .find(|s| s.name == "未分类数据")
+                .map(|s| s.child_count),
+            Some(1),
+            "根层口径里直接子目录节点也算一个子项（与 list_dir(\"\") 一致）"
+        );
     }
 
     #[test]

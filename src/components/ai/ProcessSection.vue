@@ -30,14 +30,29 @@ const props = withDefaults(
      *  仅在此为 true 且空闲时才自动折叠；连续多轮思考+工具（无正文）
      *  期间保持展开，避免每轮结束折叠、下一轮思考又重新展开的抖动。 */
     final?: boolean
+    /**
+     * 受控展开态（虚拟列表用）：消息行被窗口回收后组件会重挂载，
+     * 组件内部的开合状态会丢；由页面按消息 id 持有就能保留用户手动展开。
+     * null/undefined = 维持原来的自动开合行为（Vue 的 Boolean 缺省会被转成 false，
+     * 所以这里用 null 作为「未受控」哨兵，避免历史/流式被误折叠）。
+     */
+    expanded?: boolean | null
   }>(),
   {
     segments: () => [],
     isThinking: false,
     thinkingSec: 0,
     final: false,
+    expanded: null,
   },
 )
+
+const emit = defineEmits<{
+  'update:expanded': [expanded: boolean]
+  /** 工具抽屉打开/关闭：页面据此把该段 pin 在虚拟窗口内，滚动时不卸载 */
+  'detail-open': []
+  'detail-close': []
+}>()
 
 // 工具调用记录（从 segments 提取，供忙碌判定与标题统计）
 const toolCalls = computed(() =>
@@ -56,9 +71,28 @@ const busy = computed(
   () => props.isThinking || toolCalls.value.some((c) => c.pending),
 )
 
-// 历史消息（加载时已全部完成）默认折叠；进行中默认展开
-const collapsed = ref(!busy.value)
+// 历史消息（加载时已全部完成）默认折叠；进行中默认展开。
+// 受控时（props.expanded 为 boolean）以页面持有的状态为准。
+const controlled = computed(() => props.expanded === true || props.expanded === false)
+const internalCollapsed = ref(!busy.value)
+const collapsed = computed(() => (controlled.value ? !props.expanded : internalCollapsed.value))
 const bodyRef = ref<HTMLElement | null>(null)
+
+/** 统一的开合入口：受控时只发事件（父级同步回写）；非受控时先改本地状态，
+ *  再把结果交给父级。虚拟列表会回收/重挂载消息行，页面按消息 id 持有开合状态，
+ *  非受控时的自动开合也必须上报，否则重挂载后状态会丢（高度缓存还会对不上）。 */
+function setCollapsed(next: boolean): void {
+  // next 是目标 collapsed；已经在这个状态就不重复发事件（避免父级反复 invalidate）
+  if (collapsed.value === next) return
+  if (!controlled.value) internalCollapsed.value = next
+  emit('update:expanded', !next)
+  if (!next) {
+    nextTick(() => {
+      const el = bodyRef.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }
+}
 
 // 已思考时长（秒）：基准 props.thinkingSec 由数据层按消息 id 持有（跨组件重建存活），
 // 思考中叠加本地实时秒数 liveElapsed（仅展示用；权威累计在数据层按时间戳进行）
@@ -124,7 +158,7 @@ watch(
     }
     if (b && !was) {
       // 进行中 → 立即展开。CSS transition 天然可打断，不需要手动 pause 残留动画
-      collapsed.value = false
+      setCollapsed(false)
     } else if (!b && was) {
       // 空闲：仅当过程彻底结束（正文已输出 / 流已结束）才自动折叠。
       // 连续多轮思考+工具（无正文）之间 busy 会短暂回落，此时不折叠，
@@ -166,11 +200,7 @@ function toggle(): void {
 
 // 展开：高度过渡改走 CSS grid 轨道（1fr ↔ 0fr），JS 只翻状态并把内容定位到底部
 function expandNow(): void {
-  collapsed.value = false
-  nextTick(() => {
-    const el = bodyRef.value
-    if (el) el.scrollTop = el.scrollHeight
-  })
+  setCollapsed(false)
 }
 
 // 闭合：只翻状态。不再补 maxHeight —— 动画终点是内容自然高度，完成后清除
@@ -180,7 +210,7 @@ function collapseNow(): void {
     clearTimeout(collapseTimer)
     collapseTimer = null
   }
-  collapsed.value = true
+  setCollapsed(true)
 }
 
 // 内容签名：思考文字 / 工具状态变化时滚动到底部（流式跟随）
@@ -255,7 +285,12 @@ const titleText = computed(() => {
         <div class="rubber-layer" data-rubber-content>
           <template v-for="(seg, i) in segments" :key="i">
             <div v-if="seg.kind === 'reasoning'" class="process-reasoning">{{ seg.text }}</div>
-            <ToolCallGroup v-else :calls="[seg.call]" />
+            <ToolCallGroup
+              v-else
+              :calls="[seg.call]"
+              @detail-open="emit('detail-open')"
+              @detail-close="emit('detail-close')"
+            />
           </template>
         </div>
       </div>

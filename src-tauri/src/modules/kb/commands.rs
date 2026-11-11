@@ -12,8 +12,8 @@ use crate::state::AppState;
 
 use super::models::{
     KbChunk, KbCognition, KbDirListing, KbDocDetail, KbFile, KbFileInput, KbFsMove, KbFsMoveResult,
-    KbGlobHit, KbHit, KbInjection, KbMedia, KbMediaInput, KbMemory, KbMemoryStats, KbQuery,
-    KbMetaInput, KbSettings, KbSettingsInput, KbStatus, KbTrashBatchResult, KbTrashEntry,
+    KbGlobHit, KbHit, KbInjection, KbMedia, KbMediaInput, KbMemory, KbMemoryOverview, KbMemoryStats,
+    KbQuery, KbMetaInput, KbSettings, KbSettingsInput, KbStatus, KbRootStat, KbTrashBatchResult, KbTrashEntry,
     KbTrashResult, MemoryApplyResult, MemoryCandidate, MemoryMaintainResult, MODE_KEYWORD,
     MODE_LOCAL,
 };
@@ -79,7 +79,10 @@ pub fn kb_status(
 }
 
 /// 混合检索：结构化过滤 + FTS5 + 向量召回 → RRF。
-#[tauri::command]
+///
+/// `async`：要等索引追赶、可能还要做一次查询嵌入（云端是网络往返），
+/// 同步命令会把这些都压在主线程上。
+#[tauri::command(async)]
 pub fn kb_search(
     app: AppHandle,
     state: State<AppState>,
@@ -134,17 +137,20 @@ pub fn kb_search(
 
 /// 分层读取。`l1` 只给摘要 + 首块（概览），`l2` 给全部分块正文。
 /// 默认 l1——AI 需要细节时应显式要 l2，避免工具结果撑爆上下文。
-#[tauri::command]
+///
+/// `async`（= 派到线程池）：阅读会装配 kb_chunks，note 还要整篇即时切块；同步命令
+/// 会占住主线程。**不再等索引队列**：单条 doc 的读取只看它自己那一行，队列里排的是
+/// 别的源的派生刷新 —— 等它们全部落地，只会把「打开一篇笔记」拖成 1.5 秒。写路径
+/// 自己会 notify，索引线程随即追赶，不需要读路径阻塞等待。
+#[tauri::command(async)]
 pub fn kb_read(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<AppState>,
     doc_id: i64,
     level: Option<String>,
     offset: Option<i64>,
     limit: Option<i64>,
 ) -> Result<KbDocDetail> {
-    // 刚写入的笔记/归档文档要能立刻被读到
-    worker::drain_before_query(&app, REFRESH_BUDGET)?;
     let conn = state.db.lock();
     read_detail(
         &conn,
@@ -217,8 +223,12 @@ pub fn read_detail(
     // MAX_BODY 上限的检索缓存。阅读必须给全文：否则超过缓存上限的文档被截断后，
     // AI 按页读到头的也只是残篇，「继续读」无路可走。这里对 note 直读真源、
     // 按同一分块参数即时切块；其他源维持 kb_chunks（派生文档本就以缓存为准）。
-    let full_chunks: Option<Vec<String>> = if source_type == "note" {
-        source_id
+    //
+    // 返回 `(可见块, 真实总块数)`。l1 只需要首块，**不为一行摘要把整篇文档切一遍**：
+    // 只切前 300 字；总块数走 `chunk::count_chunks`（同一套断点算法、只数不切），
+    // l2 分页提示要的真实总数因此与 l2 实际块表严格一致。l2 才做完整切块。
+    let full_chunks: Option<(Vec<String>, i64)> = if source_type == "note" {
+        let content: Option<String> = source_id
             .parse::<i64>()
             .ok()
             .and_then(|fid| {
@@ -228,16 +238,43 @@ pub fn read_detail(
                 .optional()
                 .ok()
                 .flatten()
-            })
-            .map(|content| {
-                chunk::chunk_text(&content, chunk::DEFAULT_MAX_CHARS, chunk::DEFAULT_OVERLAP)
-            })
+            });
+        content.map(|content| {
+            if level == "l1" {
+                let cut = content
+                    .char_indices()
+                    .nth(chunk::DEFAULT_MAX_CHARS)
+                    .map(|(i, _)| i)
+                    .unwrap_or(content.len());
+                let head = chunk::chunk_text(
+                    &content[..cut],
+                    chunk::DEFAULT_MAX_CHARS,
+                    chunk::DEFAULT_OVERLAP,
+                );
+                // 总块数走「只数不切」的同一套断点算法：l2 分页提示要真实总数，
+                // 但不能为了一个数字把整篇文档的块字符串都造出来。
+                let total = chunk::count_chunks(
+                    &content,
+                    chunk::DEFAULT_MAX_CHARS,
+                    chunk::DEFAULT_OVERLAP,
+                ) as i64;
+                (head, total)
+            } else {
+                let all = chunk::chunk_text(
+                    &content,
+                    chunk::DEFAULT_MAX_CHARS,
+                    chunk::DEFAULT_OVERLAP,
+                );
+                let total = all.len() as i64;
+                (all, total)
+            }
+        })
     } else {
         None
     };
 
     let (total_chunks, chunks) = match &full_chunks {
-        Some(all) => {
+        Some((all, total)) => {
             let offset = if level == "l1" {
                 0
             } else {
@@ -260,7 +297,7 @@ pub fn read_detail(
                     text: text.clone(),
                 })
                 .collect();
-            (all.len() as i64, chunks)
+            (*total, chunks)
         }
         None => {
             let total: i64 = conn.query_row(
@@ -302,10 +339,15 @@ pub fn read_detail(
     } else {
         offset.unwrap_or(0).max(0)
     };
-    // 模态清单：文本恒有（有正文/块）；音频/视频/图片等本体见 assets（§2.2）
-    let text_chars = match &full_chunks {
-        Some(all) => all.iter().map(|s| s.chars().count()).sum::<usize>() as i64,
-        None => i64::from(total_chunks > 0),
+    // 模态清单：文本恒有（有正文/块）；音频/视频/图片等本体见 assets（§2.2）。
+    // l1 的 note 只切了首块，不能拿它算全文长度 —— 有块就算「有文本」。
+    let text_chars = if level == "l1" {
+        i64::from(total_chunks > 0)
+    } else {
+        match &full_chunks {
+            Some((all, _)) => all.iter().map(|s| s.chars().count()).sum::<usize>() as i64,
+            None => i64::from(total_chunks > 0),
+        }
     };
     let modalities: Vec<String> =
         assets::modals_for_source(conn, None, &source_type, &source_id, text_chars)?
@@ -720,7 +762,10 @@ pub fn kb_usage_clean(
 /* ---------- 记忆层 ---------- */
 
 /// 记忆列表。`scope`: active（默认，仅活跃）/ archived（仅归档）/ all（两者）。
-#[tauri::command]
+///
+/// `async`：全量行解析 + salience 计算；虽然当前量级很小，但它是「关于你」首屏的
+/// 同步路径之一，不能和索引线程抢主线程。
+#[tauri::command(async)]
 pub fn kb_memories(
     state: State<AppState>,
     mem_type: Option<String>,
@@ -732,6 +777,18 @@ pub fn kb_memories(
         mem_type.as_deref(),
         memory::parse_scope(scope.as_deref()),
     )
+}
+
+/// 「关于你」首屏的一次性聚合：活跃记忆 + 概况 + 注入块。
+///
+/// 从前前端并发发 `kb_memories` / `kb_memory_stats` / `kb_cognition` 三条命令，
+/// 三条各自把**同一份活跃记忆全表**读一遍、各算一遍 salience（stats 还要再拼一次
+/// 注入文本）。小库看不出，记忆一多就是三倍的钱；而且三条同步命令排队抢同一把
+/// DB 锁。这里一次取数、一次算完，页面只发一条。
+#[tauri::command(async)]
+pub fn kb_memory_overview(state: State<AppState>) -> Result<KbMemoryOverview> {
+    let conn = state.db.lock();
+    memory::overview(&conn)
 }
 
 /// 落库一次记忆抽取的结果。前端（pi-ai）负责调模型产出 candidates。
@@ -813,7 +870,7 @@ pub fn kb_memory_maintain(
 }
 
 /// 记忆库信噪比概况（注入覆盖率 / 噪声占比 / 归档数 / 上次整理时间）。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn kb_memory_stats(state: State<AppState>) -> Result<KbMemoryStats> {
     let conn = state.db.lock();
     memory::stats(&conn)
@@ -827,7 +884,7 @@ pub fn kb_memory_consolidated(state: State<AppState>) -> Result<()> {
 }
 
 /// 喂给系统提示词的紧凑认知块。前端在每轮请求前取一次（带短 TTL 缓存）。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn kb_cognition(state: State<AppState>) -> Result<KbCognition> {
     let conn = state.db.lock();
     memory::cognition(&conn, None)
@@ -870,7 +927,10 @@ pub fn kb_memory_diffs(state: State<AppState>, limit: Option<i64>) -> Result<Vec
 
 /// 按路径模式列文档： 不跨目录、 跨目录、 单字符。
 ///  列笔记、 列全部对话内容、 列全部附件编目。
-#[tauri::command]
+///
+/// `async`：glob 走 FTS/路径扫描，且要等索引队列（AI 检索需要新鲜结果），
+/// 最长 1.5 秒的等待绝不能落在主线程上。
+#[tauri::command(async)]
 pub fn kb_glob(
     app: AppHandle,
     state: State<AppState>,
@@ -955,17 +1015,26 @@ pub fn kb_meta_set(state: State<AppState>, input: KbMetaInput) -> Result<KbFile>
 
 /// 列一层目录：文件管理器的 `ls`。一次带回大小、时间、模态、钉住、归类与子项数。
 ///
-/// `async`（= 派到线程池）：这里要等索引追赶（`drain_before_query` 最长 1.5 秒），
-/// 同步命令会把界面一起冻住 —— 而这是**每次进目录**都会走的路径。
+/// `async`（= 派到线程池）：列举要扫前缀范围，大目录可以到上万行，不能占主线程。
+///
+/// **不等索引队列**：列举直接读 `kb_docs` / `kb_files`，跟脏队列是两回事。从前这里
+/// 等 `drain_before_query`（最长 1.5 秒），启动对账一次性入队上千条时，每次进目录都
+/// 白卡一轮；而真正要保证的「刚写的文件立即可见」由 `kb_files` 直写 + 写路径 notify
+/// 已经保证，不靠阻塞列举。
 #[tauri::command(async)]
-pub fn kb_list_dir(
-    app: AppHandle,
-    state: State<AppState>,
-    path: String,
-) -> Result<KbDirListing> {
-    worker::drain_before_query(&app, REFRESH_BUDGET)?;
+pub fn kb_list_dir(state: State<AppState>, path: String) -> Result<KbDirListing> {
     let conn = state.db.lock();
     listing::list_dir(&conn, &path)
+}
+
+/// 根层统计：顶层目录的直接子项数 + 节点更新时间（关于你首屏用）。
+///
+/// 与 `kb_list_dir("")` 的区别只在**返回什么**：这里不实例化条目、不查 assets、
+/// 不做 Rust 侧归并，数字在 SQLite 里 `GROUP BY` 完直接回几十行。
+#[tauri::command(async)]
+pub fn kb_root_stats(state: State<AppState>) -> Result<Vec<KbRootStat>> {
+    let conn = state.db.lock();
+    listing::root_stats(&conn)
 }
 
 /// 删除 = 移进回收站（系统文件拒绝；目录连整棵子树一起走）。可撤销：kb_trash_restore。
@@ -1467,7 +1536,7 @@ mod tests {
         )
         .unwrap();
         let mem_id: i64 = conn
-            .query_row("SELECT id FROM kb_memories LIMIT 1", [], |r| r.get(0))
+            .query_row("SELECT id FROM memory_shards LIMIT 1", [], |r| r.get(0))
             .unwrap();
         index::apply_one(&conn, "memory", &mem_id.to_string()).unwrap();
         let doc_id: i64 = conn

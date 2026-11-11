@@ -21,16 +21,18 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -39,11 +41,31 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import org.json.JSONObject
 
 private val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 private val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+
+/** 四槽位停靠：顶/底 = 全宽条，左/右 = 64dp 方块（与程序内浮条完全同义） */
+private enum class Slot {
+  TOP,
+  BOTTOM,
+  LEFT,
+  RIGHT,
+}
+
+private fun Slot.prefName(): String = name.lowercase(Locale.US)
+
+private fun parseSlot(raw: String?): Slot? =
+  when (raw) {
+    "top" -> Slot.TOP
+    "bottom" -> Slot.BOTTOM
+    "left" -> Slot.LEFT
+    "right" -> Slot.RIGHT
+    else -> null
+  }
 
 /**
  * 全局沉浸浮窗 · Android 系统浮层（契约 docs/GLOBAL-FLOAT.md §2 / §3 / §5.4）。
@@ -80,15 +102,25 @@ class GlobalFloatService : Service() {
     private const val KEY_Y = "y"
     private const val KEY_SIDE = "side"
     private const val KEY_FORM = "form"
+    // 四槽位停靠（与程序内浮条 rein.wbar.dock.v1 / 桌面浮窗 rein.float.dock.v1 同构）
+    private const val KEY_SLOT = "slot"
+    private const val KEY_BAR_SLOT = "bar_slot"
+    private const val KEY_SIDE_Y = "side_y"
 
     private const val ACTION_START = "com.gozaoo.rein.FLOAT_START"
     private const val ACTION_UPDATE = "com.gozaoo.rein.FLOAT_UPDATE"
     private const val ACTION_STOP = "com.gozaoo.rein.FLOAT_STOP"
 
-    /** 条形态 430dp 上限、左右共让 24dp；照程序内浮条「430 宽窗口里 406 宽」的口径 */
-    private const val BAR_MAX_DP = 430
+    /**
+     * 条形态宽度 = min(屏宽 - 24dp, 456dp)。
+     *
+     * 456 = tokens.css 的 --frame-max(480) - 24，与程序内浮条 `.dock-body.is-bar`
+     * 的 `min(100vw - 24, --frame-max - 24)` 逐字同源 —— 两端在同一台手机上必须一样宽。
+     * 高度 52 = 内容 34(按钮) + 上下内距 8×2 + 1px 描边，同样照程序内浮条量出来的值。
+     */
+    private const val BAR_MAX_DP = 456
     private const val BAR_INSET_DP = 24
-    private const val BAR_HEIGHT_DP = 56
+    private const val BAR_HEIGHT_DP = 52
     private const val BLOB_DP = 64
     private const val DOT_DP = 10
     private const val BTN_HEIGHT_DP = 34
@@ -102,6 +134,26 @@ class GlobalFloatService : Service() {
 
     /** 长按泊车：与系统长按同档 500ms（按住不动才生效，越界即让位给拖拽） */
     private const val LONG_PRESS_MS = 500L
+
+    /* ---------- 手势参数：与 composables/useDragDock 同一组常量（改一处两处一起看） ---------- */
+    /** 点按 / 拖拽判定位移；按钮点击永远达不到 */
+    private const val SLOP_DP = 8
+    /** 轻弹阈值 ≈350dp/s（换算成 px/ms 时乘 density） */
+    private const val FLICK_DP_MS = 0.35f
+    /** 慢速释放投影：偏移 = v(px/ms) × 180ms */
+    private const val PROJECTION_MS = 180f
+    /** 速度采样窗口 */
+    private const val VELOCITY_WINDOW_MS = 100L
+    /** 橡皮筋刚度，越小越软 */
+    private const val RUBBER_C = 0.55f
+    /** 顶 / 底 / 侧边停靠距安全区的呼吸边距 */
+    private const val EDGE_GAP_DP = 12
+    /** settle 弹簧（半隐式欧拉）：ζ≈0.87、ωn≈12.6rad/s ≈ Apple 式 0.48s/bounce0.16 */
+    private const val SPRING_STIFFNESS = 160f
+    private const val SPRING_DAMPING = 22f
+
+    /** 本地换了形态后，主窗口载荷回声到达前不被旧 payload 回滚（与桌面 FloatApp 的乐观渲染同义） */
+    private const val FORM_PIN_MS = 1_200L
 
     /** 服务实例（桥转发 update/setForm/前台态的对象；空 = 没在跑，桥只缓存） */
     @Volatile
@@ -127,11 +179,23 @@ class GlobalFloatService : Service() {
   /** 亮暗两套颜色；每次渲染重取（深色模式可能在服务存活期间切换） */
   private var palette: Palette = Palette.light()
 
-  private var rootView: LinearLayout? = null
+  private var rootView: DockRoot? = null
   private var params: WindowManager.LayoutParams? = null
   private var payload: JSONObject? = null
+
+  /* ---------- 停靠：与程序内浮条 / 桌面浮窗同一套四槽位模型 ---------- */
+  /** 当前槽位（顶/底 = 全宽条，左/右 = 方块）；形态由它派生，不再独立漂移 */
+  private var slot: Slot = Slot.BOTTOM
+  /** 方块轻点展开回上一次的全宽条槽位 */
+  private var barSlot: Slot = Slot.BOTTOM
+  /** 侧边停靠时方块中心在可用纵向区间里的比例 0..1 */
+  private var sideY = 0.7f
+  /** 当前形态：由槽位决定（顶/底=bar，左/右=blob），外部 setForm 会落到对应槽位 */
   private var form = "bar"
   private var confirming = false
+
+  /** 本地换形态后，载荷回声到达前不被旧 payload 回滚（乐观渲染窗口） */
+  private var formPinnedUntil = 0L
 
   /** 本次「离开应用」期间用户已点过关闭：浮层保持隐藏，回前台后复位 */
   private var dismissed = false
@@ -160,16 +224,39 @@ class GlobalFloatService : Service() {
   private var breath: ValueAnimator? = null
   private var clockTick: Runnable? = null
 
-  private var touchSlop = 0
-  private var dragStartX = 0f
-  private var dragStartY = 0f
+  /* ---------- 拖拽手势状态（坐标一律屏幕 px，与 WindowManager.LayoutParams.x/y 同口径） ---------- */
+  private var dragStartX = 0
+  private var dragStartY = 0
   private var downRawX = 0f
   private var downRawY = 0f
+  /** 本次按下的起点在信息区里（长按泊车 / 轻点「打开」都只看这一条） */
+  private var downInInfo = false
   private var dragging = false
   private var longPress: Runnable? = null
 
   /** 本次按住期间长按已经触发（用来吞掉抬手时的那次轻点） */
   private var longPressFired = false
+
+  /** 速度采样（t 为 uptime ms，x/y 为屏幕坐标）：轻弹阈值与投影都靠它 */
+  private val samples = ArrayList<FloatArray>()
+
+  /* ---------- 弹簧落位（可打断；与 useDragDock 同一套半隐式欧拉） ---------- */
+  private val choreographer by lazy { Choreographer.getInstance() }
+  private var springRunning = false
+  private var springVx = 0f
+  private var springVy = 0f
+  /** 浮点位置：WindowManager 只吃整数，但弹簧必须在小数域里积分，否则永远收敛不到 <0.5px */
+  private var springX = 0f
+  private var springY = 0f
+  private var springTargetX = 0f
+  private var springTargetY = 0f
+  private var lastFrameNs = 0L
+
+  /** 安全区 / 屏幕尺寸缓存（旋转、系统栏显隐、导航模式切换都会让它失效） */
+  private var cachedInsets: IntArray? = null
+  private var cachedScreen: Pair<Int, Int>? = null
+  /** 上一次的可见性：隐藏期间系统栏可能变了（三键导航 / 全屏手势 / 分屏），显示时要重算 */
+  private var wasVisible = false
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -177,7 +264,7 @@ class GlobalFloatService : Service() {
     super.onCreate()
     instance = this
     palette = if (isNight()) Palette.dark() else Palette.light()
-    touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+    loadDock()
     createChannel()
   }
 
@@ -216,9 +303,18 @@ class GlobalFloatService : Service() {
     super.onConfigurationChanged(newConfig)
     // 旋转 / 深色切换：宽度与配色都得重算，否则会按旧屏宽排版、按旧主题取色
     palette = if (isNight()) Palette.dark() else Palette.light()
+    cachedInsets = null
+    cachedScreen = null
     // 换配色 / 换屏宽都要按新环境重排：清掉结构指纹强制重建
     structureKey = null
     payload?.optJSONObject("snapshot")?.let { bind(it) }
+    // 停靠位置按新屏幕重算（槽位相对安全区表达，与程序内浮条同一条规则）。
+    // 拖拽 / 弹簧飞行中不抢：用户的手还在屏幕上。
+    if (!dragging && !springRunning) {
+      val (w, h) = sizeFor(form)
+      val (x, y) = slotPos(slot, w, h)
+      writePos(x.toFloat(), y.toFloat())
+    }
   }
 
   override fun onDestroy() {
@@ -254,17 +350,30 @@ class GlobalFloatService : Service() {
     // 用户还没来得及点，确认行就被下一帧擦掉了。
     val hasEnd = snap.optJSONObject("end")?.optJSONObject("sheet")?.optJSONArray("actions") != null
     if (!hasEnd) confirming = false
-    // 形态以 payload.form 为准（主窗口是唯一真源）；没有就沿用桥里显式 setForm 的缓存
+    // 形态以槽位为唯一真源（顶/底=bar、左/右=blob）。payload.form 只在
+    // 「本地刚拖完、回声还没到」的乐观窗口之外生效，否则每秒一份心跳载荷会把
+    // 用户刚泊好的方块按旧形态弹回横条。
     val f = o.optString("form", "")
-    if (f == "bar" || f == "blob") form = f else GlobalFloatBridge.cachedForm()?.let { form = it }
+    if (SystemClock.uptimeMillis() >= formPinnedUntil) {
+      if (f == "bar" || f == "blob") {
+        if (f != form) setForm(f)
+      } else {
+        GlobalFloatBridge.cachedForm()?.let { if (it != form) setForm(it) }
+      }
+    }
     persistFormIfChanged(form)
     if (!ensureView()) return
     bind(snap)
   }
 
-  /** 形态切换（setForm）：尺寸与排版一起变，先量后排避免按旧宽度排一帧 */
+  /**
+   * 形态切换（setForm，主窗口 / 桥调用）：落到对应槽位并走同一套弹簧落位。
+   *
+   * Android 用同窗内联确认，`confirm` 不改变尺寸（§3.3）。形态与槽位是一体的：
+   * bar → 上一次的顶/底槽位，blob → 当前/右侧槽位 —— 不能再出现「form=blob 但
+   * 窗口还在屏幕中间」这种半截状态。
+   */
   fun setForm(newForm: String) {
-    // confirm 是桌面浮窗「长高」后的临时形态；Android 用同窗内联确认，不改变尺寸（§3.3）
     if (newForm == "confirm") return
     if (newForm != "bar" && newForm != "blob") return
     if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -272,9 +381,13 @@ class GlobalFloatService : Service() {
       return
     }
     if (form == newForm) return
-    form = newForm
-    persistFormIfChanged(form)
-    payload?.optJSONObject("snapshot")?.let { bind(it) } ?: resize()
+    val target =
+      if (newForm == "blob") {
+        if (slot == Slot.LEFT || slot == Slot.RIGHT) slot else Slot.RIGHT
+      } else {
+        barSlot
+      }
+    dockTo(target, 0f, 0f, emitForm = false)
   }
 
   /** 应用前台态：前台时程序内浮条在场，系统浮层必须让位（二者永不并存） */
@@ -300,7 +413,7 @@ class GlobalFloatService : Service() {
 
   private fun applyCached() {
     val cachedForm = GlobalFloatBridge.cachedForm() ?: prefs.getString(KEY_FORM, null)
-    if (cachedForm == "bar" || cachedForm == "blob") form = cachedForm
+    if ((cachedForm == "bar" || cachedForm == "blob") && cachedForm != form) setForm(cachedForm)
     val cached = GlobalFloatBridge.cachedPayload()
     if (cached != null) renderPayload(cached) else updateVisibility()
   }
@@ -310,6 +423,12 @@ class GlobalFloatService : Service() {
     // 没有会话（payload 空）就没有可显示的内容：视图建了也藏起来，别留一块空白浮窗
     val show = !appForeground && !dismissed && payload != null
     root.visibility = if (show) View.VISIBLE else View.GONE
+    // 隐藏期间系统栏可能变过（切导航模式 / 全屏手势），GONE 收不到 inset 回调：
+    // 每次从藏到显都作废几何缓存并按当前槽位重算，避免带着旧安全区踏出屏幕。
+    if (show && !wasVisible) {
+      main.post { refreshDockGeometry() }
+    }
+    wasVisible = show
     applyBreath()
   }
 
@@ -654,28 +773,43 @@ class GlobalFloatService : Service() {
 
   private fun ensureView(): Boolean {
     if (rootView != null) return true
+    val (w, h) = sizeFor(form)
+    val (x, y) = slotPos(slot, w, h)
     val p =
       WindowManager.LayoutParams().apply {
         gravity = Gravity.TOP or Gravity.START
         type = overlayType()
         // 不可拿焦点（不抢当前应用的输入焦点、不弹输入法），但触摸照收 —— 按钮要能点。
-        // LAYOUT_NO_LIMITS 让坐标按整块屏幕算，拖到状态栏/导航栏附近不被裁。
+        // LAYOUT_IN_SCREEN：坐标以**整块屏幕**左上角为原点（不设它时 y=0 是状态栏下沿，
+        //   slotPos 按屏幕尺寸算出来的槽位会整体下移一个状态栏高度，底部槽位直接被裁出屏外）。
+        // LAYOUT_NO_LIMITS 允许窗口越过常规边界（橡皮筋拖到边缘时不被提前裁切）。
         flags =
           WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         format = PixelFormat.TRANSLUCENT
-        val (w, h) = sizeFor(form)
         width = w
         height = h
-        x = restoreX(w)
-        y = restoreY(h)
+        this.x = x
+        this.y = y
       }
+    // DockRoot 自己接管触摸（onInterceptTouchEvent / onTouchEvent）：整条 bar / 整块 blob
+    // 任意位置都能起手拖，按钮区域越过 slop 后被拦截并送 CANCEL —— 与程序内浮条
+    // 「pointerdown 绑在 .dock-body 上、拖拽后吞掉那次 click」同一套语义。
+    // ⚠ 不要退回 `root.setOnTouchListener { _, ev -> onTouchEvent(ev) }`：在
+    //   `LinearLayout(this).apply{}` 里那个未限定调用会解析到 View.onTouchEvent（视图自身），
+    //   服务里的拖拽 / 长按逻辑永远不会执行 —— 0.7.18 的「全局浮窗完全拖不动」正是这个。
     val root =
-      LinearLayout(this).apply {
-        setOnTouchListener { _, ev -> onTouchEvent(ev) }
+      DockRoot(this).apply {
         // 空白处也要吃 DOWN，否则横条中间那段手势会漏给下层应用、拖不动
         isClickable = true
         isFocusable = false
+        // 系统栏 / 刘海 / 导航模式的 inset 变化信号（见 refreshDockGeometry）。
+        // 只当信号用：真正的数值一律回 WindowMetrics 取，避免拿到被窗口 fit 后的 0。
+        setOnApplyWindowInsetsListener { _, insets ->
+          main.post { refreshDockGeometry() }
+          insets
+        }
       }
     return try {
       wm().addView(root, p)
@@ -694,6 +828,7 @@ class GlobalFloatService : Service() {
   }
 
   private fun detach() {
+    stopSpring()
     cancelLongPress()
     stopClock()
     stopBreath()
@@ -710,16 +845,157 @@ class GlobalFloatService : Service() {
     }
   }
 
-  /** 形态变 → 尺寸变；x 按当前中心重新贴边，y 夹回屏内（旋转后旧 y 可能越界） */
+  /* ---------- 几何：四槽位（与 useDragDock / useFloatDock 同一套公式） ---------- */
+
+  private fun density(): Float = resources.displayMetrics.density
+
+  private fun dpF(value: Float): Float = value * density()
+
+  /** 屏幕尺寸（px）；API 30+ 用 WindowMetrics，旧系统回退 displayMetrics */
+  private fun screenSize(): Pair<Int, Int> {
+    cachedScreen?.let { return it }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      try {
+        val b = wm().currentWindowMetrics.bounds
+        if (b.width() > 0 && b.height() > 0) {
+          val s = b.width() to b.height()
+          cachedScreen = s
+          return s
+        }
+      } catch (e: Exception) {
+        Log.w(TAG, "读取 WindowMetrics 失败，回退 displayMetrics", e)
+      }
+    }
+    val s = resources.displayMetrics.widthPixels to resources.displayMetrics.heightPixels
+    cachedScreen = s
+    return s
+  }
+
+  private fun screenW(): Int = screenSize().first
+
+  private fun screenH(): Int = screenSize().second
+
+  /**
+   * 安全区（left, top, right, bottom，px）。
+   *
+   * 程序内浮条用 --safe-*（env() 与 max() 链）；原生浮层读不到 CSS，只能问系统。
+   * API 30+ 从 WindowMetrics.windowInsets 取系统栏 + 刘海；旧系统退回状态栏 /
+   * 导航栏资源高度（个别横屏把导航栏放侧边的 ROM 会偏保守，最多让浮层多缩 12dp，
+   * 不会压住系统栏）。
+   */
+  private fun safeInsets(): IntArray {
+    cachedInsets?.let { return it }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      try {
+        val i =
+          wm().currentWindowMetrics.windowInsets.getInsets(
+            WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+          )
+        val s = intArrayOf(i.left, i.top, i.right, i.bottom)
+        cachedInsets = s
+        return s
+      } catch (e: Exception) {
+        Log.w(TAG, "读取系统栏 inset 失败，回退资源尺寸", e)
+      }
+    }
+    val res = resources
+    fun dimen(name: String): Int {
+      val id = res.getIdentifier(name, "dimen", "android")
+      return if (id > 0) res.getDimensionPixelSize(id) else 0
+    }
+    val s = intArrayOf(0, dimen("status_bar_height"), 0, dimen("navigation_bar_height"))
+    cachedInsets = s
+    return s
+  }
+
+  private fun edgeGap(): Int = dp(EDGE_GAP_DP)
+
+  private fun sizeFor(targetForm: String): Pair<Int, Int> {
+    if (targetForm == "blob") return dp(BLOB_DP) to dp(BLOB_DP)
+    // 与程序内浮条 `min(100vw - 24, --frame-max - 24)` 同源；窄屏收口到屏宽 - 24dp
+    val maxW = (screenW() - dp(BAR_INSET_DP)).coerceAtLeast(dp(200))
+    return minOf(dp(BAR_MAX_DP), maxW) to dp(BAR_HEIGHT_DP)
+  }
+
+  private fun slotForm(s: Slot): String = if (s == Slot.LEFT || s == Slot.RIGHT) "blob" else "bar"
+
+  /** 侧边槽位的方块中心可用纵向区间（px，中心点表达） */
+  private fun sideYRange(blobH: Int): Pair<Float, Float> {
+    val ins = safeInsets()
+    val half = blobH / 2f + edgeGap()
+    return (ins[1] + half) to (screenH() - ins[3] - half)
+  }
+
+  /** 槽位左上角坐标（px）—— 与 useDragDock.slotCenter 逐行对应，只是换成左上角表达 */
+  private fun slotPos(s: Slot, w: Int, h: Int): Pair<Int, Int> {
+    val ins = safeInsets()
+    val gap = edgeGap()
+    if (s == Slot.BOTTOM) return ((screenW() - w) / 2) to (screenH() - ins[3] - gap - h)
+    if (s == Slot.TOP) return ((screenW() - w) / 2) to (ins[1] + gap)
+    val (lo, hi) = sideYRange(h)
+    val y = (lo + sideY.coerceIn(0f, 1f) * (hi - lo).coerceAtLeast(0f) - h / 2f).roundToInt()
+    val x = if (s == Slot.LEFT) ins[0] else screenW() - ins[2] - w
+    return x to y
+  }
+
+  /** 拖拽活动范围（左上角表达）；条宽近整屏时横向区间退化 —— 锁死，避免区间倒置 */
+  private fun dragBounds(w: Int, h: Int): FloatArray {
+    val ins = safeInsets()
+    val gap = edgeGap()
+    return floatArrayOf(
+      ins[0].toFloat(),
+      (screenW() - ins[2] - w).toFloat(),
+      (ins[1] + gap).toFloat(),
+      (screenH() - ins[3] - gap - h).toFloat(),
+    )
+  }
+
+  /**
+   * 系统栏 / 屏幕几何变了之后重落位。
+   *
+   * 为什么需要这一条：`onConfigurationChanged` 只在 w/h/density 这类配置变化时来。
+   * **导航模式切换（手势 ↔ 三键）只改 inset、不改配置** —— 实测三键导航把底部导航栏
+   * 从 63px 变成 126px 时服务收不到任何回调，缓存的 inset 一直是旧的，底部停靠的浮条
+   * 会压进导航栏里。所以根视图挂 OnApplyWindowInsetsListener 当信号，收到就作废缓存
+   * 并按当前槽位重算一次。
+   *
+   * 拖拽 / 弹簧飞行中不抢（用户的手还在屏幕上）；松手后的 dockTo 会用新度量。
+   */
+  private fun refreshDockGeometry() {
+    cachedInsets = null
+    cachedScreen = null
+    if (dragging || springRunning) return
+    if (rootView == null) return
+    val (w, h) = sizeFor(form)
+    val (x, y) = slotPos(slot, w, h)
+    val p = params ?: return
+    if (p.x != x || p.y != y) writePos(x.toFloat(), y.toFloat())
+  }
+
+  private fun writePos(x: Float, y: Float) {
+    val root = rootView ?: return
+    val p = params ?: return
+    p.x = x.roundToInt()
+    p.y = y.roundToInt()
+    try {
+      wm().updateViewLayout(root, p)
+    } catch (e: Exception) {
+      Log.w(TAG, "移动浮层失败", e)
+    }
+  }
+
+  /** 形态变 → 尺寸变（保持中心，随后由 dockTo 的弹簧把窗口带到新槽位） */
   private fun resize() {
     val root = rootView ?: return
     val p = params ?: return
     val (w, h) = sizeFor(form)
     if (p.width == w && p.height == h) return
+    val cx = p.x + p.width / 2f
+    val cy = p.y + p.height / 2f
     p.width = w
     p.height = h
-    p.x = snapX(p.x + w / 2, w)
-    p.y = p.y.coerceIn(0, (screenH() - h).coerceAtLeast(0))
+    p.x = (cx - w / 2f).roundToInt()
+    p.y = (cy - h / 2f).roundToInt()
     try {
       wm().updateViewLayout(root, p)
     } catch (e: Exception) {
@@ -727,116 +1003,316 @@ class GlobalFloatService : Service() {
     }
   }
 
-  private fun sizeFor(targetForm: String): Pair<Int, Int> {
-    if (targetForm == "blob") return dp(BLOB_DP) to dp(BLOB_DP)
-    // 430dp 是程序内浮条的设计宽；窄屏收口到屏宽 - 24dp，左右各留 12dp 呼吸
-    val maxW = (screenW() - dp(BAR_INSET_DP)).coerceAtLeast(dp(200))
-    return minOf(dp(BAR_MAX_DP), maxW) to dp(BAR_HEIGHT_DP)
-  }
+  /* ---------- 弹簧落位（可打断，与 useDragDock 同一组常量） ---------- */
 
-  private fun restoreX(width: Int): Int =
-    when (prefs.getString(KEY_SIDE, "")) {
-      "left" -> 0
-      "right" -> (screenW() - width).coerceAtLeast(0)
-      else -> {
-        val saved = prefs.getInt(KEY_X, -1)
-        if (saved >= 0) saved.coerceIn(0, (screenW() - width).coerceAtLeast(0))
-        else (screenW() - width).coerceAtLeast(0)
+  private val springFrame =
+    object : Choreographer.FrameCallback {
+      override fun doFrame(frameTimeNanos: Long) {
+        if (!springRunning) {
+          lastFrameNs = 0L
+          return
+        }
+        val p = params
+        if (p == null || rootView == null) {
+          springRunning = false
+          lastFrameNs = 0L
+          return
+        }
+        val dt =
+          if (lastFrameNs == 0L) 1f / 60f
+          else ((frameTimeNanos - lastFrameNs) / 1_000_000_000f).coerceIn(0f, 0.032f)
+        lastFrameNs = frameTimeNanos
+        springVx +=
+          (SPRING_STIFFNESS * (springTargetX - springX) - SPRING_DAMPING * springVx) * dt
+        springVy +=
+          (SPRING_STIFFNESS * (springTargetY - springY) - SPRING_DAMPING * springVy) * dt
+        springX += springVx * dt
+        springY += springVy * dt
+        writePos(springX, springY)
+        if (
+          abs(springTargetX - springX) < 0.5f &&
+            abs(springTargetY - springY) < 0.5f &&
+            hypot(springVx, springVy) < 20f
+        ) {
+          springX = springTargetX
+          springY = springTargetY
+          writePos(springX, springY)
+          springRunning = false
+          lastFrameNs = 0L
+          persistDock()
+          return
+        }
+        choreographer.postFrameCallback(this)
       }
     }
 
-  private fun restoreY(height: Int): Int {
-    val saved = prefs.getInt(KEY_Y, -1)
-    // 第一次出现：落在屏幕上三分之一，避开状态栏、键盘与底部导航
-    val fallback = screenH() / 3
-    return (if (saved >= 0) saved else fallback).coerceIn(0, (screenH() - height).coerceAtLeast(0))
-  }
-
-  private fun snapX(centerX: Int, width: Int): Int =
-    if (centerX < screenW() / 2) 0 else (screenW() - width).coerceAtLeast(0)
-
-  /* ---------- 拖拽 + 点击 ---------- */
-
-  private fun onTouchEvent(ev: MotionEvent): Boolean {
-    val root = rootView ?: return false
-    val p = params ?: return false
-    when (ev.actionMasked) {
-      MotionEvent.ACTION_DOWN -> {
-        dragStartX = p.x.toFloat()
-        dragStartY = p.y.toFloat()
-        downRawX = ev.rawX
-        downRawY = ev.rawY
-        dragging = false
-        longPressFired = false
-        // 长按泊车只认「从信息区起手、且按住不动」：按钮自己吃事件，能走到这里的
-        // 一定不是按钮；命中测试再把条上其余空白排除掉。
-        if (form == "bar" && isInsideInfo(ev.rawX, ev.rawY)) startLongPress()
-        return true
-      }
-      MotionEvent.ACTION_MOVE -> {
-        val dx = ev.rawX - downRawX
-        val dy = ev.rawY - downRawY
-        if (!dragging && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
-          // 一动就让位给拖拽：长按只在按住不动时成立，两者不互相抢
-          dragging = true
-          cancelLongPress()
-        }
-        if (dragging) {
-          p.x = (dragStartX + dx).toInt().coerceIn(0, (screenW() - p.width).coerceAtLeast(0))
-          p.y = (dragStartY + dy).toInt().coerceIn(0, (screenH() - p.height).coerceAtLeast(0))
-          try {
-            wm().updateViewLayout(root, p)
-          } catch (e: Exception) {
-            Log.w(TAG, "拖动浮层失败", e)
-          }
-        }
-        return true
-      }
-      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-        cancelLongPress()
-        // 长按已经触发过的那次抬手不算轻点，否则泊车后会被同一次抬手立刻展开回去
-        val tapped = !dragging && !longPressFired
-        val wasDragging = dragging
-        dragging = false
-        longPressFired = false
-        if (ev.actionMasked == MotionEvent.ACTION_UP) {
-          if (wasDragging) settle() else if (tapped) onTap()
-        }
-        return true
-      }
+  private fun startSpring(tx: Float, ty: Float, vx: Float, vy: Float) {
+    stopSpring()
+    // 系统减弱动效 / 动画器被关掉时直接落位（与程序内 motionOn 同一条降级）
+    val animOn = Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled()
+    if (!animOn) {
+      writePos(tx, ty)
+      persistDock()
+      return
     }
-    return false
-  }
-
-  /** 抬手吸附：中心跨过屏幕三分之一才换边，否则回弹到最近边（避免手一抖就左右横跳） */
-  private fun settle() {
-    val root = rootView ?: return
     val p = params ?: return
-    val side =
-      when {
-        p.x + p.width / 2 < screenW() / 3 -> "left"
-        p.x + p.width / 2 > screenW() * 2 / 3 -> "right"
-        // 中间三分之一：留在原来那一侧（没有记录时按最近边算）
-        else -> if (p.x + p.width / 2 < screenW() / 2) "left" else "right"
-      }
-    p.x = if (side == "left") 0 else (screenW() - p.width).coerceAtLeast(0)
-    p.y = p.y.coerceIn(0, (screenH() - p.height).coerceAtLeast(0))
-    prefs.edit().putString(KEY_SIDE, side).putInt(KEY_X, p.x).putInt(KEY_Y, p.y).apply()
+    springX = p.x.toFloat()
+    springY = p.y.toFloat()
+    springTargetX = tx
+    springTargetY = ty
+    springVx = vx
+    springVy = vy
+    springRunning = true
+    lastFrameNs = 0L
+    choreographer.postFrameCallback(springFrame)
+  }
+
+  private fun stopSpring() {
+    if (!springRunning) return
+    springRunning = false
+    lastFrameNs = 0L
     try {
-      wm().updateViewLayout(root, p)
+      choreographer.removeFrameCallback(springFrame)
     } catch (e: Exception) {
-      Log.w(TAG, "吸附落位失败", e)
+      Log.w(TAG, "停止弹簧失败", e)
     }
   }
 
+  /**
+   * 切槽位并飞过去（emitForm=true 时回传 form 让主窗口落偏好）。
+   * 形态跟着槽位走：顶/底 = bar，左/右 = blob —— 与程序内浮条 `form = slot` 一致。
+   */
+  private fun dockTo(
+    target: Slot,
+    vx: Float,
+    vy: Float,
+    emitForm: Boolean = true,
+  ) {
+    stopSpring()
+    val prevForm = form
+    slot = target
+    if (target == Slot.TOP || target == Slot.BOTTOM) barSlot = target
+    form = slotForm(target)
+    if (form != prevForm) {
+      persistFormIfChanged(form)
+      formPinnedUntil = SystemClock.uptimeMillis() + FORM_PIN_MS
+      if (emitForm) emit(JSONObject().put("action", "form").put("form", form).toString())
+      // 先改尺寸（保持中心），再按新形态重建内容
+      resize()
+      val snap = payload?.optJSONObject("snapshot")
+      if (snap != null) bind(snap) else rootView?.removeAllViews()
+    }
+    val (w, h) = sizeFor(form)
+    val (tx, ty) = slotPos(target, w, h)
+    // 先落盘再飞：动画途中进程被杀 / 服务被系统收掉，下次也回到用户选的槽位
+    persistDock()
+    if (rootView == null) {
+      // 视图还没建：落状态即可，ensureView 会按槽位建窗
+      return
+    }
+    startSpring(tx.toFloat(), ty.toFloat(), vx, vy)
+  }
+
+  /* ---------- 拖拽 + 点击（整壳可拖，按钮区越过 slop 后让位给拖拽） ---------- */
+
+  private fun pushSample(ev: MotionEvent) {
+    samples.add(floatArrayOf(ev.eventTime.toFloat(), ev.rawX, ev.rawY))
+    val cut = ev.eventTime - VELOCITY_WINDOW_MS
+    while (samples.size > 2 && samples[0][0] < cut) samples.removeAt(0)
+  }
+
+  /** 松开速度（px/ms）；窗口内样本不足时回 0 */
+  private fun sampleVelocity(): Pair<Float, Float> {
+    if (samples.size < 2) return 0f to 0f
+    val a = samples.first()
+    val b = samples.last()
+    val dt = b[0] - a[0]
+    if (dt <= 0f) return 0f to 0f
+    return (b[1] - a[1]) / dt to (b[2] - a[2]) / dt
+  }
+
+  /** 橡皮筋：界外位移按 iOS 同式衰减，越拉越紧（与 useDragDock 同一式） */
+  private fun resist(x: Float, span: Float): Float {
+    val d = span.coerceAtLeast(1f)
+    return d * (1f - 1f / ((x * RUBBER_C) / d + 1f))
+  }
+
+  private fun rubber(raw: Float, lo: Float, hi: Float): Float {
+    if (hi <= lo) return lo
+    val span = hi - lo
+    return when {
+      raw < lo -> lo - resist(lo - raw, span)
+      raw > hi -> hi + resist(raw - hi, span)
+      else -> raw
+    }
+  }
+
+  private fun yToSideY(cy: Float): Float {
+    val (lo, hi) = sideYRange(dp(BLOB_DP))
+    if (hi <= lo) return sideY
+    return ((cy - lo) / (hi - lo)).coerceIn(0f, 1f)
+  }
+
+  private fun solveRelease(cx: Float, cy: Float, vx: Float, vy: Float): Slot {
+    if (hypot(vx, vy) >= dpF(FLICK_DP_MS)) {
+      // 轻弹：速度主轴决定去向（横向 → 左/右方块并记住松手高度；纵向 → 顶/底）
+      if (abs(vx) > abs(vy)) {
+        sideY = yToSideY(cy)
+        return if (vx > 0f) Slot.RIGHT else Slot.LEFT
+      }
+      return if (vy > 0f) Slot.BOTTOM else Slot.TOP
+    }
+    return nearestSlot(cx, cy, vx, vy)
+  }
+
+  /** 慢放：投影 p + v·180ms 后取最近槽位（四槽位都参与，含 bar / blob 的尺寸差） */
+  private fun nearestSlot(cx: Float, cy: Float, vx: Float, vy: Float): Slot {
+    val jx = cx + vx * PROJECTION_MS
+    val jy = cy + vy * PROJECTION_MS
+    val candY = yToSideY(jy)
+    var best = Slot.BOTTOM
+    var bestD = Float.MAX_VALUE
+    for (s in Slot.values()) {
+      val save = sideY
+      if (s == Slot.LEFT || s == Slot.RIGHT) sideY = candY
+      val (w, h) = sizeFor(slotForm(s))
+      val (x, y) = slotPos(s, w, h)
+      sideY = save
+      val dx = x + w / 2f - jx
+      val dy = y + h / 2f - jy
+      val d = dx * dx + dy * dy
+      if (d < bestD) {
+        bestD = d
+        best = s
+      }
+    }
+    if (best == Slot.LEFT || best == Slot.RIGHT) sideY = candY
+    return best
+  }
+
+  private fun onDockDown(ev: MotionEvent) {
+    val p = params ?: return
+    // 飞行途中接住：以当前位置接管为新拖拽（速度交给新的采样）
+    stopSpring()
+    dragStartX = p.x
+    dragStartY = p.y
+    downRawX = ev.rawX
+    downRawY = ev.rawY
+    dragging = false
+    longPressFired = false
+    samples.clear()
+    pushSample(ev)
+    // 长按泊车 / 轻点打开都只认「从信息区起手」：按钮自己吃事件，能走到这里的
+    // 一定不是按钮；命中测试再把条上其余空白排除掉。
+    downInInfo = form == "bar" && isInsideInfo(ev.rawX, ev.rawY)
+    if (downInInfo) startLongPress()
+  }
+
+  private fun shouldEngage(ev: MotionEvent): Boolean =
+    hypot(ev.rawX - downRawX, ev.rawY - downRawY) > dpF(SLOP_DP.toFloat())
+
+  private fun engageDrag(ev: MotionEvent) {
+    if (dragging) return
+    dragging = true
+    cancelLongPress()
+    pushSample(ev)
+  }
+
+  private fun moveDrag(ev: MotionEvent) {
+    pushSample(ev)
+    val p = params ?: return
+    val b = dragBounds(p.width, p.height)
+    val rawX = dragStartX + (ev.rawX - downRawX)
+    val rawY = dragStartY + (ev.rawY - downRawY)
+    writePos(rubber(rawX, b[0], b[1]), rubber(rawY, b[2], b[3]))
+  }
+
+  private fun finishDrag(cancelled: Boolean) {
+    cancelLongPress()
+    val wasDragging = dragging
+    val tapped = !wasDragging && !longPressFired
+    val inInfo = downInInfo
+    dragging = false
+    longPressFired = false
+    downInInfo = false
+    val p = params ?: return
+    if (wasDragging) {
+      val cx = p.x + p.width / 2f
+      val cy = p.y + p.height / 2f
+      if (cancelled) {
+        dockTo(nearestSlot(cx, cy, 0f, 0f), 0f, 0f)
+        return
+      }
+      val (vx, vy) = sampleVelocity()
+      dockTo(solveRelease(cx, cy, vx, vy), vx, vy)
+    } else if (tapped) {
+      // 与程序内浮条同一个语义：方块轻点 = 展开；条上信息区轻点 = 打开会话页
+      if (form == "blob") onTap() else if (inInfo) openApp(actionJson("open"))
+    }
+  }
+
+  /**
+   * 浮层根视图：把触摸接管放在 View 自己的 onInterceptTouchEvent / onTouchEvent 上。
+   *
+   * 为什么不是 `setOnTouchListener`：那层监听器只在**整组视图自己**吃到事件时才回调，
+   * 而按钮是 clickable 的、会在 DOWN 就吃掉事件；更要命的是在 `LinearLayout(this).apply{}`
+   * 里写未限定的 `onTouchEvent(ev)` 会解析到 View 自身的方法（0.7.18 的真 bug：
+   * 全局浮窗完全拖不动、长按泊车也不生效）。
+   *
+   * 拦截策略与程序内浮条同义：DOWN 先给子视图（按钮照常按），位移一旦越过 8dp 就由
+   * 根视图拦截（子视图收到 CANCEL，不会误触发点击），整条 / 整块任意位置都能起手拖。
+   */
+  private inner class DockRoot(context: Context) : LinearLayout(context) {
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+      when (ev.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          onDockDown(ev)
+          return false
+        }
+        MotionEvent.ACTION_MOVE -> {
+          if (dragging) return true
+          if (shouldEngage(ev)) {
+            engageDrag(ev)
+            return true
+          }
+          return false
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+          if (!dragging) cancelLongPress()
+          return false
+        }
+      }
+      return false
+    }
+
+    override fun onTouchEvent(ev: MotionEvent): Boolean {
+      when (ev.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          onDockDown(ev)
+          return true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          if (!dragging && shouldEngage(ev)) engageDrag(ev)
+          if (dragging) moveDrag(ev)
+          return true
+        }
+        MotionEvent.ACTION_UP -> {
+          finishDrag(false)
+          return true
+        }
+        MotionEvent.ACTION_CANCEL -> {
+          finishDrag(true)
+          return true
+        }
+      }
+      return true
+    }
+  }
+
+  /** 轻点语义：只有 blob 态有（展开回上一次的全宽条槽位，与程序内方块同一个落点） */
   private fun onTap() {
-    // 只有 blob 态有「轻点」语义：展开回条。形态归主窗口所有，展开要回传 form，
-    // 否则下一次 push 会按旧形态（blob）又把它收回去。
     if (form != "blob") return
-    form = "bar"
-    persistFormIfChanged(form)
-    payload?.optJSONObject("snapshot")?.let { bind(it) } ?: updateVisibility()
-    emit(JSONObject().put("action", "form").put("form", "bar").toString())
+    dockTo(barSlot, 0f, 0f, emitForm = true)
   }
 
   /**
@@ -865,13 +1341,14 @@ class GlobalFloatService : Service() {
     longPress = null
   }
 
-  /** 泊车：本地先切 blob 并落持久化，再回传 form 让主窗口的持久形态与本机对齐 */
+  /** 泊车：按当前中心选最近一侧，保留纵向比例，再回传 form 让主窗口的持久形态与本机对齐 */
   private fun park() {
     if (form != "bar") return
-    form = "blob"
-    persistFormIfChanged(form)
-    payload?.optJSONObject("snapshot")?.let { bind(it) } ?: resize()
-    emit(JSONObject().put("action", "form").put("form", "blob").toString())
+    val p = params ?: return
+    val cx = p.x + p.width / 2f
+    val cy = p.y + p.height / 2f
+    sideY = yToSideY(cy)
+    dockTo(if (cx < screenW() / 2f) Slot.LEFT else Slot.RIGHT, 0f, 0f, emitForm = true)
   }
 
   /** 长按命中区 = 信息组在屏幕上的矩形（rawX/rawY 是屏幕坐标） */
@@ -1047,17 +1524,54 @@ class GlobalFloatService : Service() {
 
   private fun wm(): WindowManager = getSystemService(WindowManager::class.java)
 
-  private fun screenW(): Int = resources.displayMetrics.widthPixels
-
-  private fun screenH(): Int = resources.displayMetrics.heightPixels
-
   private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
-
-  private fun dpF(value: Float): Float = value * resources.displayMetrics.density
 
   private fun isNight(): Boolean =
     (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
       Configuration.UI_MODE_NIGHT_YES
+
+  /**
+   * 载入停靠槽位（与程序内浮条同一个持久化语义：槽位 / 上次条槽位 / 侧边纵向比例）。
+   * 旧版本只存 KEY_SIDE + KEY_X/KEY_Y，这里做一次性迁移，之后一律写四槽位键。
+   */
+  private fun loadDock() {
+    val savedSlot = prefs.getString(KEY_SLOT, null)
+    if (savedSlot != null) {
+      slot = parseSlot(savedSlot) ?: Slot.BOTTOM
+      barSlot = parseSlot(prefs.getString(KEY_BAR_SLOT, null)) ?: Slot.BOTTOM
+      sideY = prefs.getFloat(KEY_SIDE_Y, 0.7f).coerceIn(0f, 1f)
+    } else {
+      val side = prefs.getString(KEY_SIDE, "")
+      if (side == "left" || side == "right") {
+        slot = if (side == "left") Slot.LEFT else Slot.RIGHT
+        barSlot = Slot.BOTTOM
+        val (lo, hi) = sideYRange(dp(BLOB_DP))
+        val y = prefs.getInt(KEY_Y, -1)
+        sideY = if (y >= 0 && hi > lo) ((y - lo) / (hi - lo)).coerceIn(0f, 1f) else 0.7f
+      } else {
+        val y = prefs.getInt(KEY_Y, -1)
+        slot = if (y in 0 until screenH() / 2) Slot.TOP else Slot.BOTTOM
+        barSlot = slot
+      }
+    }
+    if (barSlot != Slot.TOP && barSlot != Slot.BOTTOM) barSlot = Slot.BOTTOM
+    form = slotForm(slot)
+    persistFormIfChanged(form)
+  }
+
+  /** 停靠状态落盘（只在手势/弹簧结束时写，不跟着 1s 心跳写） */
+  private fun persistDock() {
+    try {
+      prefs
+        .edit()
+        .putString(KEY_SLOT, slot.prefName())
+        .putString(KEY_BAR_SLOT, barSlot.prefName())
+        .putFloat(KEY_SIDE_Y, sideY)
+        .apply()
+    } catch (e: Exception) {
+      Log.w(TAG, "持久化停靠槽位失败", e)
+    }
+  }
 
   /** 形态只在真正变化时落盘：心跳每秒一份载荷，不能每秒写一次 SharedPreferences */
   private fun persistFormIfChanged(target: String) {

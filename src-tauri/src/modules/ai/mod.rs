@@ -12,6 +12,7 @@
 //!   agent 工具循环 + 能力探测，LLM 流量与探测请求由 Rust 直发。
 
 pub mod agent;
+pub mod chat_page;
 pub mod commands;
 pub mod models;
 pub mod online;

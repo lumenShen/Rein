@@ -11,7 +11,7 @@
  * （左钮）」段落随之删除；输入行的跨页行为（发送 / 「+」带草稿）在本剧本末尾冒烟。
  *
  * 剧本：
- *   0. 基线：默认页签行 = 主页,运动,我,AI，输入行在场（未编辑过的容器按目录缺省渲染）
+ *   0. 基线：默认页签行 = 主页,运动,关于你,AI，输入行在场（未编辑过的容器按目录缺省渲染）
  *   1. 输入行：AI 页也是同一个 ComposerBar（在 .dock / #dock-ai-composer 内），回主页同源
  *   2. 长按**页签** 480ms 进编辑态：mask / 托盘出现、页签按钮化、可移动项带「−」徽标、
  *      固定件（主页 / 我 / AI）无徽标、输入行收起、长按不跳转
@@ -261,17 +261,18 @@ async function main() {
     /* ---- 0. 基线：未编辑过的容器按目录缺省渲染 ---- */
     const pill0 = await pillSeq()
     ok(
-      '默认页签行 = 主页,运动,我,AI（固定件就位 + 插件条目，AI 殿后）',
-      pill0.join() === '主页,运动,我,AI',
+      '默认页签行 = 主页,运动,关于你,AI（固定件就位 + 插件条目，AI 殿后）',
+      pill0.join() === '主页,运动,关于你,AI',
       pill0.join(' · '),
     )
     const quick0 = await evalJS(`(() => ({
       quick: !!document.querySelector('.dock .dock-quick'),
       placeholder: document.querySelector('.dock .qk-input')?.placeholder ?? '',
+      rotator: !!document.querySelector('.dock .qk-ph span'),
     }))()`)
     ok(
-      '默认带 AI 输入行（每个显示底栏的页面都有，占位含「按住说话」）',
-      quick0.quick && quick0.placeholder.includes('按住说话'),
+      '默认带 AI 输入行（每个显示底栏的页面都有，占位轮播层在场）',
+      quick0.quick && quick0.rotator && quick0.placeholder.length > 0,
       JSON.stringify(quick0),
     )
     const state0 = await editState()
@@ -292,7 +293,7 @@ async function main() {
     ok(
       'AI 页输入行 = 同一个 ComposerBar（在 Dock 玻璃内、文本域同源）、页签行照常（AI 高亮）',
       aiQuick.inDock && aiQuick.inHost && aiQuick.hasTextarea && aiQuick.chipsInDock &&
-        (await pillSeq()).join() === '主页,运动,我,AI',
+        (await pillSeq()).join() === '主页,运动,关于你,AI',
       JSON.stringify(aiQuick) + ' · ' + (await pillSeq()).join(' · '),
     )
     await evalJS(`location.hash = '#/'`)
@@ -332,7 +333,7 @@ async function main() {
     )
     ok(
       '固定件 AI 的 aria 保持条目名（不用动作语义骗读屏用户）、输入行收起、页签序列不变',
-      editDom.aiAria === null && editDom.quickGone && editDom.pill.join() === '主页,运动,我,AI',
+      editDom.aiAria === null && editDom.quickGone && editDom.pill.join() === '主页,运动,关于你,AI',
       `aiAria=${editDom.aiAria} quickGone=${editDom.quickGone} · ${editDom.pill.join(' · ')}`,
     )
     ok(
@@ -359,15 +360,15 @@ async function main() {
       chip: !!document.querySelector('.dock-edit-tray [data-nav-id="sports"] [data-nav-badge="+"]'),
     }))()`)
     ok(
-      '摘除后页签行 = 主页,我,AI，托盘出现「运动」chip（data-nav-badge="+"）',
-      removed.pill.join() === '主页,我,AI' && removed.chip,
+      '摘除后页签行 = 主页,关于你,AI，托盘出现「运动」chip（data-nav-badge="+"）',
+      removed.pill.join() === '主页,关于你,AI' && removed.chip,
       JSON.stringify(removed),
     )
     ok('「＋」加回「运动」（追加到可移动区末尾）', (await clickText('.dock-edit-tray .tray-chip', '运动')) === true)
     await sleep(300)
     ok(
-      '加回后页签行恢复 主页,运动,我,AI（固定件之间 / 之后）',
-      (await pillSeq()).join() === '主页,运动,我,AI',
+      '加回后页签行恢复 主页,运动,关于你,AI（固定件之间 / 之后）',
+      (await pillSeq()).join() === '主页,运动,关于你,AI',
       (await pillSeq()).join(' · '),
     )
 
@@ -396,8 +397,8 @@ async function main() {
     // 拖拽松手会让 useNavDrag 装一枚 400ms 的一次性吞窗：等它出窗再点别的东西
     await sleep(600)
     ok(
-      '拖「运动」到固定件「主页」上方被钳制，顺序仍是 主页,运动,我,AI',
-      (await pillSeq()).join() === '主页,运动,我,AI',
+      '拖「运动」到固定件「主页」上方被钳制，顺序仍是 主页,运动,关于你,AI',
+      (await pillSeq()).join() === '主页,运动,关于你,AI',
       (await pillSeq()).join(' · '),
     )
 
@@ -409,7 +410,7 @@ async function main() {
     const afterDiscard = await editState()
     ok(
       '放弃变更：退出编辑态、页签行回滚',
-      !afterDiscard.mask && !afterDiscard.tray && (await pillSeq()).join() === '主页,运动,我,AI',
+      !afterDiscard.mask && !afterDiscard.tray && (await pillSeq()).join() === '主页,运动,关于你,AI',
       (await pillSeq()).join(' · '),
     )
     ok(
@@ -426,8 +427,8 @@ async function main() {
     await clickText('.dock-edit-tray .tray-btn', '保存布局')
     await sleep(400)
     ok(
-      '保存布局：退出编辑态，页签行 = 主页,我,AI',
-      !(await editState()).mask && !(await editState()).tray && (await pillSeq()).join() === '主页,我,AI',
+      '保存布局：退出编辑态，页签行 = 主页,关于你,AI',
+      !(await editState()).mask && !(await editState()).tray && (await pillSeq()).join() === '主页,关于你,AI',
       (await pillSeq()).join(' · '),
     )
     ok(
@@ -438,8 +439,8 @@ async function main() {
     await waitFor(`!!document.querySelector('.dock .dock-tab')`, 12000, '刷新后的底栏')
     await sleep(600)
     ok(
-      '刷新后布局保持（主页,我,AI）',
-      (await pillSeq()).join() === '主页,我,AI',
+      '刷新后布局保持（主页,关于你,AI）',
+      (await pillSeq()).join() === '主页,关于你,AI',
       (await pillSeq()).join(' · '),
     )
 
@@ -455,16 +456,16 @@ async function main() {
     await clickText('.dock-edit-tray .tray-btn', '保存布局')
     await sleep(400)
     ok(
-      '加回后保存：页签行 = 主页,运动,我,AI',
-      (await pillSeq()).join() === '主页,运动,我,AI',
+      '加回后保存：页签行 = 主页,运动,关于你,AI',
+      (await pillSeq()).join() === '主页,运动,关于你,AI',
       (await pillSeq()).join(' · '),
     )
     await evalJS(`location.reload()`)
     await waitFor(`!!document.querySelector('.dock .dock-tab')`, 12000, '刷新后的底栏')
     await sleep(600)
     ok(
-      '刷新后布局保持（主页,运动,我,AI；tabbar = ["sports"]）',
-      (await pillSeq()).join() === '主页,运动,我,AI' &&
+      '刷新后布局保持（主页,运动,关于你,AI；tabbar = ["sports"]）',
+      (await pillSeq()).join() === '主页,运动,关于你,AI' &&
         (await evalJS(`JSON.stringify(JSON.parse(localStorage.getItem('rein.navLayout.v1') ?? '{}').tabbar)`)) === '["sports"]',
     )
 
@@ -475,8 +476,8 @@ async function main() {
     await evalJS(`location.hash = '#/'`)
     await sleep(700)
     ok(
-      '关掉「运动」：页签行条目消失（主页,我,AI），布局字节不变',
-      (await pillSeq()).join() === '主页,我,AI' &&
+      '关掉「运动」：页签行条目消失（主页,关于你,AI），布局字节不变',
+      (await pillSeq()).join() === '主页,关于你,AI' &&
         (await evalJS(`JSON.stringify(JSON.parse(localStorage.getItem('rein.navLayout.v1') ?? '{}').tabbar)`)) === '["sports"]',
       (await pillSeq()).join(' · '),
     )
@@ -487,7 +488,7 @@ async function main() {
     await sleep(700)
     ok(
       '重开「运动」：条目原位回来',
-      (await pillSeq()).join() === '主页,运动,我,AI',
+      (await pillSeq()).join() === '主页,运动,关于你,AI',
       (await pillSeq()).join(' · '),
     )
 
@@ -521,7 +522,7 @@ async function main() {
 
     /* ---- 收尾：本剧本动过的键全部清掉，不给别的剧本留状态 ---- */
     await cleanUpAndReload()
-    ok('清理后回到默认（主页,运动,我,AI）', (await pillSeq()).join() === '主页,运动,我,AI')
+    ok('清理后回到默认（主页,运动,关于你,AI）', (await pillSeq()).join() === '主页,运动,关于你,AI')
   } finally {
     try {
       ws?.close()

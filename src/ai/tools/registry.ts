@@ -23,6 +23,16 @@ import { Type } from '@earendil-works/pi-ai'
 
 import { isTauri } from '@/services/transport'
 
+import { tools as appAlarmTools } from './appAlarm'
+import { tools as appCalendarTools } from './appCalendar'
+import { tools as appContactsTools } from './appContacts'
+import { appDesktopFilesTools } from './appDesktopFiles'
+import { appLocationTools } from './appLocation'
+import { appNotificationTools } from './appNotification'
+import { appPhoneFilesTools } from './appPhoneFiles'
+import { tools as appSmsTools } from './appSms'
+import { appTerminalTools } from './appTerminal'
+import { appUsageTools } from './appUsage'
 import { campusTools } from './campus'
 import { campusProgramTools } from './campusProgram'
 import { dietTools } from './diet'
@@ -39,7 +49,7 @@ import { pomodoroTools } from './pomodoro'
 import { programTools } from './program'
 import { providerTools } from './providers'
 import { sessionTools } from './session'
-import { defineTool, type AppTool, type ToolGroup } from './types'
+import { defineTool, type AppTool, type ToolContext, type ToolGroup } from './types'
 import { todoTools } from './todo'
 import { voiceTools } from './voice'
 import { workspaceTools } from './workspace'
@@ -65,6 +75,17 @@ const DOMAIN_TOOLS: AppTool[] = [
   ...imageTools,
   ...campusTools,
   ...campusProgramTools,
+  // 连接应用的 10 个组（stub 阶段为空数组；工具由各 app 主笔填充后自然出现）
+  ...appAlarmTools,
+  ...appUsageTools,
+  ...appCalendarTools,
+  ...appContactsTools,
+  ...appPhoneFilesTools,
+  ...appLocationTools,
+  ...appNotificationTools,
+  ...appSmsTools,
+  ...appDesktopFilesTools,
+  ...appTerminalTools,
 ]
 
 /* ---- 装载策略：哪些组恒常驻、哪些按需、谁受功能开关管 ---- */
@@ -78,6 +99,11 @@ export interface GroupPolicy {
   always?: boolean
   /** 功能插件 id（见 src/plugins/builtin）：关掉该插件后整组不出现，也不可装载 */
   plugin?: string
+  /**
+   * 该组依赖的连接应用 id（任一命中即可）；缺省 = 不依赖连接应用。
+   * 门禁由 `groupAllowed` / `resolveToolPlan` 使用（工具挂载员实现）。
+   */
+  apps?: readonly string[]
   /** 本轮消息命中即装载该组（仅按需组需要；词取用户会说的口语说法） */
   keywords?: RegExp
 }
@@ -92,7 +118,7 @@ export const GROUP_POLICY: Record<ToolGroup, GroupPolicy> = {
   nutrition: { label: '营养', hint: '每日营养汇总、目标、画像与体测', always: true },
   todo: { label: '待办', hint: '日程清单、分布与增删改', always: true },
   knowledge: { label: '知识库', hint: '跨来源检索、读正文、按路径找、笔记与文件治理', always: true },
-  memory: { label: '长期记忆', hint: '用户认知的查看与增删改', always: true },
+  memory: { label: '长期记忆', hint: '用户认知的查看、主动回忆与增删改', always: true },
   context: { label: '历史检索', hint: '在过去的对话里找原话', always: true },
   web: { label: '联网', hint: '搜索与抓取网页正文', always: true },
   image: { label: '看图', hint: '按像素坐标放大图片局部细节', always: true },
@@ -163,6 +189,77 @@ export const GROUP_POLICY: Record<ToolGroup, GroupPolicy> = {
     plugin: 'campus-grab',
     keywords: /选课|抢课|教学班|志愿|预约|开课|抢|退课/,
   },
+  // ---- 连接本机应用（默认不可见；只有已连接 + 允许 AI 的 app 才会让组进 available）----
+  // 不给 keywords：需求要求由 agent 调 load_tools 按需装载，不做关键词自动命中。
+  appAlarm: {
+    label: '闹钟和计时器',
+    hint: '读取下一个闹钟，设置/取消系统闹钟与计时器（取消需确认）',
+    always: false,
+    apps: ['alarm'],
+  },
+  appUsage: {
+    label: '安卓使用时间',
+    hint: '按天查看各应用前台使用时长与最近使用事件（只读）',
+    always: false,
+    apps: ['usage'],
+  },
+  appCalendar: {
+    label: '安卓日历',
+    hint: '查询日历与事件，新建/修改/删除事件（写操作逐次确认）',
+    always: false,
+    apps: ['calendar'],
+  },
+  appContacts: {
+    label: '通讯录',
+    hint: '搜索/读取联系人，新建/修改/删除（写操作逐次确认）',
+    always: false,
+    apps: ['contacts'],
+  },
+  appPhoneFiles: {
+    label: '安卓文件',
+    hint: '浏览/读取/搜索手机授权文件夹，写入/建目录/删除/重命名（写操作逐次确认）',
+    always: false,
+    apps: ['filesystem'],
+  },
+  appLocation: {
+    label: '位置',
+    hint: '读取当前位置或最后已知位置（只读，不反查地址）',
+    always: false,
+    apps: ['location'],
+  },
+  appNotification: {
+    label: '通知',
+    hint: '查看最近通知，清除单条或全部（清除需确认；不能代发/回复）',
+    always: false,
+    apps: ['notification'],
+  },
+  appSms: {
+    label: '短信',
+    hint: '查看短信会话与消息，发送短信（发送需确认；不改已读、不删除）',
+    always: false,
+    apps: ['sms'],
+  },
+  appDesktopFiles: {
+    label: '桌面文件',
+    hint:
+      '浏览/读取/搜索桌面、文稿、下载与授权文件夹，写入/建目录/删除/重命名（写操作逐次确认；只列已连接并允许 AI 的根）',
+    always: false,
+    apps: [
+      'win-desktop',
+      'win-documents',
+      'win-downloads',
+      'win-local',
+      'mac-desktop',
+      'linux-desktop',
+      'linux-documents',
+    ],
+  },
+  appTerminal: {
+    label: '命令行',
+    hint: '在允许的目录内以 argv 运行程序（每次确认，超时/输出有上限）',
+    always: false,
+    apps: ['win-terminal', 'mac-terminal'],
+  },
 }
 
 /** 常驻组（含元工具组） */
@@ -185,11 +282,24 @@ export function toolNamesForGroups(groups: Iterable<ToolGroup>): string[] {
   return APP_TOOLS.filter((t) => want.has(t.group)).map((t) => t.name)
 }
 
-/** 组在当前功能开关下是否可用（无 plugin 声明 = 恒可用） */
-function groupAllowed(g: ToolGroup, plugins?: string[]): boolean {
-  const p = GROUP_POLICY[g].plugin
-  if (!p) return true
-  return plugins === undefined ? true : plugins.includes(p)
+/**
+ * 组在当前功能开关 + 连接应用门禁下是否可用。
+ *
+ * **安全默认**：app 组必须由调用方传入非空的已允许 app 集合；`apps` 缺省 / null /
+ * 空集时一律不可用。非 app 组行为与旧版一致（无 plugin 声明 = 恒可用）。
+ */
+function groupAllowed(
+  g: ToolGroup,
+  plugins?: string[],
+  apps?: ReadonlySet<string> | null,
+): boolean {
+  const p = GROUP_POLICY[g]
+  if (p.plugin && plugins !== undefined && !plugins.includes(p.plugin)) return false
+  if (p.apps) {
+    if (!apps || apps.size === 0) return false
+    return p.apps.some((a) => apps.has(a))
+  }
+  return true
 }
 
 export interface ToolPlanInput {
@@ -197,6 +307,8 @@ export interface ToolPlanInput {
   text?: string
   /** 已启用的功能插件 id；缺省视为全部启用（非聊天链路不必传） */
   plugins?: string[]
+  /** 已连接且允许 AI 的应用 id；缺省/空 = 没有任何 app 组可用（安全默认） */
+  apps?: Iterable<string>
   /** 会话内已装载过的组（粘住：同一话题的追问不该再猜一次） */
   sticky?: Iterable<ToolGroup>
 }
@@ -204,30 +316,42 @@ export interface ToolPlanInput {
 export interface ToolPlan {
   /** 本轮初始装载的组（常驻 + 命中 + 粘住） */
   loaded: Set<ToolGroup>
-  /** 还能装载的按需组（未装载、未被功能开关挡住） */
+  /** 还能装载的按需组（未装载、未被功能开关/连接应用门禁挡住） */
   available: ToolGroup[]
+  /** 本轮可装载 = loaded ∪ available；`load_tools` 只接受这里的组 */
+  loadable: Set<ToolGroup>
 }
 
 /**
  * 解析本轮要装载哪些工具组：
  * 常驻组 ∪ 粘住组 ∪ 关键词命中的按需组；再算一遍「还可以装什么」给组目录。
  * 只做加法不做减法 —— 猜错时可由 `load_tools` 当场补救，不必回头问用户。
+ * app 组没有 keywords，只能由模型显式 `load_tools` 装载。
  */
 export function resolveToolPlan(input: ToolPlanInput = {}): ToolPlan {
+  const appSet = input.apps ? new Set(input.apps) : null
   const loaded = new Set<ToolGroup>(ALWAYS_GROUPS)
   for (const g of input.sticky ?? []) {
-    if (isToolGroup(g) && groupAllowed(g, input.plugins) && !GROUP_POLICY[g].always) loaded.add(g)
+    if (
+      isToolGroup(g) &&
+      groupAllowed(g, input.plugins, appSet) &&
+      !GROUP_POLICY[g].always
+    ) {
+      loaded.add(g)
+    }
   }
   const text = input.text ?? ''
   if (text.trim()) {
     for (const g of ON_DEMAND_GROUPS) {
-      if (GROUP_POLICY[g].keywords?.test(text) && groupAllowed(g, input.plugins)) loaded.add(g)
+      if (GROUP_POLICY[g].keywords?.test(text) && groupAllowed(g, input.plugins, appSet)) {
+        loaded.add(g)
+      }
     }
   }
-  return {
-    loaded,
-    available: ON_DEMAND_GROUPS.filter((g) => !loaded.has(g) && groupAllowed(g, input.plugins)),
-  }
+  const available = ON_DEMAND_GROUPS.filter(
+    (g) => !loaded.has(g) && groupAllowed(g, input.plugins, appSet),
+  )
+  return { loaded, available, loadable: new Set([...loaded, ...available]) }
 }
 
 /** 组目录文案（系统提示词用）：只列「此刻还能装载」的组，装完就缩短 */
@@ -245,37 +369,120 @@ ${rows.join('\n')}
 
 /* ---- 元工具：装载其它分组 ---- */
 
+/** load_tools 的拒绝条目：未知 / 常驻 / 功能未开启 / 连接应用不可用 / 其它不可装载 / 一次装太多 */
+export type LoadBlockedReason =
+  | 'unknown'
+  | 'always'
+  | 'plugin_disabled'
+  | 'app_unavailable'
+  | 'unavailable'
+  | 'too_many'
+
+export interface LoadBlockedGroup {
+  group: string
+  reason: LoadBlockedReason
+}
+
+/** 一次最多装载的组数：超过就让模型分两次装，避免单次 schema 膨胀 */
+const MAX_LOAD_GROUPS = 4
+
+/** 不可用组的原因文案（消息里必须保留原始组名） */
+function blockedReasonLabel(reason: LoadBlockedReason, g: string): string {
+  switch (reason) {
+    case 'unknown':
+      return '未知分组'
+    case 'always':
+      return '常驻组无需装载'
+    case 'app_unavailable':
+      return '连接应用未连接或未允许 AI'
+    case 'plugin_disabled':
+      return '功能未开启'
+    case 'too_many':
+      return `一次最多 ${MAX_LOAD_GROUPS} 个`
+    default:
+      return isToolGroup(g) ? '当前不可装载' : '未知分组'
+  }
+}
+
 export const loaderTools: AppTool[] = [
   defineTool({
     name: 'load_tools',
     group: 'system',
     label: '装载工具分组',
     description:
-      '装载当前不在手边的工具分组（组名见系统提示词的【工具装载】段）。传组名数组，装载后当轮即可调用该组工具；已装载的组重复传也无害。',
+      '装载当前不在手边的工具分组（组名见系统提示词的【工具装载】段）。传组名数组，装载后当轮即可调用该组工具；已装载的组重复传也无害。一次最多 4 个组。',
     parameters: Type.Object({
       groups: Type.Array(Type.String({ description: '要装载的分组名，如 ["ledger","campus"]' }), {
-        description: '分组名数组（可多个）',
+        description: '分组名数组（可多个，最多 4 个）',
       }),
     }),
-    async execute(args) {
+    async execute(args, ctx?: ToolContext) {
       const asked = args.groups.map((s) => s.trim()).filter(Boolean)
       if (asked.length === 0) throw new Error('groups 不能为空，传要装载的分组名数组，如 ["ledger"]')
+      const unique = [...new Set(asked)]
+      if (unique.length > MAX_LOAD_GROUPS) {
+        return {
+          loadedGroups: [],
+          toolNames: [],
+          blocked: unique.map(
+            (group): LoadBlockedGroup => ({ group, reason: 'too_many' }),
+          ),
+          message: `一次最多装载 ${MAX_LOAD_GROUPS} 个分组（收到 ${unique.length} 个），请分两次调用 load_tools。`,
+        }
+      }
+
+      // ctx.loadable 是唯一权威集合（已装载 ∪ 可装载）；没有 ctx 的旧直调走安全默认：
+      // app 组一律不可装载，非 app 组行为不变（e2e 仍可直调）。
+      const ctxAppSet = ctx ? new Set(ctx.apps ?? []) : null
+      const allowed = (g: ToolGroup): boolean =>
+        ctx?.loadable ? ctx.loadable.has(g) : groupAllowed(g, ctx?.plugins, ctxAppSet)
+
       const ok: ToolGroup[] = []
       const unknown: string[] = []
-      for (const name of asked) {
-        // 常驻组与元工具组无可装载，按名不对处理，免得模型以为「再装一次」有效
-        if (!isToolGroup(name) || GROUP_POLICY[name].always) {
+      const blocked: LoadBlockedGroup[] = []
+      for (const name of unique) {
+        if (!isToolGroup(name)) {
           unknown.push(name)
+          blocked.push({ group: name, reason: 'unknown' })
           continue
         }
-        if (!ok.includes(name)) ok.push(name)
+        // 常驻组与元工具组无可装载，按名不对处理，免得模型以为「再装一次」有效
+        if (GROUP_POLICY[name].always) {
+          blocked.push({ group: name, reason: 'always' })
+          continue
+        }
+        if (!allowed(name)) {
+          const reason: LoadBlockedReason = GROUP_POLICY[name].apps
+            ? 'app_unavailable'
+            : GROUP_POLICY[name].plugin
+              ? 'plugin_disabled'
+              : 'unavailable'
+          blocked.push({ group: name, reason })
+          continue
+        }
+        ok.push(name)
       }
+
       const toolNames = toolNamesForGroups(ok)
-      const done = ok.map((g) => `${GROUP_POLICY[g].label}（${toolNamesForGroups([g]).length} 个）`).join('、')
-      const miss = unknown.length > 0 ? `没有这些分组：${unknown.join('、')}；` : ''
+      const done = ok
+        .map((g) => `${GROUP_POLICY[g].label}（${toolNamesForGroups([g]).length} 个）`)
+        .join('、')
+      // 旧 e2e 依赖未知名原样出现在 message 里：unknown 与不可用分两段，组名都不改
+      const segments: string[] = []
+      if (unknown.length > 0) segments.push(`没有这些分组：${unknown.join('、')}`)
+      const unavailable = blocked.filter((b) => b.reason !== 'unknown')
+      if (unavailable.length > 0) {
+        segments.push(
+          `这些分组当前不可用：${unavailable
+            .map((b) => `${b.group}（${blockedReasonLabel(b.reason, b.group)}）`)
+            .join('、')}`,
+        )
+      }
+      const miss = segments.length > 0 ? `${segments.join('；')}；` : ''
       return {
         loadedGroups: ok,
         toolNames,
+        blocked,
         message:
           ok.length > 0
             ? `${miss}已装载 ${done}，当轮即可调用。可用组名见系统提示词的【工具装载】段。`
@@ -296,14 +503,15 @@ export function findAppTool(name: string): AppTool | undefined {
 }
 
 /** AppTool → AgentTool：默认结果包成 {ok:true,data} 文本；rawContent 工具原样透传内容块（可含图片）；失败 throw 由框架回灌错误 */
-function toAgentTool(t: AppTool): AgentTool {
+function toAgentTool(t: AppTool, ctx?: ToolContext): AgentTool {
   return {
     name: t.name,
     label: t.label,
     description: t.description,
     parameters: t.parameters,
     execute: async (_toolCallId, params) => {
-      const data = await t.execute(params as never)
+      // ctx 透传给 app 工具（门禁 / 写确认）；非 app 工具的单参 execute 直接忽略它
+      const data = await t.execute(params as never, ctx)
       if (t.rawContent) return data as AgentToolResult<unknown>
       return {
         content: [{ type: 'text', text: JSON.stringify({ ok: true, data }) }],
@@ -314,14 +522,17 @@ function toAgentTool(t: AppTool): AgentTool {
 }
 
 /** 注册表 → Agent 工具集；传 onlyNames 时只挂指定工具（如视觉识别轮只给 search_food） */
-export function buildAppAgentTools(onlyNames?: string[]): AgentTool[] {
+export function buildAppAgentTools(onlyNames?: string[], ctx?: ToolContext): AgentTool[] {
   const tools = onlyNames ? APP_TOOLS.filter((t) => onlyNames.includes(t.name)) : APP_TOOLS
-  return tools.map(toAgentTool)
+  return tools.map((t) => toAgentTool(t, ctx))
 }
 
-/** 按分组装载（聊天主链路用）：只给这些组的工具，组内不做裁剪 */
-export function buildAgentToolsForGroups(groups: Iterable<ToolGroup>): AgentTool[] {
-  return buildAppAgentTools(toolNamesForGroups(groups))
+/** 按分组装载（聊天主链路用）：只给这些组的工具，组内不做裁剪；ctx 随闭包透传 */
+export function buildAgentToolsForGroups(
+  groups: Iterable<ToolGroup>,
+  ctx?: ToolContext,
+): AgentTool[] {
+  return buildAppAgentTools(toolNamesForGroups(groups), ctx)
 }
 
 /**

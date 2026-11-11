@@ -68,7 +68,7 @@ fn build_filter(q: &KbQuery, enabled: &[String]) -> Filter {
 ///
 /// 用户查询里可能含 FTS5 语法字符（`"` `*` `(` `:` `-` 等），直接拼进 MATCH 会语法报错。
 /// 做法是把查询按空白切成若干词，每个词用双引号包成短语（内部 `"` 翻倍转义），词间用 AND。
-fn match_expr(query: &str) -> String {
+pub(crate) fn match_expr(query: &str) -> String {
     let terms: Vec<String> = query
         .split_whitespace()
         .filter(|t| !t.is_empty())
@@ -78,7 +78,7 @@ fn match_expr(query: &str) -> String {
 }
 
 /// 查询是否短于 trigram 的下限（按 unicode 字符数，不是字节）。
-fn too_short_for_trigram(query: &str) -> bool {
+pub(crate) fn too_short_for_trigram(query: &str) -> bool {
     query.trim().chars().count() < 3
 }
 

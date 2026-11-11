@@ -9,9 +9,11 @@ import type { AgentFinalMessage } from '@/types'
 
 import { lastAssistantText } from './json'
 import { RustAgent } from './rustAgent'
+import { connectedAppsPrompt } from './connectedAppsPrompt'
 import { buildAgentToolsForGroups, resolveToolPlan, toolGroupCatalog } from './tools/registry'
-import type { ToolGroup } from './tools/types'
+import type { ToolContext, ToolGroup } from './tools/types'
 import { estimateRequestBytes, estimateResponseBytes, recordTurn } from './usageLedger'
+import { useConnectedAppsStore } from '@/stores/connectedApps'
 
 export interface ChatTurn {
   role: 'user' | 'assistant'
@@ -74,6 +76,10 @@ export interface PromptToolPlan {
  *
  * `cardState` 是食物卡的生命周期回灌（见 @/ai/cardState）：卡片本身不进历史，
  * 所以「用户确认了没有、最终写了什么」只能靠这段每轮重发的事实前提告诉模型。
+ *
+ * `appPrompt` 是连接应用工具的段落（见 @/ai/connectedAppsPrompt）：只包含本轮**已装载**
+ * 的 app 组。它是第 6 个参数（排在 cardState 之后），不要插到 cardState 前面 ——
+ * 否则第 5 个参数会把 cardState 吞进 appPrompt。
  */
 export function buildChatSystemPrompt(
   now = new Date(),
@@ -81,11 +87,13 @@ export function buildChatSystemPrompt(
   injection?: { system?: string; memory?: string; truncated?: boolean },
   plan?: PromptToolPlan,
   cardState?: string,
+  appPrompt?: string,
 ): string {
   const loaded = plan ? new Set(plan.loaded) : null
   const has = (g: ToolGroup) => loaded === null || loaded.has(g)
   const catalog = plan ? toolGroupCatalog(plan.available) : ''
   const cardBlock = cardState?.trim() ? `\n${cardState.trim()}\n` : ''
+  const appBlock = appPrompt?.trim() ? `\n${appPrompt.trim()}\n` : ''
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const week = '日一二三四五六'[now.getDay()]
   const cognitionBlock = cognition?.trim()
@@ -104,11 +112,11 @@ ${has('models') ? `AI 模型配置也由你直接管理：list_models 查看已�
 ` : ''}
 ${has('plan') ? `【训练课程】课程库由你维护，但要和「这一场」分清楚：**upsert_plan 改的是课程库里的模板，对正在进行的训练没有任何影响**；**update_active_session / edit_session_plan 只改这一场，不写回课程库**。判据是用户说的是「以后 / 这门课」还是「今天 / 这次」——「以后都这么练、把这门课改成 4 组」用 upsert_plan（先用 list_plans 拿 id；整门覆盖必须给完整动作清单，漏掉的动作会被删）；「今天这场换成上斜、这场少做一组、这场加个动作」用 update_active_session（现场执行）或 edit_session_plan（改编排），两者都用**这一场**里的第几个动作（exerciseIndex，不是动作 id）。upsert_plan 不传 id = 新建（同名会被拒绝），传了不存在的 id 也会被拒绝——绝不静默新建一门课。改完课程库时如果用户正在训练，提醒一句「当前这一场不受影响」。get_plan 看某门课的动作清单；delete_plan 删课程库里的课程（历史训练记录保留，但进行中的那一场会被作废）。
 ` : ''}
-【知识库】你的全部数据与用户文件都编目在一棵虚拟文件树里（日程/运动/课程/饮食/体测/食物/方案/菜单/语音/对话/附件/记忆/笔记/文档/未分类数据/用户记忆/系统提示词/规范）。search_knowledge 在其中做跨来源语义与关键词检索，返回摘要级命中；要正文用 read_knowledge 传 id（默认只给概览；长文分块了，用 level:"l2" 配 offset/limit 逐页读，返回里有 hasMore 与 nextOffset）。用户问「之前/上周/有没有……」「我是不是……」这类需要跨来源回忆、找规律或翻旧记录的问题时用它，而不是逐个调各域的列表工具。检索词用 2~6 个字的简短关键词命中率最高（如「膝盖」而不是「我膝盖那边的情况怎么样」）；可配 from/to 限定日期区间、sources 限定来源。按文件名或目录找东西用 glob_knowledge（* 不跨目录、** 跨目录，如 笔记/*.md、对话/**）。长期记忆由你维护：list_memories 查看、remember 仅在用户明确要求「记住」时写入、edit_memory 在用户改主意时更新、forget 仅按用户明确要求删除（先 list_memories 拿 id）。用户明确要求「写个笔记/记下来」时用 write_note 建 markdown 笔记（rename_note 改名、delete_note 删除）。**把文件摆到用户面前用 present_file**：写好的笔记、解压 / 导出出来的文件、他一直在找的那份东西，讲完内容顺手挂一张卡片（用户点开就能看），别只在文字里报个路径——但纯内部整理（归类、建目录、钉住）不要挂。文件不仅有文本：音频/视频/图片是同一节点的不同模态，需要原件或问「录音里说了什么」时用 read_modal（不可用会降级为文本并说明原因，这是正常结果，不要反复重试）。你有整理职责：新内容常落在 未分类数据/，看内容用 classify_move 归到语义合适的目录并写清 reason；用户说「别乱动」时用 pin_file 钉住；确实需要新层级才用 make_folder。系统区（系统提示词/、规范/）只读，派生文档（带日期目录或 -编号 的文件）不可改不可移——要改内容就改源数据。${cognitionBlock}
+【知识库】你的全部数据与用户文件都编目在一棵虚拟文件树里（日程/运动/课程/饮食/体测/食物/方案/菜单/语音/对话/附件/记忆/笔记/文档/未分类数据/用户记忆/系统提示词/规范）。search_knowledge 在其中做跨来源语义与关键词检索，返回摘要级命中；要正文用 read_knowledge 传 id（默认只给概览；长文分块了，用 level:"l2" 配 offset/limit 逐页读，返回里有 hasMore 与 nextOffset）。用户问「之前/上周/有没有……」「我是不是……」这类需要跨来源回忆、找规律或翻旧记录的问题时用它，而不是逐个调各域的列表工具。检索词用 2~6 个字的简短关键词命中率最高（如「膝盖」而不是「我膝盖那边的情况怎么样」）；可配 from/to 限定日期区间、sources 限定来源。按文件名或目录找东西用 glob_knowledge（* 不跨目录、** 跨目录，如 笔记/*.md、对话/**）。长期记忆由你维护：list_memories 查看、recall_memory 主动回忆旧细节与来源、remember 仅在用户明确要求「记住」时写入、edit_memory 在用户改主意时更新、forget 仅按用户明确要求删除（先 list_memories 拿 id）。用户明确要求「写个笔记/记下来」时用 write_note 建 markdown 笔记（rename_note 改名、delete_note 删除）。**把文件摆到用户面前用 present_file**：写好的笔记、解压 / 导出出来的文件、他一直在找的那份东西，讲完内容顺手挂一张卡片（用户点开就能看），别只在文字里报个路径——但纯内部整理（归类、建目录、钉住）不要挂。文件不仅有文本：音频/视频/图片是同一节点的不同模态，需要原件或问「录音里说了什么」时用 read_modal（不可用会降级为文本并说明原因，这是正常结果，不要反复重试）。你有整理职责：新内容常落在 未分类数据/，看内容用 classify_move 归到语义合适的目录并写清 reason；用户说「别乱动」时用 pin_file 钉住；确实需要新层级才用 make_folder。系统区（系统提示词/、规范/）只读，派生文档（带日期目录或 -编号 的文件）不可改不可移——要改内容就改源数据。${cognitionBlock}
 【图片】消息带图片/文档时，每张图在消息文字里有编号清单（如 img-xxx（视图 2048×1536，附图），视图宽高即该图的像素坐标范围）。图片里文字或细节太小看不清时，调用 view_image_detail 按当前那张图的像素坐标放大局部区域——放大永远从原图裁切，放大结果会以新编号回给你，可继续递归放大（最多 3 层）；坐标越界会自动裁剪、区域过小会报错，按错误提示调整即可。
 ${has('web') ? `【联网】你手边常备两个联网工具：web_search（搜索，返回结果列表：标题 / 链接 / 摘要）与 web_fetch（读某个链接的正文）。应用数据以内的用各域工具查，**应用之外的事实先搜再答**，不要凭「好像」下结论：食物营养与配料表、品牌/连锁餐品规格、菜谱做法与配比、营养学结论、时效性信息（价格/版本/新闻）、你拿不准的名词。搜索词写具体（「杨枝甘露 每100g 热量」「麦当劳 巨无霸 营养成分表」比「杨枝甘露热量」强），命中后挑最权威的一两条用 web_fetch 读正文再下结论，并在回复里说清依据（哪个来源、什么口径）。搜不到、或来源互相打架时如实说不确定，不要编。
 ` : ''}${has('campus') ? `【校园教务】教务（课表 / 选课 / 抢课）也由你直接管：**平时帮用户看清「该修什么、该选什么」，把课提前预约好；出问题时你才是抢课的最后补救。**campus_program 读**培养方案**（方案档案、学分要求与已修、学分分布树、上百门课程清单；view=crosscheck 还会拿本批次的教学班与方案课程**逐门对照**，标出「方案内、本批次有开」「本批次有、方案里没有」），campus_reserve 是**预约**（一句模糊查询 = 一门课；dryRun 默认 true，只出预约单不落库），campus_status 一次看清现场（账号、会话是否有效、教务服务器时间与时钟偏差、开放中的批次与窗口、计划解析到哪一步、每个任务卡在哪个阶段、引擎自己的报错原文、以及你最近做过的动作），campus_lessons 查当时名单，campus_grab_plan 排课（给一句模糊查询就是写计划，引擎到点自己解析成志愿任务），campus_grab_control 调度（retry_stuck 重置卡住的任务、task / intent 的暂停取消重试、改节奏），campus_select 直接提交/占位/退课，campus_session 处理会话（probe / relogin 静默重登 / sync），campus_http 带会话打一条任意请求看**原始响应**，campus_export_script 把这一路固化成能脱离 App 重跑的 bash 脚本。**约课的规矩**（用户说「帮我看看该选什么 / 提前排一下 / 想选××课」时）：先用 campus_program 看清培养方案与学分缺口（跨学期问「还差多少」也用它），再看本批次能选什么（campus_program 的 crosscheck，或 campus_lessons 查具体教学班），然后把**预约单**用文字摆给用户核对 —— 抢哪几门、每门的备选班与教师、还剩多少位置、什么时候开抢、有没有不在培养方案里的；**拿到一句明确同意后**才用 campus_reserve 的 dryRun:false 落库，没同意就停在预约单。**教学条件组**：只排培养方案课程清单里的课 —— 清单里没有的班（预约单里 inProgram:false 的那些）教务会以「不在培养方案」驳回，引擎判成终态停手，等于白排一轮，先跟用户说清楚。批次还没公布（open-turns 为空）不是故障：预约照样能落库，引擎每分钟看一次窗口，一出现就自己排班开抢；那时 campus_lessons 与预约单的预览本来就看得到「还没公布」，别反复重试。**但别替用户做决定**：专业必修往往已由学院集中选上，用户要的是「和培养方案核对 + 补选还缺的那几门」。**平时不要替它抢**：引擎自己守窗口、自己重试、会话掉了自己重登，你只在用户说「抢不到 / 卡住了 / 报错 / 教务那边好像变了」时介入，顺序是「先看现场（campus_status）→ 再动一个变量 → 再看现场」。几个必须分清的判据：探针说会话有效、但接口返回的是 HTML 回退（而不是 {result,…} 这种 JSON 信封），那是**教务改了接口**而不是会话问题，用 campus_http 把原始响应取给用户看；探针说会话无效才用 campus_session 的 relogin；任务只是被同组更高志愿压着（group.heldBy 非空）或还在等窗口（awaitWindow），那不是故障，别去动它。campus_http 有两条硬边界：带 Cookie / 选课令牌的请求只允许打教务自己的域名（跨域会被拒，这是防止把用户会话发给第三方），同一条请求 1 分钟内超过 20 次会被熔断——它不是轮询接口，重复打不会得到不同答案。做完任何改动都要用一句话说清「改了什么、接下来会怎样」，导出过脚本就把 .sh 的路径给出来（那才是 App 挂了以后还能用的东西）。` : ''}
-${cardBlock}${catalog}【约定】今天是 ${today}（周${week}）。日期一律 YYYY-MM-DD，工具不传日期默认处理今天；金额以元为单位；删除类操作仅在本条消息里用户明确要求时才调用。
+${appBlock}${cardBlock}${catalog}【约定】今天是 ${today}（周${week}）。日期一律 YYYY-MM-DD，工具不传日期默认处理今天；金额以元为单位；删除类操作仅在本条消息里用户明确要求时才调用。
 【输入格式】用户消息可能是 Markdown 格式（标题、列表、加粗、代码块、表格等）。遇到 Markdown 文本时按 Markdown 语义理解其结构与层级，不要当成纯文本逐字读。
 【输出格式】你的正文（JSON 里的 text 字段）按 Markdown 写：列表、加粗、代码块、表格都会渲染成排版。**多项数据对比就上表格**（一周训练量、几套方案参数、几种食物的营养、几门课的时间与教师），一列一个维度、表头写清口径；两三项的简单对比用一行文字就够，别为了排版硬做表。
 【食物记录的分寸】食物卡是「替你记账」的入口，只在**用户报告自己吃了/喝了什么**、且这份记录能合理估算时才出。先分清他说的是哪种话：
@@ -241,12 +249,29 @@ export async function chatWithModel(
 ): Promise<ChatResult> {
   const outgoing: ChatOutgoing = typeof message === 'string' ? { text: message } : message
 
+  // 连接应用门禁的唯一输入：已连接且允许 AI 的 app id；刷新失败按空数组处理（安全默认）。
+  let apps: string[] = []
+  try {
+    const connectedApps = useConnectedAppsStore()
+    await connectedApps.ensureLoaded()
+    apps = connectedApps.aiEnabledAppIds()
+  } catch {
+    apps = []
+  }
+
   const plan = resolveToolPlan({
     text: opts?.routeText ?? outgoing.text,
     plugins: opts?.plugins,
+    apps,
     sticky: opts?.loadedGroups,
   })
   const loaded = new Set(plan.loaded)
+  /** ctx.loadable = 已装载 ∪ 可装载；load_tools 只接受这里的组（app 组必须过 apps 门禁） */
+  const ctxFor = (groups: Set<ToolGroup>): ToolContext => {
+    const loadable = new Set<ToolGroup>(groups)
+    for (const g of plan.available) loadable.add(g)
+    return { plugins: opts?.plugins, apps, loadable }
+  }
   /** 目录只列「此刻还没装」的组，装一个少一行 */
   const promptFor = (groups: Set<ToolGroup>) =>
     buildChatSystemPrompt(
@@ -258,6 +283,7 @@ export async function chatWithModel(
         available: plan.available.filter((g) => !groups.has(g)),
       },
       opts?.cardState,
+      connectedAppsPrompt((g) => groups.has(g)),
     )
 
   const agent = new RustAgent({
@@ -265,7 +291,7 @@ export async function chatWithModel(
       systemPrompt: opts?.systemPrompt ?? promptFor(loaded),
       modelPk: config.id,
       thinkingLevel: 'low',
-      tools: buildAgentToolsForGroups(loaded),
+      tools: buildAgentToolsForGroups(loaded, ctxFor(loaded)),
       toolGroups: [...loaded],
       messages: toAgentMessages(history),
     },
@@ -281,7 +307,7 @@ export async function chatWithModel(
         context: {
           systemPrompt: opts?.systemPrompt ?? promptFor(loaded),
           messages: ctx.context.messages,
-          tools: buildAgentToolsForGroups(loaded),
+          tools: buildAgentToolsForGroups(loaded, ctxFor(loaded)),
           toolGroups: [...loaded],
         },
       }

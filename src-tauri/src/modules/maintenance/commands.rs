@@ -123,7 +123,7 @@ const BUSINESS_GROUPS: &[ClearGroup] = &[
     },
     ClearGroup {
         label: "动作库（内置动作重启后自动补回）",
-        tables: &["exercises"],
+        tables: &["exercises", "exercise_guides"],
         dirs: &[],
     },
     ClearGroup {
@@ -187,6 +187,7 @@ const FACTORY_GROUPS: &[ClearGroup] = &[
             "workout_sessions",
             "workout_plans",
             "exercises",
+            "exercise_guides",
             "todos",
             "ledger_entries",
             "ledger_settings",
@@ -216,8 +217,13 @@ const FACTORY_GROUPS: &[ClearGroup] = &[
         tables: &[
             "ai_chats",
             "ai_chat_messages",
+            "ai_chat_seq",
             "kb_memories",
             "kb_memory_diffs",
+            "memory_shards",
+            "memory_shard_history",
+            "memory_jobs",
+            "memory_dream_runs",
             "ai_usage",
             "voice_memos",
         ],
@@ -717,9 +723,14 @@ mod tests {
             .collect();
         listed.sort_unstable();
         for t in all {
-            // kb_fts 是 external-content 虚拟表（内容真身在 kb_chunks），shadow 表随宿主走，
-            // 都不必在展示清单里单列——kb_docs/kb_chunks 那一组代表它们
-            if t == "kb_fts" || t.starts_with("kb_fts_") {
+            // FTS5 虚拟表（kb_fts / memory_shard_fts）是 external-content 索引，内容真身
+            // 在宿主表（kb_chunks / memory_shards），shadow 表随宿主一起清，都不必在
+            // 展示清单里单列——宿主表所在的那一组代表它们
+            if t == "kb_fts"
+                || t.starts_with("kb_fts_")
+                || t == "memory_shard_fts"
+                || t.starts_with("memory_shard_fts_")
+            {
                 continue;
             }
             assert!(
@@ -775,10 +786,20 @@ mod tests {
             [],
         )
         .unwrap();
-        let fts_rows: i64 = conn
-            .query_row("SELECT COUNT(*) FROM kb_fts_data", [], |r| r.get(0))
-            .unwrap();
-        assert!(fts_rows > 0, "前置条件：FTS 索引确实有内容");
+        // 记忆分片行同理点亮 memory_shard_fts 索引
+        conn.execute(
+            "INSERT INTO memory_shards (idempotency_key, origin, content, base_weight, floor, \
+             stability, last_event_at, created_at, updated_at) \
+             VALUES ('manual:1','manual_write','shard text',1.0,0.1,10.0,'2026-01-01','2026-01-01','2026-01-01')",
+            [],
+        )
+        .unwrap();
+        for fts in ["kb_fts_data", "memory_shard_fts_data"] {
+            let n: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM \"{fts}\""), [], |r| r.get(0))
+                .unwrap();
+            assert!(n > 0, "前置条件：{fts} 索引确实有内容");
+        }
 
         let plan = collect_clear_plan(&conn).unwrap();
         clear_tables(&conn, &plan).unwrap();
@@ -798,7 +819,7 @@ mod tests {
             // FTS5 shadow 表不按行数断言：delete-all 之后 %_data 里仍会留索引结构
             // 记录（空索引的内务，不是数据）——索引是否真被清空用 docsize（每条
             // 被索引文档一行）判，在下面的专项断言里
-            if t.starts_with("kb_fts_") {
+            if t.starts_with("kb_fts_") || t.starts_with("memory_shard_fts_") {
                 continue;
             }
             let n: i64 = conn
@@ -807,10 +828,12 @@ mod tests {
             assert_eq!(n, 0, "恢复出厂后 {t} 应为空");
         }
         // FTS 索引真的空了：docsize 一行 = 一条被索引文档
-        let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM kb_fts_docsize", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(n, 0, "FTS 索引应被 delete-all 清空");
+        for fts in ["kb_fts_docsize", "memory_shard_fts_docsize"] {
+            let n: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM \"{fts}\""), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 0, "{fts} 应被 delete-all 清空");
+        }
         // 迁移账本必须活着：重启后补种子、不重跑迁移
         assert!(count(&conn, "schema_migrations") > 0, "schema_migrations 不能被清");
     }

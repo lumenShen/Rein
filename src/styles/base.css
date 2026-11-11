@@ -875,6 +875,14 @@ html[data-dock-quick='on'] {
   --dock-h: calc(var(--tabbar-h) + var(--dock-quick-h));
 }
 
+/* 输入中（页签行收起）：Dock 只剩输入行这一截 —— 键盘上方的浮层 / Toast 按这个高度
+   避让，别在半屏键盘之上再空出一整行页签的距离。输入行退场时自己补了 4px 下内缩
+   （TabBar 的 .is-typing 规则），所以这里带上 --gap-tight。 */
+html[data-dock-quick='input'] {
+  --dock-top: calc(var(--safe-bottom) + var(--dock-float) + var(--dock-quick-h) + var(--gap-tight));
+  --dock-h: calc(var(--dock-quick-h) + var(--gap-tight));
+}
+
 .dock-block {
   flex: none;
 }

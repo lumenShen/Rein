@@ -33,7 +33,33 @@ export type ToolGroup =
   | 'image' // 图片查看（放大镜）
   | 'campus' // 校园教务（课表域）：培养方案与学分完成度
   | 'campusGrab' // 校园教务（课表的子模块，默认关闭）：抢课编排、选课、现场诊断与带会话的原始请求
+  // 连接本机应用（按 app 分组，默认不可见；用户连接并允许 AI 后才可由 load_tools 装载）
+  | 'appAlarm' // 闹钟和计时器（Android）
+  | 'appUsage' // 安卓使用时间（只读）
+  | 'appCalendar' // 安卓日历（读写）
+  | 'appContacts' // 通讯录（读写）
+  | 'appPhoneFiles' // 安卓 SAF 文件（读写）
+  | 'appLocation' // 位置（只读）
+  | 'appNotification' // 通知（读取 + 清除）
+  | 'appSms' // 短信（读取 + 发送）
+  | 'appDesktopFiles' // 桌面文件（Windows / Mac / Linux 共享组）
+  | 'appTerminal' // 命令行（Windows / Mac 共享组）
   | 'system' // 元工具：工具分组装载（load_tools），自身恒常驻
+
+/**
+ * 单轮工具执行上下文：由聊天链路按当前会话算出，随 AgentTool 闭包透传给 `execute`。
+ *
+ * - `plugins`：已启用的功能插件 id（组门禁）；
+ * - `apps`：本轮已连接且允许 AI 的连接应用 id（app 组门禁）；
+ * - `loadable`：本轮可装载 = 已装载 ∪ 可装载；`load_tools` 只接受这里的组。
+ *
+ * 旧调用（e2e / 非聊天直调）不传 ctx 时必须安全降级：app 组一律不可装载。
+ */
+export interface ToolContext {
+  plugins?: string[]
+  apps?: string[]
+  loadable?: ReadonlySet<ToolGroup>
+}
 
 /** rawContent 工具的返回：直接作为工具结果内容块（可含图片），details 附带元数据 */
 export interface RawToolResult {
@@ -54,7 +80,11 @@ export interface AppTool<TParameters extends TSchema = TSchema> {
   dangerous?: boolean
   /** 结果含图片等原始内容块：execute 返回 RawToolResult，注册表原样透传 */
   rawContent?: boolean
-  execute: (args: Static<TParameters>) => Promise<unknown>
+  /**
+   * 执行入参 + 本轮上下文。ctx 可选：现有单参 execute 全部兼容
+   * （TS 允许少参数函数赋给多参数类型）；app 工具靠它做门禁与确认。
+   */
+  execute: (args: Static<TParameters>, ctx?: ToolContext) => Promise<unknown>
 }
 
 /** defineTool：仅为让参数 schema 与 execute 入参类型联动推断 */

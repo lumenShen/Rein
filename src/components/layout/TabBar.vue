@@ -12,7 +12,9 @@ import { useNavEdit } from '@/composables/useNavEdit'
 import { usePressGlow } from '@/composables/usePressGlow'
 import { useToast } from '@/composables/useToast'
 import { useAiStore } from '@/stores/ai'
+import { useComposerStore } from '@/stores/composer'
 import { useNavLayoutStore, TABBAR_MAX, type NavEntry } from '@/stores/navLayout'
+import { composerEngaged } from '@/system/composerFocus'
 import {
   aiVoiceCancel,
   aiVoiceInput,
@@ -59,6 +61,7 @@ const LONG_PRESS_MS = 480
 /** 长按位移阈值：超过它是滚动 / 滑动，不是长按（与 useNavDrag、bento 的 slop 同值） */
 const SLOP_PX = 8
 const ai = useAiStore()
+const composer = useComposerStore()
 const navLayout = useNavLayoutStore()
 const navEdit = useNavEdit('tabbar')
 const route = useRoute()
@@ -123,23 +126,39 @@ const drag = useNavDrag({
   },
 })
 
-/* ---------- AI 快捷输入行：草稿、跨页发送与语音 ---------- */
-const quickDraft = ref('')
+/* ---------- AI 快捷输入行：草稿、跨页发送与语音 ----------
+ * 草稿住在 stores/composer（跨页唯一真源）：文字 / 附图 / 文档 / 引用 / 纪要
+ * 一起活过任何一次切页 —— 底栏与 AI 页的输入条从此读写同一份。 */
 
-/** 发送：递给 AI 页即发（askFrom 的约定是「调用方负责跳转」；busy 时那边落输入框不丢话） */
+/** 输入中（或「+」菜单开着）：页签行收起，整块玻璃只剩输入行。
+ *  AI 页也认这份状态（那边的输入条是同一个组件、同一个聚焦单例）。 */
+const typing = computed(() => showQuick.value && composerEngaged.value)
+
+/** 发送：文字走 askFrom 递话（AI 页挂载即发）；带引用 / 附件 / 文档 / 纪要时整份草稿
+ *  交给 AI 页在挂载后发送 —— 引用关系、图片视图与文档元数据只有那边组装得了，
+ *  底栏代发会把这些内容悄悄留在原地。 */
 function sendQuick(): void {
-  const text = quickDraft.value.trim()
+  if (!composer.hasContent) return
+  if (
+    composer.quote ||
+    composer.attachments.length > 0 ||
+    composer.docAtt ||
+    composer.memoRefs.length > 0
+  ) {
+    composer.requestSend()
+    void router.push({ name: 'ai' })
+    return
+  }
+  const text = composer.text.trim()
   if (!text) return
   ai.askFrom(text)
-  quickDraft.value = ''
+  composer.clear()
   void router.push({ name: 'ai' })
 }
 
-/** 「+」：带草稿去 AI 页的完整输入条（附件 / 文档 / 引用在那边），只填不发 */
+/** 「+」：去 AI 页的完整输入条（附件 / 文档 / 引用在那边）。草稿已经是全局共享的，
+ *  不需要交接 —— 保留「带草稿过去、只填不发」的既有语义。 */
 function openFullComposer(): void {
-  const text = quickDraft.value.trim()
-  if (text) ai.handOffDraft(text)
-  quickDraft.value = ''
   void router.push({ name: 'ai' })
 }
 
@@ -184,7 +203,7 @@ function onDockVoiceDown(e: PointerEvent): void {
 function onVoiceDone({ text, reason }: AiVoiceResult): void {
   if (!quickBar.value) return
   if (text) {
-    quickDraft.value = appendVoiceText(quickDraft.value, text)
+    composer.text = appendVoiceText(composer.text, text)
   } else if (reason === 'error') {
     toast.toast(aiVoiceInput.lastError || '识别失败')
   } else if (reason !== 'cancel') {
@@ -203,11 +222,18 @@ watch(
 )
 
 /* 显隐写到 <html>：浮层（AppMenu / ActionSheet / Toast）靠 --dock-top 避让底栏，
-   输入行在编辑态收起时整条 Dock 矮一截，避让高度必须跟着变（tokens.css）。 */
+   输入行在编辑态收起时整条 Dock 矮一截，避让高度必须跟着变（tokens.css）。
+   三态：off = 没有输入行 / on = 输入行 + 页签行 / input = 输入中（页签行收起）。
+   输入中把 --dock-top 也换成「只剩输入行」：键盘上方的浮层不该按两行让位。 */
+const quickState = computed<'off' | 'on' | 'input'>(() => {
+  if (!showQuick.value) return 'off'
+  return typing.value ? 'input' : 'on'
+})
+
 watch(
-  showQuick,
-  (on) => {
-    document.documentElement.dataset.dockQuick = on ? 'on' : 'off'
+  quickState,
+  (state) => {
+    document.documentElement.dataset.dockQuick = state
   },
   { immediate: true },
 )
@@ -297,7 +323,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav ref="dockEl" class="dock" :class="{ 'is-editing': editing }" aria-label="主导航">
+  <nav ref="dockEl" class="dock" :class="{ 'is-editing': editing, 'is-typing': typing }" aria-label="主导航">
     <!-- 图标 24 / 标签 10-11 Medium / 图标与标签 2：底部页签的规格（玻璃内前景
          与画质预览页的标本共用 base.css 那份，图标尺寸由装配层给，调用处不再各写 21/22） -->
     <GlassDockAssembly
@@ -313,7 +339,8 @@ onBeforeUnmount(() => {
              必须在 AIPage 挂载前就存在，否则首帧定位失败。 -->
         <ComposerBar
           v-if="quickBar"
-          v-model="quickDraft"
+          v-model="composer.text"
+          :sendable="composer.hasContent"
           @add="openFullComposer"
           @send="sendQuick"
           @voice-down="onDockVoiceDown"
@@ -398,6 +425,38 @@ onBeforeUnmount(() => {
   left: var(--page-pad-x);
   right: var(--page-pad-x);
   z-index: 60;
+}
+
+/* ---------- 输入中：页签行收起（一块玻璃只剩输入行） ----------
+   2026-11-10 用户定稿：聚焦输入框时隐藏 nav-item，键盘上方的空间留给输入本身；
+   无论在哪个页面（含 AI 页的 Teleport 输入条）都成立 —— 聚焦态来自
+   system/composerFocus 的同一个单例。
+   收起做补间（键盘弹起时的位移不突兀）；展开保持瞬时：失焦往往伴随「+」菜单
+   打开，菜单的锚点若在动画中途测量，会落在还没回到位的 + 钮上。 */
+.dock.is-typing :deep(.dock-navs) {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    height var(--dur-base) var(--ease-spring),
+    opacity var(--dur-fast) var(--ease-standard);
+}
+
+/* 页签行退场后，输入行自己补上玻璃下缘的内缩（原先由页签行占着这一截）。
+   .flush 是并入 AI 页 .composer 的那一根：外边距归 .composer.embedded 管，
+   这里不去碰它（否则会多出 4px）。 */
+.dock.is-typing :deep(.dock-quick:not(.flush)) {
+  margin-bottom: var(--gap-tight);
+}
+
+.dock.is-typing :deep(.composer.embedded) {
+  margin-bottom: var(--gap-tight);
+}
+
+/* 关闭动效：收起这一步也不做补间 */
+html[data-motion='off'] .dock.is-typing :deep(.dock-navs) {
+  transition: none;
 }
 
 /* ---------- 编辑态：一切视觉只落在插槽内容里，装配层零改动 ----------

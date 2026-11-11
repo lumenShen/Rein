@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import {
   Archive,
   BookOpen,
   Camera,
-  ChartPie,
   Check,
   Copy,
   FileText,
@@ -13,7 +13,6 @@ import {
   FolderUp,
   History,
   Images,
-  Mic,
   Plus,
   Quote,
   RotateCcw,
@@ -27,15 +26,16 @@ import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
 import ComposerBar from '@/components/common/ComposerBar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
-import StatusChip from '@/components/common/StatusChip.vue'
 import HistoryDrawer from '@/components/ai/HistoryDrawer.vue'
 import FoodParseSheet from '@/components/ai/FoodParseSheet.vue'
-import ProcessSection from '@/components/ai/ProcessSection.vue'
-import ChatFileCard from '@/components/ai/ChatFileCard.vue'
+import MemoryCards from '@/components/ai/MemoryCards.vue'
 import VoiceInputMask from '@/components/ai/VoiceInputMask.vue'
-import MdText from '@/components/common/MdText.vue'
+import ChatSegmentView from '@/components/ai/chat/ChatSegmentView.vue'
+import { flushHeights } from '@/components/ai/chat/heightCache'
+import { useVirtualChat } from '@/components/ai/chat/useVirtualChat'
 import MemoPickerSheet from '@/components/voice/MemoPickerSheet.vue'
 import { openMemoById } from '@/system/voiceRuntime'
+import { composerFocused, composerMenuOpen } from '@/system/composerFocus'
 import {
   aiVoiceInput,
   aiVoiceStart,
@@ -47,17 +47,18 @@ import {
   VOICE_TAP_MS,
 } from '@/system/aiVoiceInput'
 import type { AiVoiceResult } from '@/system/aiVoiceInput'
-import FoodParseEditor from '@/components/diet/FoodParseEditor.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import AiBoard from '@/components/ai/AiBoard.vue'
-import { DESKTOP_MIN, MEAL_LABELS, MEAL_ORDER, suggestMeal } from '@/config/domain'
+import { DESKTOP_MIN, suggestMeal } from '@/config/domain'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { isTauriDesktopWindow } from '@/system/windowChrome'
 import { useToast } from '@/composables/useToast'
 import { kbService } from '@/services/kbService'
 import { useAiStore } from '@/stores/ai'
+import { useChatPagingStore } from '@/stores/chatPaging'
+import { useComposerStore } from '@/stores/composer'
+import { useMemoryStore } from '@/stores/memory'
 import { useModelsStore } from '@/stores/models'
 import { copyText } from '@/utils/clipboard'
 import { listFoodDrafts, removeFoodDraft, saveFoodDraft, type FoodDraft } from '@/utils/foodDrafts'
@@ -68,11 +69,19 @@ import { shareInbox } from '@/system/shareInbox'
 import type { SendImage } from '@/stores/ai'
 import type { VoiceMemo } from '@/types'
 import { fmtDateCn, toDateStr } from '@/utils/date'
-import { fmtMmSs } from '@/utils/format'
-import type { AiMessage, AiDocMeta, KbEmbeddingMode, KbEntry, MealType } from '@/types'
+import { buildChatSegments, segmentIdOfMessage } from '@/ai/chatSegments'
+import type { AiMessage, AiDocMeta, KbEmbeddingMode, KbEntry, MealType, ParsedFoodItem } from '@/types'
 
 /** AI 页：拍照直识别（可编辑卡片 + 草稿箱）/ 文字记饮食 / 数据工具对话。 */
 const ai = useAiStore()
+/** 会话分页状态机（尾页 / 向上加载 / around 跳转）；消息真源仍在 ai.messages */
+const paging = useChatPagingStore()
+/**
+ * 全局输入条的草稿（跨页唯一真源）：文字 / 附图 / 文档 / 引用 / 纪要都在这里，
+ * 从本页切走（AIPage 卸载）再回来时原样还在 —— 输入条是全局唯一的，草稿也只有一份。
+ */
+const composer = useComposerStore()
+const { text: draft, attachments, docAtt, quote, memoRefs } = storeToRefs(composer)
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -91,15 +100,6 @@ function metaOf(m: AiMessage): ReturnType<typeof ai.getMeta> {
   return ai.getMeta(m.id)
 }
 
-/** 正文气泡是否有东西可渲染：有正文，或流式中且还没有过程区（此时显示打字点）。
- *  流式占位气泡在推理/工具阶段是空 text——内容全在 ProcessSection 里，气泡本体不该出现：
- *  它的 padding/底色/阴影会渲染成一个什么都没有的「空气泡」，挂在过程区上方。 */
-function showTextBubble(m: AiMessage): boolean {
-  if (m.kind !== 'text') return false
-  if (m.text) return true
-  return !!m.streaming && !metaOf(m)?.segments.length
-}
-
 /** 整条消息是否有东西可渲染。挡掉空壳（连带省掉它的 10px 间距）：
  *  流式占位气泡在正文到达前是空 text，历史恢复时被吸收的消息只剩 id/kind 空壳。 */
 function showMsg(m: AiMessage): boolean {
@@ -111,7 +111,10 @@ function showMsg(m: AiMessage): boolean {
   if (m.files?.length) return true
   switch (m.kind) {
     case 'text':
-      return showTextBubble(m)
+      // 流式气泡无论当前是打字点还是正文都可见；**不要在这里读 text 的值** ——
+      // 每个 token 都会让 visibleMessages → buildChatSegments 整体重算（万条消息时是 O(n)/token）。
+      // 非流式消息的 text 已定稿（空占位在 settle 时被 splice），读取值不会随流式变化。
+      return m.streaming === true || !!m.text
     case 'photo':
       // 与模板分支同条件：没有图就没有可渲染的部分（纯文字的照片消息按空壳处理）
       return !!(m.imageBase64 || m.images?.length)
@@ -179,13 +182,300 @@ function fmtDraftTime(iso: string): string {
   return `${fmtDateCn(toDateStr(d))} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const draft = ref('')
 /** 全局唯一的输入条（ComposerBar）：AI 页与底栏是同一个组件 —— 聚焦、长高、锚定都交给它 */
 const composerEl = ref<InstanceType<typeof ComposerBar> | null>(null)
 const fileEl = ref<HTMLInputElement | null>(null)
 const galleryEl = ref<HTMLInputElement | null>(null)
 const cameraEl = ref<HTMLInputElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
+
+/* ============================================================
+   可变高度虚拟列表（方案 §9）
+   ============================================================ */
+
+/** 只把可渲染消息交给分段器：被吸收的空壳/空气泡不占高度 */
+const visibleMessages = computed(() => ai.messages.filter(showMsg))
+/** user 回合段：`seg:<首条可见消息 id>`，anchor 与 shard 对齐 */
+const segments = computed(() => buildChatSegments(visibleMessages.value))
+
+/** 用户手动开合过的过程区（按消息 id；组件被回收后仍保持） */
+const processExpanded = reactive<Record<string, boolean>>({})
+const expandedIds = computed(() => {
+  const set = new Set<string>()
+  for (const [id, open] of Object.entries(processExpanded)) if (open) set.add(id)
+  return set
+})
+
+/** pin：焦点 / 长按菜单 / 工具抽屉打开的段不卸载 */
+const focusPinned = reactive(new Set<string>())
+const transientPinned = reactive(new Set<string>())
+const detailPinned = reactive(new Set<string>())
+const pinnedIds = computed(() => [...new Set([...focusPinned, ...transientPinned, ...detailPinned])])
+
+const virtualBodyEl = ref<HTMLElement | null>(null)
+
+const {
+  visibleSegments,
+  topSpacer,
+  bottomSpacer,
+  setSegmentEl,
+  measure: measureVirtual,
+  captureAnchor,
+  restoreAnchor,
+  scrollToMessage,
+  scrollToBottom: scrollVirtualBottom,
+  invalidateMessage,
+  suspendScroll,
+  resumeScroll,
+} = useVirtualChat({
+  scroller: listEl,
+  body: virtualBodyEl,
+  segments,
+  chatId: computed(() => ai.chatId),
+  expandedIds,
+  pinnedIds,
+  hasMoreBefore: computed(() => paging.hasMoreBefore),
+  hasMoreAfter: computed(() => paging.hasMoreAfter),
+  onLoadOlder: () => {
+    void loadOlder()
+  },
+  onLoadNewer: () => {
+    void loadNewer()
+  },
+})
+
+/** 段元素 ref 回调（模板里拿到的是 Element | ComponentPublicInstance | null） */
+function bindSegmentEl(segmentId: string, el: unknown): void {
+  setSegmentEl(segmentId, el instanceof HTMLElement ? el : null)
+}
+
+function mealOf(messageId: string): MealType {
+  return mealByMsg[messageId] ?? suggestMeal()
+}
+
+function expandedOf(messageId: string): boolean | undefined {
+  return processExpanded[messageId]
+}
+
+/* ---------- 跳转高亮（#msg-<id>.flash，2s 后清） ---------- */
+
+const flashId = ref<string | null>(null)
+let flashTimer: ReturnType<typeof setTimeout> | null = null
+
+function flashMessage(messageId: string | null): void {
+  if (!messageId) return
+  flashId.value = messageId
+  if (flashTimer) clearTimeout(flashTimer)
+  flashTimer = setTimeout(() => {
+    if (flashId.value === messageId) flashId.value = null
+    flashTimer = null
+  }, 2000)
+}
+
+/* ---------- 顶部记忆卡（E 域：MemoryCards + stores/memory；普通 block，不参与段高度） ---------- */
+
+const memory = useMemoryStore()
+const memoryCards = computed(() => memory.cards)
+const memoryDreaming = computed(() => memory.dreaming)
+const memoryCardsEl = ref<HTMLElement | null>(null)
+let memoryCardsRO: ResizeObserver | null = null
+
+const lastUserText = computed(() => {
+  for (let i = ai.messages.length - 1; i >= 0; i--) {
+    const m = ai.messages[i]!
+    if (m.role === 'user' && m.text?.trim()) return m.text.trim()
+  }
+  return undefined
+})
+
+async function loadMemorySurfaces(): Promise<void> {
+  if (!ai.chatId) return
+  try {
+    await memory.loadCardsForChat(ai.chatId, lastUserText.value)
+  } catch {
+    /* 记忆卡失败静默：不影响聊天 */
+  }
+}
+
+async function refreshMemoryCards(): Promise<void> {
+  await loadMemorySurfaces()
+}
+
+function onMemoryJump(payload: { anchorMessageId: string; chatId: string }): void {
+  if (!payload?.anchorMessageId) return
+  void jumpToMemoryAnchor(payload.anchorMessageId, payload.chatId ?? null)
+}
+
+function onMemoryOpen(payload: { shardId: number }): void {
+  void router.push({ name: 'ai-knowledge', query: { shard: String(payload.shardId) } })
+}
+
+function onMemoryDismiss(shardId: number): void {
+  memory.dismissCard(shardId)
+}
+
+function observeMemoryCards(): void {
+  if (typeof ResizeObserver === 'undefined') return
+  const el = memoryCardsEl.value
+  if (!el) return
+  memoryCardsRO?.disconnect()
+  // 卡片内容变化不一定改变条数：用 RO 兜住 bodyOffset 的更新
+  memoryCardsRO = new ResizeObserver(() => measureVirtual())
+  memoryCardsRO.observe(el)
+}
+
+watch(
+  [() => memoryCards.value.length, () => memoryDreaming.value],
+  () => {
+    void nextTick(() => {
+      measureVirtual()
+      observeMemoryCards()
+    })
+  },
+  { flush: 'post' },
+)
+
+/* ---------- 分页加载（吸底由 lastMessageId watcher 负责，前插绝不吸底） ---------- */
+
+/** 跳转期间抑制自动吸底：replaceMessages 会被误判成「尾部追加」而先滚到底 */
+const suppressAutoScroll = ref(false)
+
+async function jumpToMemoryAnchor(anchorId: string, chat?: string | null): Promise<void> {
+  if (!anchorId || ai.busy) return
+  suppressAutoScroll.value = true
+  suspendScroll()
+  try {
+    if (chat && chat !== ai.chatId) {
+      await ai.selectChat(chat)
+      if (ai.chatId !== chat) return
+      await paging.syncChat()
+    }
+    const target = await paging.jumpToAnchor(anchorId)
+    if (!target) return
+    await nextTick()
+    measureVirtual()
+    const found = await scrollToMessage(target, { highlight: true })
+    flashMessage(found)
+  } finally {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    measureVirtual()
+    resumeScroll()
+    await nextTick()
+    suppressAutoScroll.value = false
+  }
+}
+
+async function loadOlder(): Promise<void> {
+  if (paging.loadingBefore || !paging.hasMoreBefore || ai.busy) return
+  const anchor = captureAnchor()
+  suspendScroll()
+  try {
+    const loaded = await paging.loadOlder()
+    if (!loaded) return
+    await nextTick()
+    measureVirtual()
+    await restoreAnchor(anchor)
+  } finally {
+    resumeScroll()
+  }
+}
+
+/**
+ * 键盘/读屏版「加载更早」：哨兵 Tab 到时先加载一页，再把焦点送到新装上的最老一条。
+ *
+ * 只加载不移动的话，新段在视口上方、虚拟列表不会挂载它们，Tab 依然够不到——
+ * 对键盘用户等于没有入口。加载后滚到该条并聚焦，focusin 会把它 pin 在窗口里。
+ */
+async function loadOlderAndFocus(): Promise<void> {
+  const firstBefore = ai.messages[0]?.id
+  await loadOlder()
+  await nextTick()
+  const first = ai.messages[0]
+  if (!first || first.id === firstBefore) return
+  await scrollToMessage(first.id)
+  await nextTick()
+  const el = document.getElementById(`msg-${first.id}`)
+  if (el instanceof HTMLElement) el.focus()
+}
+
+async function loadNewer(): Promise<void> {
+  if (paging.loadingAfter || !paging.hasMoreAfter || ai.busy) return
+  suspendScroll()
+  // 尾部追加会改变 lastMessageId；这里不是「发送新消息」，不能把人拽到新底部
+  suppressAutoScroll.value = true
+  try {
+    const loaded = await paging.loadNewer()
+    if (!loaded) return
+    await nextTick()
+    measureVirtual()
+  } finally {
+    resumeScroll()
+    suppressAutoScroll.value = false
+  }
+}
+
+/* ---------- pin / 焦点 / 菜单锚点 ---------- */
+
+function pinMessage(messageId: string, bucket: Set<string>): void {
+  const segId = segmentIdOfMessage(segments.value, messageId)
+  if (segId) bucket.add(segId)
+}
+
+function unpinMessage(messageId: string, bucket: Set<string>): void {
+  const segId = segmentIdOfMessage(segments.value, messageId)
+  if (segId) bucket.delete(segId)
+}
+
+function onFocusIn(e: FocusEvent): void {
+  const target = e.target
+  const seg = target instanceof HTMLElement ? target.closest('[data-seg-id]') : null
+  const id = seg instanceof HTMLElement ? seg.dataset.segId : undefined
+  if (id) focusPinned.add(id)
+}
+
+function onFocusOut(e: FocusEvent): void {
+  const target = e.target
+  const from = target instanceof HTMLElement ? target.closest('[data-seg-id]') : null
+  const to = e.relatedTarget instanceof HTMLElement ? e.relatedTarget.closest('[data-seg-id]') : null
+  if (from instanceof HTMLElement && from !== to) {
+    const id = from.dataset.segId
+    if (id) focusPinned.delete(id)
+  }
+}
+
+function onUpdateItems(messageId: string, items: ParsedFoodItem[]): void {
+  const msg = ai.messages.find((m) => m.id === messageId)
+  if (!msg) return
+  msg.items = items
+  invalidateMessage(messageId)
+}
+
+function onUpdateMeal(messageId: string, meal: MealType): void {
+  mealByMsg[messageId] = meal
+}
+
+function onUpdateProcess(messageId: string, expanded: boolean): void {
+  processExpanded[messageId] = expanded
+  invalidateMessage(messageId)
+}
+
+function onDetailOpen(messageId: string): void {
+  pinMessage(messageId, detailPinned)
+  invalidateMessage(messageId)
+}
+
+function onDetailClose(messageId: string): void {
+  unpinMessage(messageId, detailPinned)
+}
+
+function onOpenMemo(memoId: string): void {
+  if (memoId) void openMemoById(memoId)
+}
+
+function onCommit(messageId: string, meal: MealType): void {
+  void ai.commitParse(messageId, meal)
+}
+
 
 /** 上传文件的入口要连图片（含 HEIF）带 Office/文本一起收；图库/相机只收图 */
 const UPLOAD_ACCEPT = `${IMAGE_ACCEPT},.docx,.pptx,.xlsx,.md,.markdown,.txt,.csv`
@@ -216,30 +506,22 @@ function openCamMenu(): void {
   camMenuOpen.value = true
 }
 
+/** 「+」菜单：只有它本来就是从**聚焦中的**输入条打开时，才让底栏保持收起。
+ *  菜单锚在 + 钮上，页签行一展开整行会上移 58px、菜单悬在旧位置；但若打开时输入条
+ *  并未聚焦（页签行本来就在），这里就不该凭空收起它 —— 收起反而会让锚点在菜单
+ *  定位的过程中移动。 */
+watch(camMenuOpen, (open) => {
+  composerMenuOpen.value = open && composerFocused.value
+})
+
 function onCamSelect(value: string): void {
   if (value === 'camera') cameraEl.value?.click()
   else if (value === 'gallery') galleryEl.value?.click()
   else fileEl.value?.click()
 }
 
-/** 待发送附图：选图后先挂输入框上方（可移除/配文字），随下一条消息一起发出。
-    数组化以支持「连拍几张 + 图库多选」一起发（相机每次拍一张，可累积）。 */
-interface AttImage {
-  full: string
-  small: string | null
-  w: number
-  h: number
-  source: File
-}
-const attachments = ref<AttImage[]>([])
-/** 待发送 Office 文档：解析结果 + 勾选要发给 AI 的内嵌图（可多选，随消息一起发出） */
-const docAtt = ref<{
-  file: File
-  doc: ParsedDoc
-  /** 各图片的发送视图（≤模型图片上限的 JPEG） */
-  views: Map<string, { base64: string; w: number; h: number }>
-  selected: Set<string>
-} | null>(null)
+/* 待发送附图 / 文档（选图后先挂输入框上方，可移除、配文字，随下一条消息发出）
+   住在 stores/composer：跨页唯一真源，切走再回来不会丢。 */
 
 function toggleDocImage(id: string): void {
   const d = docAtt.value
@@ -248,12 +530,6 @@ function toggleDocImage(id: string): void {
   if (next.has(id)) next.delete(id)
   else next.add(id)
   docAtt.value = { ...d, selected: next }
-}
-
-/** 消息图片列表（photo 单图/多图、doc 多图统一） */
-function msgImages(m: AiMessage): { base64: string; mime: string }[] {
-  if (m.images?.length) return m.images.map((im) => ({ base64: im.base64, mime: im.mime }))
-  return m.imageBase64 ? [{ base64: m.imageBase64, mime: m.mime ?? 'image/jpeg' }] : []
 }
 
 /** 打开 AI 挂出的文件卡片：文件进阅读器、目录进文件管理器。
@@ -273,12 +549,11 @@ function openChatFile(f: KbEntry): void {
 /** 每张解析卡选择的目标餐次，默认按当前时间推荐 */
 const mealByMsg = reactive<Record<string, MealType>>({})
 
-/** 历史抽屉 / 长按菜单 / 引用 */
+/** 历史抽屉 / 长按菜单 / 引用（quote 本身住在 stores/composer，与草稿一同跨页保留） */
 const drawerOpen = ref(false)
 const menuTarget = ref<AiMessage | null>(null)
 /** 长按菜单锚定元素：被长按的那条消息气泡 */
 const menuAnchor = ref<HTMLElement | null>(null)
-const quote = ref<AiMessage | null>(null)
 
 /* ---------- 「历史」菜单（bind 式：锚定左上角那颗圆钮弹出，带图标） ----------
  *  原来左上角是「文件」「历史记录」两颗圆钮，功能都是「回到过去的东西」，
@@ -352,7 +627,6 @@ function onHistSelect(value: string): void {
 
 /* ---------- @纪要引用（输入 @ 弹出选择器，发送时注入纪要总结与逐句转写） ---------- */
 const memoPickerOpen = ref(false)
-const memoRefs = ref<VoiceMemo[]>([])
 
 watch(
   () => draft.value,
@@ -373,31 +647,48 @@ function removeMemoRef(id: string): void {
 }
 
 onMounted(() => {
-  void ai.init()
+  void (async () => {
+    // 分页初始化 = 建/取会话 + 尾页（E 域未合并时沿用旧 init 的全量加载）
+    await paging.init()
+    await nextTick()
+    measureVirtual()
+    await scrollToBottom()
+    // 底栏在别的页面按了发送、草稿里带着附件 / 文档 / 纪要：等会话就位后用同一套
+    // send() 组装并发出（图片视图 / 文档元数据只有本页有）。busy 时 send 自己会拒绝，
+    // 草稿原样留在输入框，不丢。
+    if (composer.takeSendRequest()) send()
+    // 抢课面板「交给 AI 排查」递过来的现场：**直接发**，不再让人按一次发送 ——
+    // 那正是抢课窗口里最缺时间的时候。取完即清，回到本页不会重复发。
+    const handed = ai.takePendingPrompt()
+    if (handed) {
+      // 正在生成时不能直接发（sendText 会直接返回，那段现场就没了）：落到输入框里等着，
+      // 比默默丢掉强 —— 人至少看得见「有话没发出去」。
+      if (ai.busy) draft.value = handed
+      else void ai.sendText(handed)
+    }
+    // 知识库/记忆卡「查看原文」跳进本页：URL 带 anchor + chat，定位并高亮后清参数
+    await jumpFromRouteAnchor()
+    await loadMemorySurfaces()
+  })()
   // 选图压图时要用视觉模型的 imageMaxEdge，提前加载模型配置
   void useModelsStore().load().catch(() => undefined)
   refreshDrafts()
-  void scrollToBottom()
   if (route.query.intent === 'photo') openCamMenu()
-  // 抢课面板「交给 AI 排查」递过来的现场：**直接发**，不再让人按一次发送 ——
-  // 那正是抢课窗口里最缺时间的时候。取完即清，回到本页不会重复发。
-  const handed = ai.takePendingPrompt()
-  if (handed) {
-    // 正在生成时不能直接发（sendText 会直接返回，那段现场就没了）：落到输入框里等着，
-    // 比默默丢掉强 —— 人至少看得见「有话没发出去」。
-    if (ai.busy) {
-      draft.value = handed
-    } else {
-      void ai.sendText(handed)
-    }
-  }
-  // 底栏快捷输入的「+」递来的草稿：只填不发（人要去加附件，不是要发送）。
-  // 不自动聚焦 —— 导航落地就弹软键盘太霸道，正文已经在输入框里看得见。
-  const handedDraft = ai.takePendingDraft()
-  if (handedDraft) {
-    draft.value = handedDraft
-  }
+  // 底栏「+」不再交接草稿：文字 / 附图 / 文档 / 引用都住在 stores/composer，
+  // 导航过来时输入框里原样就是那份草稿（只填不发）。
 })
+
+/** 从 KnowledgePage / MemoryCards 深链进来：先切会话，再 around 到消息并高亮。 */
+async function jumpFromRouteAnchor(): Promise<void> {
+  const anchor = route.query.anchor
+  if (typeof anchor !== 'string' || !anchor) return
+  const chat = typeof route.query.chat === 'string' ? route.query.chat : null
+  await jumpToMemoryAnchor(anchor, chat)
+  const query = { ...route.query }
+  delete query.anchor
+  delete query.chat
+  void router.replace({ query })
+}
 
 // 分享收件箱：路由带 ?intent=share 时消费预填（冷启动 / 运行中被分享唤起都会走到这里）
 watch(
@@ -420,30 +711,55 @@ watch(
   { immediate: true },
 )
 
-watch(
-  () => ai.messages.length,
-  () => void scrollToBottom(),
+/** 空会话看板是否该出现：初始挂载前的骨架期、尾页加载中都不要闪看板。
+ *  reset() 之后（新对话/清空）没有尾页请求，也应该直接给看板。 */
+const boardVisible = computed(
+  () => paging.ready || (paging.started && !paging.loadingTail && !paging.error),
 )
 
-// 流式输出：过程段/思考/工具任一事件后跟随滚动（等价 EffiBuddy 的事件级 scrollBottom）
+/** 最后一条消息 id：只有「尾部追加 / 撤回」才变；前插不触发吸底 */
+const lastMessageId = computed(() => ai.messages.at(-1)?.id ?? null)
+
+watch(lastMessageId, (id) => {
+  if (!id || suppressAutoScroll.value) return
+  void scrollToBottom()
+})
+
+// 流式输出：过程段/思考/工具任一事件后跟随滚动（等价 EffiBuddy 的事件级 scrollBottom）。
+// 虚拟列表只更新末段（它在窗口内），这里只负责把视口跟到底。
 watch(
   () => ai.streamSeq,
-  () => void scrollToBottom(),
+  () => {
+    // 逐 token 只补 1 帧；定稿/吸底另有 3 帧的收尾路径
+    if (!suppressAutoScroll.value) void scrollToBottom(1)
+  },
 )
 
 // 回合结束后再跟一次：定稿会把流式占位气泡 morph 成食物卡 / 分析卡，**卡片是在最后一条
 // 流式事件之后才长高的** —— 那一次事件已经滚过了，这里不补一刀，卡片就停在视口下方。
-// （用户报的「AI 已经出卡，切页回来才弹出来」：回来时 onMounted 的 scrollToBottom 把它带进视野。）
+// 虚拟列表用 spacer 估算高度，需要等 ResizeObserver 实测后再补一帧。
 watch(
   () => ai.busy,
   (busy) => {
-    if (!busy) void scrollToBottom()
+    if (!busy && !suppressAutoScroll.value) void scrollToBottom()
   },
 )
 
-async function scrollToBottom(): Promise<void> {
-  await nextTick()
-  listEl.value?.scrollTo({ top: listEl.value.scrollHeight })
+// 切会话：E 域的 selectChat 会自己 loadTail；这里兜住旧路径（直接全量加载）与记忆卡刷新
+watch(
+  () => ai.chatId,
+  () => {
+    void (async () => {
+      await paging.syncChat()
+      await nextTick()
+      // 等消息就位后再取注入结果（loadCardsForChat 内部还会再校验一次 chatId）
+      await refreshMemoryCards()
+    })()
+  },
+)
+
+async function scrollToBottom(passes = 3): Promise<void> {
+  await scrollVirtualBottom(passes)
 }
 
 /** 文本是否疑似 Markdown（含至少两种语法特征） */
@@ -458,10 +774,6 @@ function looksLikeMarkdown(text: string): boolean {
   if (/^\s*>\s/m.test(text)) hits++
   if (/\|.*\|/.test(text)) hits++
   return hits >= 2
-}
-
-function fmtVoiceDur(ms: number): string {
-  return fmtMmSs(ms)
 }
 
 function send(): void {
@@ -619,13 +931,19 @@ async function consumeShare(): Promise<void> {
 
 let pressTimer: number | undefined
 let pressStart: { x: number; y: number } | null = null
+/** 长按开始时把菜单要锚定的元素**先存下来**：450ms 后 event.currentTarget 已是 null */
+let pressEl: HTMLElement | null = null
 
-function onPressStart(e: PointerEvent, m: AiMessage): void {
+function onPressStart(e: PointerEvent, m: AiMessage, el: HTMLElement): void {
   if (e.pointerType === 'mouse' && e.button !== 0) return
   pressStart = { x: e.clientX, y: e.clientY }
+  pressEl = el
+  // 长按期间行不能被虚拟窗口回收：pin 住所在段（菜单关闭/短按时释放）
+  transientPinned.clear()
+  pinMessage(m.id, transientPinned)
   pressTimer = window.setTimeout(() => {
     pressTimer = undefined
-    menuAnchor.value = (e.currentTarget as HTMLElement) ?? null
+    menuAnchor.value = pressEl
     menuTarget.value = m
   }, 450)
 }
@@ -636,6 +954,7 @@ function onPressMove(e: PointerEvent): void {
   if (Math.abs(e.clientX - pressStart.x) > 8 || Math.abs(e.clientY - pressStart.y) > 8) {
     window.clearTimeout(pressTimer)
     pressTimer = undefined
+    transientPinned.clear()
   }
 }
 
@@ -644,6 +963,8 @@ function onPressEnd(): void {
     window.clearTimeout(pressTimer)
     pressTimer = undefined
   }
+  // 长按已开菜单时保留 pin（菜单锚点还在被长按的行上）；短按/滑动则释放
+  if (menuTarget.value === null) transientPinned.clear()
 }
 
 /* ---------- 语音输入（麦克风按钮：按住说话 / 轻点连听，链路见 system/aiVoiceInput） ---------- */
@@ -703,12 +1024,34 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onVoiceWindowUp)
   window.removeEventListener('pointercancel', onVoiceWindowUp)
   if (aiVoiceInput.active) void aiVoiceCancel()
+  // 本页卸载时菜单随之消失：别把「保持收起」的请求留在单例里
+  composerMenuOpen.value = false
+  // 长按定时器不能在页面卸载后补一次 menuTarget 赋值（虚拟化下更容易遇到）
+  if (pressTimer !== undefined) {
+    window.clearTimeout(pressTimer)
+    pressTimer = undefined
+  }
+  if (flashTimer) {
+    clearTimeout(flashTimer)
+    flashTimer = null
+  }
+  memoryCardsRO?.disconnect()
+  memoryCardsRO = null
+  // 节流中的高度缓存最后一批落盘
+  flushHeights()
 })
 
-function onCtxMenu(e: MouseEvent, m: AiMessage): void {
+function onCtxMenu(e: MouseEvent, m: AiMessage, el: HTMLElement): void {
   e.preventDefault()
-  menuAnchor.value = (e.currentTarget as HTMLElement) ?? null
+  transientPinned.clear()
+  pinMessage(m.id, transientPinned)
+  menuAnchor.value = el
   menuTarget.value = m
+}
+
+function onMenuClose(): void {
+  menuTarget.value = null
+  transientPinned.clear()
 }
 
 const menuActions = computed<MenuItem[]>(() => {
@@ -724,6 +1067,7 @@ const menuActions = computed<MenuItem[]>(() => {
 async function onMenuSelect(value: string, target: AiMessage | null = menuTarget.value): Promise<void> {
   const m = target
   menuTarget.value = null
+  transientPinned.clear()
   if (!m) return
   if (value === 'copy' && m.text) {
     const ok = await copyText(m.text)
@@ -741,11 +1085,13 @@ async function onMenuSelect(value: string, target: AiMessage | null = menuTarget
  * 已有的三个动作 —— 同一套语义、同一条实现，不另起一份逻辑。
  * 只在焦点落在消息行自身时响应：行内按钮（折叠推理块等）继续用自己的键。
  */
-function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
+function onMsgKey(e: KeyboardEvent, m: AiMessage, el: HTMLElement): void {
   if (e.target !== e.currentTarget || e.metaKey || e.ctrlKey || e.altKey) return
   if (e.key === 'Enter') {
     e.preventDefault()
-    menuAnchor.value = e.currentTarget as HTMLElement
+    transientPinned.clear()
+    pinMessage(m.id, transientPinned)
+    menuAnchor.value = el
     menuTarget.value = m
     return
   }
@@ -802,161 +1148,94 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
       <!-- 超范围平移层：页面级滚动区走 item 超伸 —— 吸顶页头与底栏都留在层外，
            超伸时只有消息位移（system/rubberScroll） -->
       <div class="rubber-layer" data-rubber-content>
+        <!-- 顶部记忆卡（E 域创建）：虚拟体之前的普通块，不进入段高度模型。
+             卡片内容变化时用 ResizeObserver 重算 bodyOffset（见 observeMemoryCards）。 -->
+        <div v-if="memoryCards.length || memoryDreaming" ref="memoryCardsEl" class="memory-cards-host">
+          <MemoryCards
+            :cards="memoryCards"
+            :dreaming="memoryDreaming"
+            @jump="onMemoryJump"
+            @open="onMemoryOpen"
+            @dismiss="onMemoryDismiss"
+          />
+        </div>
+
         <!-- 空会话：会话看板取代原来那条「你好，我是 Rein AI……」。
-             那条字是纯文字气泡，与下面第一条真实消息形态完全一样（都居左、都一个气泡），
-             分不清哪条是机器说的；而且它答的是「我是谁」，
-             用户真正要问的是「我现在能干什么」—— 看板给的是后者。 -->
-        <AiBoard v-if="ai.messages.length === 0" @ask="askFromBoard" @drafts="openDrafts" />
+             看板只在尾页就绪后出现，加载中不闪。 -->
+        <AiBoard v-if="ai.messages.length === 0 && boardVisible" @ask="askFromBoard" @drafts="openDrafts" />
 
-        <template v-for="m in ai.messages" :key="m.id">
-          <!-- 键盘可达：整行是一个可聚焦组，Enter 开长按同款菜单，c/q/Backspace 直通三个动作 -->
+        <div
+          v-else-if="ai.messages.length === 0 && !boardVisible && !paging.error"
+          class="chat-loading"
+          aria-busy="true"
+        >
+          <span /><span /><span />
+        </div>
+
+        <div v-if="paging.error && ai.messages.length === 0" class="chat-error">
+          <p>{{ paging.error }}</p>
+          <button type="button" @click="paging.loadTail(ai.chatId)">重试</button>
+        </div>
+
+        <!-- 键盘可达的「加载更早」哨兵：视觉隐藏、可 Tab 到；滚到顶部也会触发 -->
+        <button
+          v-if="paging.hasMoreBefore"
+          type="button"
+          class="load-sentinel"
+          aria-label="加载更早的消息"
+          @focus="loadOlderAndFocus()"
+          @click="loadOlderAndFocus()"
+        >
+          加载更早的消息
+        </button>
+
+        <!-- 虚拟体：上 spacer + 可见段 + 下 spacer。DOM 里只有视口段 + overscan + pinned，
+             高度由前缀和给出，与总消息数无关（一万条消息也只渲染 15–25 段）。 -->
+        <div ref="virtualBodyEl" class="virtual-body" @focusin="onFocusIn" @focusout="onFocusOut">
+          <div class="v-spacer" :style="{ height: `${topSpacer}px` }" aria-hidden="true" />
           <div
-            v-if="showMsg(m)"
-            :id="`msg-${m.id}`"
-            class="msg"
-            :class="[m.role]"
-            role="group"
-            tabindex="0"
-            :aria-label="`${m.role === 'user' ? '我' : 'AI'} 的消息（回车打开操作菜单）`"
-            @keydown="onMsgKey($event, m)"
-            @pointerdown="onPressStart($event, m)"
-            @pointermove="onPressMove($event)"
-            @pointerup="onPressEnd"
-            @pointerleave="onPressEnd"
-            @pointercancel="onPressEnd"
-            @contextmenu.prevent="onCtxMenu($event, m)"
+            v-for="seg in visibleSegments"
+            :key="seg.id"
+            class="virtual-seg"
+            :ref="(el) => bindSegmentEl(seg.id, el)"
           >
-            <div class="msg-col">
-              <!-- 推理过程 + 工具调用合并区块：单行摘要标题，进行中展开、完成后自动折叠 -->
-              <ProcessSection
-                v-if="metaOf(m)?.segments.length"
-                :segments="metaOf(m)?.segments ?? []"
-                :is-thinking="metaOf(m)?.isThinking ?? false"
-                :thinking-sec="metaOf(m)?.thinkingSec ?? 0"
-                :final="m.id !== ai.streamingBubbleId"
-              />
-
-              <!-- 引用块 -->
-              <p v-if="m.quoteText" class="qblock">{{ m.quoteText }}</p>
-
-              <!-- 照片（可多图；可带随图文字，图与文分气泡，同属一条消息） -->
-              <template v-if="m.kind === 'photo' && (m.imageBase64 || m.images?.length)">
-                <div class="photo-bubble" :class="{ multi: (m.images?.length ?? 0) > 1 }">
-                  <img
-                    v-for="(im, i) in msgImages(m)"
-                    :key="i"
-                    :src="`data:${im.mime};base64,${im.base64}`"
-                    alt="用户上传的照片"
-                  >
-                </div>
-                <p v-if="m.text" class="bubble">{{ m.text }}</p>
-              </template>
-
-              <!-- 文档消息（解析文本随消息发给模型，气泡展示卡片与勾选的内嵌图） -->
-              <template v-else-if="m.kind === 'doc' && m.doc">
-                <div class="doc-card">
-                  <FileText :size="16" />
-                  <div class="dc-info">
-                    <p class="dc-name">{{ m.doc.name }}</p>
-                    <p class="dc-meta dc-meta-row">
-                      <span class="dc-facts"><span class="num">{{ m.doc.chars }}</span> 字{{ m.doc.truncated ? '（已截断）' : '' }} · 图片 <span class="num">{{ m.doc.imagesTotal }}</span> 张</span>
-                      <template v-if="m.doc.skippedImages > 0">
-                        <StatusChip tone="warn">跳过 <span class="num">{{ m.doc.skippedImages }}</span> 张图</StatusChip>
-                        <InfoHint title="被跳过的图片" content="文档里的内嵌图只有一部分会发给 AI：不支持的格式、体积过小的图标或装饰图、重复出现的图，以及超出数量上限的图会被跳过。跳过的图不参与推理，正文不受影响。" />
-                      </template>
-                    </p>
-                  </div>
-                </div>
-                <div v-if="m.images?.length" class="photo-bubble multi">
-                  <img
-                    v-for="(im, i) in m.images"
-                    :key="i"
-                    :src="`data:image/jpeg;base64,${im.base64}`"
-                    alt="文档内嵌图片"
-                  >
-                </div>
-                <p v-if="m.text" class="bubble">{{ m.text }}</p>
-              </template>
-
-              <!-- 纯文本（Markdown 渲染，流式按块增量；正文还没到就显示打字点）。
-                   showTextBubble 已挡掉「有过程区但没正文」的空壳——那正是空气泡的来源 -->
-              <div v-else-if="showTextBubble(m)" class="bubble">
-                <MdText v-if="m.text" :text="m.text" :streaming="m.streaming" />
-                <span v-if="m.text && m.streaming" class="caret" aria-hidden="true" />
-                <span v-else-if="!m.text" class="tdots" aria-hidden="true"><i /><i /><i /></span>
-              </div>
-
-              <!-- 语音轮（转写 + 关联纪要，点开语音会话回看/重放） -->
-              <button v-else-if="m.kind === 'voice'" class="voice-bub" @click="m.voiceMeta && openMemoById(m.voiceMeta.memoId)">
-                <span class="vb-head"><Mic :size="13" /> 语音<span v-if="m.voiceMeta" class="num">&nbsp;{{ fmtVoiceDur(m.voiceMeta.durationMs) }}</span> · 会议纪要</span>
-                <span class="vb-txt">{{ (m.text ?? '').slice(0, 72) }}{{ (m.text ?? '').length > 72 ? '…' : '' }}</span>
-                <span class="vb-go">查看纪要 ›</span>
-              </button>
-
-              <!-- 食物解析卡（行内改重量 / 删行，未匹配项不会写入） -->
-              <div v-else-if="m.kind === 'food-parse' && m.items" class="parse">
-                <p class="parse-title">识别到 <span class="num">{{ m.items.length }}</span> 项食物</p>
-                <FoodParseEditor v-model="m.items" />
-
-                <template v-if="!m.committed">
-                  <SegmentedControl
-                    class="meal"
-                    :model-value="mealByMsg[m.id] ?? suggestMeal()"
-                    :options="MEAL_ORDER.map((x) => ({ value: x, label: MEAL_LABELS[x] }))"
-                    @update:model-value="mealByMsg[m.id] = $event as MealType"
-                  />
-                  <!-- 两个去向。原先只有「加入记录」，于是底部那个「草稿箱」入口
-                       永远是空的 —— saveFoodDraft 只在草稿箱自己的弹层里被调用过，
-                       也就是「先进草稿箱、再从草稿箱写入」这条唯一路径没法从聊天流起步。
-                       现在两条路并排：当场记，或留到稍后（改重量 / 补匹配）。 -->
-                  <div class="row actions">
-                    <button
-                      class="stash"
-                      :disabled="m.items.length === 0"
-                      @click="stashParse(m)"
-                    >
-                      <Archive :size="14" /> 存草稿箱
-                    </button>
-                    <button
-                      class="commit"
-                      :disabled="m.items.every((it) => it.foodId == null)"
-                      @click="ai.commitParse(m.id, mealByMsg[m.id] ?? suggestMeal())"
-                    >
-                      加入记录
-                    </button>
-                  </div>
-                  <!-- 写入按钮点不动时，用户最容易漏读的正是这一行：抬到 --text-2（4.9:1），
-                       不再吃 .t-3 那档三级灰（白底 3.6:1）。错误原因一律留在卡面上 -->
-                  <p v-if="m.items.every((it) => it.foodId == null)" class="parse-hint">
-                    全部未匹配到食物库，无法直接写入 —— 可先存草稿，稍后调整。
-                  </p>
-                </template>
-                <p v-else class="committed">
-                  <Check :size="14" />
-                  {{ m.mealType ? `已写入今日${MEAL_LABELS[m.mealType]}` : '已写入今日饮食' }}
-                </p>
-              </div>
-
-              <!-- 分析卡 -->
-              <div v-else-if="m.kind === 'analysis'" class="analysis">
-                <p class="a-title row center"><ChartPie :size="15" /> 今日饮食分析</p>
-                <p class="a-body">{{ m.text }}</p>
-              </div>
-
-              <!-- AI 挂出的工作区文件（present_file）：点在聊天里，开在文件页里。
-                   放在所有正文分支之后 —— 它是「这条回复的产物」，与正文同属一条消息，
-                   所以模型只挂了文件没说话时也照常出现。 -->
-              <div v-if="m.files?.length" class="msg-files">
-                <ChatFileCard
-                  v-for="f in m.files"
-                  :key="f.path"
-                  :file="f"
-                  @open="openChatFile"
-                />
-              </div>
-            </div>
+            <ChatSegmentView
+              :segment="seg"
+              :streaming-bubble-id="ai.streamingBubbleId"
+              :meal-of="mealOf"
+              :expanded-of="expandedOf"
+              :flash-id="flashId"
+              @press-start="onPressStart"
+              @press-move="onPressMove"
+              @press-end="onPressEnd"
+              @ctx-menu="onCtxMenu"
+              @message-key="onMsgKey"
+              @open-memo="onOpenMemo"
+              @commit="onCommit"
+              @stash="stashParse"
+              @update-items="onUpdateItems"
+              @update-meal="onUpdateMeal"
+              @update-process="onUpdateProcess"
+              @detail-open="onDetailOpen"
+              @detail-close="onDetailClose"
+              @open-file="openChatFile"
+              @height-dirty="invalidateMessage"
+            />
           </div>
-        </template>
+          <div class="v-spacer" :style="{ height: `${bottomSpacer}px` }" aria-hidden="true" />
+        </div>
+
+        <!-- 键盘可达的「加载更新」哨兵：around 跳转后用户可继续往下读 -->
+        <button
+          v-if="paging.hasMoreAfter"
+          type="button"
+          class="load-sentinel"
+          aria-label="加载更新的消息"
+          @focus="loadNewer()"
+          @click="loadNewer()"
+        >
+          加载更新的消息
+        </button>
       </div>
     </div>
 
@@ -1053,8 +1332,8 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
         v-model="draft"
         class="cbar"
         flush
-        :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : '吃了什么？例如：一碗米饭'"
-        :sendable="!!draft.trim() || attachments.length > 0 || !!docAtt || memoRefs.length > 0"
+        :placeholder="docAtt ? '问问这份文档，或让 AI 放大看图' : attachments.length > 1 ? `问问这 ${attachments.length} 张图，或直接记录饮食` : attachments.length === 1 ? '问问这张图，或直接记录饮食' : undefined"
+        :sendable="composer.hasContent"
         :busy="ai.busy"
         add-label="添加附件"
         voice-testid="ai-voice-btn"
@@ -1134,7 +1413,7 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
       :open="menuTarget !== null"
       :actions="menuActions"
       :anchor="menuAnchor"
-      @close="menuTarget = null"
+      @close="onMenuClose"
       @select="onMenuSelect"
     />
   </div>
@@ -1360,6 +1639,9 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
   overflow-y: auto;
   padding: 0 var(--page-pad-x) var(--cb-reserve);
   scrollbar-width: none;
+  /* 虚拟列表自己做前插/高度回写锚定；浏览器原生 scroll anchoring 会与
+     手动 scrollTop += delta 叠加成双倍位移（spacer 布局下触发时机也不可控） */
+  overflow-anchor: none;
 }
 
 /* 页头自己让开状态栏：margin-top = 安全区高度（其余页面由 .app-frame 的 padding-top 给同一段），
@@ -1954,6 +2236,98 @@ function onMsgKey(e: KeyboardEvent, m: AiMessage): void {
 .pop-enter-from {
   opacity: 0;
   transform: translateY(8px);
+}
+
+/* ============================================================
+   虚拟列表外壳
+   ============================================================ */
+
+/* 记忆卡是虚拟体之前的普通块：滚动不参与段高度，content 变化由 RO 触发 measure */
+.memory-cards-host {
+  margin-bottom: var(--gap-md);
+}
+
+/* 上 spacer + 可见段 + 下 spacer；高度由前缀和给出，容器自身不设固定高 */
+.virtual-body {
+  display: block;
+  min-height: 1px;
+}
+
+.v-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+
+/* 段外壳：flow-root 让段内最后一条消息的 margin-bottom 计入实测高度；
+   不给 transform/contain:paint，避免气泡阴影与 sticky 页头被裁 */
+.virtual-seg {
+  display: flow-root;
+}
+
+/* 「加载更早」哨兵：视觉上只有 1px，键盘 Tab 得到、滚到顶部也会触发 */
+.load-sentinel {
+  display: block;
+  width: 100%;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 1px;
+  line-height: 1px;
+  cursor: default;
+}
+
+.load-sentinel:focus-visible {
+  /* 不改变高度：哨兵在虚拟体之前，长高会把所有段整体下移 27px */
+  background: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 加载中骨架（只在尾页未就绪时出现，避免 AiBoard 先闪一下） */
+.chat-loading {
+  display: flex;
+  justify-content: center;
+  gap: var(--gap-sm);
+  padding: var(--sp-20) 0;
+}
+
+.chat-loading span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  animation: tdots-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-loading span:nth-child(2) { animation-delay: 0.15s; }
+.chat-loading span:nth-child(3) { animation-delay: 0.3s; }
+
+.chat-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-md);
+  padding: var(--sp-8) 0;
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+.chat-error button {
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-16);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--fs-caption);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-loading span {
+    animation: none;
+  }
 }
 
 /* ============================================================

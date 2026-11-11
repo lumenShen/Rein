@@ -10,7 +10,10 @@
  *   B. 路由 —— 关键词命中装载、未命中不装；
  *   C. 门禁 —— 关掉的功能插件整组不出现，也不可装载；
  *   D. 元工具 —— load_tools 真能扩载、组目录随之缩短、非法组名有回话；
- *   E. 提示词联动 —— 段落与工具同进同出（不给工具就不讲工具）。
+ *   E. 提示词联动 —— 段落与工具同进同出（不给工具就不讲工具）；
+ *   F. 连接应用门禁 —— apps 缺省时 10 个 app 组全部不可见；传入已允许的 app 后
+ *      appCalendar/appContacts/appSms/appDesktopFiles/appTerminal 才进 available，
+ *      读 + 写工具都由 load_tools 装载，写工具不在初始清单。
  */
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
@@ -132,14 +135,15 @@ async function main() {
     }`)
     ok(
       '分组：注册表 = 域工具 + load_tools，常驻组不含课表/记账',
-      shape.tools === 84 && shape.hasLoader === false ? false : shape.hasLoader,
+      shape.tools === 144 && shape.hasLoader,
       `${shape.tools} 个工具 / ${shape.groups} 组`,
     )
     // 按需组数跟着 GROUP_POLICY 走：campus 拆出子模块 campusGrab 之后是 9 组
     // （原来写死 8，是拆分前的数 —— 这条断言此后一直红着，没人发现）。
+    // 连接应用新增 10 组后共 29 组；常驻 41（含 system 组的 load_tools）。
     ok(
-      '分组：默认只装常驻组（39 个），其余按需',
-      shape.alwaysCount === 39 && shape.available.length === 9,
+      '分组：默认只装常驻组（41 个，含 load_tools），其余按需',
+      shape.alwaysCount === 41 && shape.available.length === 9,
       `常驻 ${shape.alwaysCount} 个，可装载 ${shape.available.length} 组 [${shape.available.join(',')}]`,
     )
     ok(
@@ -236,6 +240,128 @@ async function main() {
       return { rows: R.toolGroupCatalog(avail).split('\\n').length - 2, avail }
     }`)
     ok('组目录：装过的组不再出现在目录里', !catalogAfter.avail.includes('ledger'), catalogAfter.avail.join(','))
+
+    /* ---------- D2. 连接应用门禁（apps 缺省 = 全部不可见） ---------- */
+
+    const appGate = await evalJS(`(async () => {
+      const R = await import('/src/ai/tools/registry.ts')
+      const five = ['calendar', 'contacts', 'sms', 'win-desktop', 'win-terminal']
+      const planNone = R.resolveToolPlan({ apps: [] })
+      const planFive = R.resolveToolPlan({ apps: five })
+      const planCal = R.resolveToolPlan({ apps: ['calendar'] })
+      const isApp = (g) => g.startsWith('app')
+      const appToolNames = R.APP_TOOLS.filter((t) => isApp(t.group)).map((t) => t.name)
+      const loadedNames = R.toolNamesForGroups(planFive.loaded)
+      const t = R.findAppTool('load_tools')
+      const batch1 = await t.execute(
+        { groups: ['appCalendar', 'appContacts', 'appSms'] },
+        { apps: five, loadable: planFive.loadable },
+      )
+      const batch2 = await t.execute(
+        { groups: ['appDesktopFiles', 'appTerminal'] },
+        { apps: five, loadable: planFive.loadable },
+      )
+      // 旧 e2e 直调不带 ctx：app 组必须一律被拒
+      const noCtx = await t.execute({ groups: ['appCalendar'] })
+      const appNames = () => R.APP_TOOLS.filter((x) => isApp(x.group)).map((x) => x.name)
+      return {
+        defaultAvail: planNone.available,
+        defaultAppGroups: planNone.available.filter(isApp),
+        fiveAppGroups: planFive.available.filter(isApp),
+        calAppGroups: planCal.available.filter(isApp),
+        calAvailCount: planCal.available.length,
+        appToolCount: appToolNames.length,
+        loadedAppTools: loadedNames.filter((n) => appToolNames.includes(n)),
+        batch1,
+        batch2,
+        noCtx,
+        writeNames: appNames().filter((n) => /^(create|update|delete|write|send|run)_/.test(n)),
+        dangerous: {
+          createCalendar: R.findAppTool('create_calendar_event')?.dangerous === true,
+          listCalendar: R.findAppTool('list_calendar_events')?.dangerous === true,
+          terminal: R.findAppTool('run_terminal_command')?.dangerous === true,
+        },
+        groupCounts: {
+          appCalendar: R.toolNamesForGroups(['appCalendar']).length,
+          appContacts: R.toolNamesForGroups(['appContacts']).length,
+          appSms: R.toolNamesForGroups(['appSms']).length,
+          appDesktopFiles: R.toolNamesForGroups(['appDesktopFiles']).length,
+          appTerminal: R.toolNamesForGroups(['appTerminal']).length,
+        },
+      }
+    })()`)
+
+    ok(
+      '连接应用：不传 apps / apps:[] → 默认 9 组，任何 app 组都不出现',
+      appGate.defaultAvail.length === 9 && appGate.defaultAppGroups.length === 0,
+      `默认 ${appGate.defaultAvail.length} 组，app 组 ${appGate.defaultAppGroups.join(',') || '无'}`,
+    )
+    ok(
+      '连接应用：传 5 个已允许 app → 对应 5 个组进 available（未连接组不出现）',
+      ['appCalendar', 'appContacts', 'appSms', 'appDesktopFiles', 'appTerminal'].every((g) =>
+        appGate.fiveAppGroups.includes(g),
+      ) &&
+        appGate.fiveAppGroups.length === 5 &&
+        !appGate.fiveAppGroups.includes('appAlarm') &&
+        !appGate.fiveAppGroups.includes('appUsage'),
+      appGate.fiveAppGroups.join(','),
+    )
+    ok(
+      '连接应用：只传 calendar → available 10 组，app 组只多 appCalendar',
+      appGate.calAvailCount === 10 &&
+        appGate.calAppGroups.length === 1 &&
+        appGate.calAppGroups[0] === 'appCalendar',
+      `${appGate.calAvailCount} 组 / ${appGate.calAppGroups.join(',')}`,
+    )
+    ok(
+      '连接应用：初始装载清单里没有任何 app 工具（写工具不在初始清单）',
+      appGate.loadedAppTools.length === 0,
+      appGate.loadedAppTools.slice(0, 5).join(',') || '无',
+    )
+    const loadedWrites = [...appGate.batch1.toolNames, ...appGate.batch2.toolNames]
+    const expectedWrites = [
+      'create_calendar_event',
+      'update_calendar_event',
+      'delete_calendar_event',
+      'create_contact',
+      'update_contact',
+      'delete_contact',
+      'send_sms',
+      'write_desktop_file',
+      'delete_desktop_file',
+      'run_terminal_command',
+    ]
+    ok(
+      '连接应用：load_tools（带 ctx）能装载 5 组，读 + 写工具名都在',
+      appGate.batch1.loadedGroups.join(',') === 'appCalendar,appContacts,appSms' &&
+        appGate.batch2.loadedGroups.join(',') === 'appDesktopFiles,appTerminal' &&
+        expectedWrites.every((n) => loadedWrites.includes(n)),
+      `${loadedWrites.length} 个工具名`,
+    )
+    ok(
+      '连接应用：工具数按 6/5/4/8/1 分组，44 个 app 工具',
+      appGate.groupCounts.appCalendar === 6 &&
+        appGate.groupCounts.appContacts === 5 &&
+        appGate.groupCounts.appSms === 4 &&
+        appGate.groupCounts.appDesktopFiles === 8 &&
+        appGate.groupCounts.appTerminal === 1 &&
+        appGate.appToolCount === 44,
+      JSON.stringify(appGate.groupCounts),
+    )
+    ok(
+      '连接应用：旧直调不带 ctx → app 组被 blocked，理由含「连接应用」',
+      appGate.noCtx.loadedGroups.length === 0 &&
+        appGate.noCtx.message.includes('连接应用') &&
+        appGate.noCtx.blocked.some((b) => b.group === 'appCalendar' && b.reason === 'app_unavailable'),
+      appGate.noCtx.message.slice(0, 60),
+    )
+    ok(
+      '连接应用：写工具标 dangerous（UI 红标），读工具不标',
+      appGate.dangerous.createCalendar &&
+        !appGate.dangerous.listCalendar &&
+        appGate.dangerous.terminal,
+      JSON.stringify(appGate.dangerous),
+    )
 
     /* ---------- E. 提示词联动 ---------- */
 

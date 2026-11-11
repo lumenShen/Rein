@@ -1,44 +1,43 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChevronRight, Globe, Plus, Search } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
+import ConnectedAppSheet from '@/components/settings/ConnectedAppSheet.vue'
 import { useToast } from '@/composables/useToast'
-import { healthSyncService } from '@/services/healthSyncService'
+import { useConnectedAppsStore } from '@/stores/connectedApps'
 import {
   CONNECTED_APPS,
-  CONNECTED_APPS_COMPAT_KEY,
-  CONNECTED_APPS_PLACEHOLDER_KEY,
   CONNECTED_APP_PLATFORM_NOTES,
   PLATFORM_LABELS,
   type ConnectedApp,
   type ConnectedAppPlatform,
 } from '@/config/connectedApps'
 import { currentPlatform, type PlatformKey } from '@/utils/platform'
-import type { HealthSyncStatus } from '@/types'
 
 /**
  * 连接应用（`/settings/apps`）。
  *
  * 一页回答三个问题：**这台设备上哪些应用能连**（平台页签 + 分组）、**哪些已经接上**
- * （真实行「管理」/「已连接」+ 占位行 ✓ / +）、**接上之后还能让谁读数据**（页底外部访问）。
+ * （原生状态快照 `connected_app_status`，health 由 `health_sync_status` 合成）、
+ * **接上之后还能让谁读数据**（页底外部访问）。
  *
- * 只有 Android 的健康数据是真入口，其余行都是占位：点一下只在本机记一个标记
- * （`localStorage` 的 id 数组），不调 IPC、不写库。占位行做成「能点、能看见状态变了」，
- * 是为了让入口先立得住；footer 明说「带 + 的应用是占位入口」，不让 ✓ 冒充已接入。
+ * 连接状态只来自原生：页面不读写任何占位标记，也不把 localStorage 当作「已连接」。
+ * 旧占位键由 store 初始化时清一次（`stores/connectedApps.ts`）。
  *
- * 浏览器预览不是真实平台：页签如实写「浏览器」且不加「当前」前缀，内容按 Windows 展示
- * （参考图的主目标平台），页顶另给一行「无法连接本机应用」的说明；健康数据行则在
- * 桌面 / 浏览器下提示「只在安卓上可用」。
+ * 行右侧是一枚**状态 pill**（不是开关）：点击整行打开详情抽屉；health 仍进既有健康数据页。
+ * 首次 Android 状态 `unknown` 时行显示「检测中」，300ms 后重试一次；仍未知就停在这里，
+ * 由用户点「重试」或重新进页面触发再次检测。错误不清空旧状态。
  *
  * 平台判定只用于展示（见 `utils/platform.ts` 的文件头），不作为「这个功能有没有」的真源。
  */
 
 const router = useRouter()
 const { toast } = useToast()
+const connectedApps = useConnectedAppsStore()
 
 /** 当前运行平台（展示用途，不是能力真源） */
 const platform = currentPlatform()
@@ -105,114 +104,143 @@ function focusSearch(): void {
   searchEl.value?.focus()
 }
 
-/* ---------------- 健康数据：真实状态来自 health_sync_status ---------------- */
+/* ---------------- 状态：health 由 health_sync_status 合成，其余读原生快照 ---------------- */
 
-const healthStatus = ref<HealthSyncStatus | null>(null)
+const healthStatus = computed(() => connectedApps.statusFor('health'))
 
-const healthConnected = computed(() => {
-  const s = healthStatus.value
-  return (
-    platform === 'android' &&
-    !!s &&
-    s.supported &&
-    s.availability === 'available' &&
-    s.readGranted
-  )
-})
-
-async function loadHealthStatus(): Promise<void> {
-  // 桌面 / 浏览器没有 Health Connect，没必要为一条状态发请求
-  if (platform !== 'android') return
-  try {
-    healthStatus.value = await healthSyncService.status()
-  } catch (e) {
-    console.warn('[connected-apps] 读取健康数据状态失败', e)
-  }
-}
-
-onMounted(() => {
-  void loadHealthStatus()
-})
-
-/* ---------------- 占位行的本机标记 ---------------- */
-
-/** 主键 + 兼容键：值都是 id 数组，读取取并集、写入两边同步 */
-const MARK_KEYS = [CONNECTED_APPS_PLACEHOLDER_KEY, CONNECTED_APPS_COMPAT_KEY] as const
-
-function readMarkedKey(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function loadMarked(): string[] {
-  const ids = new Set<string>()
-  for (const key of MARK_KEYS) {
-    for (const id of readMarkedKey(key)) ids.add(id)
-  }
-  return [...ids]
-}
-
-const marked = ref<string[]>(loadMarked())
-
-function toggleMark(id: string): void {
-  const wasMarked = marked.value.includes(id)
-  marked.value = wasMarked
-    ? marked.value.filter((v) => v !== id)
-    : [...marked.value, id]
-  const raw = JSON.stringify(marked.value)
-  for (const key of MARK_KEYS) {
-    try {
-      localStorage.setItem(key, raw)
-    } catch {
-      // 隐私模式写不进去：本次点击仍然生效，只是刷新后回到空数组
-    }
-  }
-  toast(wasMarked ? '已取消占位标记' : '占位功能，稍后接入')
-}
-
-function isConnected(app: ConnectedApp): boolean {
-  if (app.kind === 'placeholder') return marked.value.includes(app.id)
-  return app.id === 'health' ? healthConnected.value : false
-}
-
-/** 真实行的右侧标签：不可用时明说「仅安卓」，可用了才是「管理」/「已连接」 */
-function realRowLabel(app: ConnectedApp): string {
-  if (app.id !== 'health') return '管理'
-  if (healthUnavailable()) return '仅安卓'
-  return healthConnected.value ? '已连接' : '管理'
-}
+const healthConnected = computed(
+  () => platform === 'android' && healthStatus.value?.connected === true,
+)
 
 /** 健康数据在桌面 / 浏览器上不可用：给一句明确原因，不要把人送进一个全灰的页面 */
-function healthUnavailable(): boolean {
-  return platform !== 'android' || healthStatus.value?.supported === false
+const healthUnavailable = computed(
+  () => platform !== 'android' || healthStatus.value?.supported === false,
+)
+
+/** 需要授权文件夹才能连接的 app：没有根时行显示「选文件夹」而不是「去授权」 */
+function needsRoot(id: string): boolean {
+  return id === 'filesystem' || id === 'win-local'
 }
 
-function onRow(app: ConnectedApp): void {
-  if (app.kind === 'placeholder') {
-    toggleMark(app.id)
-    return
+/** 行右侧状态文字：不支持 / 检测中 / 连接 / 去授权 / 选文件夹 / 已连接 */
+function rowLabel(app: ConnectedApp): string {
+  // health 保持既有真实入口语义：桌面 / 浏览器上只有说明，安卓上给「管理 / 已连接」
+  if (app.route) {
+    if (healthUnavailable.value) return '仅安卓'
+    return healthConnected.value ? '已连接' : '管理'
   }
-  if (app.id === 'health' && healthUnavailable()) {
-    // 桌面 / 不支持时先给一句原因，再照旧进页：健康数据页自己是说明性禁用态，
-    // 用户能在那儿看清「为什么这里没有 Health Connect」，而不是被一个 toast 挡在门外。
-    toast('健康数据只在安卓上可用')
-  }
-  if (app.route) void router.push({ name: app.route })
+
+  const s = connectedApps.statusFor(app.id)
+  if (!s) return '检测中'
+  if (s.availability === 'unknown') return '检测中'
+  if (s.availability === 'unsupported') return '不支持'
+  if (s.availability === 'unavailable') return '不可用'
+  if (s.connected) return s.aiEnabled ? '已连接 · AI' : '已连接'
+  if (!s.enabled) return '连接'
+  if (needsRoot(app.id) && s.roots.length === 0) return '选文件夹'
+  return '去授权'
 }
 
-/** 健康数据行的副标在非 Android 上直接说清限制；其余行沿用声明表 */
+/** 状态 pill 的语气：可行动项用强调色，其余保持中性。 */
+function rowTone(app: ConnectedApp): 'label' | 'muted' | 'action' {
+  const label = rowLabel(app)
+  if (label === '已连接' || label === '已连接 · AI') return 'label'
+  if (label === '连接' || label === '去授权' || label === '选文件夹') return 'action'
+  return 'muted'
+}
+
+/** 某一行是否可点开详情（health 走路由，其余打开抽屉） */
+function rowAria(app: ConnectedApp): string {
+  return `${app.title}：${rowLabel(app)}`
+}
+
 function subtitleFor(app: ConnectedApp): string {
-  if (app.id === 'health' && platform !== 'android') return app.statusHint ?? app.subtitle
+  if (app.route && platform !== 'android') return app.statusHint ?? app.subtitle
   return app.subtitle
 }
 
-/** 外部访问入口的副标：桌面端是真实场景，Android 上补一句可用范围 */
+/* ---------------- 抽屉 ---------------- */
+
+const sheetApp = ref<ConnectedApp | null>(null)
+const sheetOpen = ref(false)
+
+function onRow(app: ConnectedApp): void {
+  if (app.route) {
+    if (healthUnavailable.value) {
+      // 桌面 / 不支持时先给一句原因，再照旧进页：健康数据页自己是说明性禁用态，
+      // 用户能在那儿看清「为什么这里没有 Health Connect」，而不是被一个 toast 挡在门外。
+      toast('健康数据只在安卓上可用')
+    }
+    void router.push({ name: app.route })
+    return
+  }
+  sheetApp.value = app
+  sheetOpen.value = true
+}
+
+function closeSheet(): void {
+  sheetOpen.value = false
+}
+
+/* ---------------- 加载 / 重试 / 回到前台刷新 ---------------- */
+
+/** Android 首次 state.json 还没落地时只重试一次，避免无限轮询。 */
+let retriedUnknown = false
+let retryTimer: number | null = null
+
+function hasUnknownStatus(): boolean {
+  const list = Object.values(connectedApps.statuses)
+  if (list.length === 0) return true
+  return list.some((s) => s.availability === 'unknown')
+}
+
+function scheduleUnknownRetry(): void {
+  if (platform !== 'android' || retriedUnknown) return
+  if (!hasUnknownStatus()) return
+  retriedUnknown = true
+  retryTimer = window.setTimeout(() => {
+    retryTimer = null
+    void connectedApps.refresh()
+  }, 300)
+}
+
+async function bootstrap(): Promise<void> {
+  // 强制重读：从健康数据页授权后返回时，30 秒缓存会让人看到旧的「管理」。
+  // health 也在这次 refresh 里由 store 合成（Android / 浏览器）。
+  await connectedApps.refresh()
+  scheduleUnknownRetry()
+}
+
+function retry(): void {
+  void connectedApps.refresh()
+}
+
+/** 回到前台 / 窗口重新聚焦：原生授权可能已在系统设置里改过，重读一次。 */
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') void connectedApps.refresh()
+}
+
+function onWindowFocus(): void {
+  void connectedApps.refresh()
+}
+
+onMounted(() => {
+  void bootstrap()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('focus', onWindowFocus)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('focus', onWindowFocus)
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+})
+
+/* ---------------- 页底外部访问入口 ---------------- */
+
 const externalSubtitle = computed(() =>
   platform === 'android'
     ? '让外部程序读取数据、触发操作（桌面端可用）'
@@ -233,7 +261,7 @@ const externalSubtitle = computed(() =>
           class="hdr-btn"
           aria-label="添加连接应用"
           data-testid="apps-add"
-          @click="toast('占位功能，稍后接入')"
+          @click="toast('当前平台的可连接应用都已列在下方；连接后可在详情里允许 AI 使用')"
         >
           <Plus :size="18" />
         </button>
@@ -252,8 +280,15 @@ const externalSubtitle = computed(() =>
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
       <p v-if="isBrowserPreview" class="preview-note">
-        浏览器预览无法连接本机应用，以下是占位清单。
+        浏览器预览使用样例数据，不会读写本机文件、通讯录或执行命令。
       </p>
+
+      <div v-if="connectedApps.error" class="err card" role="alert" data-testid="apps-error">
+        <span class="err-txt">读取本机状态失败：{{ connectedApps.error }}</span>
+        <button type="button" class="err-retry" data-testid="apps-error-retry" @click="retry">
+          重试
+        </button>
+      </div>
 
       <div class="tabs" role="tablist" aria-label="平台">
         <span
@@ -309,21 +344,15 @@ const externalSubtitle = computed(() =>
               :icon="app.icon"
               :accent="app.accent"
               :testid="`connected-app-${app.id}`"
-              :aria-label="`${app.title}：${isConnected(app) ? '已连接' : '未连接'}`"
-              :aria-pressed="app.kind === 'placeholder' ? isConnected(app) : undefined"
+              :aria-label="rowAria(app)"
               @click="onRow(app)"
             >
-              <template v-if="app.kind === 'real'">
-                <PillChip tone="muted" size="sm">{{ realRowLabel(app) }}</PillChip>
-                <ChevronRight :size="16" class="chev" />
-              </template>
-              <span
-                v-else
-                class="mark"
-                :class="{ on: isConnected(app) }"
+              <PillChip
+                :tone="rowTone(app)"
+                size="sm"
                 :data-testid="`apps-toggle-${app.id}`"
-                aria-hidden="true"
-              >{{ isConnected(app) ? '✓' : '+' }}</span>
+              >{{ rowLabel(app) }}</PillChip>
+              <ChevronRight v-if="app.route" :size="16" class="chev" />
             </SettingsRow>
           </div>
         </div>
@@ -347,9 +376,11 @@ const externalSubtitle = computed(() =>
       </section>
 
       <p class="foot">
-        带 + 的应用是占位入口，接入后会变成 ✓；先把入口摆出来，具体接入在后续版本实现。
+        连接后，AI 只在你允许的应用与权限范围内工作；写操作会逐次确认，并写入本地审计。
       </p>
     </div>
+
+    <ConnectedAppSheet :open="sheetOpen" :app="sheetApp" @close="closeSheet" />
   </div>
 </template>
 
@@ -365,6 +396,36 @@ const externalSubtitle = computed(() =>
   color: var(--text-3);
   font-size: var(--fs-caption);
   line-height: var(--lh-caption);
+}
+
+/* 读取失败：保留旧状态，只在顶部加一条可重试的错误条 */
+.err {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+  margin-top: var(--sp-4);
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.err-txt {
+  flex: 1;
+  min-width: 0;
+}
+
+.err-retry {
+  flex: none;
+  min-height: var(--control-sm);
+  padding: 0 var(--sp-12);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
 }
 
 /* 平台页签：横向可滚，当前平台用实底卡片抬起来（参考图里是白胶囊压在淡色底上） */
@@ -475,9 +536,7 @@ const externalSubtitle = computed(() =>
   line-height: var(--lh-body);
 }
 
-/* 参考图是「一行一张卡」：白卡之间留 8，不用分隔线把整组切成一条长列表。
-   .card 提供底 / 圆角 / 落影（高画质及以上同一份玻璃材质），这里只把默认内距
-   换成行内距 —— 行高由 SettingsRow 自己按有没有副标给 64 / 48。 */
+/* 参考图是「一行一张卡」：白卡之间留 8，不用分隔线把整组切成一条长列表。 */
 .list {
   margin-top: var(--gap-sm);
 }
@@ -490,25 +549,6 @@ const externalSubtitle = computed(() =>
   margin-top: var(--gap-sm);
 }
 
-/* 右侧圆形标记：未连接是中性 +，已连接是浅绿 ✓（与占位 footer 的口径一致） */
-.mark {
-  width: var(--control-sm);
-  height: var(--control-sm);
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: var(--fs-body);
-  font-weight: var(--fw-semibold);
-  line-height: 1;
-}
-
-.mark.on {
-  background: var(--ok-soft);
-  color: var(--ok-strong);
-}
-
 .chev {
   flex: none;
   color: var(--text-3);
@@ -518,7 +558,7 @@ const externalSubtitle = computed(() =>
   margin-top: var(--gap-lg);
 }
 
-/* 页底小字：说明 + / ✓ 的语义，不抢外部访问入口的注意力 */
+/* 页底小字：说明连接边界，不抢外部访问入口的注意力 */
 .foot {
   margin-top: var(--gap-md);
   color: var(--text-3);

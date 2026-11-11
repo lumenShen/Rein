@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLayout } from 'animejs'
-import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Heart, Info, ListPlus, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, ClockPlus, Coffee, Ellipsis, Gauge, Info, ListPlus, PlusCircle, Repeat, RotateCcw, SkipForward, Timer } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
@@ -11,7 +11,6 @@ import InfoHint from '@/components/common/InfoHint.vue'
 import RingProgress from '@/components/common/RingProgress.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
-import HeartRateZoneBar from '@/components/health/HeartRateZoneBar.vue'
 // 这两块按需加载：肌群图本体是 160 KB 的解剖 SVG（三个视图 raw 内联）＋ 一处
 // 只在点开动作详情时才出现的抽屉。它们是沉浸层**内部**的详情块，用户不开到那一屏
 // 就用不到 —— 而沉浸层挂在 App 根上，静态 import 等于让每个路由都背着这 160 KB 首屏。
@@ -28,6 +27,7 @@ import SessionStageBubble from '@/components/exercise/SessionStageBubble.vue'
 import SessionCourseDrawer from '@/components/exercise/SessionCourseDrawer.vue'
 import SessionExerciseSwapSheet from '@/components/exercise/SessionExerciseSwapSheet.vue'
 import SessionGlassButton from '@/components/exercise/SessionGlassButton.vue'
+import SessionHeartRateCard from '@/components/exercise/SessionHeartRateCard.vue'
 import SessionSummaryPane from '@/components/exercise/SessionSummaryPane.vue'
 import ReadinessDialog from '@/components/exercise/ReadinessDialog.vue'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
@@ -73,10 +73,9 @@ import type { SwapCandidate } from '@/types'
 const s = useSessionStore()
 /** 训练偏好：准备时长（运动 › 运动设置 › 课程设置可改，气泡下一组立即生效） */
 const prefs = useExercisePrefs()
-/** 心率：训练开始自动连上次设备；顶栏只显示读数，点开是设备抽屉 */
+/** 心率：训练开始自动连上次设备；读数落在内容流（SessionHeartRateCard），点开是设备抽屉 */
 const hr = useHeartRateStore()
 const hrOpen = ref(false)
-const hrConnected = computed(() => hr.connected && hr.bpm != null)
 const lib = useExerciseLibStore()
 const router = useRouter()
 const { toast } = useToast()
@@ -451,14 +450,22 @@ const MORE_ACTIONS = computed<MenuItem[]>(() => {
   return list
 })
 
+/**
+ * 子菜单的 value 必须带前缀命名空间：同一张「更多」菜单里两个层叠子菜单的叶子
+ * 都走 onMorePick，纯数字会被判成同一种动作。曾经的实病：临时休息的「1/2/3/5 分钟」
+ * 与今日状态的 1–5 档撞值，点休息反而写入了自评（用户读到的是「提交修改训练状态」）。
+ */
+const READINESS_PREFIX = 'readiness:'
+const TEMP_REST_PREFIX = 'temp-rest:'
+
 /** 今日状态自评档位（写进快照，建议引擎据此修正今日处方） */
 const READINESS_ACTIONS: MenuItem[] = [
-  { label: '很好 · 精力充沛', value: '5', icon: Gauge },
-  { label: '不错 · 状态在线', value: '4', icon: Gauge },
-  { label: '一般 · 正常', value: '3', icon: Gauge },
-  { label: '疲惫 · 有点顶', value: '2', icon: Gauge },
-  { label: '很差 · 硬撑', value: '1', icon: Gauge },
-  { label: '清除自评（纯自动推断）', value: 'clear', icon: Gauge },
+  { label: '很好 · 精力充沛', value: `${READINESS_PREFIX}5`, icon: Gauge },
+  { label: '不错 · 状态在线', value: `${READINESS_PREFIX}4`, icon: Gauge },
+  { label: '一般 · 正常', value: `${READINESS_PREFIX}3`, icon: Gauge },
+  { label: '疲惫 · 有点顶', value: `${READINESS_PREFIX}2`, icon: Gauge },
+  { label: '很差 · 硬撑', value: `${READINESS_PREFIX}1`, icon: Gauge },
+  { label: '清除自评（纯自动推断）', value: `${READINESS_PREFIX}clear`, icon: Gauge },
 ]
 
 /** 首次进入力量训练时的一次性自评入口（跳过即纯自动推断）：热身做完、第一正式组开做前才弹 */
@@ -506,11 +513,11 @@ function onReadinessClose(): void {
 
 /** 临时休息时长：作为更多菜单「临时休息」的层叠子菜单 */
 const TEMP_REST_ACTIONS: MenuItem[] = [
-  { label: '1 分钟', value: '1', icon: Timer },
-  { label: '2 分钟', value: '2', icon: Timer },
-  { label: '3 分钟', value: '3', icon: Timer },
-  { label: '5 分钟', value: '5', icon: Timer },
-  { label: '10 分钟', value: '10', icon: Timer },
+  { label: '1 分钟', value: `${TEMP_REST_PREFIX}1`, icon: Timer },
+  { label: '2 分钟', value: `${TEMP_REST_PREFIX}2`, icon: Timer },
+  { label: '3 分钟', value: `${TEMP_REST_PREFIX}3`, icon: Timer },
+  { label: '5 分钟', value: `${TEMP_REST_PREFIX}5`, icon: Timer },
+  { label: '10 分钟', value: `${TEMP_REST_PREFIX}10`, icon: Timer },
 ]
 
 /** 详解抽屉用的动作：组数展示为「计划 + 加练」后的实际值，热身也换成实时处方 */
@@ -531,21 +538,24 @@ function onMorePick(value: string): void {
     toast(`已加练 1 组 · 「${ex.name}」共 ${s.effSets(ex)} 组`)
   } else if (value === 'redo-last') {
     if (!s.redoLastSet()) toast('还没有已完成的组')
-  } else if (value === 'clear') {
-    s.setReadiness(null)
-    toast('已清除自评 · 建议按训练历史自动推断')
-  } else if (value === '5' || value === '4' || value === '3' || value === '2' || value === '1') {
-    s.setReadiness(Number(value))
-    toast('已记录今日状态 · 建议重量已同步调整')
   } else if (value === 'swap') {
     swapOpen.value = true
   } else if (value === 'insert') {
     insertOpen.value = true
   } else if (value === 'detail') {
     detailOpen.value = true
-  } else {
-    // 临时休息子菜单：直接给分钟数
-    const min = Number(value)
+  } else if (value === `${READINESS_PREFIX}clear`) {
+    s.setReadiness(null)
+    toast('已清除自评 · 建议按训练历史自动推断')
+  } else if (value.startsWith(READINESS_PREFIX)) {
+    const level = Number(value.slice(READINESS_PREFIX.length))
+    if (level >= 1 && level <= 5) {
+      s.setReadiness(level)
+      toast('已记录今日状态 · 建议重量已同步调整')
+    }
+  } else if (value.startsWith(TEMP_REST_PREFIX)) {
+    // 临时休息子菜单：直接给分钟数（与自评档位已用前缀区分，不再串台）
+    const min = Number(value.slice(TEMP_REST_PREFIX.length))
     if (Number.isFinite(min) && min > 0 && s.startTempRest(min)) toast(`临时休息 ${min} 分钟`)
   }
 }
@@ -1141,6 +1151,10 @@ watch(immersiveOpen, (open) => {
   }
   layerEl.value?.classList.remove('is-open')
   stopMorph()
+  // 立即关闭（结束/作废，不走落位溶解）时把形变壳归位：mid-morph 的 transform
+  // 若留在层上，下次展开会从错误锚点接续，旧位置也可能留下合成残影。落位溶解
+  // 期间（is-settling）不能归位——那 130ms 要停在悬浮条 rect 上淡出。
+  if (!layerEl.value?.classList.contains('is-settling')) writeMorph(IDENTITY())
   const back = focusBeforeOpen
   focusBeforeOpen = null
   if (back?.isConnected) back.focus({ preventScroll: true })
@@ -1299,6 +1313,19 @@ function trapFocus(e: KeyboardEvent): void {
               <p v-else class="whint">热身组不计入组数与总容量，重量可按需调整</p>
             </div>
 
+            <!-- 心率从顶栏落进内容流：它和重量、肌群激活是同一组的内容，
+                 放在登记卡与肌群激活之间（顶栏那颗 52px 胶囊读不出区间） -->
+            <SessionHeartRateCard
+              :supported="hr.supported"
+              :connected="hr.connected"
+              :bpm="hr.bpm"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :avg-bpm="hr.liveAvgBpm"
+              :max-bpm="hr.liveMaxBpm"
+              @open="hrOpen = true"
+            />
+
             <div v-if="activation" class="blockcard">
               <h3>肌群激活</h3>
               <MuscleMap :activation="activation" interactive />
@@ -1385,6 +1412,18 @@ function trapFocus(e: KeyboardEvent): void {
               </div>
             </div>
 
+            <!-- 心率：动作中就在登记卡下方，不占顶栏也不再是一颗读不出区间的胶囊 -->
+            <SessionHeartRateCard
+              :supported="hr.supported"
+              :connected="hr.connected"
+              :bpm="hr.bpm"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :avg-bpm="hr.liveAvgBpm"
+              :max-bpm="hr.liveMaxBpm"
+              @open="hrOpen = true"
+            />
+
             <div v-if="activation" class="blockcard">
               <h3>肌群激活</h3>
               <MuscleMap :activation="activation" interactive />
@@ -1423,6 +1462,20 @@ function trapFocus(e: KeyboardEvent): void {
               <span v-if="restMeta.rest">{{ restMeta.rest }}</span>
             </p>
 
+            <!-- 组间休息正是要盯心率的时候：落在休息环下方，和倒计时同一条视线。
+                 平均/峰值只在休息态给：做组时它只是两组之间的噪音，恢复时才用得上。 -->
+            <SessionHeartRateCard
+              :supported="hr.supported"
+              :connected="hr.connected"
+              :bpm="hr.bpm"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :avg-bpm="hr.liveAvgBpm"
+              :max-bpm="hr.liveMaxBpm"
+              stats
+              @open="hrOpen = true"
+            />
+
             <!-- 组间休息正是「抬头看下一步怎么做」的时机：把刚做完那个动作的要点留在屏上 -->
             <div v-if="curGuide" class="blockcard">
               <h3>{{ displayName }} · 动作要点</h3>
@@ -1439,6 +1492,16 @@ function trapFocus(e: KeyboardEvent): void {
               {{ s.currentEx.kind === 'timed' ? `${s.currentEx.targetSec} 秒 × ${s.effSets(s.currentEx)} 组` : `${s.currentEx.durationMin} 分钟` }}
               <template v-if="s.currentEx.kind === 'timed'"> · 组间休息 {{ s.currentEx.restSec }} 秒</template>
             </p>
+            <SessionHeartRateCard
+              :supported="hr.supported"
+              :connected="hr.connected"
+              :bpm="hr.bpm"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :avg-bpm="hr.liveAvgBpm"
+              :max-bpm="hr.liveMaxBpm"
+              @open="hrOpen = true"
+            />
             <div v-if="activation" class="blockcard">
               <h3>肌群激活</h3>
               <MuscleMap :activation="activation" interactive />
@@ -1452,6 +1515,16 @@ function trapFocus(e: KeyboardEvent): void {
               <b class="num timernum" role="timer" aria-label="已用时">{{ timedText }}</b>
               <span class="hint">目标 {{ timedTargetText }}</span>
             </RingProgress>
+            <SessionHeartRateCard
+              :supported="hr.supported"
+              :connected="hr.connected"
+              :bpm="hr.bpm"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :avg-bpm="hr.liveAvgBpm"
+              :max-bpm="hr.liveMaxBpm"
+              @open="hrOpen = true"
+            />
           </div>
 
           <!-- 总结：成绩单交给独立组件（完成环 / 四项指标 / 进步 / 逐动作明细 /
@@ -1469,7 +1542,7 @@ function trapFocus(e: KeyboardEvent): void {
            苹果的做法是「层级靠版式与分组表达，能去掉的就去掉」，而不是同一条栏里
            叠两层进度。三块各自是独立的玻璃体，并排不叠压（同 Dock 的语言）。 -->
       <!-- 顶栏：左右两组玻璃夹住中间的组数状态。收起与结束各占一侧；
-           心率是训练中随时要看/要连的读数，收进右侧组（与结束并排），
+           心率读数已落进各 phase 的内容流（SessionHeartRateCard），
            中间的组数胶囊仍由 1fr 对称列保证数学居中。 -->
       <header class="ctrl-top">
         <SessionGlassButton h="var(--cap-h)">
@@ -1487,30 +1560,9 @@ function trapFocus(e: KeyboardEvent): void {
         </SessionGlassButton>
 
         <div class="top-right">
-          <SessionGlassButton v-if="hr.supported" h="var(--cap-h)">
-            <button
-              class="cbtn hrbtn"
-              :class="{ live: hrConnected }"
-              :aria-label="hrConnected ? `心率 ${hr.bpm} 次每分，打开心率设备` : '连接心率设备'"
-              @click="hrOpen = true"
-            >
-              <span class="hrread">
-                <Heart :size="17" :stroke-width="2.1" aria-hidden="true" />
-                <span v-if="hrConnected" class="num">{{ hr.bpm }}</span>
-                <span v-else class="hrword">心率</span>
-              </span>
-              <!-- 连接后补一条紧凑区间条：组间休息时不用退出训练层也能看出
-                   当前在哪个区、离下一档还有多远。 -->
-              <HeartRateZoneBar
-                v-if="hrConnected"
-                class="hrbar"
-                compact
-                live
-                :bpm="hr.bpm"
-                :max-hr="hr.maxHr"
-              />
-            </button>
-          </SessionGlassButton>
+          <!-- 心率已落进内容流（见各 pane 里的 SessionHeartRateCard）：
+               顶栏只留「收起 / 组数 / 结束」三块，读数不再挤在 52px 胶囊里，
+               点卡即开同一张设备抽屉。 -->
           <!-- 结束是这条栏里唯一的「主行动」：苹果的规矩是它单独着色（tinted）当焦点，
                其余留中性 —— 所以色落在字上，不把整颗胶囊染红 -->
           <SessionGlassButton h="var(--cap-h)">
@@ -1729,9 +1781,18 @@ function trapFocus(e: KeyboardEvent): void {
   contain: layout paint;
   transform-origin: 0 0;
   opacity: 0;
+  /* 收起后只靠 opacity:0 不够：Android WebView 会让层内 backdrop-filter/投影
+     的合成层漏画（真机实测：玻璃胶囊的白边叠在别的页面上）。visibility:hidden
+     直接掐断整棵子树的绘制，落位溶解那 130ms 由 .is-settling 放行。 */
+  visibility: hidden;
   pointer-events: none;
   box-shadow: var(--shadow-float);
   background: var(--surface);
+}
+
+.session-layer.is-open,
+.session-layer.is-settling {
+  visibility: visible;
 }
 
 .session-layer.is-open {
@@ -1830,8 +1891,7 @@ function trapFocus(e: KeyboardEvent): void {
    （GlassSurface 的折射靠 backdrop-filter，祖先带 transform / filter 会把它废掉）。 */
 .ctrl-top .min,
 .ctrl-top .end,
-.ctrl-top .pcapsule,
-.ctrl-top .hrbtn {
+.ctrl-top .pcapsule {
   height: 100%;
   display: inline-flex;
   align-items: center;
@@ -1843,49 +1903,14 @@ function trapFocus(e: KeyboardEvent): void {
     background-color var(--dur-fast) var(--ease-standard);
 }
 
-/* 右侧组：心率读数 + 结束并排，两者仍是独立玻璃体（不是叠在同一个玻璃里） */
+/* 右侧组：只剩结束一枚 —— 心率读数已经落进内容流（SessionHeartRateCard），
+   顶栏不再有第二块玻璃，右侧仍需 justify-end 才能贴边。 */
 .ctrl-top .top-right {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--gap-sm);
   min-width: 0;
-}
-
-/* 心率读数：未连接时是「心率」两个字（点开去连）；已连接时上行图标 + BPM、
-   下行一条紧凑区间条。写成两行是为了条有确定的 52px 宽，胶囊不会被三角撑开。 */
-.ctrl-top .hrbtn {
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 0 var(--sp-10);
-  font-weight: var(--fw-semibold);
-  color: var(--text-2);
-}
-
-.ctrl-top .hrread {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-text);
-  line-height: 1;
-}
-
-.ctrl-top .hrbar {
-  width: 52px;
-  flex: none;
-}
-
-.ctrl-top .hrbtn.live {
-  color: var(--text-1);
-}
-
-.ctrl-top .hrbtn.live svg {
-  color: var(--danger);
-}
-
-.ctrl-top .hrword {
-  font-size: var(--fs-footnote);
-  font-weight: var(--fw-regular);
 }
 
 .ctrl-top .min {
@@ -1914,8 +1939,7 @@ function trapFocus(e: KeyboardEvent): void {
 
 .ctrl-top .min:active,
 .ctrl-top .end:active,
-.ctrl-top .pcapsule:active,
-.ctrl-top .hrbtn:active {
+.ctrl-top .pcapsule:active {
   transform: scale(1.04, 0.92);
   transition: transform 120ms var(--ease-out);
 }

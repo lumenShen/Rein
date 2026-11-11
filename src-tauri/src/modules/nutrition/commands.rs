@@ -142,7 +142,8 @@ pub fn set_targets(
     Ok(())
 }
 
-#[tauri::command]
+/// `async`：这是「关于你」首屏的四路之一，和其他读命令一样不该占主线程。
+#[tauri::command(async)]
 pub fn get_profile(state: State<AppState>) -> Result<Profile> {
     let conn = state.db.lock();
     ensure_found(load_profile(&conn))

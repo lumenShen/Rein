@@ -35,6 +35,7 @@ pub mod memory;
 pub mod models;
 pub mod search;
 pub mod settings;
+pub mod shard;
 pub mod source;
 pub mod usage;
 pub mod worker;

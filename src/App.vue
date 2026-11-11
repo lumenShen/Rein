@@ -19,6 +19,7 @@ import VoiceFloatBar from '@/components/voice/VoiceFloatBar.vue'
 import SessionOverlay from '@/components/exercise/SessionOverlay.vue'
 import UpdatePrompt from '@/components/update/UpdatePrompt.vue'
 import GatewayAuthSheet from '@/components/settings/GatewayAuthSheet.vue'
+import ToolConfirmSheet from '@/components/settings/ToolConfirmSheet.vue'
 import ToastHost from '@/components/common/ToastHost.vue'
 import NavEditMask from '@/components/common/NavEditMask.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
@@ -432,6 +433,8 @@ onMounted(() => {
   <UpdatePrompt :open="updatePrompt" @close="updatePrompt = false" />
   <!-- 外部程序授权弹窗：单例 runtime 驱动，任何外部连接请求进来都由它唤起（system/externalAccessRuntime） -->
   <GatewayAuthSheet />
+  <!-- 危险工具确认层：单例队列驱动，写操作（日历/通讯录/短信/通知/文件/终端）执行前弹一次 -->
+  <ToolConfirmSheet />
   <ToastHost />
 </template>
 

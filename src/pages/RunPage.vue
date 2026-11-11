@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronDown, Heart, Play, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Heart, Play, SatelliteDish, X } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import CountdownOverlay from '@/components/common/CountdownOverlay.vue'
 import GlassThumb from '@/components/common/GlassThumb.vue'
 import HeartRateSheet from '@/components/health/HeartRateSheet.vue'
 import HeartRateSummary from '@/components/health/HeartRateSummary.vue'
+import HeartRateZoneMeter from '@/components/health/HeartRateZoneMeter.vue'
 import HoldToEnd from '@/components/run/HoldToEnd.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import { hrZoneMeta } from '@/config/hr'
@@ -124,19 +125,6 @@ watch(
     if (p === 'ready' || p === 'running') void refreshTrackStatus()
   },
 )
-
-/**
- * 后台对账胶囊：只说「现在是谁在记」—— 落点新鲜度归更靠上的 GPS chip，
- * 同一件事不在两颗相邻胶囊里各报一遍（眼睛要对照两个数字才知道是同一件）。
- * 只在有原生前台服务的机型上才敢说「后台记录中」——桌面/浏览器里进程本就在前台，
- * 那是另一句实话；降级后前台服务已放手（nativeDegraded），更不能沿用原话。
- */
-const bgChip = computed(() => {
-  if (r.phase !== 'running' && r.phase !== 'paused') return ''
-  if (r.source !== 'native') return '前台记录中'
-  if (r.nativeDegraded) return '应用内记录 · 锁屏可能中断'
-  return '后台记录中'
-})
 
 /**
  * 短时长（秒）→「45 秒」/「1 分 05 秒」：chip 里的年龄读数要能一眼比大小。
@@ -436,24 +424,37 @@ const runState = computed(() =>
 )
 
 /**
- * GPS chip 四态：按「最近一次落点有多新」分档，而不是「连接上了没有」。
- * 连接是持续状态、落点是离散事实 —— 只有后者能回答「现在这行距离还可信吗」；
- * 旧文案的「已连接」在系统掐断定位后仍挂着，等于替系统打包票。
+ * 卫星状态四档（强 / 优 / 弱 / 未连接）。
+ *
+ * 判据沿用旧 GPS chip：按「最近一次落点有多新」分档，精度只参与重分档
+ * （落点新鲜但精度差，降一档）。文字不再上屏 —— handle 行只留一枚卫星图标，
+ * 完整档位收进 aria-label / title；颜色是唯一的分级语言：绿 → 黄 → 红。
  */
-const gpsChip = computed<{ text: string; tone: string } | null>(() => {
-  if (r.phase !== 'running' && r.phase !== 'paused') return null
+type GpsLevel = 'strong' | 'good' | 'weak' | 'off'
+const gpsLevel = computed<{ level: GpsLevel; label: string }>(() => {
+  if (r.phase !== 'running' && r.phase !== 'paused') {
+    return { level: 'off', label: '卫星未连接' }
+  }
   if (r.lastFixAt === 0) {
-    if (r.fixWaitSec < 20)
-      return {
-        text: r.fixWaitSec > 10 ? `定位中… · 已等 ${fmtShortAge(r.fixWaitSec)}` : '定位中…',
-        tone: 'wait',
-      }
-    return { text: `无定位 ${fmtShortAge(r.fixWaitSec)} · 距离已停止累加`, tone: 'lost' }
+    return {
+      level: 'off',
+      label:
+        r.fixWaitSec < 20
+          ? `卫星未连接 · 定位中（已等 ${fmtShortAge(r.fixWaitSec)}）`
+          : `卫星未连接 · 已等 ${fmtShortAge(r.fixWaitSec)}`,
+    }
   }
   const age = r.fixAgeSec
-  if (age < 3) return { text: `GPS 良好 ±${Math.round(r.lastFixAccM)} m`, tone: 'ok' }
-  if (age <= 30) return { text: `定位中断 ${fmtShortAge(age)}`, tone: 'warn' }
-  return { text: `无定位 ${fmtShortAge(age)} · 距离已停止累加`, tone: 'lost' }
+  const acc = Math.max(0, Math.round(r.lastFixAccM))
+  const accText = acc > 0 ? ` · 精度 ±${acc} 米` : ''
+  if (age < 3 && (acc === 0 || acc <= 20)) {
+    return { level: 'strong', label: `卫星强${accText}` }
+  }
+  if (age <= 10) return { level: 'good', label: `卫星优${accText}` }
+  if (age <= 30) {
+    return { level: 'weak', label: `卫星弱 · 定位中断 ${fmtShortAge(age)}` }
+  }
+  return { level: 'off', label: `卫星未连接 · 无定位 ${fmtShortAge(age)}` }
 })
 
 const goalLabel = computed(() => {
@@ -529,6 +530,11 @@ const SCALE_BAR_MIN_PX = 40
 const SCALE_BAR_MAX_PX = 120
 /** 每纬度米数（等距圆柱近似） */
 const M_LAT = 111_320
+/** 方向箭头：首枚离起点 56px，之后每 96px 一枚，最多 8 枚，两端各留 26px 不压标记 */
+const ARROW_START_PX = 56
+const ARROW_SPACING_PX = 96
+const ARROW_END_GAP_PX = 26
+const ARROW_MAX = 8
 
 interface Cam {
   scale: number
@@ -552,6 +558,18 @@ const userScale = ref(1)
  */
 const goo = motionRich
 const msegIndex = computed(() => (camMode.value === 'fit' ? 1 : 0))
+
+/**
+ * 方向键换档：与 common/SegmentedControl 同一套单选语义（roving tabindex）。
+ * 只有两段，所以「另一段」就是唯一的下一站 —— 不看方向也成立（左右都能绕回来）。
+ */
+function onMsegKey(e: KeyboardEvent, i: number): void {
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+  e.preventDefault()
+  if (i === 0) fitAll()
+  else recenter()
+}
+
 /** 手势接管的冻结相机（世界坐标稳定：锚定首点） */
 const manualCam = ref<Cam | null>(null)
 /** 运动方向朝上的旋转角（度，EMA 平滑） */
@@ -582,7 +600,7 @@ watch(trackMeters, (m) => {
 
 const view = computed(() => {
   const m = trackMeters.value
-  if (!m || m.length === 0) return { cam: null, d: null, start: null, last: null }
+  if (!m || m.length === 0) return { cam: null, d: null, start: null, last: null, arrows: [] }
 
   const win = canvas.value
   // 全览可用框：窗口内缩一个 page-padding，再把末点标记的半径算进去 ——
@@ -641,19 +659,53 @@ const view = computed(() => {
 
   // 抽稀描线（≤400 点），末点必含
   let d: string | null = null
+  const arrows: { x: number; y: number; a: number }[] = []
   if (m.length >= 2) {
     const step = Math.max(1, Math.ceil(m.length / 400))
     const idxs: number[] = []
     for (let i = 0; i < m.length; i += step) idxs.push(i)
     if (idxs[idxs.length - 1] !== m.length - 1) idxs.push(m.length - 1)
-    const p0 = to(m[idxs[0]!]!)
+    const pts = idxs.map((i) => to(m[i]!))
+    const p0 = pts[0]!
     d = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)}`
-    for (let k = 1; k < idxs.length; k++) {
-      const q = to(m[idxs[k]!]!)
+    for (let k = 1; k < pts.length; k++) {
+      const q = pts[k]!
       d += ` L ${q.x.toFixed(1)} ${q.y.toFixed(1)}`
     }
+
+    /* 行进方向箭头：沿**屏幕坐标**等距取样（不是按点数 —— 轨迹抽稀后各段长度
+       差几个数量级，按点数放会让箭头在直道上挤成一串、在弯道里消失）。
+       只取可见窗口内、离起点/终点各有一段距离的点；最多 8 枚，SVG 元素数量恒定。
+       相机跟随每来一个定位点才重算一次，不挂动画循环。 */
+    const last = pts[pts.length - 1]!
+    let acc = 0
+    let nextAt = ARROW_START_PX
+    for (let k = 1; k < pts.length; k += 1) {
+      const a = pts[k - 1]!
+      const b = pts[k]!
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const seg = Math.hypot(dx, dy)
+      if (seg < 0.01) continue
+      while (nextAt <= acc + seg) {
+        const t = (nextAt - acc) / seg
+        const x = a.x + dx * t
+        const y = a.y + dy * t
+        const nearEnd = Math.hypot(x - last.x, y - last.y) < ARROW_END_GAP_PX
+        const nearStart = Math.hypot(x - p0.x, y - p0.y) < ARROW_END_GAP_PX
+        const visible =
+          x > 12 && x < win.w - 12 && y > win.winTop + 12 && y < win.winTop + win.winH - 12
+        if (!nearEnd && !nearStart && visible) {
+          arrows.push({ x, y, a: (Math.atan2(dy, dx) * 180) / Math.PI + 90 })
+          if (arrows.length >= ARROW_MAX) break
+        }
+        nextAt += ARROW_SPACING_PX
+      }
+      if (arrows.length >= ARROW_MAX) break
+      acc += seg
+    }
   }
-  return { cam, d, start: to(m[0]!), last: to(m[m.length - 1]!) }
+  return { cam, d, start: to(m[0]!), last: to(m[m.length - 1]!), arrows }
 })
 
 /* ---------- 地图手势：单指平移 / 双指捏合缩放平移 ---------- */
@@ -896,8 +948,10 @@ const drawerDragging = ref(false)
 const dragY = ref<number | null>(null)
 // 收起/展开改的是画布窗口的下沿：落定后重量一次（几何带过渡，schedule 里会再等一拍）
 watch(drawerCollapsed, scheduleSyncCanvas)
-/** 收起态露出的 peek 高度：把手 + 时长/千卡行 */
-const PEEK_PX = 176
+/** 收起态露出的 peek 高度：把手 + 时长/千卡行。
+ *  把手行 32 + 上下内距 12/6 = 50（旧值 44），这两个数必须一起改：
+ *  `.drawer.collapsed` 的 translateY 里还写着同一份 182。 */
+const PEEK_PX = 182
 let dragBase = 0
 let dragStartY = 0
 let dragMoved = false
@@ -1048,6 +1102,15 @@ function bumpKm(delta: number): void {
         aria-hidden="true"
       >
         <path v-if="view.d" class="route" :d="view.d" />
+        <!-- 行进方向箭头：白色小箭头压在橙色轨迹上，随相机旋转一起转 -->
+        <g
+          v-for="(a, i) in view.arrows"
+          :key="`arrow-${i}`"
+          class="route-arrow"
+          :transform="`translate(${a.x.toFixed(1)} ${a.y.toFixed(1)}) rotate(${a.a.toFixed(1)})`"
+        >
+          <path d="M0 -4.6 L4 3.6 L0 1.8 L-4 3.6 Z" />
+        </g>
         <circle v-if="view.start" class="mk-start" :cx="view.start.x" :cy="view.start.y" r="5.5" />
         <g v-if="view.last">
           <circle class="mk-pulse" :cx="view.last.x" :cy="view.last.y" r="7" />
@@ -1066,36 +1129,15 @@ function bumpKm(delta: number): void {
         <button class="min" aria-label="收起运动模式" @click="minimize">
           <ChevronDown :size="20" /> 收起
         </button>
-        <span class="ptitle">跑步</span>
         <!-- 结束不再放这里：它落在拇指最顺手的位置、又只是「红字一碰即中」。
              跑步中只留暂停；暂停后由控制行的长按闸门结束（见 HoldToEnd）。 -->
         <span class="ph" />
       </header>
 
-      <!-- 左上 HUD 一列：定位新鲜度 → 后台对账 → 通知权限提示。
-           竖向叠放（而不是像从前左右各挂一颗）是因为两者读的是同一件事的两面：
-           「点有多新」与「谁在记」，眼睛不该在屏幕上跳两处。 -->
+      <!-- 左上 HUD：通知权限提示。
+           GPS 不再在这里报文字：卫星状态收进抽屉把手（拖动小横条左侧）的一枚图标，
+           心率则落在抽屉内容区的整行心率卡里 —— 同一件事不在屏幕上说两遍。 -->
       <div class="hud">
-        <!-- 心率：跑动中随时能看 / 能连；与 GPS 同一列，不抢主读数 -->
-        <button
-          v-if="(r.phase === 'running' || r.phase === 'paused') && hr.supported"
-          type="button"
-          class="chip glass-surface hr"
-          :class="{ 'hr-on': hr.connected }"
-          :aria-label="hrAria"
-          @click="hrOpen = true"
-        >
-          <Heart class="hric" :size="14" :stroke-width="2.2" aria-hidden="true" />
-          <template v-if="hr.connected">
-            <b class="num hrbpm">{{ hr.bpm ?? '—' }}</b>
-            <span v-if="hrZoneLabel" class="hrzone">{{ hrZoneLabel }}</span>
-          </template>
-          <template v-else>心率</template>
-        </button>
-        <span v-if="gpsChip" class="chip glass-surface gps" :class="gpsChip.tone">
-          <i class="gdot" />{{ gpsChip.text }}
-        </span>
-        <span v-if="bgChip" class="chip glass-surface stat"><i class="sdot" />{{ bgChip }}</span>
         <button
           v-if="notifyNudge"
           type="button"
@@ -1125,9 +1167,12 @@ function bumpKm(delta: number): void {
       :style="dragStyle"
       @scroll.capture="onDrawerScroll"
     >
-      <!-- 把手行：拖拽档位 / 缩放模式（仅进行中与暂停）。
+      <!-- 把手行：卫星状态 ｜ 拖拽条 ｜ 缩放模式（仅进行中与暂停）。
+           卫星只要一枚图标（强 / 优 / 弱 / 未连接，绿→黄→红），文字收进 title/aria ——
+           状态钉在行左端、与内容边同线，读法固定成「左边状态 · 中间把手 · 右边控件」；
+           旧写法贴着横条左侧，行左半边整片空着，重心全压在右侧分段控件上。
            回中钮与占位块已删：「固定」段就是回中（同一个 recenter），两个入口
-           只会让人犹豫按哪个；腾出的空间留给右侧分段控件，把手仍居中。 -->
+           只会让人犹豫按哪个；腾出的空间留给分段控件，拖拽条仍居中。 -->
       <div
         v-if="r.phase === 'running' || r.phase === 'paused'"
         class="handle"
@@ -1136,11 +1181,37 @@ function bumpKm(delta: number): void {
         @pointerup="onHandleUp"
         @pointercancel="onHandleUp"
       >
+        <span
+          class="sat"
+          :class="gpsLevel.level"
+          role="img"
+          :aria-label="gpsLevel.label"
+          :title="gpsLevel.label"
+        >
+          <SatelliteDish :size="18" :stroke-width="2.2" aria-hidden="true" />
+        </span>
         <i class="grab" />
-        <div ref="msegEl" class="mseg glass-surface" :class="{ goo: goo }">
+        <div ref="msegEl" class="mseg" :class="{ goo: goo }" role="radiogroup" aria-label="地图缩放模式">
           <GlassThumb v-if="goo" :index="msegIndex" :count="2" />
-          <button class="seg-item glow-layer" :class="{ on: camMode !== 'fit' }" @click="recenter">固定</button>
-          <button class="seg-item glow-layer" :class="{ on: camMode === 'fit' }" @click="fitAll">全览</button>
+          <span v-else class="mthumb" :style="{ transform: `translateX(${msegIndex * 100}%)` }" />
+          <button
+            class="seg-item glow-layer"
+            :class="{ on: camMode !== 'fit' }"
+            role="radio"
+            :aria-checked="camMode !== 'fit'"
+            :tabindex="camMode !== 'fit' ? 0 : -1"
+            @click="recenter"
+            @keydown="onMsegKey($event, 0)"
+          >固定</button>
+          <button
+            class="seg-item glow-layer"
+            :class="{ on: camMode === 'fit' }"
+            role="radio"
+            :aria-checked="camMode === 'fit'"
+            :tabindex="camMode === 'fit' ? 0 : -1"
+            @click="fitAll"
+            @keydown="onMsegKey($event, 1)"
+          >全览</button>
         </div>
       </div>
 
@@ -1215,7 +1286,7 @@ function bumpKm(delta: number): void {
               </span>
               <!-- 与左侧「本次距离」同一套阅读顺序：大数字在上，说明小字在下。
                    两个标签的底边对齐，眼睛横扫时才不会在左右之间重新找基线。 -->
-              <p class="tcap lh-r-cap"><i class="live-dot" />瞬时配速</p>
+              <p class="tcap lh-r-cap">瞬时配速</p>
             </div>
           </div>
 
@@ -1229,10 +1300,9 @@ function bumpKm(delta: number): void {
           </div>
 
           <!-- 三列指标卡：时长 / 平均配速 / 消耗（主读数已上提到 hero 行）。
-               瞬时那列从前在这里，现在它是 hero 的右读数，不再重复出现。
-               心率连上后插一列：跑步时「心率此刻多少、在哪个区」与配速/消耗
-               是同一层要观察的数据，不该只藏在左上角那颗 chip 里。 -->
-          <div class="pace row glass-surface" :class="{ 'with-hr': hr.connected }">
+               心率不再挤进第四列：它要同时说「此刻多少、在哪个区、区间条上的位置」，
+               一列 ~84px 装不下，也会把另外三格的数字压小。 -->
+          <div class="pace row glass-surface">
             <div class="col center">
               <span class="lab">时长</span>
               <b class="num pv">{{ clockText }}</b>
@@ -1244,20 +1314,34 @@ function bumpKm(delta: number): void {
               <b class="num pv">{{ paceText }}</b>
               <span class="pu">/km</span>
             </div>
-            <div v-if="hr.connected" class="col center hrstat">
-              <span class="lab">
-                <Heart :size="12" :stroke-width="2.2" class="hrlab" aria-hidden="true" />
-                心率
-              </span>
-              <b class="num pv">{{ hr.bpm ?? '—' }}</b>
-              <span class="pu">{{ hrZoneLabel ? `${hrZoneLabel}区` : '次/分' }}</span>
-            </div>
             <div class="col center kcal">
               <span class="lab">消耗</span>
               <b class="num">{{ r.kcal }}</b>
               <span class="pu">kcal</span>
             </div>
           </div>
+
+          <!-- 心率整行：读数 + 五段条 + 指示器，直接复用健康域的心率区间组件
+               （心率抽屉 / 力量训练页同一枚）。整行可点开设备抽屉；未连接时
+               右侧给一枚「连接」，这一行不会变成一块死读数。 -->
+          <button
+            type="button"
+            class="livehr glass-surface glow-layer"
+            :aria-label="hrAria"
+            @click="hrOpen = true"
+          >
+            <HeartRateZoneMeter
+              :bpm="hr.connected ? hr.bpm : null"
+              :max-hr="hr.maxHr"
+              :zone="hr.zone"
+              :live="hr.connected"
+            >
+              <template #trailing>
+                <span v-if="!hr.connected" class="hr-connect">连接</span>
+                <ChevronRight :size="16" class="hr-chev" aria-hidden="true" />
+              </template>
+            </HeartRateZoneMeter>
+          </button>
 
           <div class="ctl row">
             <!-- 跑步中只允许暂停：结束必须在暂停之后，且要按住 5 秒（HoldToEnd）。 -->
@@ -1504,6 +1588,16 @@ function bumpKm(delta: number): void {
   filter: drop-shadow(0 0 6px var(--hero-route-glow));
 }
 
+/* 行进方向箭头：白色实心小箭头压在橙色轨迹上（与地图导航同一种读法）。
+   深色描边只负责把箭头从轨迹的发光里剥出来，不引入第二条彩色。 */
+.route-arrow path {
+  fill: var(--hero-text);
+  stroke: var(--hero-bg);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+  opacity: 0.94;
+}
+
 .mk-start {
   fill: var(--hero-text);
   opacity: 0.85;
@@ -1609,19 +1703,12 @@ function bumpKm(delta: number): void {
   color: var(--hero-text);
 }
 
-.ptitle {
-  font-size: var(--fs-footnote);
-  font-weight: var(--fw-bold);
-  color: var(--hero-text-dim);
-}
-
 .ph {
   width: 48px;
 }
 
-/* 左上 HUD 一列：定位新鲜度 → 后台对账 → 通知提示。
-   竖排而不是左右分挂：三行读的是同一件事的不同面（点多新 / 谁在记 / 通知通不通），
-   眼睛不该在屏幕上跳两处。z-index 4 = 遮罩层（3）之上 —— 暂停时它们保持原亮度。 */
+/* 左上 HUD：通知权限提示（卫星状态已收进抽屉把手，心率已落进心率卡）。
+   z-index 4 = 遮罩层（3）之上 —— 暂停时它保持原亮度。 */
 .hud {
   position: absolute;
   top: calc(var(--safe-top) + 62px);
@@ -1646,103 +1733,16 @@ function bumpKm(delta: number): void {
   color: var(--hero-text);
 }
 
-.gps,
-.stat,
-.nudge,
-.hr {
+.nudge {
   display: flex;
   align-items: center;
-  /* 状态点 + 文字是「图标 + 文字」关系，取 --gap-text-inline（8），
-     三枚 chip 里这一处原来 6 与 .nudge 的 8 混着用。 */
   gap: var(--gap-text-inline);
   font-size: var(--fs-caption);
   font-weight: var(--fw-semibold);
   text-align: left;
 }
 
-/* 心率 chip：未连接时只是「心率」入口，连接后图心变危险色、BPM 保持中性。
-   命中高度补足 44（视觉高度不变）：跑动中点按，热区必须够大。 */
-.hr {
-  position: relative;
-}
-
-.hr::after {
-  content: '';
-  position: absolute;
-  inset: calc(50% - var(--hit-min) / 2) 0;
-}
-
-.hr .hric {
-  color: var(--hero-text-dim);
-}
-
-.hr.hr-on .hric {
-  color: var(--danger);
-}
-
-.hr .hrbpm {
-  font-weight: var(--fw-semibold);
-}
-
-.hr .hrzone {
-  color: var(--hero-text-dim);
-}
-
-/* 四态：wait（还没落点）/ ok（新鲜）/ warn（中断）/ lost（已停累计）。
-   颜色只用于"要不要看一眼"，文案本身不缩写 —— 变色但不说人话等于没说。 */
-.gps.wait .gdot {
-  background: var(--hero-text-dim);
-}
-
-.gps.ok .gdot {
-  background: var(--hero-route-line);
-  box-shadow: 0 0 8px var(--hero-route-glow);
-  animation: rein-breathe var(--dur-pulse) infinite;
-}
-
-.run-page.paused .gps.ok .gdot {
-  animation-play-state: paused;
-}
-
-.gps.warn {
-  color: var(--warn);
-}
-
-.gps.warn .gdot,
-.gps.lost .gdot {
-  background: var(--warn);
-}
-
-/* 第四态用 --hero-end 而不是 --warn-strong：后者在亮色档是 #8a5300
-   （为 warn-soft 底设计的「橙字」），压在这块**固定近黑**的舞台上实测只有 ~3:1 ——
-   而本页舞台的深色与系统配色无关（--hero-bg 亮暗同值），所以这里要的是暗场红。
-   语义也没丢：--hero-end 就是这一块暗区自己的强调红。 */
-.gps.lost {
-  color: var(--hero-end);
-}
-
-.gps.lost .gdot {
-  background: var(--danger);
-}
-
-.gdot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--hero-text-dim);
-  flex: none;
-}
-
-/* 后台对账胶囊：中性色（它报的是状态，不是警报） */
-.sdot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--hero-route-line);
-  flex: none;
-}
-
-/* 通知提示：可点可关的一行，压暗一档不抢 GPS chip 的注意力 */
+/* 通知提示：可点可关的一行，压暗一档不抢地图画面的注意力 */
 .nudge {
   position: relative;
   gap: var(--gap-sm);
@@ -1849,10 +1849,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 }
 
 /* 收起档：只露出 peek（把手 + 时长/距离 hero 行）。
+   182 = PEEK_PX（RunPage.vue 脚本里同名常量，改一处必须改两处）。
    收起比展开短一档（.drawer 基础规则是 dur-sheet）——展开是"生长"，收起只是让位；
    :not(.dragging) 让拖拽中不挂过渡，位移只跟手指 */
 .drawer.collapsed:not(.dragging) {
-  transform: translateY(calc(100% - 176px));
+  transform: translateY(calc(100% - 182px));
   transition: transform var(--dur-base) var(--ease-standard);
 }
 
@@ -1868,44 +1869,92 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   top: 32%;
 }
 
-/* 把手行：拖拽条 ｜ 缩放模式切换（回中钮已删，见模板注释） */
+/* 把手行：卫星状态 ｜ 拖拽条 ｜ 缩放模式切换（回中钮已删，见模板注释）。
+   卫星在行首参与布局、分段控件靠右（margin-left:auto），拖拽条绝对定位独自
+   钉在抽屉正中的轴线上 —— 两边翼再宽也不能把横条推歪。
+   页头左右 16（--pad-sheet），与 .pane 的内容边同一条线（卫星、距离墨水、
+   指标卡左边界因此落在同一条竖线上）。
+   上下内距 12/6 而不是 8/4：抽屉顶角半径 32，在分段控件右端那道弧已吃掉
+   ~4px，再按 8 收边，控件会贴进弧里。 */
 .handle {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  /* 把手行是抽屉的页头：左右 16（--pad-sheet），与 .pane 的内容边同一条线。 */
   gap: var(--gap-sm);
-  padding: var(--sp-8) var(--pad-sheet) var(--sp-4);
+  padding: var(--sp-12) var(--pad-sheet) var(--sp-6);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
+/* 卫星状态四档：颜色是唯一的分级语言（绿 → 黄 → 红），文字收进 title/aria。
+   钉在行左端（不是小横条左侧）：读法固定成「左状态 · 中把手 · 右控件」，
+   左半边不再有一整片空白。非交互（pointer-events:none）—— 点在它身上仍然是在拖把手。 */
+.sat {
+  flex: none;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--text-3);
+}
+
+.sat.strong {
+  color: var(--ok-strong);
+}
+
+/* 「优」比「强」亮半档：同一支绿往前走一步就够，不用另立一个色相 */
+.sat.good {
+  color: color-mix(in srgb, var(--ok-strong) 55%, var(--ok));
+}
+
+.sat.weak {
+  color: var(--warn-strong);
+}
+
+.sat.off {
+  color: var(--danger);
+}
+
 .grab {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  /* 内容行（32 高的控件线）的中线 = 上内距 12 + 半行 16 —— 不能按整行 50%：
+     页头上下内距不对称（12/6），整行中线比控件线低 3px，横条会看着往下掉。 */
+  top: calc(var(--sp-12) + var(--sp-16));
   /* 半模态把手按规范收到 32×4、正圆角：原来 44×5 + 4 圆角读起来是一条小横杠 */
-  max-width: 32px;
-  margin: 0 auto;
+  width: 32px;
   height: 4px;
+  translate: -50% -50%;
   border-radius: var(--radius-full);
   background: var(--line);
 }
 
-/* 相机模式切换：两段分段控件 —— 轨道走 .glass-surface（抽屉上的浮玻璃），
-   滑块在丰富档换成 GlassThumb（液态融合 + 形变），与 SegmentedControl 同一套做法。 */
+/* 缩放模式：两段分段控件。轨道取 --surface-3（比抽屉底 #f5f5f7 低一档的**实色**灰），
+   滑块是 --surface（亮色白 / 暗色近黑）—— 与 common/SegmentedControl、AddWorkoutSheet
+   里那颗「这次累不累」同一套表面语义。旧写法把玻璃（近白）当轨道、灰当选中底：
+   玻璃叠在同色抽屉上只剩一圈阴影，选中的灰块又和轨道只差十几级，整颗控件读不出
+   「一段被选中」；圆角还是轨道 16 / 滑块 8 两种曲率，滑块四角戳在胶囊里。
+   丰富档的滑块仍换 GlassThumb（液态融合 + 形变），几何内缩与 .seg.goo 同值。 */
 .mseg {
   position: relative;
   display: flex;
-  gap: var(--gap-text);
-  /* 分段按钮整体 32（规则 4）：内缩 2 后段高 28（--control-sm），
-     GlassThumb 的模糊半径也按 32 推（容器高度的 14%），与 SegmentedControl 同档。 */
-  min-height: var(--sp-32);
+  /* 把手行里它自己靠右：卫星在行首、拖拽条绝对定位，都不参与这条轴 */
+  margin-left: auto;
+  /* 高度锁死 32（规则 4）：内缩 2 后段高 28（--control-sm）。
+     GlassThumb 的模糊半径按容器高度的 14% 推（≈4.5px），与 SegmentedControl 同档。 */
+  height: var(--sp-32);
   padding: var(--sp-2);
+  background: var(--surface-3);
+  /* 胶囊轨道：滑块（GlassThumb blob / .mthumb）同为胶囊 —— 两种曲率是旧稿的病根 */
+  border-radius: var(--radius-full);
   /* 滑块内缩跟 32 的轨道走：与 common/SegmentedControl 的 .seg.goo 同值 */
   --thumb-inset-y: var(--sp-2);
   --thumb-inset-x: var(--sp-2);
-  border-radius: var(--radius-m);
+  /* 丰富档 blob 的颜色/浓度：GlassThumb 读的是 --glass-blob / --glass-blob-a。
+     必须是实色 —— goo 对 alpha 做 19a−8 的对比，半透明底会被直接推成 0（滑块消失）。 */
+  --glass-blob: var(--surface);
+  --glass-blob-a: 1;
   /* 裁掉 goo 的模糊外溢。用 clip + clip-margin 而不是 hidden：hidden 会把按钮
      外扩的 44px 命中区一起裁掉（旧写法实测只剩 ~2px）；clip-margin 把裁切边
      向外放 8px，模糊照样不出轨道，命中区与焦点环却能完整保留。 */
@@ -1914,8 +1963,22 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   overflow-clip-margin: var(--gap-sm);
 }
 
-/* 丰富档：滑块落在这条**玻璃轨道**上，所以用半透 blob 语义（不覆写令牌），
-   融合时能看到它与轨道玻璃的通透关系。 */
+/* 默认档（减弱动效 / 低端机）的滑块：与 GlassThumb 的 blob 逐格对齐
+   （left/top 2、宽 = 半轨道 − 2、平移 100% 落进第二格），只是不做液态形变。 */
+.mthumb {
+  position: absolute;
+  top: var(--sp-2);
+  bottom: var(--sp-2);
+  left: var(--sp-2);
+  width: calc(50% - var(--sp-2));
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-thumb);
+  transition: transform var(--dur-base) var(--ease-standard);
+}
+
+/* 两段按钮：等分轨道（两段紧邻、不留缝 —— 滑块宽 = 半轨道 − 2，缝会让它压过界），
+   命中区靠 ::before 上下外扩（见下）。 */
 .mseg button {
   position: relative;
   flex: 1;
@@ -1924,10 +1987,14 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   align-items: center;
   justify-content: center;
   padding: 0 var(--sp-10);
-  border-radius: var(--radius-s);
-  font-size: var(--fs-micro);
+  border-radius: var(--radius-full);
+  /* 12（--fs-caption）而不是 10（--fs-micro）：2 个汉字在 10px 上是辨识下限，
+     分段标签是要读的，不是装饰；行高收到 1 让 28 的段高里垂直居中更稳。 */
+  font-size: var(--fs-caption);
+  line-height: 1;
   font-weight: var(--fw-semibold);
   color: var(--text-3);
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 
 /* 触控目标：段高 28，靠伪元素上下各外扩 8px 凑满 44。
@@ -1947,15 +2014,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   color: var(--text-1);
 }
 
-/* 默认档：没有 goo 滤镜，纯色滑块常驻；丰富档由 GlassThumb 接管并压掉这块 */
-.mseg:not(.goo) button.on {
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-
-.mseg.goo button.on {
-  background: transparent;
-  box-shadow: none;
+/* 键盘焦点环：轨道上的 overflow: clip 是为 goo 的模糊留的，会把默认外扩的
+   焦点环裁掉 —— 向内收 3px，环落在滑块内侧（与 SegmentedControl 同法）。 */
+.mseg button:focus-visible {
+  outline-offset: -3px;
+  border-radius: var(--radius-full);
 }
 
 .pane {
@@ -2132,8 +2195,11 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
 
 /* 进行中：内容贴顶（收起档 peek 正好露出 hero 行），控制行沉底。
    底距提到 46px：控制行必须落进单手可达区（真机 1220×2712/DPR3 下控件下沿 ≤864 CSS px），
-   而 .pane 的 30px 在没有底部安全区的机型上会让它落到 874。 */
-.live {
+   而 .pane 的 30px 在没有底部安全区的机型上会让它落到 874。
+   ⚠ 选择器必须带 .pane：HeartRateZoneMeter 的实时态也挂 `.live`，而子组件根节点
+   带着父组件的 scope 属性 —— 单写 `.live` 会把 46px 底距和 flex-start 一起漏进
+   心率组件的根节点（实测心率行凭空高 38px）。 */
+.pane.live {
   justify-content: flex-start;
   padding-bottom: calc(46px + var(--safe-bottom));
 }
@@ -2142,8 +2208,12 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
    时长的墨水左边界会飘在卡片左边缘右边。stretch 把这一层撑到面板满宽，
    内部所有 100% 宽的块（hero 行 / 目标条 / 指标卡）就共享同一条左边线 ——
    这条在暂停帧尤其要紧：切换不许重排。 */
-.live .rubber-layer {
+.pane.pane.live .rubber-layer {
   align-self: stretch;
+  /* 内容超高（心率整行加入后短屏会走到这里）时不能居中：居中会把 hero 顶部
+     顶进不可滚动区（与 .sumpane 同一条教训）。余量仍由 .ctl 的 margin-top:auto
+     吸收，正常屏的观感不变。 */
+  justify-content: flex-start;
 }
 
 /* hero 行：左距离（84/600，主读数）右瞬时配速（44/700，次读数）。
@@ -2282,19 +2352,6 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   white-space: nowrap;
 }
 
-.live-dot {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--c-exercise);
-  animation: rein-breathe var(--dur-pulse) infinite;
-}
-
-.run-page.paused .live-dot {
-  animation-play-state: paused;
-}
-
 .pace .pv {
   font-size: var(--fs-display-s);
   font-weight: var(--fw-bold);
@@ -2302,16 +2359,36 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   color: var(--text-1);
 }
 
-/* 心率接入后是四列：34px 的「00:00」「5'30"」在 ~84px 的格里会顶到分隔线，
-   值降一档；标签与单位不动，四列仍有统一的基线。 */
-.pace.with-hr .pv,
-.pace.with-hr .kcal b {
-  font-size: var(--fs-title1);
+/* 心率整行：与三列卡同一条左右边线、同一档圆角与内距（--pad-card 16）。
+   比完整心率卡矮一截（无标题行），短屏上不会把暂停键顶出抽屉；
+   指带下方留 8px 给指示器的落点（.hzm 自己也有 8，合计 16 与卡内距同档）。 */
+.livehr {
+  width: 100%;
+  padding: var(--pad-card) var(--pad-card) var(--sp-8);
+  border-radius: var(--radius-m);
+  text-align: left;
+  color: var(--text-1);
+  transition: transform var(--dur-slow) var(--ease-spring);
 }
 
-.hrstat .hrlab {
+.livehr:active {
+  transform: scale(0.99);
+  transition: transform 120ms var(--ease-out);
+}
+
+.hr-connect {
+  padding: 0 var(--sp-8);
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  line-height: 1.6;
+}
+
+.hr-chev {
   flex: none;
-  color: var(--danger);
+  color: var(--text-3);
 }
 
 /* 自动暂停时不再产生新值：留住停表前的读数，压暗表示「这是上一刻的」——

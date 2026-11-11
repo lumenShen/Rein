@@ -18,6 +18,12 @@ const props = defineProps<{
   calls: ProcessToolCall[]
 }>()
 
+const emit = defineEmits<{
+  /** 详情抽屉开/关：虚拟列表据此把宿主段 pin 在窗口内（滚动时不卸载） */
+  'detail-open': []
+  'detail-close': []
+}>()
+
 /** 当前查看详情的工具调用（抽屉） */
 const detailCall = ref<ProcessToolCall | null>(null)
 
@@ -125,6 +131,12 @@ const rows = computed(() =>
 
 function openDetail(c: ProcessToolCall): void {
   detailCall.value = c
+  emit('detail-open')
+}
+
+function closeDetail(): void {
+  detailCall.value = null
+  emit('detail-close')
 }
 </script>
 
@@ -152,7 +164,7 @@ function openDetail(c: ProcessToolCall): void {
       <span class="tool-chevron"><ChevronRight :size="13" /></span>
     </button>
 
-    <ToolDetailDrawer :call="detailCall" @close="detailCall = null" />
+    <ToolDetailDrawer :call="detailCall" @close="closeDetail" />
   </div>
 </template>
 

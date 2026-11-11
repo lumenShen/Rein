@@ -80,7 +80,7 @@
 - **今日画布（2026-08-28）**：`/todos` = 未安排池（date=今天且 start_min 为空）+ 单日时间轴（`CanvasTimeline`：重叠贪心分列、指针拖拽改位、现在线、过去块降透明）+ 桌面右栏详情（`DayDetailPanel`，子任务可勾选）；移动端点块直接进编辑抽屉。智能排程 `autoSchedule.ts`：AI（单轮 pi-agent）产出建议槽位 → 幽灵块预览 → 用户确认才落库（L2 契约），无模型回落启发式（优先级×时长装填最早空档）。每日规划仪式 `DailyRitual`（当天首次打开，localStorage 打标）。周段 = `WeekTimeline`（7 列甘特时间线：横轴 7 日、纵轴 0-24 时、块按 date+startMin+durationMin 定位，长按 320ms 武装拖拽跨天改时、今天列现在线、过去列压暗、无时间待办收进底部池点击快排、Ctrl+滚轮缩放；布局复用 `utils/timelineLayout.ts` 与日画布同一分列算法）+ `WeekSummary`（完成率环 + 按天分布 + 本地洞察）。清单段 = `AllTodoList`（原分组列表）。前端每次 `loadAll` 先调 `sync_recurrences` 物化重复实例（幂等，失败静默跳过）。
 - **聊天历史**：多会话（`ai_chats`，前端 `chatId` 指向当前会话，启动打开最近会话，历史抽屉 `HistoryDrawer` 切换/新建）；消息按 id 幂等 upsert（commit 状态变更不产生新行、不改变原 seq）；food-parse 的 items/source/committedAt 与 text 的 thinking/quote 序列化在 `payload`；图片存 1600px 压缩图（识别与追问复用同一张）。**照片静默入会话**（不自动识别、不输出内容，识别由用户提问触发，模型经历史图片块看图）。撤回 = `ai_chat_cut`（按消息 id 删该条及其后全部，级联）；清空上下文 = `ai_chat_clear` + 重写欢迎语；会话首条用户消息后自动把标题"AI 对话"改为前 16 字（`ai_chat_rename`）。
 - **AI 工具与消息操作**：`chat.ts` 给 Agent 注入 `search_context` 工具（TypeBox schema，后端 `ai_chat_search` 跨会话 LIKE 搜索、命中含会话标题），模型可自主调用回忆历史。长按消息（450ms，移动 8px 取消）或右键 → AppMenu 的 bind 菜单（贴着气泡弹，图标 + 文字）：复制 / 引用 / 撤回（仅用户消息，级联）；引用以 payload 持久化、气泡内引用块渲染、发给模型时作为消息前缀上下文。
-- **工具按需装载（2026-09-20）**：此前是「全量常挂」——83 个工具的 schema（约 42k 字符，每轮、每次工具回灌后的下一轮都重发）无条件塞给模型，且关掉课表/运动/方案后工具照旧全带。现在按**分组**装载（`ai/tools/registry.ts` 的 `GROUP_POLICY`）：常驻 9 组（饮食 / 营养 / 待办 / 知识库 / 记忆 / 历史检索 / 联网 / 看图 / 训练会话 = 39 个工具、15.6k 字符，实测降 63%）+ 按需 8 组（记账 / 运动记录 / 训练课程 / 健康方案 / 专注 / 模型配置 / 语音服务 / 校园教务）。按需组的装载有三条来路：本轮消息命中该组关键词、会话内已装过（粘住，`stores/ai.ts` 的 `chatToolGroups`；切会话按历史重播，撤回/清空/新对话归零）、模型自己调元工具 `load_tools`。粒度是**组而不是单个工具**——装载就给全（含 delete/update），半截组会让模型计划一个做不完的任务。三条配套约束：① **提示词段落与工具同进同出**：【模型配置】【语音】【校园教务】三段随各自分组出现/消失，未装载的组只在【工具装载】段留一行组目录（`toolGroupCatalog`），否则模型读得到用法却调不到工具、只能空转；② 功能插件（课表 / 运动 / 健康方案）关掉后**整组不给也不可装载**——修复了 AI 工具与插件开关此前完全脱钩的问题；③ 扩载走 `prepareNextTurnWithContext` 替换 context，**同一次 run 内**即可调用（`AgentToolResult.addedToolNames` 只是声明，plain Agent 不会自己激活，所以扩载靠这个钩子），不必让用户再说一遍。纪要认真整理这类非聊天链路可用 `opts.routeText` 另传判定文本。回归：`node scripts/e2e-ai-tools.mjs`。
+- **工具按需装载（2026-09-20）**：此前是「全量常挂」——83 个工具的 schema（约 42k 字符，每轮、每次工具回灌后的下一轮都重发）无条件塞给模型，且关掉课表/运动/方案后工具照旧全带。现在按**分组**装载（`ai/tools/registry.ts` 的 `GROUP_POLICY`）：常驻 9 组（饮食 / 营养 / 待办 / 知识库 / 记忆 / 历史检索 / 联网 / 看图 / 训练会话 = 39 个工具、15.6k 字符，实测降 63%）+ 按需 8 组（记账 / 运动记录 / 训练课程 / 健康方案 / 专注 / 模型配置 / 语音服务 / 校园教务）。按需组的装载有三条来路：本轮消息命中该组关键词、会话内已装过（粘住，`stores/ai.ts` 的 `chatToolGroups`；切会话按历史重播，撤回/清空/新对话归零）、模型自己调元工具 `load_tools`。粒度是**组而不是单个工具**——装载就给全（含 delete/update），半截组会让模型计划一个做不完的任务。三条配套约束：① **提示词段落与工具同进同出**：【模型配置】【语音】【校园教务】三段随各自分组出现/消失，未装载的组只在【工具装载】段留一行组目录（`toolGroupCatalog`），否则模型读得到用法却调不到工具、只能空转；② 功能插件（课表 / 运动 / 健康方案）关掉后**整组不给也不可装载**——修复了 AI 工具与插件开关此前完全脱钩的问题；③ 扩载走 `prepareNextTurnWithContext` 替换 context，**同一次 run 内**即可调用（`AgentToolResult.addedToolNames` 只是声明，plain Agent 不会自己激活，所以扩载靠这个钩子），不必让用户再说一遍。纪要认真整理这类非聊天链路可用 `opts.routeText` 另传判定文本。回归：`node scripts/e2e-ai-tools.mjs`。**2026-11-10 起**：常驻 41 个（含 `load_tools`）/ 29 组；新增 10 个连接应用组（44 个工具），由 `apps` 门禁控制，缺省不传 `apps` 时默认不可见，见 §17。
 - **卡片状态回灌（2026-09-26）**：回灌给模型的历史只挑 text/analysis/voice/photo/doc（`stores/ai.ts::sendText`），**卡片本身**（食物卡 `kind='food-parse'`、语音纪要卡 `kind='voice'`）与工具过程被整体丢弃——模型对自己出过的卡、用户有没有确认、最终写了什么一无所知，于是「用户已经确认了饮食，它还按没记录继续聊、甚至再出一张卡」。`src/ai/cardState.ts::buildCardStateBlock` 每轮现拼一段注入（经 `chatWithModel({ cardState })`，与【用户认知】同一条链路，不是又一个工具），**两条来源**：① **派生**——聊天里的卡从既有数据现算：食物卡（最近 6 张：已确认写入今日X / 未确认；用户改过则标「修改后确认」）与语音纪要卡（本会话纪要的总结条目「已写入 / 未写入」待办·饮食，状态在 `voice_memos.summaryJson`，`stores/ai.ts::memosForChat` 只在会话真有语音轮时查一次、不缓存）；② **记录**——跨页面的 AI 提议卡（智能添加出卡 / 目标建议 / 智能排程 / 方案复盘）的采纳·放弃由调用点在动作发生时记一条（`src/ai/cardOutcomes.ts`，localStorage `rein.aiCards.v1`，上限 10 条 / 24h 过期；它是「给下一轮模型看的一次性信号」而不是用户数据，故不进 SQLite、也不进知识库索引），渲染成【AI 提议处理记录】段。段落名从【食物卡状态】改成【卡片状态】（现在同时装食物卡与纪要），**未确认 ≠ 已记录**这条语义写进提示词【分寸】。食物卡另有两个字段进 `payload`（不透明文本列，Rust/mock/contract 零改动）：`mealType`（`commitParse` 时写，界面「已写入今日午餐」与回灌文案共用）与 `proposal`（建卡时模型原始条目的快照，用来判断用户改没改）。回归：`node scripts/e2e-ai-card-state.mjs`。
 - **健康方案与 AI 调参（2026-08-26；2026-10-04「溶解」重构）**：方案基线由纯函数引擎 `src/utils/programEngine.ts` 确定性生成（三档参数表 × Mifflin-St Jeor 计算 × `resources/recipe_templates.json` 食谱模板装配 × 周计划模板组合），食谱模板营养值由 `scripts/gen-recipes.mjs` 从 foods.json 实算生成、禁止手填。**训练频率以用户设置的「每周可训练天数」为权威**（未设置时用档位默认；周模板覆盖 3~7 练，1~2 练从最低频模板裁剪）。2026-10-04 起方案**不再是独立大页面**：`/program` 只留「向导（约束 + 三档对比）+ 一屏管理（状态条 / 周期进度 / 复盘 / 采购 / 调参 / 调整历史）」，执行落在日常界面——计划训练课以 `program_id` 待办铺进画布（`category='workout'`，标题「方案·课程名」，**不再写饮食锚点**；点块直达课程开课），档位目标经 `saveTargets` 进入全应用目标管线（主页摄入条 / 营养页），今日菜单在 `components/nutrition/ProgramMenuCard.vue`（AI 按需生成 → `program_meals` 缓存 → 模板回落）。主页 `ProgramStatusCard` 是执行期常驻落点（周次 / 今日动作 / 复盘到期入口 → `/program?review=1`）。归档 / 删除当前方案时目标还原为档案默认值；旧版锚点由 `stores/program.migrateScheduleOnce` 一次性重排清除（localStorage 标记 `rein.program.sched2`）。AI 侧入口：聊天工具 `get_program`（只读）/ `generate_program`（生成并启用新方案，与页面同一引擎与激活链路，dangerous：会归档现有方案）/ `adjust_program`（调参，走 store.adjust 同一钳制链路）；周复盘经方案页发起或主页深链（`src/ai/programReview.ts` 汇总近 7 天执行数据 → 无工具单轮分析 → 结构化建议 → 用户确认后应用），AI 不生成新计划结构。
 - **AI 定制菜单（2026-08-27）**：`src/ai/recipeGen.ts` —— 模型只出「结构」（餐次 + 库内食物 + 克重，经 search_food 选 id），营养一律由前端用食物库每 100g 数据实算，再按目标热量整体缩放（钳制 0.6~1.5，越界提示）。两个入口共用核心 `generateDayMenu`：食谱库的一日菜单、营养页「今日菜单」卡的**按需生成**（上下文含日期/训练日/近期已吃避免重复/忌口与偏好）。**每日菜单不再是模板写死、也不落日程**：未生成时回落模板菜单，生成一次即落 `program_meals` 缓存（可「换一批」重新生成）；方案调整后从当天起清缓存按新参数重生成；无模型用户始终回落模板菜单。**食谱偏好闭环**：`recipe_prefs` 表存喜欢(1)/不喜欢(-1)，食谱库页标记 → 方案引擎选菜（喜欢优先、不喜欢排除）与 AI 生成提示词共用。
@@ -188,7 +188,7 @@
 | `/me/folder` | me-folder | 文件夹（关于你的分组详情：query `key` 必填（`WorkspaceGroupKey`）、`path` 可选（嵌套目录）；合并分组声明的物理根目录，只读投影，写操作走「在文件管理器中打开」） |
 | `/me/program` | me-program | 程序数据（关于你的第二份清单：按物理目录列系统提示词 / 规范 / 课程 / 食物 / 菜单与自动生成的投影；点击深链 `/ai/files?dir=<root>`） |
 | `/settings` | settings | 设置（二级内容页：三组——能力与连接（连接应用 / 设备 / 打开或关闭功能 / 全局浮窗）、通用（外观与性能 / 清除软件数据）、关于（软件更新）；番茄钟配置在专注页、训练准备时长在运动设置、外部访问在连接应用；入口在「关于你 › 设置」） |
-| `/settings/apps` | settings-apps | 连接应用（三级页：平台页签 + Android 真实健康数据行 + 占位行（`+` / `✓` 只存 `localStorage`，不调 IPC）+ 页底外部访问入口；浏览器预览显式说明「无法连接本机应用」） |
+| `/settings/apps` | settings-apps | 连接应用（三级页：平台页签 + 真实连接行（Android 8 / Windows 5 / Mac 2 / Linux 2）+ 页底外部访问入口。行状态来自 `connected_app_status`（health 由 `health_sync_status` 合成），右侧是状态 pill；点行打开 `ConnectedAppSheet`（权限读写分行、AI/写入开关、文件根、重新检测、断开）。iOS 页签只显示「尚未支持」说明；AI 工具按应用组按需装载，详见 `docs/CONNECTED-APPS.md`） |
 | `/settings/apps/external` | settings-apps-external | 外部访问（四级页：内嵌 `components/settings/ExternalAccessSection.vue` 的网关开关 / 端口 / 已授权程序，不复制授权弹窗；入口在连接应用页底） |
 | `/settings/appearance` | settings-appearance | 外观与性能（三级页：画质四档 + 动效三档 + 「液态玻璃预览」入口进 `/settings/perf`；两档都是手动档，不自动切换） |
 | `/settings/features` | settings-features | 打开或关闭功能（三级页：插件层的逐项开关，列表来自 `src/plugins` 里 `toggleable` 的声明。**自身不属于任何插件**，任何组合下都可达） |
@@ -785,3 +785,84 @@ Rust 侧 `cargo test --lib update::`（37 项，含**官方 CLI 签名必须验�
 - 真机开调试端口的坑见 docs/GLOBAL-FLOAT.md §10 末尾：wry 总是显式设置 WebView2 的
   `AdditionalBrowserArguments`，环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGS` 不生效，
   必须用 `tauri dev --config <临时配置>` 合并 `additionalBrowserArgs`。
+
+## 17. 连接本机应用（modules/connected_apps · stores/connectedApps.ts · ai/tools/app*.ts）
+
+把 17 个本机应用（Android 8 / Windows 5 / Mac 2 / Linux 2）接进 Rein，并作为 AI 工具组
+按需挂载。health 不在本域：它继续走 `health_sync_*`，页面把两份状态合成同一张注册表。
+完整能力矩阵、权限教程、错误码、审计与验证记录见 `docs/CONNECTED-APPS.md`。
+
+### 17.1 模块与四个命令
+
+| 文件 | 职责 |
+|---|---|
+| `connected_apps/mod.rs` | 模块根、桥目录、IPC payload/结果上限、平台判定 |
+| `connected_apps/models.rs` | `ConnectedAppsSnapshot/Status/Permission/Root/InvokeReply/Patch`（camelCase） |
+| `connected_apps/state.rs` | 17 条 `AppSpec`、method 读/写 allowlist、`connected/aiEnabled/writeAllowed` 公式 |
+| `connected_apps/store.rs` | `app_meta` 的 `connected_apps.ai.<app>` / `connected_apps.write.<app>` / `connected_apps.local_roots` |
+| `connected_apps/commands.rs` | 四个 Tauri 命令 + 审计行 |
+| `connected_apps/android.rs` | JNI dispatch、`cacheDir/connected_apps/{state,requests,results}.json`、50ms 轮询、超时 |
+| `connected_apps/desktop.rs` / `paths.rs` / `fs_ops.rs` / `term_ops.rs` | 桌面根表、相对路径/链接/根包含、文件读写、argv 进程执行 |
+| `connected_apps/audit.rs` | JSONL 审计、脱敏、1MB 轮转 |
+| `connected_apps/apps/*.rs` | app id → handler 的固定 match；Android 参数先做与 Kotlin 同口径校验 |
+
+四条命令：`connected_app_status`（17 条状态快照）、`connected_app_request`（只拉起系统
+授权页/选择器）、`connected_app_invoke`（按 app+method 执行，AI 工具唯一入口）、
+`connected_app_update`（只记录连接/AI/写许可/根）。三向同步：`lib.rs generate_handler!` ↔
+`src/services/connectedAppService.ts` ↔ `src/mock/server.ts` 顶层 case。
+
+### 17.2 十个 AI 工具组（44 个工具）
+
+| 组 | apps | 工具 | 写工具（确认） |
+|---|---|---|---|
+| `appAlarm` | alarm | 5 | `set_alarm`/`set_timer`（需写许可，不确认）、`dismiss_alarm`/`dismiss_timer`（确认） |
+| `appUsage` | usage | 2 | 无（系统只读） |
+| `appCalendar` | calendar | 6 | `create/update/delete_calendar_event`（确认） |
+| `appContacts` | contacts | 5 | `create/update/delete_contact`（确认） |
+| `appPhoneFiles` | filesystem | 8 | `write_phone_file`/`create_phone_folder`/`delete_phone_file`/`rename_phone_file`（确认） |
+| `appLocation` | location | 2 | 无（系统只读） |
+| `appNotification` | notification | 3 | `dismiss_notification`/`dismiss_all_notifications`（确认） |
+| `appSms` | sms | 4 | `send_sms`（确认） |
+| `appDesktopFiles` | win-desktop / win-documents / win-downloads / win-local / mac-desktop / linux-desktop / linux-documents | 8 | `write_desktop_file`/`create_desktop_folder`/`delete_desktop_file`/`rename_desktop_file`（确认） |
+| `appTerminal` | win-terminal / mac-terminal | 1 | `run_terminal_command`（每次确认） |
+
+- `GROUP_POLICY` 的 app 组都声明 `apps`，没有 keywords；缺省不传 `apps` 时整组不可见。
+  `stores/ai.ts` 用 `useConnectedAppsStore().aiEnabledAppIds()` 作为唯一门禁入口。
+- 共享组用 `root` id 前缀 `<appId>:<rootId>` 路由；TS 只当前缀提示，Rust 按该 app 的
+  根表重新解析。`list_desktop_roots` 给模型前剥离绝对路径。
+- 写工具统一走 `callConnectedAppWrite`：本地 `assertAppReady({write:true})` → `askToolConfirm`
+  → 拒绝写 `__audit`（denied）并抛 `connected_app_user_denied` → 最后才调 native。
+  `dangerous: true` 只是过程卡红标，**不是**确认触发器；现有非 app 的 dangerous 工具行为不变。
+- 浏览器 mock 所有结果带 `meta.mock=true`；终端只模拟 `echo/pwd/hostname/whoami/ls`，
+  其余返回 `connected_app_mock_unavailable`，不冒充真机执行。
+
+### 17.3 Android bridge / 服务 / R8
+
+- `ConnectedAppsBridge.kt` 四个 `@JvmStatic`：`refresh/request/invoke/revoke`；`MainActivity`
+  在既有 bridge 之后 `register(this)`，`onResume` `refresh(this)`。
+- `connectedapps/` 下 8 个 Ops（`AlarmOps` / `UsageOps` / `CalendarOps` / `ContactsOps` /
+  `FileOps` / `LocationOps` / `NotificationOps` / `SmsOps`）+ `PermissionMap` / `Json` /
+  `ReinNotificationListenerService`。通知监听服务由 Manifest 按类名实例化，缓存有界
+  （200 条 / 256KB），字段截断 500。
+- Manifest 一次加齐 8 条权限（`READ/WRITE_CALENDAR`、`READ/WRITE_CONTACTS`、`READ_SMS`、
+  `SEND_SMS`、`SET_ALARM`、`PACKAGE_USAGE_STATS`）+ 闹钟 intent 的 `<queries>` + 通知监听
+  `<service>`。不申请 `MANAGE_EXTERNAL_STORAGE` / `QUERY_ALL_PACKAGES` / 精确闹钟。
+- `proguard-rules.pro` 两条 keep：`ConnectedAppsBridge` 与 `connectedapps.**`。Rust 经 JNI
+  按类名/方法名调用，R8 静态分析看不到引用；漏掉会在 release 包复现 `NoSuchMethodError`。
+- `connected_app_status` 的 Android 首次状态可能是 `unknown/refreshing`（`state.json` 尚未
+  落地）；Rust 优先 JNI `status("*")`，失败才回退文件，**没有实现 generation 轮询等待**；
+  页面只自动重试一次（300ms），之后停在「检测中」+「重新检测」，不冒充未连接。
+
+### 17.4 已知边界
+
+- **Mac/Linux 未在本机验证**；`cfg(unix)` 分支、`process_group`、`libc::kill`、
+  `document_dir()` 行为只按目标平台编译。
+- **Android 未做真机 debug/release(R8) 验证**：权限拒绝/撤销、SAF 持久树、通知监听、
+  短信/日历/通讯录、闹钟 intent、刷新时序均需设备复核。
+- **终端不是沙箱**：`cwd` 只限制起始目录，命令仍可访问用户有权限的任何路径；闸门是
+  「每次确认 + argv 无 shell 拼接 + 拒绝提权程序 + 审计」。
+- **工具桥超时**：`src-tauri/src/modules/ai/agent/commands.rs` 的 `TOOL_RESULT_TIMEOUT`
+  当前 120s；确认层 60s + 终端上限 90s 的最坏路径 150s 会先撞桥超时，终端跑满上限时
+  需要复核（见交付报告缺口）。
+- **写入前根校验**：`connected_app_update({roots})` 在写库前未 canonicalize/去重/拒绝磁盘根
+  与主目录祖先；读取侧 `paths::roots_for` 会过滤非法根，因此不构成越权，但严格口径未达成。

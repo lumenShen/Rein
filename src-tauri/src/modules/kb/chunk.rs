@@ -40,16 +40,49 @@ pub fn chunk_text(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
         return Vec::new();
     }
 
+    let chars: Vec<char> = normalized.chars().collect();
+    let mut chunks: Vec<String> = Vec::new();
+    walk_chunks(&chars, max_chars, overlap, |start, end| {
+        let piece: String = chars[start..end].iter().collect();
+        let piece = piece.trim().to_string();
+        if !piece.is_empty() {
+            chunks.push(piece);
+        }
+    });
+    chunks
+}
+
+/// 只数块数、不拼字符串。用于「总块数」提示（`kb_read` 的 l1 只切首块，
+/// 但分页提示仍要真实总数）；同一套断点算法，避免两处口径漂移。
+pub fn count_chunks(text: &str, max_chars: usize, overlap: usize) -> usize {
+    let normalized = normalize(text);
+    if normalized.is_empty() {
+        return 0;
+    }
+    let chars: Vec<char> = normalized.chars().collect();
+    let mut count = 0usize;
+    walk_chunks(&chars, max_chars, overlap, |start, end| {
+        if chars[start..end].iter().any(|c| !c.is_whitespace()) {
+            count += 1;
+        }
+    });
+    count
+}
+
+/// 逐块回调 `[start, end)`。`chunk_text` 与 `count_chunks` 共用这一份断点逻辑：
+/// 断点优先落在句读处，块间保留 overlap，且「必须真前进」防死循环。
+fn walk_chunks(chars: &[char], max_chars: usize, overlap: usize, mut emit: impl FnMut(usize, usize)) {
+    if chars.is_empty() {
+        return;
+    }
     let max_chars = max_chars.max(32);
     let overlap = overlap.min(max_chars / 2);
-    let chars: Vec<char> = normalized.chars().collect();
     if chars.len() <= max_chars {
-        return vec![normalized];
+        emit(0, chars.len());
+        return;
     }
 
-    let mut chunks: Vec<String> = Vec::new();
     let mut start = 0usize;
-
     while start < chars.len() {
         let hard_end = (start + max_chars).min(chars.len());
 
@@ -68,11 +101,7 @@ pub fn chunk_text(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
             found.unwrap_or(hard_end)
         };
 
-        let piece: String = chars[start..end].iter().collect();
-        let piece = piece.trim().to_string();
-        if !piece.is_empty() {
-            chunks.push(piece);
-        }
+        emit(start, end);
 
         if end >= chars.len() {
             break;
@@ -81,8 +110,6 @@ pub fn chunk_text(text: &str, max_chars: usize, overlap: usize) -> Vec<String> {
         let next = end.saturating_sub(overlap);
         start = if next > start { next } else { end };
     }
-
-    chunks
 }
 
 #[cfg(test)]
@@ -164,5 +191,31 @@ mod tests {
         for ch in &c {
             assert!(!ch.is_empty());
         }
+    }
+
+    /// `count_chunks` 是 l1 阅读的「总块数」来源：必须与 `chunk_text` 的块数**逐例相等**，
+    /// 否则 AI 拿到的分页提示（共 N 块 / 从第几块继续）会和 l2 实际切出来的块表打架。
+    #[test]
+    fn count_matches_chunk_text_len() {
+        let cases: [(&str, usize, usize); 6] = [
+            ("", DEFAULT_MAX_CHARS, DEFAULT_OVERLAP),
+            ("   \n\t  ", DEFAULT_MAX_CHARS, DEFAULT_OVERLAP),
+            ("膝盖不舒服，把深蹲换成腿举", DEFAULT_MAX_CHARS, DEFAULT_OVERLAP),
+            ("腿部力量训练，深蹲五组。", DEFAULT_MAX_CHARS, DEFAULT_OVERLAP),
+            ("abcdefghij", 32, 20),
+            ("甲", 32, 999),
+        ];
+        for (text, max, overlap) in cases {
+            assert_eq!(
+                count_chunks(text, max, overlap),
+                chunk_text(text, max, overlap).len(),
+                "text={text:?} max={max} overlap={overlap}"
+            );
+        }
+        let long = "腿部力量训练，深蹲五组。".repeat(200);
+        assert_eq!(
+            count_chunks(&long, DEFAULT_MAX_CHARS, DEFAULT_OVERLAP),
+            chunk_text(&long, DEFAULT_MAX_CHARS, DEFAULT_OVERLAP).len()
+        );
     }
 }

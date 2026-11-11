@@ -306,6 +306,19 @@ export interface KbDirListing {
   truncated: boolean
 }
 
+/**
+ * 根层统计（`kb_root_stats`）：顶层目录的直接子项数与节点更新时间。
+ *
+ * 这是 `kb_list_dir("")` 的「只要数字」版本 —— 关于你首屏只需要 13 个 root 的计数，
+ * 不值得把整棵树实例化。`childCount` 与 `KbEntry.childCount` 同口径（根层列举）。
+ */
+export interface KbRootStat {
+  name: string
+  childCount: number
+  /** 目录节点自身的 updatedAt；隐式目录为空串 */
+  updatedAt: string
+}
+
 /* ---------- 回收站（kb/files.rs） ---------- */
 
 export interface KbTrashEntry {
@@ -491,6 +504,320 @@ export interface KbMemoryStats {
 export interface KbCognition {
   memories: KbMemory[]
   text: string
+}
+
+/**
+ * 「关于你」首屏聚合（kb_memory_overview）：活跃记忆 + 概况 + 注入块。
+ *
+ * 三份视图来自 Rust 侧同一次全表读 —— 页面不要再并发发三条命令各读一遍。
+ */
+export interface KbMemoryOverview {
+  memories: KbMemory[]
+  stats: KbMemoryStats
+  cognition: KbCognition
+}
+
+/* ---------- 记忆分片层（kb/shard，方案 §7.3） ---------- */
+
+export type MemoryShardOrigin =
+  | 'conversation'
+  | 'dream_summary'
+  | 'manual_write'
+  | 'marked_important'
+
+export type MemoryShardState = 'active' | 'dormant' | 'archived'
+
+export type MemoryShardEventType =
+  | 'birth'
+  | 'search_hit'
+  | 'manual_mark'
+  | 'manual_edit'
+  | 'manual_archive'
+  | 'manual_restore'
+  | 'dream_consolidate'
+  | 'dream_revive'
+  | 'dream_supersede'
+
+export interface MemoryProvenance {
+  reasoningDigest?: string
+  toolCalls?: { name: string; ok: boolean; brief: string }[]
+  userText?: string
+  anchorSeq?: number
+  messageIds?: string[]
+  legacy?: number
+  legacyActiveCount?: number
+}
+
+export interface MemoryShard {
+  id: number
+  origin: MemoryShardOrigin
+  memType: KbMemoryType
+  topic: string
+  category: string
+  content: string
+  confidence: number
+  baseWeight: number
+  floor: number
+  stability: number
+  lastEventAt: string
+  state: MemoryShardState
+  anchorMessageId: string | null
+  chatId: string | null
+  userMessageId: string | null
+  provenance: MemoryProvenance
+  supersedes: number | null
+  consolidatedInto: number | null
+  dreamAction: 'supersede_new' | 'consolidate_merged' | 'digest' | null
+  sourceChatId: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  archivedReason: string | null
+  /** 读时计算：base_weight × (floor + (1-floor) × e^(-闲置天数/稳定期)) */
+  effectiveWeight: number
+}
+
+export interface MemoryShardHistory {
+  seq: number
+  at: string
+  event: MemoryShardEventType
+  stability: number
+  baseWeight: number
+  floor: number
+  factor: number
+  rank: number | null
+  hits30d: number | null
+  runId: string
+  note: string
+}
+
+export interface MemoryShardDetail {
+  shard: MemoryShard
+  history: MemoryShardHistory[]
+  sourceMessageIds: string[]
+}
+
+/** 抽取/Dream 之外的显式写入动作；update 只改传入字段 */
+export interface ShardWriteAction {
+  op: 'add' | 'update' | 'delete' | 'archive'
+  id?: number
+  content?: string
+  memType?: KbMemoryType
+  topic?: string
+  category?: string
+  confidence?: number
+  reason?: string
+}
+
+export interface ShardPatch {
+  content?: string
+  memType?: KbMemoryType
+  topic?: string
+  category?: string
+}
+
+export interface ShardApplyResult {
+  added: number
+  updated: number
+  deleted: number
+  archived: number
+  restored: number
+  skipped: number
+}
+
+export interface ShardSweepResult {
+  checked: number
+  activated: number
+  dormant: number
+  archived: number
+}
+
+export interface MemorySearchHit {
+  shardId: number
+  content: string
+  memType: KbMemoryType
+  topic: string
+  category: string
+  origin: MemoryShardOrigin
+  state: MemoryShardState
+  anchorMessageId: string | null
+  chatId: string | null
+  relevance: number
+  effectiveWeight: number
+  createdAt: string
+}
+
+export interface MemorySearchResult {
+  hits: MemorySearchHit[]
+  mode: 'vector' | 'keyword' | 'weight'
+  reinforced: number
+  revived: number
+  tookMs: number
+}
+
+export interface MemoryInjectShard {
+  shardId: number
+  content: string
+  memType: KbMemoryType
+  topic: string
+  category: string
+  origin: MemoryShardOrigin
+  anchorMessageId: string | null
+  chatId: string | null
+  effectiveWeight: number
+  reason: 'anchor' | 'digest' | 'relevant' | 'weight'
+}
+
+export interface MemoryInjectResult {
+  text: string
+  shards: MemoryInjectShard[]
+  estimatedTokens: number
+  budgetTokens: number
+  mode: 'vector' | 'keyword' | 'weight'
+}
+
+export interface MemoryShardStats {
+  active: number
+  dormant: number
+  archived: number
+  total: number
+  limit: number
+  maxChars: number
+  injected: number
+  injectedChars: number
+  estimatedTokens: number
+  budgetTokens: number
+  avgConfidence: number
+  avgEffectiveWeight: number
+  signalRatio: number
+  noiseRatio: number
+  embeddingPending: number
+  embeddingFailed: number
+  lastSweepAt: string | null
+  lastDreamAt: string | null
+  atCap: boolean
+  sweepTruncated: boolean
+}
+
+export interface MemoryShardOverview {
+  shards: MemoryShard[]
+  stats: MemoryShardStats
+  cognition: MemoryInjectResult
+}
+
+export interface MemoryDuplicate {
+  aId: number
+  bId: number
+  score: number
+  aContent: string
+  bContent: string
+}
+
+export interface MemoryShardEvent {
+  at: string
+  shardId: number
+  event: MemoryShardEventType
+  content: string
+  runId: string
+  note: string
+}
+
+export type DreamGateReason =
+  | 'ok'
+  | 'cooldown'
+  | 'insufficient_material'
+  | 'running'
+  | 'no_material'
+  | 'disabled'
+
+export interface DreamGate {
+  eligible: boolean
+  reason: DreamGateReason
+  lastRunAt: string | null
+  sessionsSince: number
+  messagesSince: number
+  cooldownHours: number
+  minSessions: number
+  minMessages: number
+}
+
+export interface DreamMessage {
+  id: string
+  seq: number
+  role: 'user' | 'assistant'
+  /** 直接存后端 kind 字符串，避免 kb.ts ↔ ai.ts 的类型循环依赖 */
+  kind: string
+  text: string | null
+  anchorId: string | null
+  createdAt: string
+}
+
+export interface DreamSession {
+  chatId: string
+  title: string
+  updatedAt: string
+  messages: DreamMessage[]
+}
+
+export interface DreamShardBrief {
+  id: number
+  content: string
+  memType: KbMemoryType
+  topic: string
+  category: string
+  origin: MemoryShardOrigin
+  state: MemoryShardState
+  stability: number
+  effectiveWeight: number
+  anchorMessageId: string | null
+  chatId: string | null
+  updatedAt: string
+}
+
+export interface DreamContext {
+  since: string | null
+  sessions: DreamSession[]
+  shards: DreamShardBrief[]
+  duplicatePairs: MemoryDuplicate[]
+  totalSessions: number
+  totalMessages: number
+}
+
+export type DreamAction =
+  | {
+      type: 'supersede'
+      oldShardId: number
+      content: string
+      memType?: KbMemoryType
+      topic?: string
+      category?: string
+      reason?: string
+    }
+  | {
+      type: 'consolidate'
+      shardIds: number[]
+      content: string
+      memType?: KbMemoryType
+      topic?: string
+      category?: string
+      reason?: string
+    }
+  | { type: 'digest'; content: string; topic?: string; category?: string }
+  | { type: 'revive'; shardId: number; reason?: string }
+
+export interface DreamBeginResult {
+  gate: DreamGate
+  runId: string | null
+  context: DreamContext | null
+}
+
+export interface DreamApplyResult {
+  created: number
+  superseded: number
+  consolidated: number
+  revived: number
+  skipped: number
+  alreadyApplied: boolean
 }
 
 /* ---------- 压缩包（kb/archive.rs） ---------- */

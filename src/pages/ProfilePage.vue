@@ -36,7 +36,12 @@ import { toMs } from '@/files/provider'
 import { healthSyncService } from '@/services/healthSyncService'
 import { kbService } from '@/services/kbService'
 import { useNutritionStore } from '@/stores/nutrition'
-import type { HealthMetricSeries, KbCognition, KbMemory, KbMemoryStats } from '@/types'
+import type {
+  HealthMetricSeries,
+  MemoryInjectResult,
+  MemoryShard,
+  MemoryShardStats,
+} from '@/types'
 import { fmtDateCn, toDateStr } from '@/utils/date'
 import { bmiBand, bmiOf } from '@/utils/health'
 
@@ -44,8 +49,8 @@ import { bmiBand, bmiOf } from '@/utils/health'
  * 「关于你」= 现有 VFS 的人类可读投影，不新增存储、不移动任何物理路径。
  *
  * 页面回答三件事：
- *   1. Rein 现在知道什么 ——「我对你的了解」读 kb_memories / kb_memory_stats /
- *      kb_cognition（AI 从对话里提炼的长期记忆，不是用户手填的表单）；
+ *   1. Rein 现在知道什么 ——「我对你的了解」读 memory_shard_overview
+ *      （AI 从对话里提炼、按分片维护的长期记忆，不是用户手填的表单）；
  *   2. 这些信息放在哪 —— 健康 / 生活 / 语音笔记 / 笔记与文档 / Rein 的角落，
  *      都是 `config/workspaceView.ts` 里的前端分组，点进去是真实的 `kb_list_dir`；
  *   3. 系统自己生成了哪些文件 —— 最后一张弱化的「程序数据」，只读、按物理目录读。
@@ -87,9 +92,9 @@ function openEdit(): void {
    「我对你的了解」
    ============================================================ */
 
-const memories = ref<KbMemory[]>([])
-const stats = ref<KbMemoryStats | null>(null)
-const cognition = ref<KbCognition | null>(null)
+const memories = ref<MemoryShard[]>([])
+const stats = ref<MemoryShardStats | null>(null)
+const cognition = ref<MemoryInjectResult | null>(null)
 const memLoading = ref(true)
 const memError = ref<string | null>(null)
 const cogOpen = ref(false)
@@ -104,8 +109,27 @@ function formatMonthDay(ms: number): string {
 }
 
 const activeCount = computed(
-  () => stats.value?.active ?? memories.value.filter((m) => !m.archivedAt).length,
+  () => memories.value.filter((m) => m.state === 'active').length,
 )
+
+/** 活跃 + 休眠（与旧 compat 的「活跃」口径一致，用于「查看全部 N 条记忆」） */
+const totalCount = computed(() => memories.value.length)
+
+const dormantCount = computed(
+  () => memories.value.filter((m) => m.state === 'dormant').length,
+)
+
+/** 当前展示条目的平均记忆强度（effectiveWeight 的读时值） */
+const avgStrength = computed(() => {
+  if (!memories.value.length) return 0
+  return memories.value.reduce((sum, m) => sum + (m.effectiveWeight ?? 0), 0) / memories.value.length
+})
+
+/** 当前展示条目的平均稳定期（天） */
+const avgStability = computed(() => {
+  if (!memories.value.length) return 0
+  return memories.value.reduce((sum, m) => sum + (m.stability ?? 0), 0) / memories.value.length
+})
 
 const latestUpdatedMs = computed<number | null>(() => {
   let max: number | null = null
@@ -134,12 +158,12 @@ const isFresh = computed(
     Date.now() - latestUpdatedMs.value < 7 * 24 * 60 * 60 * 1000,
 )
 
-/** 摘要取 salience 最高的 5 条；一条记忆都没有时退回 cognition.text 的第一段。 */
+/** 摘要取记忆强度最高的 5 条；一条记忆都没有时退回 cognition.text 的第一段。 */
 const memoryLines = computed<string[]>(() => {
   const top = [...memories.value]
     .sort(
       (a, b) =>
-        (b.salience ?? 0) - (a.salience ?? 0) ||
+        (b.effectiveWeight ?? 0) - (a.effectiveWeight ?? 0) ||
         (toMs(b.updatedAt) ?? 0) - (toMs(a.updatedAt) ?? 0),
     )
     .slice(0, 5)
@@ -161,7 +185,14 @@ const statsLine = computed(() => {
   if (memLoading.value) return ''
   const s = stats.value
   if (s) {
-    return `${s.active} 条记忆 · ${s.injected} 条注入 · ${Math.round((s.signalRatio ?? 0) * 100)}% 覆盖率`
+    const parts = [
+      `${activeCount.value} 活跃`,
+      `${dormantCount.value} 休眠`,
+      `${s.injected} 条注入`,
+      `平均稳定期 ${avgStability.value.toFixed(0)} 天`,
+      `平均强度 ${avgStrength.value.toFixed(2)}`,
+    ]
+    return parts.join(' · ')
   }
   if (memError.value) return ''
   return memories.value.length ? `${memories.value.length} 条记忆` : ''
@@ -171,10 +202,10 @@ const statsLine = computed(() => {
 const headerSubtitle = computed<string | undefined>(() => {
   if (memLoading.value) return '正在读取记忆…'
   if (memError.value) return undefined
-  if (activeCount.value === 0) return '还没有记忆'
+  if (totalCount.value === 0) return '还没有记忆'
   return latestUpdatedMs.value == null
-    ? `${activeCount.value} 条记忆`
-    : `${activeCount.value} 条记忆 · 更新于 ${formatDay(latestUpdatedMs.value)}`
+    ? `${totalCount.value} 条记忆`
+    : `${totalCount.value} 条记忆 · 更新于 ${formatDay(latestUpdatedMs.value)}`
 })
 
 /* ============================================================
@@ -221,6 +252,17 @@ function groupUpdatedText(group: WorkspaceGroup): string {
   }
   return max == null ? '' : `${formatMonthDay(max)}更新`
 }
+
+/**
+ * 每张分组卡的「最近更新」文案：一次算全。
+ * 模板里从前每张卡调两次 `groupUpdatedText`（`v-if` + 插值），每次都要遍历 sources；
+ * 卡片只有 5 张时无所谓，但它是首屏渲染路径上的重复工作，且随分组数/root 数放大。
+ */
+const groupUpdated = computed<ReadonlyMap<string, string>>(() => {
+  const map = new Map<string, string>()
+  for (const g of WORKSPACE_GROUPS) map.set(g.key, groupUpdatedText(g))
+  return map
+})
 
 /* ============================================================
    健康磁贴
@@ -292,39 +334,38 @@ async function settle<T>(request: Promise<T>): Promise<Settled<T>> {
 async function loadMemory(): Promise<void> {
   memLoading.value = true
   memError.value = null
-  const [mem, stat, cog] = await Promise.all([
-    settle(kbService.memories(undefined, 'active')),
-    settle(kbService.memoryStats()),
-    settle(kbService.cognition()),
-  ])
-  if (mem.ok) memories.value = mem.value
-  else {
+  // 一次聚合拿分片 + 统计 + 当前注入块（同为分片读路径；不再并发三条命令）。
+  // 顶部卡片只展示 curated（手动/梦境/重要），conversation 分片留给主动检索与对话页。
+  const result = await settle(kbService.memoryShardOverview())
+  if (result.ok) {
+    memories.value = result.value.shards.filter((s) => s.origin !== 'conversation')
+    stats.value = result.value.stats
+    cognition.value = result.value.cognition
+  } else {
     memError.value = '记忆暂时读不到'
-    console.warn('[about] kb_memories 读取失败', mem.error)
+    console.warn('[about] memory_shard_overview 读取失败', result.error)
   }
-  if (stat.ok) stats.value = stat.value
-  else console.warn('[about] kb_memory_stats 读取失败', stat.error)
-  if (cog.ok) cognition.value = cog.value
-  else console.warn('[about] kb_cognition 读取失败', cog.error)
   memLoading.value = false
 }
 
 async function loadCounts(): Promise<void> {
   countsLoading.value = true
   countsError.value = null
-  const result = await settle(kbService.listDir(''))
+  // 只要数字：kb_root_stats 在 SQLite 里 GROUP BY 完回几十行；
+  // 从前用 listDir('') 会把整棵树（docs/files/assets）实例化成条目再数一遍。
+  const result = await settle(kbService.rootStats())
   if (result.ok) {
     const map = new Map<string, DirStat>()
-    for (const entry of result.value.entries) {
-      map.set(entry.name, {
-        count: entry.childCount,
-        updatedMs: toMs(entry.updatedAt) ?? null,
+    for (const row of result.value) {
+      map.set(row.name, {
+        count: row.childCount,
+        updatedMs: toMs(row.updatedAt) ?? null,
       })
     }
     rootStats.value = map
   } else {
     countsError.value = '工作区目录暂时读不到'
-    console.warn('[about] kb_list_dir 读取失败', result.error)
+    console.warn('[about] kb_root_stats 读取失败', result.error)
   }
   countsLoading.value = false
 }
@@ -477,7 +518,7 @@ function accentStyle(accent: string): string {
           <span class="hint-slot">
             <InfoHint
               title="我对你的了解"
-              content="这些是 AI 从对话里提炼的长期记忆；点「查看 AI 实际读到的版本」能看到它这一轮真正注入的文本。"
+              content="这些是 AI 从对话里提炼并分片维护的长期记忆：活跃/休眠会随记忆强度与检索变化；注入预算 2000 tokens、最多 8 条。点「查看 AI 实际读到的版本」能看到它这一轮真正注入的文本。"
             />
           </span>
         </header>
@@ -514,7 +555,7 @@ function accentStyle(accent: string): string {
 
         <footer v-if="!memLoading && !memError && hasMemory" class="mfoot">
           <button class="mlink" data-testid="about-memory-manage" @click="goKnowledge">
-            <span>查看全部 {{ activeCount }} 条记忆</span>
+            <span>查看全部 {{ totalCount }} 条记忆</span>
             <ChevronRight :size="14" />
           </button>
           <button
@@ -628,7 +669,7 @@ function accentStyle(accent: string): string {
             <span class="fmeta num">
               <span v-if="countsLoading" class="skel fmeta-skel" aria-hidden="true" />
               <template v-else>
-                {{ groupCountText(g) }}<template v-if="groupUpdatedText(g)"> · {{ groupUpdatedText(g) }}</template>
+                {{ groupCountText(g) }}<template v-if="groupUpdated.get(g.key)"> · {{ groupUpdated.get(g.key) }}</template>
               </template>
             </span>
           </button>

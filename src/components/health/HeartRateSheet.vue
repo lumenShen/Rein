@@ -23,6 +23,17 @@ const connectedId = computed(() => (hr.connected ? hr.device?.id ?? null : null)
 const scanning = computed(() => hr.scanning)
 const busy = computed(() => hr.scanning || hr.connecting || hr.reconnecting)
 
+/** 连上以后只留当前设备：扫描快照里的耳机 / 电视对训练毫无意义，留着只是噪音。
+ *  已连接设备不一定还在最后一次扫描快照里（自动连接、列表被新扫描清空），
+ *  这时用状态里的 device 兜底，保证「已连接设备」下面永远有一行。 */
+const visibleDevices = computed<HrDevice[]>(() => {
+  if (!hr.connected) return hr.devices
+  const id = connectedId.value
+  if (!id) return []
+  const own = hr.devices.find((d) => d.id === id) ?? hr.device
+  return own ? [own] : []
+})
+
 const stateLabel = computed(() => {
   switch (hr.status.state) {
     case 'connected':
@@ -130,7 +141,7 @@ watch(
 
       <section class="devices">
         <header class="sec-head">
-          <h3>附近设备</h3>
+          <h3>{{ hr.connected ? '已连接设备' : '附近设备' }}</h3>
           <button
             v-if="!hr.connected"
             type="button"
@@ -143,8 +154,8 @@ watch(
           <span v-else class="sec-hint">先断开再扫描</span>
         </header>
 
-        <p v-if="scanning && hr.devices.length === 0" class="empty">正在扫描…</p>
-        <p v-else-if="hr.devices.length === 0" class="empty">
+        <p v-if="scanning && visibleDevices.length === 0" class="empty">正在扫描…</p>
+        <p v-else-if="visibleDevices.length === 0" class="empty">
           <template v-if="hr.connected">
             已连接当前设备。要更换请先点右上角「断开」，再重新扫描。
           </template>
@@ -153,7 +164,7 @@ watch(
           </template>
         </p>
         <ul v-else class="list">
-          <li v-for="d in hr.devices" :key="d.id">
+          <li v-for="d in visibleDevices" :key="d.id">
             <button
               type="button"
               class="dev"

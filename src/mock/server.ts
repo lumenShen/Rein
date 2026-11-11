@@ -79,7 +79,15 @@ import type {
   HrProfileInput,
   HrStatus,
   HrWorkoutSummary,
+  ConnectedAppPatch,
+  ConnectedAppRequestMode,
 } from '@/types'
+import {
+  mockConnectedAppInvoke,
+  mockConnectedAppRequest,
+  mockConnectedAppStatus,
+  mockConnectedAppUpdate,
+} from '@/mock/connectedApps'
 import { normalizeActivation } from '@/config/muscles'
 import { buildAxisRows } from '@/utils/campusTimeAxis'
 import { addDays, startOfMonth, startOfWeek, todayStr } from '@/utils/date'
@@ -5774,6 +5782,1699 @@ function updateSnapshot(): UpdateSnapshot {
   }
 }
 
+/* ---------------- 记忆分片（kb/shard，方案 §7） ----------------
+ *
+ * 浏览器 mock 用一份 localStorage 快照承载 shards / history / dreamRuns，
+ * 语义对齐 Rust（`shard/{store,decay,retrieve,inject,dream}.rs`）：
+ * - 三态由读时权重推导（24 小时巡检节流 = 600s，force 跳过节流）；
+ * - 主动检索只有 rank<3、relevance≥0.60、30 天 ≤10 次、同 shard 10 分钟冷却才续命，
+ *   续命写 `search_hit` 并唤醒 dormant/（显式 revive 的）archived；
+ * - 自动注入严格只读，默认排除 conversation，条数/字符/token 三重预算；
+ * - Dream apply 以 run 为幂等键：done 重放返回首次结果（alreadyApplied=true），
+ *   整批一个"事务"（这里用克隆快照，出错不落盘）。
+ *
+ * 旧的 `kb_memories` 命令保持原样；首次进入分片层时按 0054 的映射把旧记忆回填一次。
+ * 浏览器没有 embedding，duplicates 沿用旧 mock 的伪向量（与旧 `kb_memory_duplicates` 同口径）。
+ */
+
+type MockShardOrigin = 'conversation' | 'dream_summary' | 'manual_write' | 'marked_important'
+type MockShardState = 'active' | 'dormant' | 'archived'
+type MockShardEvent =
+  | 'birth'
+  | 'search_hit'
+  | 'manual_mark'
+  | 'manual_edit'
+  | 'manual_archive'
+  | 'manual_restore'
+  | 'dream_consolidate'
+  | 'dream_revive'
+  | 'dream_supersede'
+
+interface MockShardRow {
+  id: number
+  idempotencyKey: string
+  origin: MockShardOrigin
+  memType: string
+  topic: string
+  category: string
+  content: string
+  contentHash: string
+  confidence: number
+  baseWeight: number
+  floor: number
+  stability: number
+  lastEventAt: string
+  state: MockShardState
+  anchorMessageId: string | null
+  chatId: string | null
+  userMessageId: string | null
+  provenance: Record<string, unknown>
+  supersedes: number | null
+  consolidatedInto: number | null
+  dreamAction: string | null
+  sourceChatId: string | null
+  sourceMessageIds: string[]
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  archivedReason: string | null
+  legacyMemoryId: number | null
+  legacyActiveCount: number
+  legacyLastUsedAt: string | null
+}
+
+interface MockShardHistoryRow {
+  shardId: number
+  seq: number
+  at: string
+  event: MockShardEvent
+  stability: number
+  baseWeight: number
+  floor: number
+  factor: number
+  rank: number | null
+  hits30d: number | null
+  runId: string
+  note: string
+}
+
+interface MockDreamRun {
+  id: string
+  startedAt: string
+  finishedAt: string | null
+  status: 'running' | 'done' | 'failed' | 'cancelled'
+  sessionCount: number
+  messageCount: number
+  result: Record<string, number> | null
+  error: string | null
+}
+
+interface MockShardStore {
+  version: number
+  nextShardId: number
+  lastSweepAt: string | null
+  shards: MockShardRow[]
+  history: MockShardHistoryRow[]
+  dreamRuns: MockDreamRun[]
+}
+
+const SHARD_STORE_KEY = 'rein.mock.memory_shards.v1'
+const SHARD_THETA_ACTIVE = 0.25
+const SHARD_THETA_DORMANT = 0.08
+const SHARD_S_MAX = 3650
+const SHARD_HISTORY_MAX = 512
+const SHARD_SWEEP_INTERVAL_MS = 600_000
+const SHARD_MAX_CHARS = 1800
+const SHARD_MEMORY_TYPES = ['preference', 'constraint', 'event', 'entity', 'profile', 'pattern']
+const DREAM_COOLDOWN_HOURS = 3
+const DREAM_MIN_SESSIONS = 1
+const DREAM_MIN_MESSAGES = 5
+const DREAM_MAX_ACTIONS = 12
+const DREAM_LEASE_MINUTES = 10
+const DREAM_REVIVE_MIN_R = 0.10
+const DREAM_REVIVE_MAX_R = 0.30
+const DREAM_CONTEXT_MAX_SESSIONS = 8
+const DREAM_CONTEXT_MAX_MESSAGES = 200
+const DREAM_CONTEXT_MAX_SHARDS = 40
+const DREAM_CONTEXT_MAX_DUPLICATES = 20
+const DREAM_SHARD_BRIEF_CHARS = 300
+const DREAM_DUP_THRESHOLD = 0.86
+const INJECT_BUDGET_TOKENS = 2000
+const INJECT_MAX_CHARS = 3200
+const INJECT_MAX_SHARDS = 8
+const INJECT_ANCHOR_MAX = 3
+const INJECT_DIGEST_MAX = 2
+const INJECT_CONVERSATION_MAX = 2
+const INJECT_CONVERSATION_CHARS = 600
+const DUP_SCAN_LIMIT_NEW = 400
+
+let mockShardStore: MockShardStore | null = null
+let mockDreamSeq = 0
+
+/** 字符数（emoji 按 1 个算，与 Rust `chars().count()` 同口径） */
+const mockCharCount = (s: string): number => Array.from(s).length
+const mockSliceChars = (s: string, n: number): string => Array.from(s).slice(0, n).join('')
+const mockRound3 = (x: number): number => Math.round(x * 1000) / 1000
+
+/** 兼容 RFC3339 与 SQLite `YYYY-MM-DD HH:MM:SS`（后者按 UTC 解释，与 Rust parse_ts 一致） */
+function mockShardTime(raw: string | null | undefined): number | null {
+  if (!raw) return null
+  const text = raw.trim()
+  if (!text) return null
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?/.test(text)) {
+    const ms = Date.parse(`${text.replace(' ', 'T')}Z`)
+    return Number.isFinite(ms) ? ms : null
+  }
+  const ms = Date.parse(text)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function mockShardWeight(
+  s: { baseWeight: number; floor: number; stability: number; lastEventAt: string },
+  nowMs = Date.now(),
+): number {
+  const at = mockShardTime(s.lastEventAt)
+  const dtDays = at == null ? 0 : Math.max(0, (nowMs - at) / 86_400_000)
+  const stability = Math.max(0.1, s.stability)
+  return s.baseWeight * (s.floor + (1 - s.floor) * Math.exp(-dtDays / stability))
+}
+
+function mockShardStateFor(weight: number): MockShardState {
+  if (weight >= SHARD_THETA_ACTIVE) return 'active'
+  if (weight >= SHARD_THETA_DORMANT) return 'dormant'
+  return 'archived'
+}
+
+function mockShardParams(origin: string): { baseWeight: number; floor: number; s0: number } {
+  if (origin === 'conversation') return { baseWeight: 1, floor: 0.05, s0: 3 }
+  if (origin === 'dream_summary') return { baseWeight: 2, floor: 0.1, s0: 10 }
+  if (origin === 'marked_important') return { baseWeight: 4, floor: 0.35, s0: 90 }
+  return { baseWeight: 2.5, floor: 0.15, s0: 20 }
+}
+
+/** 与 `source::sanitize` 同口径：非法路径字符换 `-`，去首尾 `-`，空段记 `未命名` */
+function mockSanitizeSegment(raw: string): string {
+  const bad = new Set(['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t'])
+  let out = ''
+  for (const ch of raw.trim()) {
+    if ([...out].length >= 16) break
+    if (bad.has(ch)) out += '-'
+    else if (!/[\u0000-\u001f\u007f]/.test(ch)) out += ch
+  }
+  const trimmed = out.trim().replace(/^-+|-+$/g, '')
+  return trimmed || '未命名'
+}
+
+function mockNormalizeCategory(raw: string): string {
+  return raw
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(mockSanitizeSegment)
+    .join('/')
+}
+
+function mockNormalizeShardType(raw: string): string {
+  const t = raw.trim()
+  return SHARD_MEMORY_TYPES.includes(t) ? t : 'preference'
+}
+
+function mockNormalizeShardContent(raw: string): string {
+  const t = raw.trim()
+  if (mockCharCount(t) <= SHARD_MAX_CHARS) return t
+  return `${mockSliceChars(t, SHARD_MAX_CHARS - 1)}…`
+}
+
+/** FNV-1a 64（与 `index::content_hash(&[content])` 同算法，含段分隔 0xff） */
+function mockContentHash(parts: string[]): string {
+  let h = 0xcbf29ce484222325n
+  const prime = 0x100000001b3n
+  const mask = 0xffffffffffffffffn
+  for (const part of parts) {
+    for (const b of new TextEncoder().encode(part)) {
+      h ^= BigInt(b)
+      h = (h * prime) & mask
+    }
+    h ^= 0xffn
+    h = (h * prime) & mask
+  }
+  return h.toString(16).padStart(16, '0')
+}
+
+function saveMockShardStore(): void {
+  if (!mockShardStore) return
+  try {
+    localStorage.setItem(SHARD_STORE_KEY, JSON.stringify(mockShardStore))
+  } catch {
+    /* localStorage 不可用时退化为内存态 */
+  }
+}
+
+/** 首次进入分片层：读快照，没有就按 0054 的映射把旧 kb_memories 回填一次。 */
+function loadMockShardStore(): MockShardStore {
+  if (mockShardStore) return mockShardStore
+  let loaded: MockShardStore | null = null
+  try {
+    const raw = localStorage.getItem(SHARD_STORE_KEY)
+    if (raw) loaded = JSON.parse(raw) as MockShardStore
+  } catch {
+    loaded = null
+  }
+  if (loaded && Array.isArray(loaded.shards)) {
+    loaded.history = Array.isArray(loaded.history) ? loaded.history : []
+    loaded.dreamRuns = Array.isArray(loaded.dreamRuns) ? loaded.dreamRuns : []
+    loaded.lastSweepAt = loaded.lastSweepAt ?? null
+    loaded.nextShardId = Math.max(
+      Number(loaded.nextShardId ?? 0),
+      ...loaded.shards.map((s) => Number(s.id)),
+      0,
+    )
+    mockShardStore = loaded
+    return loaded
+  }
+
+  loadKbStore()
+  const store: MockShardStore = {
+    version: 1,
+    nextShardId: 0,
+    lastSweepAt: null,
+    shards: [],
+    history: [],
+    dreamRuns: [],
+  }
+  // 0054：旧行是抽取/合并产物，用 dream 档先验（2.0 / 0.10 / 10），origin 仍记 manual_write。
+  for (const m of kbMemories) {
+    const id = ++store.nextShardId
+    const archived = Boolean(m.archivedAt)
+    const lastEventAt = m.lastUsedAt ?? m.updatedAt ?? m.createdAt
+    store.shards.push({
+      id,
+      idempotencyKey: `legacy:${m.id}`,
+      origin: 'manual_write',
+      memType: m.memType,
+      topic: m.topic,
+      category: m.category,
+      content: m.content,
+      contentHash: mockContentHash([m.content]),
+      confidence: m.confidence,
+      baseWeight: 2,
+      floor: 0.1,
+      stability: 10,
+      lastEventAt,
+      state: archived ? 'archived' : 'active',
+      anchorMessageId: null,
+      chatId: m.sourceChatId,
+      userMessageId: null,
+      provenance: { legacy: 1, legacyActiveCount: m.activeCount },
+      supersedes: null,
+      consolidatedInto: null,
+      dreamAction: null,
+      sourceChatId: m.sourceChatId,
+      sourceMessageIds: [],
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
+      archivedAt: m.archivedAt,
+      archivedReason: m.archivedReason,
+      legacyMemoryId: m.id,
+      legacyActiveCount: m.activeCount,
+      legacyLastUsedAt: m.lastUsedAt,
+    })
+    store.history.push({
+      shardId: id,
+      seq: 1,
+      at: m.createdAt,
+      event: 'birth',
+      stability: 10,
+      baseWeight: 2,
+      floor: 0.1,
+      factor: 1,
+      rank: null,
+      hits30d: null,
+      runId: '',
+      note: 'legacy',
+    })
+    if (archived && m.archivedAt) {
+      store.history.push({
+        shardId: id,
+        seq: 2,
+        at: m.archivedAt,
+        event: 'manual_archive',
+        stability: 10,
+        baseWeight: 2,
+        floor: 0.1,
+        factor: 1,
+        rank: null,
+        hits30d: null,
+        runId: '',
+        note: 'legacy',
+      })
+    }
+  }
+  mockShardStore = store
+  saveMockShardStore()
+  return store
+}
+
+function mockShardToModel(s: MockShardRow, nowMs = Date.now()) {
+  return {
+    id: s.id,
+    origin: s.origin,
+    memType: s.memType,
+    topic: s.topic,
+    category: s.category,
+    content: s.content,
+    confidence: s.confidence,
+    baseWeight: s.baseWeight,
+    floor: s.floor,
+    stability: s.stability,
+    lastEventAt: s.lastEventAt,
+    state: s.state,
+    anchorMessageId: s.anchorMessageId,
+    chatId: s.chatId,
+    userMessageId: s.userMessageId,
+    provenance: s.provenance,
+    supersedes: s.supersedes,
+    consolidatedInto: s.consolidatedInto,
+    dreamAction: s.dreamAction,
+    sourceChatId: s.sourceChatId,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+    archivedAt: s.archivedAt,
+    archivedReason: s.archivedReason,
+    effectiveWeight: mockShardWeight(s, nowMs),
+  }
+}
+
+/** 同 Rust `history::append`：seq 递增、512 行软上限、非空 run_id 的 (shard,run,event) 幂等。 */
+function mockHistoryAppend(
+  store: MockShardStore,
+  shardId: number,
+  ev: Omit<MockShardHistoryRow, 'shardId' | 'seq'>,
+): boolean {
+  const rows = store.history.filter((h) => h.shardId === shardId)
+  if (rows.length >= SHARD_HISTORY_MAX) return false
+  if (ev.runId && rows.some((h) => h.runId === ev.runId && h.event === ev.event)) return false
+  const seq = Math.max(0, ...rows.map((h) => h.seq)) + 1
+  store.history.push({ ...ev, shardId, seq })
+  return true
+}
+
+/** 与 `store::insert_shard` 的 `ON CONFLICT(idempotency_key) DO NOTHING` 对齐。 */
+function mockShardInsert(store: MockShardStore, row: Omit<MockShardRow, 'id'>): number {
+  if (store.shards.some((s) => s.idempotencyKey === row.idempotencyKey)) return 0
+  const id = ++store.nextShardId
+  store.shards.push({ ...row, id })
+  return id
+}
+
+function mockBirthStability(store: MockShardStore, id: number): number | null {
+  const rows = store.history.filter((h) => h.shardId === id).sort((a, b) => a.seq - b.seq)
+  return rows.length ? rows[0].stability : null
+}
+
+/** 删一行 + history 级联（Rust 由 FK 完成）。 */
+function mockDeleteShardRow(store: MockShardStore, id: number): boolean {
+  const i = store.shards.findIndex((s) => s.id === id)
+  if (i < 0) return false
+  store.shards.splice(i, 1)
+  store.history = store.history.filter((h) => h.shardId !== id)
+  return true
+}
+
+function mockSweep(store: MockShardStore, force: boolean) {
+  const nowMs = Date.now()
+  const lastMs = mockShardTime(store.lastSweepAt)
+  if (!force && lastMs != null && nowMs - lastMs >= 0 && nowMs - lastMs < SHARD_SWEEP_INTERVAL_MS) {
+    return { checked: 0, activated: 0, dormant: 0, archived: 0 }
+  }
+  const now = new Date(nowMs).toISOString()
+  const result = { checked: 0, activated: 0, dormant: 0, archived: 0 }
+  for (const s of store.shards) {
+    if (s.state === 'archived' || s.consolidatedInto != null) continue
+    result.checked += 1
+    const next = mockShardStateFor(mockShardWeight(s, nowMs))
+    if (next === s.state) continue
+    if (next === 'dormant') {
+      s.state = 'dormant'
+      result.dormant += 1
+    } else if (next === 'active') {
+      s.state = 'active'
+      s.archivedAt = null
+      s.archivedReason = null
+      result.activated += 1
+    } else {
+      s.state = 'archived'
+      s.archivedAt = now
+      s.archivedReason = 'decay'
+      result.archived += 1
+    }
+  }
+  store.lastSweepAt = now
+  saveMockShardStore()
+  return result
+}
+
+function mockSweepIfDue(store: MockShardStore): void {
+  mockSweep(store, false)
+}
+
+function mockArchiveShardInPlace(
+  store: MockShardStore,
+  id: number,
+  reason: string,
+  now = new Date().toISOString(),
+): boolean {
+  const s = store.shards.find((x) => x.id === id)
+  if (!s || s.state === 'archived') return false
+  const note = reason.trim() || 'manual'
+  s.state = 'archived'
+  s.archivedAt = now
+  s.archivedReason = note
+  s.updatedAt = now
+  mockHistoryAppend(store, id, {
+    at: now,
+    event: 'manual_archive',
+    stability: s.stability,
+    baseWeight: s.baseWeight,
+    floor: s.floor,
+    factor: 1,
+    rank: null,
+    hits30d: null,
+    runId: '',
+    note,
+  })
+  return true
+}
+
+/** `memory_shard_update` / apply 的 update 共用；strict 决定"缺行/已合并"是报错还是 skipped。 */
+function mockUpdateShardInPlace(
+  store: MockShardStore,
+  id: number,
+  patch: { content?: string | null; memType?: string | null; topic?: string | null; category?: string | null },
+  strict: boolean,
+  now = new Date().toISOString(),
+) {
+  const s = store.shards.find((x) => x.id === id)
+  if (!s) {
+    if (strict) throw new Error(`记忆不存在：id=${id}`)
+    return null
+  }
+  if (s.consolidatedInto != null) {
+    if (strict) throw new Error('该记忆已合并，请修改合并后的记忆')
+    return null
+  }
+  const nonEmpty = (v: string | null | undefined): string | null => {
+    if (v == null) return null
+    const t = v.trim()
+    return t ? t : null
+  }
+  const rawContent = nonEmpty(patch.content)
+  const content = rawContent == null ? s.content : mockNormalizeShardContent(rawContent)
+  if (!content) {
+    if (strict) throw new Error('记忆内容不能为空')
+    return null
+  }
+  const changed = content !== s.content
+  const newHash = changed ? mockContentHash([content]) : s.contentHash
+  if (changed) {
+    const collision = store.shards.find(
+      (x) =>
+        x.id !== id &&
+        (x.origin === 'manual_write' || x.origin === 'marked_important') &&
+        x.contentHash === newHash &&
+        x.consolidatedInto == null,
+    )
+    if (collision) throw new Error('内容与已有记忆重复')
+  }
+  const memType = mockNormalizeShardType(nonEmpty(patch.memType) ?? s.memType)
+  const topic = nonEmpty(patch.topic) ?? s.topic
+  const category =
+    nonEmpty(patch.category) != null
+      ? mockNormalizeCategory(nonEmpty(patch.category)!)
+      : s.category
+  const wasArchived = s.state === 'archived'
+  s.memType = memType
+  s.topic = topic
+  s.category = category
+  s.content = content
+  s.contentHash = newHash
+  s.updatedAt = now
+  if (wasArchived) {
+    s.state = 'active'
+    s.archivedAt = null
+    s.archivedReason = null
+    s.lastEventAt = now
+  }
+  mockHistoryAppend(store, id, {
+    at: now,
+    event: 'manual_edit',
+    stability: s.stability,
+    baseWeight: s.baseWeight,
+    floor: s.floor,
+    factor: 1,
+    rank: null,
+    hits30d: null,
+    runId: '',
+    note: strict && wasArchived ? 'restored-by-edit' : '',
+  })
+  return { model: mockShardToModel(s), restored: wasArchived, updated: !wasArchived }
+}
+
+function mockApplyShardActions(
+  store: MockShardStore,
+  actions: Record<string, unknown>[],
+  chatId: string | null,
+  messageIds: string[],
+) {
+  const result = { added: 0, updated: 0, deleted: 0, archived: 0, restored: 0, skipped: 0 }
+  if (!actions.length) return result
+  // 整批一个事务（克隆，出错不落盘）。
+  const draft: MockShardStore = structuredClone(store)
+  const now = new Date().toISOString()
+  for (const action of actions) {
+    const op = String(action.op ?? '')
+    if (op === 'add') {
+      const content = mockNormalizeShardContent(String(action.content ?? ''))
+      if (!content) {
+        result.skipped += 1
+        continue
+      }
+      const memType = mockNormalizeShardType(String(action.memType ?? ''))
+      const topic = String(action.topic ?? '').trim()
+      const category = mockNormalizeCategory(String(action.category ?? ''))
+      const confidence = Number(action.confidence == null ? 0.7 : action.confidence)
+      const hash = mockContentHash([content])
+      const existing = draft.shards
+        .filter(
+          (s) =>
+            (s.origin === 'manual_write' || s.origin === 'marked_important') &&
+            s.contentHash === hash &&
+            s.consolidatedInto == null,
+        )
+        .sort((a, b) => b.id - a.id)[0]
+      if (existing) {
+        if (existing.state === 'archived') {
+          const birth = mockBirthStability(draft, existing.id) ?? existing.stability
+          existing.state = 'active'
+          existing.archivedAt = null
+          existing.archivedReason = null
+          existing.stability = Math.max(existing.stability, birth)
+          existing.lastEventAt = now
+          existing.updatedAt = now
+          mockHistoryAppend(draft, existing.id, {
+            at: now,
+            event: 'manual_restore',
+            stability: existing.stability,
+            baseWeight: existing.baseWeight,
+            floor: existing.floor,
+            factor: 1,
+            rank: null,
+            hits30d: null,
+            runId: '',
+            note: 'duplicate-add',
+          })
+          result.restored += 1
+        } else {
+          result.skipped += 1
+        }
+        continue
+      }
+      const p = mockShardParams('manual_write')
+      const id = mockShardInsert(draft, {
+        idempotencyKey: `manual:${hash}`,
+        origin: 'manual_write',
+        memType,
+        topic,
+        category,
+        content,
+        contentHash: hash,
+        confidence: Math.min(1, Math.max(0, Number.isFinite(confidence) ? confidence : 0.7)),
+        baseWeight: p.baseWeight,
+        floor: p.floor,
+        stability: p.s0,
+        lastEventAt: now,
+        state: 'active',
+        anchorMessageId: null,
+        chatId,
+        userMessageId: null,
+        provenance: messageIds.length ? { messageIds: messageIds.slice() } : {},
+        supersedes: null,
+        consolidatedInto: null,
+        dreamAction: null,
+        sourceChatId: chatId,
+        sourceMessageIds: messageIds.slice(),
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+        archivedReason: null,
+        legacyMemoryId: null,
+        legacyActiveCount: 0,
+        legacyLastUsedAt: null,
+      })
+      if (id === 0) {
+        result.skipped += 1
+        continue
+      }
+      mockHistoryAppend(draft, id, {
+        at: now,
+        event: 'birth',
+        stability: p.s0,
+        baseWeight: p.baseWeight,
+        floor: p.floor,
+        factor: 1,
+        rank: null,
+        hits30d: null,
+        runId: '',
+        note: '',
+      })
+      result.added += 1
+    } else if (op === 'update') {
+      const id = Number(action.id)
+      if (!Number.isFinite(id)) {
+        result.skipped += 1
+        continue
+      }
+      const out = mockUpdateShardInPlace(
+        draft,
+        id,
+        {
+          content: action.content == null ? null : String(action.content),
+          memType: action.memType == null ? null : String(action.memType),
+          topic: action.topic == null ? null : String(action.topic),
+          category: action.category == null ? null : String(action.category),
+        },
+        false,
+        now,
+      )
+      if (!out) {
+        result.skipped += 1
+        continue
+      }
+      if (out.restored) result.restored += 1
+      else result.updated += 1
+    } else if (op === 'delete') {
+      const id = Number(action.id)
+      const s = draft.shards.find((x) => x.id === id)
+      if (!s || s.consolidatedInto != null) {
+        result.skipped += 1
+        continue
+      }
+      for (const dep of draft.shards.filter((x) => x.consolidatedInto === id)) {
+        mockDeleteShardRow(draft, dep.id)
+      }
+      mockDeleteShardRow(draft, id)
+      result.deleted += 1
+    } else if (op === 'archive') {
+      const id = Number(action.id)
+      const reason = String(action.reason ?? '').trim() || 'manual'
+      if (mockArchiveShardInPlace(draft, id, reason, now)) result.archived += 1
+      else result.skipped += 1
+    } else {
+      throw new Error(`记忆操作只支持 add / update / delete / archive，收到：${op}`)
+    }
+  }
+  mockShardStore = draft
+  saveMockShardStore()
+  // 旧审计（kb_memory_diffs）继续写：旧页面仍会读它。
+  mockMemoryDiffs.unshift({
+    at: now,
+    payload: {
+      candidates: actions.length,
+      added: result.added,
+      updated: result.updated,
+      deleted: result.deleted,
+      archived: result.archived,
+      restored: result.restored,
+      skipped: result.skipped,
+    },
+  })
+  mockMemoryDiffs.length = Math.min(mockMemoryDiffs.length, 20)
+  saveMockMemoryDiffs()
+  return result
+}
+
+/** 关键词打分（与 retrieve.rs 的降级链同形：≥3 字按 FTS 0.70，其余 LIKE 0.55）。 */
+function mockKeywordScore(content: string, query: string): number {
+  const q = query.trim()
+  if (!q) return 0
+  if (!content.toLowerCase().includes(q.toLowerCase())) return 0
+  return mockCharCount(q) >= 3 ? 0.7 : 0.55
+}
+
+function mockSearchShards(
+  store: MockShardStore,
+  query: string,
+  topK: number,
+  includeDormant: boolean,
+  includeArchived: boolean,
+  reviveArchived: boolean,
+) {
+  mockSweepIfDue(store)
+  const started = performance.now()
+  const q = query.trim()
+  const qChars = mockCharCount(q)
+  const browseOnly = qChars < 2
+  const states = includeArchived
+    ? includeDormant
+      ? ['active', 'dormant', 'archived']
+      : ['active', 'archived']
+    : includeDormant
+      ? ['active', 'dormant']
+      : ['active']
+  const candidates = store.shards
+    .filter((s) => s.consolidatedInto == null && states.includes(s.state))
+    .sort(
+      (a, b) =>
+        (mockShardTime(b.lastEventAt) ?? 0) - (mockShardTime(a.lastEventAt) ?? 0) || b.id - a.id,
+    )
+    .slice(0, 5000)
+  const scored: Array<{ score: number; hit: Record<string, unknown> }> = []
+  for (const s of candidates) {
+    let relevance = 0
+    if (!browseOnly) relevance = mockKeywordScore(s.content, q)
+    if (q && !browseOnly) {
+      if (relevance <= 0) continue
+    } else {
+      relevance = 1
+    }
+    const weight = mockShardWeight(s)
+    scored.push({
+      score: relevance * weight,
+      hit: {
+        shardId: s.id,
+        content: s.content,
+        memType: s.memType,
+        topic: s.topic,
+        category: s.category,
+        origin: s.origin,
+        state: s.state,
+        anchorMessageId: s.anchorMessageId,
+        chatId: s.chatId,
+        relevance: mockRound3(relevance),
+        effectiveWeight: mockRound3(weight),
+        createdAt: s.createdAt,
+      },
+    })
+  }
+  scored.sort((a, b) => b.score - a.score || Number(b.hit.shardId) - Number(a.hit.shardId))
+  const hits = scored.slice(0, topK).map((x) => x.hit)
+  const mode: 'keyword' | 'weight' = !browseOnly && q ? 'keyword' : 'weight'
+
+  let reinforced = 0
+  let revived = 0
+  // 关键词模式必须 query ≥3 字才续命（§5.4）；浏览器没有向量，vector 分支不存在。
+  const canReinforce = q !== '' && mode === 'keyword' && qChars >= 3
+  if (canReinforce) {
+    const nowMs = Date.now()
+    const at = new Date(nowMs).toISOString()
+    for (let rank = 0; rank < hits.length && rank < 3; rank++) {
+      const hit = hits[rank]
+      const s = store.shards.find((x) => x.id === Number(hit.shardId))
+      if (!s || s.consolidatedInto != null) continue
+      if (Number(hit.relevance) < 0.6) continue
+      const archived = s.state === 'archived'
+      if (archived && (!reviveArchived || Number(hit.relevance) < 0.75)) continue
+      const rows = store.history.filter((h) => h.shardId === s.id)
+      if (rows.length >= SHARD_HISTORY_MAX) continue
+      const hitRows = rows.filter((h) => h.event === 'search_hit')
+      const hits30d = hitRows.filter((h) => {
+        const t = mockShardTime(h.at)
+        return t != null && nowMs - t <= 30 * 86_400_000
+      }).length
+      if (hits30d >= 10) continue
+      const lastHitMs = hitRows.reduce((m, h) => Math.max(m, mockShardTime(h.at) ?? 0), 0)
+      if (lastHitMs > 0 && nowMs - lastHitMs < 600_000) continue
+      const alpha = hits30d >= 5 ? 0.4 : 0.8
+      const factor = 1 + alpha / (1 + rank)
+      const newStability = Math.min(SHARD_S_MAX, s.stability * factor)
+      mockHistoryAppend(store, s.id, {
+        at,
+        event: 'search_hit',
+        stability: newStability,
+        baseWeight: s.baseWeight,
+        floor: s.floor,
+        factor,
+        rank,
+        hits30d,
+        runId: '',
+        note: '',
+      })
+      s.stability = newStability
+      s.lastEventAt = at
+      s.updatedAt = at
+      s.state = 'active'
+      s.archivedAt = null
+      s.archivedReason = null
+      if (archived) revived += 1
+      reinforced += 1
+    }
+    if (reinforced) saveMockShardStore()
+  }
+
+  return {
+    hits,
+    mode,
+    reinforced,
+    revived,
+    tookMs: Math.max(0, Math.round(performance.now() - started)),
+  }
+}
+
+function mockRenderInjectLine(s: MockShardRow): string {
+  const label = s.category.trim()
+    ? `${KB_MEMORY_TYPE_LABELS[s.memType] ?? s.memType}·${s.category.trim()}`
+    : (KB_MEMORY_TYPE_LABELS[s.memType] ?? s.memType)
+  return `- [${label}] ${s.content.trim()}`
+}
+
+/** `inject::select`：严格只读；三重预算 + conversation 独立上限。 */
+function mockInjectShards(
+  store: MockShardStore,
+  query: string | null,
+  budgetTokens: number,
+  maxShards: number,
+  includeConversation: boolean,
+) {
+  const q = query?.trim() ?? ''
+  const useQuery = mockCharCount(q) >= 2
+  const candidates = store.shards
+    .filter(
+      (s) =>
+        s.consolidatedInto == null &&
+        s.state === 'active' &&
+        (includeConversation || s.origin !== 'conversation') &&
+        mockShardWeight(s) >= SHARD_THETA_ACTIVE,
+    )
+    .sort(
+      (a, b) =>
+        (mockShardTime(b.lastEventAt) ?? 0) - (mockShardTime(a.lastEventAt) ?? 0) || b.id - a.id,
+    )
+    .slice(0, 5000)
+
+  const relevance = new Map<number, number>()
+  for (const s of candidates) relevance.set(s.id, useQuery ? mockKeywordScore(s.content, q) : 1)
+
+  const anchors = candidates
+    .filter((s) => s.origin === 'marked_important')
+    .sort(
+      (a, b) =>
+        mockShardWeight(b) - mockShardWeight(a) ||
+        (mockShardTime(b.updatedAt) ?? 0) - (mockShardTime(a.updatedAt) ?? 0),
+    )
+    .slice(0, INJECT_ANCHOR_MAX)
+  const digests = candidates
+    .filter((s) => s.dreamAction === 'digest')
+    .sort((a, b) => mockShardWeight(b) - mockShardWeight(a))
+    .slice(0, INJECT_DIGEST_MAX)
+  const anchorIds = new Set(anchors.map((s) => s.id))
+  const digestIds = new Set(digests.map((s) => s.id))
+  const rest = candidates
+    .filter((s) => !anchorIds.has(s.id) && !digestIds.has(s.id))
+    .sort(
+      (a, b) =>
+        (relevance.get(b.id) ?? 0) * mockShardWeight(b) -
+          (relevance.get(a.id) ?? 0) * mockShardWeight(a) || b.id - a.id,
+    )
+
+  const order: Array<{ shard: MockShardRow; reason: 'anchor' | 'digest' | 'relevant' | 'weight' }> = []
+  for (const s of anchors) order.push({ shard: s, reason: 'anchor' })
+  for (const s of digests) order.push({ shard: s, reason: 'digest' })
+  for (const s of rest) {
+    order.push({ shard: s, reason: q ? 'relevant' : 'weight' })
+  }
+
+  let charsUsed = 0
+  let tokensUsed = 0
+  let conversationCount = 0
+  let conversationChars = 0
+  const seen = new Set<string>()
+  const lines: string[] = []
+  const shards: Array<Record<string, unknown>> = []
+  for (const { shard, reason } of order) {
+    if (shards.length >= maxShards) break
+    const content = shard.content.trim()
+    if (!content) continue
+    const line = mockRenderInjectLine(shard)
+    const lineChars = mockCharCount(line)
+    const lineTokens = Math.ceil(lineChars / 1.6) + 6
+    if (shard.origin === 'conversation') {
+      if (conversationCount >= INJECT_CONVERSATION_MAX || conversationChars + lineChars > INJECT_CONVERSATION_CHARS) {
+        continue
+      }
+    }
+    if (seen.has(content)) continue
+    if (charsUsed + lineChars + (lines.length ? 1 : 0) > INJECT_MAX_CHARS) continue
+    if (tokensUsed + lineTokens > budgetTokens) continue
+    seen.add(content)
+    if (shard.origin === 'conversation') {
+      conversationCount += 1
+      conversationChars += lineChars
+    }
+    charsUsed += lineChars + (lines.length ? 1 : 0)
+    tokensUsed += lineTokens
+    lines.push(line)
+    shards.push({
+      shardId: shard.id,
+      content: shard.content,
+      memType: shard.memType,
+      topic: shard.topic,
+      category: shard.category,
+      origin: shard.origin,
+      anchorMessageId: shard.anchorMessageId,
+      chatId: shard.chatId,
+      effectiveWeight: mockRound3(mockShardWeight(shard)),
+      reason,
+    })
+  }
+
+  return {
+    text: lines.join('\n'),
+    shards,
+    estimatedTokens: tokensUsed,
+    budgetTokens,
+    mode: (useQuery ? 'keyword' : 'weight') as 'keyword' | 'weight',
+  }
+}
+
+function mockShardStats(store: MockShardStore, curatedOnly: boolean) {
+  const live = store.shards.filter(
+    (s) => s.state !== 'archived' && s.consolidatedInto == null && (!curatedOnly || s.origin !== 'conversation'),
+  )
+  const count = (state: MockShardState): number =>
+    store.shards.filter(
+      (s) => s.state === state && s.consolidatedInto == null && (!curatedOnly || s.origin !== 'conversation'),
+    ).length
+  const active = count('active')
+  const dormant = count('dormant')
+  const archived = count('archived')
+  const total = store.shards.filter(
+    (s) => s.consolidatedInto == null && (!curatedOnly || s.origin !== 'conversation'),
+  ).length
+  const cognition = mockInjectShards(store, null, INJECT_BUDGET_TOKENS, INJECT_MAX_SHARDS, false)
+  const injected = cognition.shards.length
+  const injectedChars = mockCharCount(cognition.text)
+  const avg = (f: (s: MockShardRow) => number): number =>
+    live.length ? mockRound3(live.reduce((sum, s) => sum + f(s), 0) / live.length) : 0
+  const lastDreamAt =
+    store.dreamRuns
+      .filter((r) => r.status === 'done' && r.finishedAt)
+      .map((r) => r.finishedAt as string)
+      .sort((a, b) => (mockShardTime(b) ?? 0) - (mockShardTime(a) ?? 0))[0] ?? null
+  const liveTotal = active + dormant
+  return {
+    active,
+    dormant,
+    archived,
+    total,
+    limit: INJECT_MAX_SHARDS,
+    maxChars: INJECT_MAX_CHARS,
+    injected,
+    injectedChars,
+    estimatedTokens: cognition.estimatedTokens,
+    budgetTokens: cognition.budgetTokens,
+    avgConfidence: avg((s) => s.confidence),
+    avgEffectiveWeight: avg((s) => mockShardWeight(s)),
+    signalRatio: active > 0 ? mockRound3(Math.min(1, injected / active)) : 1,
+    noiseRatio: liveTotal > 0 ? mockRound3(dormant / liveTotal) : 0,
+    embeddingPending: 0,
+    embeddingFailed: 0,
+    lastSweepAt: store.lastSweepAt,
+    lastDreamAt,
+    atCap: total >= 50000,
+    sweepTruncated: liveTotal > 20000,
+  }
+}
+
+/** 与 retrieve::duplicate_pairs 同口径；浏览器无真向量，沿用旧 mock 的伪向量。 */
+function mockDuplicateShards(store: MockShardStore, threshold: number, limit: number, curatedOnly = true) {
+  const rows = store.shards
+    .filter(
+      (s) =>
+        s.consolidatedInto == null &&
+        (s.state === 'active' || s.state === 'dormant') &&
+        (!curatedOnly || s.origin !== 'conversation'),
+    )
+    .sort(
+      (a, b) =>
+        (mockShardTime(b.lastEventAt) ?? 0) - (mockShardTime(a.lastEventAt) ?? 0) || b.id - a.id,
+    )
+    .slice(0, DUP_SCAN_LIMIT_NEW)
+  const vecs = new Map(rows.map((s) => [s.id, mockMemVec(s.id, s.content)]))
+  const pairs: Array<Record<string, unknown>> = []
+  for (let i = 0; i < rows.length; i++) {
+    for (let j = i + 1; j < rows.length; j++) {
+      const a = rows[i]
+      const b = rows[j]
+      const score = mockCosine(vecs.get(a.id)!, vecs.get(b.id)!)
+      if (score < threshold) continue
+      pairs.push({
+        aId: Math.min(a.id, b.id),
+        bId: Math.max(a.id, b.id),
+        score: mockRound3(score),
+        aContent: mockSliceChars(a.content, 120),
+        bContent: mockSliceChars(b.content, 120),
+      })
+    }
+  }
+  pairs.sort((a, b) => Number(b.score) - Number(a.score))
+  return limit > 0 ? pairs.slice(0, limit) : []
+}
+
+/** 消息回合锚点（与 0054 回填/`backfill_chat_anchors` 同规则）：terminal assistant 优先，否则回合最后一条 assistant。 */
+function mockChatAnchorMap(messages: AiChatMessage[]): Map<string, string | null> {
+  const sorted = messages.slice().sort((a, b) => a.seq - b.seq)
+  const out = new Map<string, string | null>()
+  let turn: AiChatMessage[] = []
+  const flush = (): void => {
+    if (!turn.length) return
+    const assistants = turn.filter((m) => m.role === 'assistant')
+    const terminal = assistants.filter(
+      (m) =>
+        ((m.kind === 'text' || m.kind === 'analysis') && (m.text ?? '').trim() !== '') ||
+        m.kind === 'food-parse',
+    )
+    const pool = terminal.length ? terminal : assistants
+    let chosen: AiChatMessage | null = null
+    for (const m of pool) if (!chosen || m.seq > chosen.seq) chosen = m
+    for (const m of turn) out.set(m.id, chosen ? chosen.id : null)
+    turn = []
+  }
+  for (const m of sorted) {
+    if (m.role === 'user' && turn.length) flush()
+    turn.push(m)
+  }
+  flush()
+  return out
+}
+
+function mockChatPage(
+  chatId: string,
+  beforeSeq: number | null,
+  afterSeq: number | null,
+  limitTurns: number | null,
+) {
+  if (beforeSeq != null && afterSeq != null) throw new Error('before_seq 与 after_seq 不能同时使用')
+  const limit = Math.min(50, Math.max(1, limitTurns == null ? 16 : Number(limitTurns)))
+  const msgs = (aiChats.get(chatId)?.messages ?? []).slice().sort((a, b) => a.seq - b.seq)
+  const total = msgs.length
+  const anchors = mockChatAnchorMap(msgs)
+  const wrap = (list: AiChatMessage[]) =>
+    list.map((m) => ({ ...m, anchorId: anchors.get(m.id) ?? null }))
+  const hasUser = msgs.some((m) => m.role === 'user')
+
+  let messages: AiChatMessage[] = []
+  let hasMoreBefore = false
+  let hasMoreAfter = false
+
+  if (!hasUser) {
+    // legacy：整段一个回合；单页最多 1000 条（与 Rust LEGACY_PAGE_MAX_MESSAGES 一致）。
+    const max = 1000
+    if (afterSeq != null) {
+      const rows = msgs.filter((m) => m.seq > afterSeq)
+      hasMoreAfter = rows.length > max
+      messages = rows.slice(0, max)
+      hasMoreBefore = msgs.some((m) => m.seq <= afterSeq)
+    } else {
+      const bound = beforeSeq ?? Number.MAX_SAFE_INTEGER
+      const rows = msgs.filter((m) => m.seq < bound)
+      hasMoreBefore = rows.length > max
+      messages = rows.slice(-max)
+      hasMoreAfter = beforeSeq != null && msgs.some((m) => m.seq >= bound)
+    }
+  } else if (afterSeq != null) {
+    const starts = msgs.filter((m) => m.role === 'user' && m.seq > afterSeq).map((m) => m.seq)
+    hasMoreAfter = starts.length > limit
+    const end = hasMoreAfter ? starts[limit] : Number.MAX_SAFE_INTEGER
+    const start = msgs.find((m) => m.seq > afterSeq)?.seq
+    messages =
+      start != null && start < end ? msgs.filter((m) => m.seq >= start && m.seq < end) : []
+    hasMoreBefore = msgs.some((m) => m.seq <= afterSeq)
+  } else {
+    const bound = beforeSeq ?? Number.MAX_SAFE_INTEGER
+    const starts = msgs
+      .filter((m) => m.role === 'user' && m.seq < bound)
+      .map((m) => m.seq)
+      .sort((a, b) => b - a)
+    let start = 0
+    if (starts.length > limit) {
+      start = starts.slice(0, limit)[limit - 1]
+      hasMoreBefore = true
+    }
+    messages = msgs.filter((m) => m.seq >= start && m.seq < bound)
+    hasMoreAfter = beforeSeq != null && msgs.some((m) => m.seq >= bound)
+  }
+
+  return {
+    messages: wrap(messages),
+    total,
+    hasMoreBefore,
+    hasMoreAfter,
+    nextBeforeSeq: hasMoreBefore ? (messages[0]?.seq ?? null) : null,
+    nextAfterSeq: hasMoreAfter ? (messages[messages.length - 1]?.seq ?? null) : null,
+  }
+}
+
+function mockChatPageAround(chatId: string, messageId: string, limitTurns: number | null) {
+  const msgs = aiChats.get(chatId)?.messages ?? []
+  const target = msgs.find((m) => m.id === messageId)
+  if (!target) throw new Error('消息不存在')
+  const nextTurn = msgs
+    .filter((m) => m.role === 'user' && m.seq > target.seq)
+    .reduce((min, m) => Math.min(min, m.seq), Number.MAX_SAFE_INTEGER)
+  return mockChatPage(
+    chatId,
+    nextTurn === Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : nextTurn,
+    null,
+    limitTurns,
+  )
+}
+
+/** Dream 上下文（§6.3）：最近 200 条有效消息 / 最近 8 个会话 / 40 条 brief / 20 对重复。 */
+function mockDreamContext(
+  store: MockShardStore,
+  since: string | null,
+  totalSessions: number,
+  totalMessages: number,
+) {
+  const sinceMs = mockShardTime(since)
+  const validKinds = new Set(['text', 'food-parse', 'analysis', 'voice'])
+  const rows: Array<{ msg: AiChatMessage; anchorId: string | null }> = []
+  for (const chat of aiChats.values()) {
+    const anchors = mockChatAnchorMap(chat.messages)
+    for (const m of chat.messages) {
+      if (!validKinds.has(m.kind)) continue
+      if ((m.text ?? '').trim() === '') continue
+      if (m.kind === 'voice' && m.role !== 'user') continue
+      const t = mockShardTime(m.createdAt)
+      if (sinceMs != null && (t == null || t <= sinceMs)) continue
+      rows.push({ msg: m, anchorId: anchors.get(m.id) ?? null })
+    }
+  }
+  rows.sort(
+    (a, b) =>
+      (mockShardTime(a.msg.createdAt) ?? 0) - (mockShardTime(b.msg.createdAt) ?? 0) ||
+      a.msg.seq - b.msg.seq,
+  )
+  const recent = rows.slice(-DREAM_CONTEXT_MAX_MESSAGES)
+
+  const sessions: Array<{
+    chatId: string
+    title: string
+    updatedAt: string
+    lastAt: string
+    messages: Array<Record<string, unknown>>
+  }> = []
+  for (const { msg, anchorId } of recent) {
+    const chat = aiChats.get(msg.chatId)
+    let session = sessions.find((s) => s.chatId === msg.chatId)
+    if (!session) {
+      session = {
+        chatId: msg.chatId,
+        title: chat?.title ?? 'AI 对话',
+        updatedAt: chat?.updatedAt ?? msg.createdAt,
+        lastAt: msg.createdAt,
+        messages: [],
+      }
+      sessions.push(session)
+    }
+    session.messages.push({
+      id: msg.id,
+      seq: msg.seq,
+      role: msg.role,
+      kind: msg.kind,
+      text: msg.text,
+      anchorId,
+      createdAt: msg.createdAt,
+    })
+    session.lastAt = msg.createdAt
+  }
+  sessions.sort((a, b) => (mockShardTime(b.lastAt) ?? 0) - (mockShardTime(a.lastAt) ?? 0))
+  const keptSessions = sessions.slice(0, DREAM_CONTEXT_MAX_SESSIONS)
+
+  const briefs = store.shards
+    .filter((s) => s.consolidatedInto == null && (s.state === 'active' || s.state === 'dormant'))
+    .sort(
+      (a, b) =>
+        Number(a.origin === 'conversation') - Number(b.origin === 'conversation') ||
+        (mockShardTime(b.lastEventAt) ?? 0) - (mockShardTime(a.lastEventAt) ?? 0),
+    )
+    .slice(0, DREAM_CONTEXT_MAX_SHARDS)
+    .map((s) => ({
+      id: s.id,
+      content: mockSliceChars(s.content, DREAM_SHARD_BRIEF_CHARS),
+      memType: s.memType,
+      topic: s.topic,
+      category: s.category,
+      origin: s.origin,
+      state: s.state,
+      stability: s.stability,
+      effectiveWeight: mockShardWeight(s),
+      anchorMessageId: s.anchorMessageId,
+      chatId: s.chatId,
+      updatedAt: s.updatedAt,
+    }))
+
+  const duplicatePairs = mockDreamDuplicatePairs(store, briefs.map((b) => b.id))
+
+  return {
+    since,
+    sessions: keptSessions.map(({ chatId, title, updatedAt, messages }) => ({
+      chatId,
+      title,
+      updatedAt,
+      messages,
+    })),
+    shards: briefs,
+    duplicatePairs,
+    totalSessions,
+    totalMessages,
+  }
+}
+
+/** Dream 只比较进入上下文的 brief（与 Rust `duplicates_for(ids)` 一致）。 */
+function mockDreamDuplicatePairs(store: MockShardStore, ids: number[]) {
+  const rows = ids
+    .map((id) => store.shards.find((s) => s.id === id))
+    .filter((s): s is MockShardRow => Boolean(s))
+  const vecs = new Map(rows.map((s) => [s.id, mockMemVec(s.id, s.content)]))
+  const pairs: Array<Record<string, unknown>> = []
+  for (let i = 0; i < rows.length; i++) {
+    for (let j = i + 1; j < rows.length; j++) {
+      const a = rows[i]
+      const b = rows[j]
+      const score = mockCosine(vecs.get(a.id)!, vecs.get(b.id)!)
+      if (score < DREAM_DUP_THRESHOLD) continue
+      pairs.push({
+        aId: Math.min(a.id, b.id),
+        bId: Math.max(a.id, b.id),
+        score,
+        aContent: mockSliceChars(a.content, DREAM_SHARD_BRIEF_CHARS),
+        bContent: mockSliceChars(b.content, DREAM_SHARD_BRIEF_CHARS),
+      })
+    }
+  }
+  pairs.sort((a, b) => Number(b.score) - Number(a.score))
+  return pairs.slice(0, DREAM_CONTEXT_MAX_DUPLICATES)
+}
+
+function mockDreamGate(
+  eligible: boolean,
+  reason: string,
+  lastRunAt: string | null,
+  sessionsSince: number,
+  messagesSince: number,
+) {
+  return {
+    eligible,
+    reason,
+    lastRunAt,
+    sessionsSince,
+    messagesSince,
+    cooldownHours: DREAM_COOLDOWN_HOURS,
+    minSessions: DREAM_MIN_SESSIONS,
+    minMessages: DREAM_MIN_MESSAGES,
+  }
+}
+
+function mockDreamNotEligible(
+  reason: string,
+  lastRunAt: string | null,
+  sessionsSince: number,
+  messagesSince: number,
+) {
+  return {
+    gate: mockDreamGate(false, reason, lastRunAt, sessionsSince, messagesSince),
+    runId: null,
+    context: null,
+  }
+}
+
+function mockDreamBegin(force: boolean) {
+  const store = loadMockShardStore()
+  loadKbStore()
+  const nowMs = Date.now()
+  const now = new Date(nowMs).toISOString()
+
+  // 1. 清理过期 lease（10 分钟）。
+  for (const run of store.dreamRuns) {
+    if (run.status !== 'running') continue
+    const started = mockShardTime(run.startedAt)
+    if (started != null && nowMs - started > DREAM_LEASE_MINUTES * 60_000) {
+      run.status = 'failed'
+      run.finishedAt = now
+      run.error = 'timeout'
+    }
+  }
+  // 2. 已有未过期 running。
+  if (store.dreamRuns.some((r) => r.status === 'running')) {
+    return mockDreamNotEligible('running', null, 0, 0)
+  }
+  // 3. 上次成功 + 窗口素材。
+  const lastFinished =
+    store.dreamRuns
+      .filter((r) => r.status === 'done' && r.finishedAt)
+      .map((r) => r.finishedAt as string)
+      .sort((a, b) => (mockShardTime(b) ?? 0) - (mockShardTime(a) ?? 0))[0] ?? null
+  const lastMs = mockShardTime(lastFinished)
+  const windowMsgs: AiChatMessage[] = []
+  for (const chat of aiChats.values()) {
+    for (const m of chat.messages) {
+      const t = mockShardTime(m.createdAt)
+      if (lastMs != null && (t == null || t <= lastMs)) continue
+      windowMsgs.push(m)
+    }
+  }
+  const sessionsSince = new Set(windowMsgs.map((m) => m.chatId)).size
+  const messagesSince = windowMsgs.length
+
+  // 4. auto_consolidate（force 跳过）。
+  if (!force && !kbSettings.autoConsolidate) {
+    return mockDreamNotEligible('disabled', lastFinished, sessionsSince, messagesSince)
+  }
+  // 5. 3 小时冷却（force 跳过）。
+  if (!force && lastMs != null && nowMs - lastMs < DREAM_COOLDOWN_HOURS * 3_600_000) {
+    return mockDreamNotEligible('cooldown', lastFinished, sessionsSince, messagesSince)
+  }
+  // 6. 最小素材（force 也不跳过）。
+  if (sessionsSince < DREAM_MIN_SESSIONS || messagesSince < DREAM_MIN_MESSAGES) {
+    const reason = messagesSince === 0 ? 'no_material' : 'insufficient_material'
+    return mockDreamNotEligible(reason, lastFinished, sessionsSince, messagesSince)
+  }
+
+  // 7. 建 run + context（同一事务：context 组装失败不留孤儿 running）。
+  const context = mockDreamContext(store, lastFinished, sessionsSince, messagesSince)
+  let runId = `dream-${nowMs}-${++mockDreamSeq}`
+  while (store.dreamRuns.some((r) => r.id === runId)) runId = `${runId}-1`
+  store.dreamRuns.push({
+    id: runId,
+    startedAt: now,
+    finishedAt: null,
+    status: 'running',
+    sessionCount: sessionsSince,
+    messageCount: messagesSince,
+    result: null,
+    error: null,
+  })
+  saveMockShardStore()
+  return {
+    gate: mockDreamGate(true, 'ok', lastFinished, sessionsSince, messagesSince),
+    runId,
+    context,
+  }
+}
+
+function mockRequireShard(store: MockShardStore, id: number): MockShardRow {
+  const s = store.shards.find((x) => x.id === id)
+  if (!s) throw new Error(`记忆分片不存在：${id}`)
+  return s
+}
+
+function mockCheckDreamContent(content: string): void {
+  if (!content.trim()) throw new Error('Dream 动作的 content 不能为空')
+  if (mockCharCount(content) > SHARD_MAX_CHARS) {
+    throw new Error(`Dream 动作的 content 超过 ${SHARD_MAX_CHARS} 字`)
+  }
+}
+
+function mockInsertDreamShard(
+  store: MockShardStore,
+  key: string,
+  content: string,
+  memType: string,
+  topic: string,
+  category: string,
+  supersedes: number | null,
+  dreamAction: string,
+  now: string,
+): number | null {
+  const id = mockShardInsert(store, {
+    idempotencyKey: key,
+    origin: 'dream_summary',
+    memType,
+    topic,
+    category,
+    content,
+    contentHash: mockContentHash([content]),
+    confidence: 0.7,
+    baseWeight: mockShardParams('dream_summary').baseWeight,
+    floor: mockShardParams('dream_summary').floor,
+    stability: mockShardParams('dream_summary').s0,
+    lastEventAt: now,
+    state: 'active',
+    anchorMessageId: null,
+    chatId: null,
+    userMessageId: null,
+    provenance: {},
+    supersedes,
+    consolidatedInto: null,
+    dreamAction,
+    sourceChatId: null,
+    sourceMessageIds: [],
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+    archivedReason: null,
+    legacyMemoryId: null,
+    legacyActiveCount: 0,
+    legacyLastUsedAt: null,
+  })
+  if (id === 0) return null
+  mockHistoryAppend(store, id, {
+    at: now,
+    event: 'birth',
+    stability: mockShardParams('dream_summary').s0,
+    baseWeight: mockShardParams('dream_summary').baseWeight,
+    floor: mockShardParams('dream_summary').floor,
+    factor: 1,
+    rank: null,
+    hits30d: null,
+    runId: '',
+    note: '',
+  })
+  return id
+}
+
+function mockDreamMemType(raw: unknown): string {
+  const t = String(raw ?? '').trim()
+  if (!t) return 'event'
+  return SHARD_MEMORY_TYPES.includes(t) ? t : 'preference'
+}
+
+function mockDreamApply(runId: string, rawActions: unknown[]) {
+  const loaded = loadMockShardStore()
+  const run = loaded.dreamRuns.find((r) => r.id === runId)
+  if (!run) throw new Error(`Dream run 不存在：${runId}`)
+  // 同一 run 重放：返回首次结果，不重复写（幂等）。
+  if (run.status === 'done') {
+    return { ...(run.result ?? {}), alreadyApplied: true }
+  }
+  if (run.status !== 'running') {
+    throw new Error(`Dream run 状态为 ${run.status}，不能应用动作`)
+  }
+
+  const actions = Array.isArray(rawActions) ? rawActions : []
+  if (actions.length > DREAM_MAX_ACTIONS) {
+    throw new Error(`Dream 单次最多 ${DREAM_MAX_ACTIONS} 个动作，收到 ${actions.length}`)
+  }
+  type Parsed =
+    | { type: 'supersede'; oldShardId: number; content: string; memType?: unknown; topic?: unknown; category?: unknown; reason: string }
+    | { type: 'consolidate'; shardIds: number[]; content: string; memType?: unknown; topic?: unknown; category?: unknown; reason: string }
+    | { type: 'digest'; content: string; topic?: unknown; category?: unknown }
+    | { type: 'revive'; shardId: number; reason: string }
+  const parsed: Parsed[] = []
+  for (const raw of actions) {
+    const a = (raw ?? {}) as Record<string, unknown>
+    const type = String(a.type ?? '')
+    if (type === 'mark_important') {
+      const err = new Error(
+        'Dream 不能标记重要：DreamAction 只有 supersede / consolidate / digest / revive',
+      ) as Error & { code?: string }
+      err.code = 'dream_action_forbidden'
+      throw err
+    }
+    if (type === 'supersede') {
+      const content = String(a.content ?? '')
+      mockCheckDreamContent(content)
+      const oldShardId = Number(a.oldShardId)
+      mockRequireShard(loaded, oldShardId)
+      parsed.push({
+        type,
+        oldShardId,
+        content,
+        memType: a.memType,
+        topic: a.topic,
+        category: a.category,
+        reason: String(a.reason ?? ''),
+      })
+    } else if (type === 'consolidate') {
+      const content = String(a.content ?? '')
+      mockCheckDreamContent(content)
+      const ids = Array.from(
+        new Set(((a.shardIds as unknown[]) ?? []).map((x) => Number(x)).filter((x) => Number.isFinite(x))),
+      ).sort((x, y) => x - y)
+      if (ids.length < 2) throw new Error('consolidate 至少需要 2 个不同的 shard')
+      for (const id of ids) mockRequireShard(loaded, id)
+      parsed.push({
+        type,
+        shardIds: ids,
+        content,
+        memType: a.memType,
+        topic: a.topic,
+        category: a.category,
+        reason: String(a.reason ?? ''),
+      })
+    } else if (type === 'digest') {
+      const content = String(a.content ?? '')
+      mockCheckDreamContent(content)
+      parsed.push({ type, content, topic: a.topic, category: a.category })
+    } else if (type === 'revive') {
+      const shardId = Number(a.shardId)
+      mockRequireShard(loaded, shardId)
+      parsed.push({ type, shardId, reason: String(a.reason ?? '') })
+    } else {
+      throw new Error(`无法识别的 Dream 动作：未知变体 \`${type}\``)
+    }
+  }
+
+  // 整批一个事务：克隆快照，任一步失败都不落盘（run 保持 running）。
+  const draft: MockShardStore = structuredClone(loaded)
+  const now = new Date().toISOString()
+  const result = { created: 0, superseded: 0, consolidated: 0, revived: 0, skipped: 0 }
+
+  for (const action of parsed) {
+    if (action.type === 'supersede') {
+      const old = mockRequireShard(draft, action.oldShardId)
+      const key = `dream:${runId}:supersede:${action.oldShardId}:${mockContentHash([action.content])}`
+      const newId = mockInsertDreamShard(
+        draft,
+        key,
+        action.content,
+        mockDreamMemType(action.memType),
+        mockSliceChars(String(action.topic ?? '').trim(), 40),
+        mockNormalizeCategory(String(action.category ?? '')),
+        action.oldShardId,
+        'supersede_new',
+        now,
+      )
+      if (newId == null) {
+        result.skipped += 1
+        continue
+      }
+      old.state = 'archived'
+      old.archivedAt = now
+      old.archivedReason = 'superseded'
+      old.updatedAt = now
+      mockHistoryAppend(draft, old.id, {
+        at: now,
+        event: 'dream_supersede',
+        stability: old.stability,
+        baseWeight: old.baseWeight,
+        floor: old.floor,
+        factor: 1,
+        rank: null,
+        hits30d: null,
+        runId,
+        note: action.reason,
+      })
+      result.created += 1
+      result.superseded += 1
+    } else if (action.type === 'consolidate') {
+      const idPart = action.shardIds.join(',')
+      const key = `dream:${runId}:consolidate:${mockContentHash([idPart])}:${mockContentHash([action.content])}`
+      const mergedId = mockInsertDreamShard(
+        draft,
+        key,
+        action.content,
+        mockDreamMemType(action.memType),
+        mockSliceChars(String(action.topic ?? '').trim(), 40),
+        mockNormalizeCategory(String(action.category ?? '')),
+        null,
+        'consolidate_merged',
+        now,
+      )
+      if (mergedId == null) {
+        result.skipped += 1
+        continue
+      }
+      result.created += 1
+      for (const id of action.shardIds) {
+        const old = mockRequireShard(draft, id)
+        if (old.consolidatedInto != null) continue
+        old.consolidatedInto = mergedId
+        old.baseWeight = old.baseWeight * 0.5
+        old.updatedAt = now
+        mockHistoryAppend(draft, old.id, {
+          at: now,
+          event: 'dream_consolidate',
+          stability: old.stability,
+          baseWeight: old.baseWeight,
+          floor: old.floor,
+          factor: 1,
+          rank: null,
+          hits30d: null,
+          runId,
+          note: action.reason,
+        })
+        result.consolidated += 1
+      }
+    } else if (action.type === 'digest') {
+      const key = `dream:${runId}:digest:${mockContentHash([action.content])}`
+      const id = mockInsertDreamShard(
+        draft,
+        key,
+        action.content,
+        'event',
+        mockSliceChars(String(action.topic ?? '').trim(), 40),
+        mockNormalizeCategory(String(action.category ?? '')),
+        null,
+        'digest',
+        now,
+      )
+      if (id == null) result.skipped += 1
+      else result.created += 1
+    } else {
+      const old = mockRequireShard(draft, action.shardId)
+      if (old.state !== 'dormant' || old.consolidatedInto != null) {
+        result.skipped += 1
+        continue
+      }
+      const dtDays = Math.max(
+        0,
+        (Date.parse(now) - (mockShardTime(old.lastEventAt) ?? Date.parse(now))) / 86_400_000,
+      )
+      const r = Math.exp(-dtDays / Math.max(0.1, old.stability))
+      if (r < DREAM_REVIVE_MIN_R || r > DREAM_REVIVE_MAX_R) {
+        result.skipped += 1
+        continue
+      }
+      const stability = Math.min(SHARD_S_MAX, old.stability * 1.25)
+      old.state = 'active'
+      old.stability = stability
+      old.lastEventAt = now
+      old.updatedAt = now
+      old.archivedAt = null
+      old.archivedReason = null
+      mockHistoryAppend(draft, old.id, {
+        at: now,
+        event: 'dream_revive',
+        stability,
+        baseWeight: old.baseWeight,
+        floor: old.floor,
+        factor: 1.25,
+        rank: null,
+        hits30d: null,
+        runId,
+        note: action.reason,
+      })
+      result.revived += 1
+    }
+  }
+
+  for (const r of draft.dreamRuns) {
+    if (r.id !== runId) continue
+    r.status = 'done'
+    r.finishedAt = now
+    r.result = { ...result }
+    r.error = null
+  }
+  mockShardStore = draft
+  saveMockShardStore()
+  return { ...result, alreadyApplied: false }
+}
+
+function mockDreamCancel(runId: string, error: string | null) {
+  const store = loadMockShardStore()
+  const run = store.dreamRuns.find((r) => r.id === runId)
+  if (!run) throw new Error(`Dream run 不存在：${runId}`)
+  if (run.status !== 'running') return
+  const text = (error ?? '').trim()
+  run.status = text ? 'failed' : 'cancelled'
+  run.finishedAt = new Date().toISOString()
+  run.error = text
+  saveMockShardStore()
+}
+
 export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
   switch (cmd) {
     case 'list_foods': {
@@ -7272,7 +8973,27 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'ai_chat_messages': {
       const id = String(args.chatId)
       const msgs = aiChats.get(id)?.messages ?? []
-      return delay(structuredClone(msgs) as T)
+      // 与 Rust `ai_chat_messages` 对齐：全量路径也返回派生 anchor_id，
+      // 冷启动段构建才能拿到与 shard 一致的锚点。
+      const anchors = mockChatAnchorMap(msgs)
+      return delay(
+        structuredClone(msgs).map((m) => ({ ...m, anchorId: anchors.get(m.id) ?? null })) as T,
+      )
+    }
+
+    case 'ai_chat_page': {
+      const chatId = String(args.chatId ?? '')
+      const beforeSeq = args.beforeSeq == null ? null : Number(args.beforeSeq)
+      const afterSeq = args.afterSeq == null ? null : Number(args.afterSeq)
+      const limitTurns = args.limitTurns == null ? null : Number(args.limitTurns)
+      return delay(mockChatPage(chatId, beforeSeq, afterSeq, limitTurns) as T)
+    }
+
+    case 'ai_chat_page_around': {
+      const chatId = String(args.chatId ?? '')
+      const messageId = String(args.messageId ?? '')
+      const limitTurns = args.limitTurns == null ? null : Number(args.limitTurns)
+      return delay(mockChatPageAround(chatId, messageId, limitTurns) as T)
     }
 
     case 'ai_chat_append': {
@@ -8360,6 +10081,45 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(plain({ path: dir, entries, total: entries.length, truncated }) as T)
     }
 
+    case 'kb_root_stats': {
+      // 与 Rust listing::root_stats 同口径：每个路径取第 2 段（根层列举时直接子目录
+      // 节点也算一个子项），回收站整棵排除；只回「名字 + 数字 + 更新时间」。
+      loadKbStore()
+      kbEnsureIndex()
+      const counts = new Map<string, Set<string>>()
+      const addPath = (p: string) => {
+        if (!p || p === '回收站' || p.startsWith('回收站/')) return
+        const i = p.indexOf('/')
+        if (i <= 0) return
+        const root = p.slice(0, i)
+        const rest = p.slice(i + 1)
+        const j = rest.indexOf('/')
+        const seg = j >= 0 ? rest.slice(0, j) : rest
+        if (!seg) return
+        const set = counts.get(root) ?? new Set<string>()
+        set.add(seg)
+        counts.set(root, set)
+      }
+      for (const d of kbDocs) if (d.path) addPath(d.path)
+      for (const f of kbFiles) if (!f.trashedAt) addPath(f.path)
+      const updated = new Map<string, string>()
+      for (const f of kbFiles) {
+        if (!f.trashedAt && f.kind === 'folder' && f.path && !f.path.includes('/')) {
+          updated.set(f.path, f.updatedAt)
+        }
+      }
+      const names = new Set<string>([...counts.keys(), ...updated.keys()])
+      return delay(
+        plain(
+          [...names].sort().map((name) => ({
+            name,
+            childCount: counts.get(name)?.size ?? 0,
+            updatedAt: updated.get(name) ?? '',
+          })),
+        ) as T,
+      )
+    }
+
     case 'kb_meta_set': {
       loadKbStore()
       const input = plain(args.input as { id: number; rating?: number; tags?: string[]; note?: string }) ?? { id: 0 }
@@ -9118,6 +10878,55 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(plain(list.map(kbDocToMemory)) as T)
     }
 
+    case 'kb_memory_overview': {
+      // 与 Rust memory::overview 同口径：一次取数算三份视图（列表 / 概况 / 注入块）。
+      loadKbStore()
+      const activeList = kbMemories.filter((m) => !m.archivedAt)
+      const byUpdated = activeList
+        .slice()
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id)
+      const bySalience = activeList
+        .slice()
+        .sort((a, b) => kbSalience(b) - kbSalience(a) || b.id - a.id)
+      const picked: MockKbMemory[] = []
+      let text = ''
+      for (const m of bySalience) {
+        if (picked.length >= 24) break
+        const line = kbCognitionLine(m)
+        if (text.length + line.length + 1 > 1200) break
+        text = text ? `${text}\n${line}` : line
+        picked.push(m)
+      }
+      const stale = activeList.filter((m) => kbSalience(m) < KB_STALE_SALIENCE).length
+      const avg = (f: (m: MockKbMemory) => number): number =>
+        activeList.length
+          ? Number((activeList.reduce((s, m) => s + f(m), 0) / activeList.length).toFixed(3))
+          : 0
+      return delay(plain({
+        memories: byUpdated.map(kbDocToMemory),
+        stats: {
+          active: activeList.length,
+          archived: kbMemories.length - activeList.length,
+          total: kbMemories.length,
+          limit: 24,
+          maxChars: 1200,
+          injected: picked.length,
+          injectedChars: text.length,
+          stale,
+          avgConfidence: avg((m) => m.confidence),
+          avgSalience: avg((m) => kbSalience(m)),
+          signalRatio: activeList.length
+            ? Number((picked.length / activeList.length).toFixed(3))
+            : 1,
+          noiseRatio: activeList.length ? Number((stale / activeList.length).toFixed(3)) : 0,
+          autoConsolidate: kbSettings.autoConsolidate,
+          lastConsolidateAt: kbSettings.lastConsolidateAt,
+          lastMaintainAt: kbSettings.lastMaintainAt,
+        },
+        cognition: { memories: picked.map(kbDocToMemory), text },
+      }) as T)
+    }
+
     case 'kb_memory_apply': {
       loadKbStore()
       const candidates = plain(args.candidates as Record<string, unknown>[]) ?? []
@@ -9364,17 +11173,302 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     }
 
     case 'kb_memory_bump': {
-      loadKbStore()
-      const ids = (args.ids as number[]) ?? []
-      const now = new Date().toISOString()
-      for (const id of ids) {
-        const m = kbMemories.find((x) => x.id === id)
-        if (m) {
-          m.activeCount++
-          m.lastUsedAt = now
+      // 与 Rust `memory::bump_active` 一致：no-op。
+      // 自动注入只读，不再用「被注入一次」续命；真正的复习信号是主动搜索的
+      // memory_shard_search（写 search_hit）。旧实现递增 legacy kbMemories.activeCount
+      // 会让浏览器 mock 与真后端在「注入即续命」上分叉。
+      return delay(undefined as T)
+    }
+
+    /* ---------- 记忆分片（kb/shard，方案 §7.1 #1–#15） ---------- */
+
+    case 'memory_shard_list': {
+      const store = loadMockShardStore()
+      mockSweepIfDue(store)
+      const scopeRaw = String(args.scope ?? '').trim()
+      const scope =
+        scopeRaw === 'dormant' || scopeRaw === 'archived' || scopeRaw === 'all' ? scopeRaw : 'active'
+      const originRaw = String(args.origin ?? '').trim()
+      const origin = ['conversation', 'dream_summary', 'manual_write', 'marked_important', 'curated'].includes(
+        originRaw,
+      )
+        ? originRaw
+        : null
+      const limit = Math.min(500, Math.max(1, Number(args.limit ?? 200)))
+      const offset = Math.max(0, Number(args.offset ?? 0))
+      const stateRank = (s: MockShardRow): number =>
+        s.state === 'active' ? 0 : s.state === 'dormant' ? 1 : 2
+      const list = store.shards
+        .filter((s) => s.consolidatedInto == null)
+        .filter((s) => (scope === 'all' ? true : s.state === scope))
+        .filter((s) => {
+          if (!origin) return true
+          if (origin === 'curated') return s.origin !== 'conversation'
+          return s.origin === origin
+        })
+        .sort(
+          (a, b) =>
+            stateRank(a) - stateRank(b) ||
+            (mockShardTime(b.updatedAt) ?? 0) - (mockShardTime(a.updatedAt) ?? 0) ||
+            b.id - a.id,
+        )
+        .slice(offset, offset + limit)
+      return delay(list.map((s) => mockShardToModel(s)) as T)
+    }
+
+    case 'memory_shard_get': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const shard = store.shards.find((s) => s.id === id)
+      if (!shard) throw new Error(`记忆不存在：id=${id}`)
+      const history = store.history
+        .filter((h) => h.shardId === id)
+        .sort((a, b) => a.seq - b.seq)
+        .map((h) => ({
+          seq: h.seq,
+          at: h.at,
+          event: h.event,
+          stability: h.stability,
+          baseWeight: h.baseWeight,
+          floor: h.floor,
+          factor: h.factor,
+          rank: h.rank,
+          hits30d: h.hits30d,
+          runId: h.runId,
+          note: h.note,
+        }))
+      return delay(
+        {
+          shard: mockShardToModel(shard),
+          history,
+          sourceMessageIds: shard.sourceMessageIds.slice(),
+        } as T,
+      )
+    }
+
+    case 'memory_shard_apply': {
+      const store = loadMockShardStore()
+      const actions = (args.actions as Record<string, unknown>[] | null | undefined) ?? []
+      const chatId = (args.chatId as string | null | undefined) ?? null
+      const messageIds = ((args.messageIds as string[] | null | undefined) ?? []).map(String)
+      return delay(mockApplyShardActions(store, actions, chatId, messageIds) as T)
+    }
+
+    case 'memory_shard_update': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const patch = (args.patch as Record<string, unknown> | null | undefined) ?? {}
+      const out = mockUpdateShardInPlace(store, id, {
+        content: patch.content == null ? null : String(patch.content),
+        memType: patch.memType == null ? null : String(patch.memType),
+        topic: patch.topic == null ? null : String(patch.topic),
+        category: patch.category == null ? null : String(patch.category),
+      }, true)
+      saveMockShardStore()
+      return delay(out!.model as T)
+    }
+
+    case 'memory_shard_delete': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const shard = store.shards.find((s) => s.id === id)
+      if (!shard) {
+        saveMockShardStore()
+        return delay(false as T)
+      }
+      if (shard.consolidatedInto == null) {
+        for (const dep of store.shards.filter((s) => s.consolidatedInto === id)) {
+          mockDeleteShardRow(store, dep.id)
         }
       }
-      saveKbMemories()
+      const ok = mockDeleteShardRow(store, id)
+      saveMockShardStore()
+      return delay(ok as T)
+    }
+
+    case 'memory_shard_archive': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const reason = String(args.reason ?? '').trim() || 'manual'
+      const ok = mockArchiveShardInPlace(store, id, reason)
+      saveMockShardStore()
+      return delay(ok as T)
+    }
+
+    case 'memory_shard_restore': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const shard = store.shards.find((s) => s.id === id)
+      if (!shard || shard.state === 'active' || shard.consolidatedInto != null) {
+        return delay(false as T)
+      }
+      const birth = mockBirthStability(store, id) ?? shard.stability
+      const stability = Math.max(shard.stability, birth)
+      const now = new Date().toISOString()
+      shard.state = 'active'
+      shard.archivedAt = null
+      shard.archivedReason = null
+      shard.stability = stability
+      shard.lastEventAt = now
+      shard.updatedAt = now
+      mockHistoryAppend(store, id, {
+        at: now,
+        event: 'manual_restore',
+        stability,
+        baseWeight: shard.baseWeight,
+        floor: shard.floor,
+        factor: 1,
+        rank: null,
+        hits30d: null,
+        runId: '',
+        note: '',
+      })
+      saveMockShardStore()
+      return delay(true as T)
+    }
+
+    case 'memory_shard_mark_important': {
+      const store = loadMockShardStore()
+      const id = Number(args.id)
+      const shard = store.shards.find((s) => s.id === id)
+      if (!shard) throw new Error(`记忆不存在：id=${id}`)
+      if (shard.consolidatedInto != null) throw new Error('该记忆已合并，请标记合并后的记忆')
+      const p = mockShardParams('marked_important')
+      const stability = Math.min(SHARD_S_MAX, Math.max(shard.stability * 2, 90))
+      const now = new Date().toISOString()
+      shard.origin = 'marked_important'
+      shard.baseWeight = p.baseWeight
+      shard.floor = p.floor
+      shard.stability = stability
+      shard.state = 'active'
+      shard.archivedAt = null
+      shard.archivedReason = null
+      shard.lastEventAt = now
+      shard.updatedAt = now
+      mockHistoryAppend(store, id, {
+        at: now,
+        event: 'manual_mark',
+        stability,
+        baseWeight: p.baseWeight,
+        floor: p.floor,
+        factor: 1,
+        rank: null,
+        hits30d: null,
+        runId: '',
+        note: String(args.note ?? '').trim(),
+      })
+      saveMockShardStore()
+      return delay(mockShardToModel(shard) as T)
+    }
+
+    case 'memory_shard_search': {
+      const store = loadMockShardStore()
+      const topK = Math.min(20, Math.max(1, Number(args.topK ?? 8)))
+      const includeDormant = args.includeDormant == null ? true : Boolean(args.includeDormant)
+      const reviveArchived = args.reviveArchived == null ? false : Boolean(args.reviveArchived)
+      const includeArchived =
+        (args.includeArchived == null ? false : Boolean(args.includeArchived)) || reviveArchived
+      return delay(
+        mockSearchShards(
+          store,
+          String(args.query ?? ''),
+          topK,
+          includeDormant,
+          includeArchived,
+          reviveArchived,
+        ) as T,
+      )
+    }
+
+    case 'memory_shard_inject': {
+      const store = loadMockShardStore()
+      const budgetTokens = Math.min(8000, Math.max(200, Number(args.budgetTokens ?? 2000)))
+      const maxShards = Math.min(20, Math.max(1, Number(args.maxShards ?? 8)))
+      const includeConversation =
+        args.includeConversation == null ? false : Boolean(args.includeConversation)
+      const query = args.query == null ? null : String(args.query)
+      return delay(
+        mockInjectShards(store, query, budgetTokens, maxShards, includeConversation) as T,
+      )
+    }
+
+    case 'memory_shard_overview': {
+      const store = loadMockShardStore()
+      mockSweepIfDue(store)
+      const shards = store.shards
+        .filter((s) => s.consolidatedInto == null && s.state !== 'archived')
+        .sort(
+          (a, b) =>
+            (mockShardTime(b.updatedAt) ?? 0) - (mockShardTime(a.updatedAt) ?? 0) || b.id - a.id,
+        )
+        .map((s) => mockShardToModel(s))
+      return delay(
+        {
+          shards,
+          stats: mockShardStats(store, false),
+          cognition: mockInjectShards(store, null, INJECT_BUDGET_TOKENS, INJECT_MAX_SHARDS, false),
+        } as T,
+      )
+    }
+
+    case 'memory_shard_stats': {
+      const store = loadMockShardStore()
+      mockSweepIfDue(store)
+      return delay(mockShardStats(store, false) as T)
+    }
+
+    case 'memory_shard_sweep': {
+      const store = loadMockShardStore()
+      return delay(mockSweep(store, true) as T)
+    }
+
+    case 'memory_shard_duplicates': {
+      const store = loadMockShardStore()
+      const threshold = Math.min(0.99, Math.max(0.5, Number(args.threshold ?? 0.86)))
+      const limit = Math.max(0, Number(args.limit ?? 30))
+      return delay(mockDuplicateShards(store, threshold, limit) as T)
+    }
+
+    case 'memory_shard_events': {
+      const store = loadMockShardStore()
+      const limit = Math.min(200, Math.max(1, Number(args.limit ?? 50)))
+      const events = store.history
+        .map((h) => ({ h, shard: store.shards.find((s) => s.id === h.shardId) }))
+        .filter((row): row is { h: MockShardHistoryRow; shard: MockShardRow } => Boolean(row.shard))
+        .sort(
+          (a, b) =>
+            (mockShardTime(b.h.at) ?? 0) - (mockShardTime(a.h.at) ?? 0) ||
+            b.h.shardId - a.h.shardId ||
+            b.h.seq - a.h.seq,
+        )
+        .slice(0, limit)
+        .map(({ h, shard }) => ({
+          at: h.at,
+          shardId: h.shardId,
+          event: h.event,
+          content: mockSliceChars(shard.content, 120),
+          runId: h.runId,
+          note: h.note,
+        }))
+      return delay(events as T)
+    }
+
+    /* ---------- Dream（方案 §7.1 #16–#18） ---------- */
+
+    case 'memory_dream_begin':
+      return delay(mockDreamBegin(args.force == null ? false : Boolean(args.force)) as T)
+
+    case 'memory_dream_apply': {
+      const runId = String(args.runId ?? '')
+      const actions = (args.actions as unknown[] | null | undefined) ?? []
+      return delay(mockDreamApply(runId, actions) as T)
+    }
+
+    case 'memory_dream_cancel': {
+      mockDreamCancel(
+        String(args.runId ?? ''),
+        args.error == null ? null : String(args.error),
+      )
       return delay(undefined as T)
     }
 
@@ -10653,6 +12747,39 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'focus_unpublish':
       gwFocusRuntime = null
       return delay({} as T)
+
+    /* ---- 连接本机应用（四个通用命令；浏览器 mock 只给样例数据）---- */
+
+    case 'connected_app_status':
+      return delay(mockConnectedAppStatus() as T)
+
+    case 'connected_app_request':
+      return delay(
+        mockConnectedAppRequest(
+          String(args.appId ?? ''),
+          String(args.mode ?? 'permissions') as ConnectedAppRequestMode,
+        ) as T,
+      )
+
+    case 'connected_app_invoke': {
+      let payload: unknown = {}
+      try {
+        payload = JSON.parse(String(args.payloadJson ?? '{}'))
+      } catch {
+        payload = {}
+      }
+      return delay(
+        mockConnectedAppInvoke(String(args.appId ?? ''), String(args.method ?? ''), payload) as T,
+      )
+    }
+
+    case 'connected_app_update':
+      return delay(
+        mockConnectedAppUpdate(
+          String(args.appId ?? ''),
+          (args.patch ?? {}) as ConnectedAppPatch,
+        ) as T,
+      )
 
     default:
       throw new Error(`mock 未实现的命令: ${cmd}`)

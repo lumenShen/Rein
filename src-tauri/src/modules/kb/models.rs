@@ -268,7 +268,7 @@ pub struct KbMemory {
     pub archived_at: Option<String>,
     /// 归档原因：decay（自动衰减）/ manual（手动）/ 整理任务给出的原因
     pub archived_reason: Option<String>,
-    /// 显著性（读时计算，不落库）：置信度 × 时间衰减 × 使用强化，见 memory.rs::salience_of
+    /// 兼容投影：`memory_shards` 的读时 effective_weight（旧字段名保留，语义已换）
     pub salience: f64,
 }
 
@@ -365,6 +365,20 @@ pub struct KbMemoryStats {
 pub struct KbCognition {
     pub memories: Vec<KbMemory>,
     pub text: String,
+}
+
+/// 「关于你」首屏的一份聚合快照：活跃记忆 + 概况 + 注入块。
+///
+/// 三样东西原本是三条命令、三次全表读。聚合成一份的收益不是少两次 IPC，
+/// 而是**只算一次 salience、只拼一次注入文本**；三份结果天然来自同一帧数据，
+/// 不会出现「列表 24 条、统计说 23 条」这种同一页内自相矛盾。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KbMemoryOverview {
+    /// 活跃记忆（与 `kb_memories(scope=active)` 同序：最近修改在前）
+    pub memories: Vec<KbMemory>,
+    pub stats: KbMemoryStats,
+    pub cognition: KbCognition,
 }
 
 /* ---------- 真实文件（kb_files，可写） ---------- */
@@ -484,6 +498,20 @@ pub struct KbDirListing {
     /// 条目总数（未截断时等于 entries.len()）
     pub total: i64,
     pub truncated: bool,
+}
+
+/// 根层统计（`kb_root_stats`）：顶层目录的直接子项数与目录节点更新时间。
+///
+/// 这是 `list_dir("")` 的「只要数字」版本：关于你首屏用 13 个 root 的计数，
+/// 不值得把整棵树实例化成 `KbEntry`。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KbRootStat {
+    pub name: String,
+    /// 直接子目录数（与 `KbEntry.child_count` 同口径：只数后代，直接子文件不计）
+    pub child_count: i64,
+    /// 目录节点自身的 `updated_at`；隐式目录（没有 kb_files 节点）为空串
+    pub updated_at: String,
 }
 
 /// 回收站里的一条。`path` 是回收站内的存放路径，`original_path` 是删除前的位置。

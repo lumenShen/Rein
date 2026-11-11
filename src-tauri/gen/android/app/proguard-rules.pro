@@ -27,6 +27,12 @@
 # ---------------------------------------------------------------------------
 -keep class com.gozaoo.rein.TrackingBridge { *; }
 -keep class com.gozaoo.rein.RunTrackingService { *; }
+# RustLocationListener：Rust `modules/tracking/location.rs` 按类名加载并用
+# new_object("()V") 实例化。R8 看不到这条 JNI 引用，只会保留类体内的 native 方法，
+# **无参构造器会被裁掉**（2026-11-10 用 dexdump 在 release APK 里实证：
+# 类块只剩 <clinit>/nativeOnLocation，没有 <init>）。后果是 nativeStartLocation
+# 永远返回 0：服务/通知都在跑，但一个定位点都收不到，且只在 release 包复现。
+-keep class com.gozaoo.rein.RustLocationListener { *; }
 # UpdateBridge 同理：Rust 经 JNI 反射调 install/snapshot（modules/update 的
 # call_static_method）。漏了这条的后果实测就是「点安装并更新 → 闪退」：
 # release 包把 install 方法裁掉，JNI 调用抛 NoSuchMethodError。
@@ -52,3 +58,11 @@
 -keep class io.github.gedgygedgy.** { *; }
 # 心率权限/初始化桥：Rust 经 JNI 反射调 ensurePermissions，native 方法名也必须保留
 -keep class com.gozaoo.rein.HeartRateBridge { *; }
+# ---------------------------------------------------------------------------
+# 连接本机应用：Rust 经 JNI 反射调 ConnectedAppsBridge 的
+# status / request / invoke / revoke；R8 静态分析看不到引用。
+# connectedapps.** 还被 manifest 按类名实例化（通知监听服务）。
+# 漏掉 = release 包点任一连接应用能力时 NoSuchMethodError 闪退。
+# ---------------------------------------------------------------------------
+-keep class com.gozaoo.rein.ConnectedAppsBridge { *; }
+-keep class com.gozaoo.rein.connectedapps.** { *; }

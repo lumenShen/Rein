@@ -1802,6 +1802,310 @@ UPDATE kb_settings SET embedding_mode = 'keyword'
 DELETE FROM kb_vectors WHERE model_id = 'bge-small-zh-v1.5-int8';
 "#;
 
+/// 0052 · 一层目录列举的「未进回收站」部分索引（modules/kb/listing.rs）。
+///
+/// 列举固定是 `path BETWEEN ?1 AND ?2 AND trashed_at IS NULL ORDER BY path`。
+/// 没有这条部分索引时，优化器只能选 `idx_kb_files_trash(trashed_at)` 再对命中行
+/// 建临时 B 树排序；有了它就能按 path 顺序直接扫，排序与过滤一起省掉。
+/// 局部索引只覆盖未进回收站的行（正常浏览的全部），体积比全表索引小得多。
+///
+/// **必须跟一次 ANALYZE**：没有统计信息时优化器仍会选 trash 索引 + 临时排序
+/// （实测 5300 行的合成表：不加 ANALYZE 计划不变；加了才走这条局部索引）。
+/// 生产库（91 MB）一次性 64ms，换来后续所有列举的计划正确。
+const MIGRATION_0052: &str = r#"
+CREATE INDEX idx_kb_files_path_active ON kb_files(path) WHERE trashed_at IS NULL;
+ANALYZE;
+"#;
+
+/// 0053 · 长期记忆分片层（方案 memory-system §2.2）。
+///
+/// - `memory_shards` 是可检索、可衰减、可溯源的认知单元；`id` 保持 INTEGER（工具/页面
+///   沿用 `memoryId: number`），跨设备稳定键是 `anchor_message_id` 而不是 shard id；
+/// - `memory_shard_history` 是唯一真相源，`state`/`stability`/`last_event_at` 只是缓存；
+/// - `memory_shard_fts` 与三条触发器让正文可被 trigram 检索（与 `kb_fts` 同一套用法）；
+/// - `memory_jobs` 是异步 extract/embed 队列，`memory_dream_runs` 是 Dream 运行记录；
+/// - `ai_chat_messages.anchor_id` 是派生锚点列，0054 回填，之后由 `ai_chat_append` 维护；
+/// - `ai_chat_seq` 是每会话单调 seq 计数器：`ai_chat_cut` 删后缀后 `MAX(seq)` 会下降，
+///   直接 `MAX+1` 会复用 seq，让分页游标指向新消息。
+///
+/// 本迁移只做 schema，不碰数据；旧 `kb_memories` 保留不删（回滚源 + 兼容投影源）。
+const MIGRATION_0053: &str = r#"
+CREATE TABLE memory_shards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- 创建幂等键：conv:<anchorMessageId>:<chunkIndex>:<anchorHash> / manual:<hash> /
+  -- dream:<runId>:<action>:<hash> / legacy:<id>
+  idempotency_key TEXT NOT NULL UNIQUE,
+  origin TEXT NOT NULL CHECK (origin IN ('conversation','dream_summary','manual_write','marked_important')),
+  mem_type TEXT NOT NULL DEFAULT 'preference',
+  topic TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  -- 旧 kb_memories 回填时为 NULL，由 Rust backfill_legacy 补齐
+  content_hash TEXT,
+  confidence REAL NOT NULL DEFAULT 0.7,
+  base_weight REAL NOT NULL,
+  floor REAL NOT NULL,
+  stability REAL NOT NULL,
+  last_event_at TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','dormant','archived')),
+  anchor_message_id TEXT,
+  -- conversation shard 的 anchor 文本版本；文本变了要重建该 anchor 的 shard
+  anchor_hash TEXT,
+  chat_id TEXT,
+  user_message_id TEXT,
+  provenance_json TEXT NOT NULL DEFAULT '{}',
+  -- embedding 异步列；没有向量时走 FTS/关键词
+  embedding BLOB,
+  embedding_model TEXT,
+  embedding_dim INTEGER,
+  embedding_at TEXT,
+  supersedes INTEGER REFERENCES memory_shards(id) ON DELETE SET NULL,
+  consolidated_into INTEGER REFERENCES memory_shards(id) ON DELETE SET NULL,
+  dream_action TEXT CHECK (dream_action IN ('supersede_new','consolidate_merged','digest') OR dream_action IS NULL),
+  source_chat_id TEXT,
+  source_message_ids TEXT NOT NULL DEFAULT '[]',
+  legacy_memory_id INTEGER UNIQUE,
+  legacy_active_count INTEGER NOT NULL DEFAULT 0,
+  legacy_last_used_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  archived_at TEXT,
+  archived_reason TEXT
+);
+CREATE INDEX idx_memory_shards_state ON memory_shards(state);
+CREATE INDEX idx_memory_shards_origin_state ON memory_shards(origin, state);
+CREATE INDEX idx_memory_shards_anchor ON memory_shards(anchor_message_id);
+CREATE INDEX idx_memory_shards_chat ON memory_shards(chat_id, anchor_message_id);
+CREATE INDEX idx_memory_shards_last_event ON memory_shards(last_event_at);
+CREATE INDEX idx_memory_shards_consolidated ON memory_shards(consolidated_into)
+  WHERE consolidated_into IS NOT NULL;
+-- 手动写入按内容幂等；conversation 允许同文重复（不同 anchor 各自有溯源）
+CREATE UNIQUE INDEX uq_memory_shards_manual_hash ON memory_shards(origin, content_hash)
+  WHERE origin IN ('manual_write','marked_important')
+    AND content_hash IS NOT NULL AND consolidated_into IS NULL;
+
+CREATE VIRTUAL TABLE memory_shard_fts USING fts5(
+  content,
+  content='memory_shards',
+  content_rowid='id',
+  tokenize='trigram'
+);
+CREATE TRIGGER memory_shards_fts_ai AFTER INSERT ON memory_shards BEGIN
+  INSERT INTO memory_shard_fts(rowid, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER memory_shards_fts_ad AFTER DELETE ON memory_shards BEGIN
+  INSERT INTO memory_shard_fts(memory_shard_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+END;
+CREATE TRIGGER memory_shards_fts_au AFTER UPDATE OF content ON memory_shards BEGIN
+  INSERT INTO memory_shard_fts(memory_shard_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+  INSERT INTO memory_shard_fts(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TABLE memory_shard_history (
+  shard_id INTEGER NOT NULL REFERENCES memory_shards(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  at TEXT NOT NULL,
+  event TEXT NOT NULL CHECK (event IN (
+    'birth','search_hit','manual_mark','manual_edit','manual_archive','manual_restore',
+    'dream_consolidate','dream_revive','dream_supersede'
+  )),
+  -- 事件后的绝对 stability + base_weight/floor（缓存/审计）；三者的历史合起来才是完整真相源
+  stability REAL NOT NULL,
+  base_weight REAL NOT NULL,
+  floor REAL NOT NULL,
+  -- 本次事件实际乘数；search_hit/dream_revive 用；其余为 1.0
+  factor REAL NOT NULL DEFAULT 1.0,
+  -- search_hit 的排名（0 起）与当时 30 天内命中数，供参数变更重放
+  rank INTEGER,
+  hits_30d INTEGER,
+  -- 写入该事件时 shard 的 origin（mark_important 后为 marked_important），供重放取 s0
+  origin TEXT NOT NULL DEFAULT '',
+  run_id TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (shard_id, seq)
+);
+CREATE INDEX idx_memory_shard_history_at ON memory_shard_history(at);
+CREATE INDEX idx_memory_shard_history_run ON memory_shard_history(run_id) WHERE run_id <> '';
+-- Dream 每个 run 对同一 shard 的同一种事件最多一次（幂等）
+CREATE UNIQUE INDEX uq_memory_shard_history_run_event
+  ON memory_shard_history(shard_id, run_id, event) WHERE run_id <> '';
+
+-- 异步任务：extract（按 anchor 去重，ref_id=anchor_message_id）/ embed（按 shard 去重）
+CREATE TABLE memory_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL CHECK (kind IN ('extract','embed')),
+  ref_id TEXT NOT NULL,
+  chat_id TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  not_before TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_error TEXT,
+  UNIQUE(kind, ref_id)
+);
+CREATE INDEX idx_memory_jobs_due ON memory_jobs(kind, not_before);
+
+CREATE TABLE memory_dream_runs (
+  id TEXT PRIMARY KEY,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running','done','failed','cancelled')),
+  session_count INTEGER NOT NULL DEFAULT 0,
+  message_count INTEGER NOT NULL DEFAULT 0,
+  actions_json TEXT,
+  result_json TEXT,
+  error TEXT
+);
+CREATE INDEX idx_memory_dream_runs_started ON memory_dream_runs(started_at);
+
+-- 会话锚点：nullable；0054 回填，之后由 ai_chat_append 维护
+ALTER TABLE ai_chat_messages ADD COLUMN anchor_id TEXT;
+CREATE INDEX idx_ai_chat_messages_anchor ON ai_chat_messages(anchor_id);
+
+-- 每会话单调 seq 计数器。ai_chat_cut 删后缀后 MAX(seq) 会下降，直接 MAX+1 会复用 seq，
+-- 导致分页游标在撤回后指向新消息。计数器只增不减；append 取
+-- max(counter, MAX(ai_chat_messages.seq)) + 1，跨设备同步进来的高 seq 也不会撞。
+CREATE TABLE ai_chat_seq (
+  chat_id TEXT PRIMARY KEY,
+  next_seq INTEGER NOT NULL DEFAULT 0
+);
+"#;
+
+/// 0054 · 数据回填（方案 memory-system §2.3）：
+///
+/// 1. `ai_chat_messages.anchor_id` 全表回填：回合内最后一条 terminal assistant
+///    （text/analysis 有正文，或 food-parse）优先，没有 terminal 退化为该回合最后一条 assistant；
+///    没有 assistant 的回合保持 NULL。**不为历史会话生成 conversation shard**；
+/// 2. `ai_chat_seq` 从当前 `MAX(seq)` 起，之后只增不减；
+/// 3. 旧 `kb_memories` → `memory_shards` 的加法式映射（`legacy_memory_id` 保证幂等），
+///    补 birth history 与 archived 行的 `manual_archive`；
+/// 4. `ANALYZE` 让新索引进入查询计划。
+///
+/// 关键副作用处理：anchor UPDATE 会触发 0019 的 `kb_t_msgs_au`，给每条消息写一行
+/// `kb_dirty('chat_message')`，升级瞬间制造大量无意义索引任务。迁移窗口里先摘掉该触发器，
+/// UPDATE 后按原样建回（0019 的历史迁移本身不改）。
+const MIGRATION_0054: &str = r#"
+DROP TABLE IF EXISTS _mem_msg_anchor;
+DROP TABLE IF EXISTS _mem_anchor;
+DROP TABLE IF EXISTS _mem_turns;
+
+-- 回合号：chat 内按 seq 累加 user 出现次数；第一条 user 之前的 assistant 为 turn 0。
+CREATE TEMP TABLE _mem_turns AS
+SELECT id, chat_id, seq, role, kind, text,
+       SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END)
+         OVER (PARTITION BY chat_id ORDER BY seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS turn_no
+FROM ai_chat_messages;
+
+-- 每个回合选一个 anchor：terminal assistant 优先，同优先级取 seq 最大；没有 terminal 取最后一条 assistant。
+-- terminal 必须包含 food-parse（applyLlmReply 会把正文气泡 morph 成 kind='food-parse' 且 text=undefined）；
+-- voice 是 user 消息，不在此集合。
+CREATE TEMP TABLE _mem_anchor AS
+SELECT chat_id, turn_no, id AS anchor_id
+FROM (
+  SELECT chat_id, turn_no, id,
+         ROW_NUMBER() OVER (
+           PARTITION BY chat_id, turn_no
+           ORDER BY
+             CASE WHEN role = 'assistant'
+                   AND kind IN ('text','food-parse','analysis')
+                   AND (kind = 'food-parse' OR TRIM(COALESCE(text,'')) <> '') THEN 0 ELSE 1 END,
+             seq DESC
+         ) AS rn
+  FROM _mem_turns
+  WHERE role = 'assistant'
+)
+WHERE rn = 1;
+
+-- 消息 → 回合 anchor 的映射表。方案里的相关子查询在消息量大时是 O(n²)；
+-- 这里先物化 + 建索引，UPDATE 变成 O(n log n)，语义不变。
+CREATE TEMP TABLE _mem_msg_anchor AS
+SELECT t.id AS message_id, a.anchor_id AS anchor_id
+FROM _mem_turns t
+JOIN _mem_anchor a ON a.chat_id = t.chat_id AND a.turn_no = t.turn_no;
+CREATE UNIQUE INDEX _mem_msg_anchor_pk ON _mem_msg_anchor(message_id);
+
+-- 这次全表 UPDATE 只为回填派生列 anchor_id。先摘掉 0019 的触发器，避免为每条消息写 kb_dirty。
+DROP TRIGGER IF EXISTS kb_t_msgs_au;
+
+UPDATE ai_chat_messages
+SET anchor_id = (
+  SELECT ma.anchor_id FROM _mem_msg_anchor ma WHERE ma.message_id = ai_chat_messages.id
+)
+WHERE EXISTS (
+  SELECT 1 FROM _mem_msg_anchor ma WHERE ma.message_id = ai_chat_messages.id
+);
+
+CREATE TRIGGER kb_t_msgs_au AFTER UPDATE ON ai_chat_messages BEGIN
+  INSERT INTO kb_dirty(source_type,source_id,op,at) VALUES('chat_message',NEW.id,'upsert',datetime('now'))
+  ON CONFLICT(source_type,source_id) DO UPDATE SET op='upsert', at=excluded.at;
+END;
+
+-- seq 计数器：每个会话从当前最大 seq 起，之后只增不减。
+INSERT INTO ai_chat_seq(chat_id, next_seq)
+SELECT chat_id, MAX(seq) FROM ai_chat_messages
+GROUP BY chat_id
+ON CONFLICT(chat_id) DO UPDATE SET next_seq = MAX(ai_chat_seq.next_seq, excluded.next_seq);
+
+DROP TABLE _mem_msg_anchor;
+DROP TABLE _mem_anchor;
+DROP TABLE _mem_turns;
+
+-- 旧 kb_memories → memory_shards。迁移专用先验：dream 档 2.0/0.10/10.0，
+-- 让旧行随时间进入 dormant，而不是永久占据注入窗口；origin 仍记 manual_write。
+INSERT INTO memory_shards (
+  idempotency_key, origin, mem_type, topic, category, content, content_hash,
+  confidence, base_weight, floor, stability, last_event_at, state,
+  anchor_message_id, chat_id, user_message_id, provenance_json,
+  supersedes, consolidated_into, dream_action,
+  source_chat_id, source_message_ids, legacy_memory_id,
+  legacy_active_count, legacy_last_used_at,
+  created_at, updated_at, archived_at, archived_reason
+)
+SELECT
+  'legacy:' || m.id,
+  'manual_write',
+  m.mem_type, m.topic, m.category, m.content, NULL,
+  m.confidence, 2.0, 0.10, 10.0,
+  COALESCE(m.last_used_at, m.updated_at, m.created_at),
+  CASE WHEN m.archived_at IS NOT NULL THEN 'archived' ELSE 'active' END,
+  NULL, m.source_chat_id, NULL,
+  json_object('legacy', 1, 'legacyActiveCount', m.active_count),
+  NULL, NULL, NULL,
+  m.source_chat_id, m.source_message_ids, m.id,
+  m.active_count, m.last_used_at,
+  m.created_at, m.updated_at, m.archived_at, m.archived_reason
+FROM kb_memories m
+WHERE NOT EXISTS (
+  SELECT 1 FROM memory_shards s WHERE s.legacy_memory_id = m.id
+);
+
+INSERT INTO memory_shard_history
+  (shard_id, seq, at, event, stability, base_weight, floor, factor, rank, hits_30d, origin, run_id, note)
+SELECT s.id, 1, s.created_at, 'birth', s.stability, s.base_weight, s.floor,
+       1.0, NULL, NULL, s.origin, '', 'legacy'
+FROM memory_shards s
+WHERE s.legacy_memory_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM memory_shard_history h WHERE h.shard_id = s.id);
+
+INSERT INTO memory_shard_history
+  (shard_id, seq, at, event, stability, base_weight, floor, factor, rank, hits_30d, origin, run_id, note)
+SELECT s.id, 2, s.archived_at, 'manual_archive', s.stability, s.base_weight, s.floor,
+       1.0, NULL, NULL, s.origin, '', 'legacy'
+FROM memory_shards s
+WHERE s.legacy_memory_id IS NOT NULL
+  AND s.archived_at IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM memory_shard_history h
+    WHERE h.shard_id = s.id AND h.event = 'manual_archive'
+  );
+
+ANALYZE memory_shards;
+ANALYZE ai_chat_messages;
+"#;
+
 const MIGRATIONS: &[&str] = &[
     MIGRATION_0001,
     MIGRATION_0002,
@@ -1854,6 +2158,9 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_0049,
     MIGRATION_0050,
     MIGRATION_0051,
+    MIGRATION_0052,
+    MIGRATION_0053,
+    MIGRATION_0054,
 ];
 
 /// 通用键值元数据（`app_meta`）读写 —— 全应用**唯一一份**这条 SQL。
@@ -1917,6 +2224,74 @@ mod tests {
             ))
             .unwrap();
         }
+    }
+
+    /// 从 `from_exclusive` 之后应用到 `upto`（含）。用于「先建老表、插数据、再把它升级」
+    /// 的两段式场景（例如 0018 插 kb_memories，再升到 0028 才有 archived_at 可写）。
+    fn apply_range(conn: &Connection, from_exclusive: usize, upto: usize) {
+        for (i, sql) in MIGRATIONS.iter().enumerate() {
+            let v = i + 1;
+            if v <= from_exclusive || v > upto {
+                continue;
+            }
+            conn.execute_batch(&format!(
+                "BEGIN; {sql}; INSERT INTO schema_migrations(version) VALUES ({v}); COMMIT;"
+            ))
+            .unwrap();
+        }
+    }
+
+    /// 建到 0018（kb_memories 已存在、生命周期列还没加）并插入两条旧记忆。
+    /// 用它验证 0054 的映射、birth history 与 `legacy_memory_id` 幂等。
+    fn legacy_db_with_memories() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_through(&conn, 18);
+        conn.execute(
+            "INSERT INTO kb_memories
+               (mem_type, topic, content, confidence, active_count, source_chat_id,
+                source_message_ids, created_at, updated_at)
+             VALUES
+               ('preference','咖啡','喜欢浅烘',0.9,7,'chat-1','[\"m1\"]','2026-01-02 03:04:05','2026-01-03 04:05:06'),
+               ('constraint','膝盖','避免深蹲超过60kg',0.8,2,NULL,'[]','2026-02-02 03:04:05','2026-02-03 04:05:06')",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    /// 建到 0052（全部现有迁移），插入一个带历史会话的消息图，并清掉插入产生的 kb_dirty。
+    /// 之后的 `migrate_for_test` 只跑 0053/0054 —— 用它验证 anchor 回填与触发器副作用。
+    fn legacy_db_with_chat_messages() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_through(&conn, 52);
+        conn.execute(
+            "INSERT INTO ai_chats(id, title, created_at, updated_at)
+             VALUES ('c1','测试','2026-11-01T00:00:00+00:00','2026-11-01T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        // 回合 0：第一条 user 之前的 assistant（fallback 到自身）
+        // 回合 1：user + 一条 terminal text
+        // 回合 2：两条 user + tools + terminal text（terminal 取最后一条 text）
+        let rows = [
+            ("a0", 0i64, "assistant", "text", Some("开场白"), "2026-11-01T00:00:01+00:00"),
+            ("u1", 1, "user", "text", Some("你好"), "2026-11-01T00:00:02+00:00"),
+            ("a1", 2, "assistant", "text", Some("回复一"), "2026-11-01T00:00:03+00:00"),
+            ("u2", 3, "user", "text", Some("二"), "2026-11-01T00:00:04+00:00"),
+            ("u3", 4, "user", "text", Some("三"), "2026-11-01T00:00:05+00:00"),
+            ("a2", 5, "assistant", "tools", None, "2026-11-01T00:00:06+00:00"),
+            ("a3", 6, "assistant", "text", Some("回复二"), "2026-11-01T00:00:07+00:00"),
+        ];
+        for (id, seq, role, kind, text, at) in rows {
+            conn.execute(
+                "INSERT INTO ai_chat_messages(id, chat_id, seq, role, kind, text, created_at)
+                 VALUES (?1,'c1',?2,?3,?4,?5,?6)",
+                rusqlite::params![id, seq, role, kind, text, at],
+            )
+            .unwrap();
+        }
+        conn.execute("DELETE FROM kb_dirty", []).unwrap();
+        conn
     }
 
     fn table_exists(conn: &Connection, name: &str) -> bool {
@@ -1986,6 +2361,12 @@ mod tests {
             "kb_settings",
             "kb_memories",
             "kb_memory_diffs",
+            "memory_shards",
+            "memory_shard_history",
+            "memory_shard_fts",
+            "memory_jobs",
+            "memory_dream_runs",
+            "ai_chat_seq",
         ] {
             assert!(table_exists(&conn, t), "升级后应存在 {t}");
         }
@@ -2262,6 +2643,323 @@ mod tests {
             "只清用户自建重复（A 组保留已完成的 2 号），其余来源行原样保留"
         );
     }
+
+    /* ---------- 0053 / 0054：记忆分片层 ---------- */
+
+    fn anchor_of(conn: &Connection, id: &str) -> Option<String> {
+        conn.query_row(
+            "SELECT anchor_id FROM ai_chat_messages WHERE id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn migration_0053_creates_shard_tables_and_indexes() {
+        let conn = legacy_db();
+        migrate_for_test(&conn).unwrap();
+
+        for t in [
+            "memory_shards",
+            "memory_shard_history",
+            "memory_shard_fts",
+            "memory_jobs",
+            "memory_dream_runs",
+            "ai_chat_seq",
+        ] {
+            assert!(table_exists(&conn, t), "0053 应建出 {t}");
+        }
+        for idx in [
+            "idx_memory_shards_state",
+            "idx_memory_shards_origin_state",
+            "idx_memory_shards_anchor",
+            "idx_memory_shards_chat",
+            "idx_memory_shards_last_event",
+            "idx_memory_shards_consolidated",
+            "uq_memory_shards_manual_hash",
+            "idx_memory_shard_history_at",
+            "idx_memory_shard_history_run",
+            "uq_memory_shard_history_run_event",
+            "idx_memory_jobs_due",
+            "idx_memory_dream_runs_started",
+            "idx_ai_chat_messages_anchor",
+        ] {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
+                    [idx],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 1, "0053 应建出索引 {idx}");
+        }
+        // 派生列存在且可空
+        conn.execute(
+            "INSERT INTO ai_chats(id, title, created_at, updated_at)
+             VALUES ('c','t','2026-11-01T00:00:00+00:00','2026-11-01T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ai_chat_messages(id, chat_id, seq, role, kind, text, created_at)
+             VALUES ('m','c',1,'user','text','x','2026-11-01T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(anchor_of(&conn, "m"), None, "anchor_id 默认 NULL");
+    }
+
+    #[test]
+    fn migration_0054_backfills_anchors_for_turns() {
+        let conn = legacy_db_with_chat_messages();
+        migrate_for_test(&conn).unwrap();
+
+        // 回合 0（user 之前）：fallback 到最后一条 assistant
+        assert_eq!(anchor_of(&conn, "a0").as_deref(), Some("a0"));
+        // 回合 1：唯一 assistant 成为 anchor，user 也指向它
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("a1"));
+        assert_eq!(anchor_of(&conn, "a1").as_deref(), Some("a1"));
+        // 连续两条 user 各自开启一个回合：u2 的回合没有 assistant → anchor 保持 NULL；
+        // u3 的回合有 tools + terminal text → anchor 取 terminal a3。
+        assert_eq!(anchor_of(&conn, "u2"), None);
+        assert_eq!(anchor_of(&conn, "u3").as_deref(), Some("a3"));
+        assert_eq!(anchor_of(&conn, "a2").as_deref(), Some("a3"));
+        assert_eq!(anchor_of(&conn, "a3").as_deref(), Some("a3"));
+
+        // seq 计数器从 MAX(seq) 起
+        let next: i64 = conn
+            .query_row("SELECT next_seq FROM ai_chat_seq WHERE chat_id='c1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(next, 6);
+    }
+
+    #[test]
+    fn anchor_backfill_handles_legacy_assistant_before_first_user() {
+        let conn = legacy_db_with_chat_messages();
+        migrate_for_test(&conn).unwrap();
+        assert_eq!(
+            anchor_of(&conn, "a0").as_deref(),
+            Some("a0"),
+            "第一条 user 之前的 assistant 归 turn 0，且自己是 anchor"
+        );
+    }
+
+    #[test]
+    fn anchor_backfill_handles_consecutive_user_messages() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_through(&conn, 52);
+        conn.execute(
+            "INSERT INTO ai_chats(id, title, created_at, updated_at)
+             VALUES ('c','t','2026-11-01T00:00:00+00:00','2026-11-01T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        for (id, seq, role, kind, text) in [
+            ("u1", 1, "user", "text", Some("一")),
+            ("u2", 2, "user", "text", Some("二")),
+            ("a2", 3, "assistant", "text", Some("答")),
+        ] {
+            conn.execute(
+                "INSERT INTO ai_chat_messages(id, chat_id, seq, role, kind, text, created_at)
+                 VALUES (?1,'c',?2,?3,?4,?5,'2026-11-01T00:00:00+00:00')",
+                rusqlite::params![id, seq, role, kind, text],
+            )
+            .unwrap();
+        }
+        conn.execute("DELETE FROM kb_dirty", []).unwrap();
+
+        migrate_for_test(&conn).unwrap();
+
+        assert_eq!(
+            anchor_of(&conn, "u1"),
+            None,
+            "第一条 user 独占一个没有 assistant 的回合，anchor 保持 NULL"
+        );
+        assert_eq!(anchor_of(&conn, "u2").as_deref(), Some("a2"));
+        assert_eq!(anchor_of(&conn, "a2").as_deref(), Some("a2"));
+    }
+
+    #[test]
+    fn anchor_backfill_picks_last_terminal_assistant() {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_through(&conn, 52);
+        conn.execute(
+            "INSERT INTO ai_chats(id, title, created_at, updated_at)
+             VALUES ('c','t','2026-11-01T00:00:00+00:00','2026-11-01T00:00:00+00:00')",
+            [],
+        )
+        .unwrap();
+        for (id, seq, role, kind, text) in [
+            ("u1", 1, "user", "text", Some("问")),
+            ("a1", 2, "assistant", "text", Some("第一段")),
+            ("a2", 3, "assistant", "text", Some("最终答案")),
+            ("a3", 4, "assistant", "tools", None),
+            ("a4", 5, "assistant", "analysis", Some("   ")),
+        ] {
+            conn.execute(
+                "INSERT INTO ai_chat_messages(id, chat_id, seq, role, kind, text, created_at)
+                 VALUES (?1,'c',?2,?3,?4,?5,'2026-11-01T00:00:00+00:00')",
+                rusqlite::params![id, seq, role, kind, text],
+            )
+            .unwrap();
+        }
+        conn.execute("DELETE FROM kb_dirty", []).unwrap();
+
+        migrate_for_test(&conn).unwrap();
+
+        assert_eq!(
+            anchor_of(&conn, "u1").as_deref(),
+            Some("a2"),
+            "terminal 优先；最后一条 assistant 是 tools / 空文本，不能顶掉 terminal"
+        );
+        assert_eq!(anchor_of(&conn, "a3").as_deref(), Some("a2"));
+        assert_eq!(anchor_of(&conn, "a4").as_deref(), Some("a2"));
+    }
+
+    #[test]
+    fn legacy_memories_map_once_and_keep_legacy_id() {
+        let conn = legacy_db_with_memories();
+        migrate_for_test(&conn).unwrap();
+
+        let rows: Vec<(i64, i64, String, String, f64, f64, f64, String, String)> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, legacy_memory_id, idempotency_key, origin, base_weight, floor,
+                            stability, state, provenance_json
+                     FROM memory_shards ORDER BY legacy_memory_id",
+                )
+                .unwrap();
+            stmt.query_map([], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                    r.get(8)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+        };
+        assert_eq!(rows.len(), 2, "两条旧记忆各映射一行");
+        assert_eq!(rows[0].1, 1);
+        assert_eq!(rows[0].2, "legacy:1");
+        assert_eq!(rows[0].3, "manual_write");
+        assert_eq!((rows[0].4, rows[0].5, rows[0].6), (2.0, 0.10, 10.0));
+        assert_eq!(rows[0].7, "active");
+        assert!(rows[0].8.contains("\"legacy\":1"), "provenance 保留 legacy 标记");
+        assert_eq!(rows[1].1, 2);
+
+        // 再跑一次迁移不重复回填（幂等）
+        migrate_for_test(&conn).unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM memory_shards", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn legacy_memory_history_has_birth_and_archive() {
+        let conn = legacy_db_with_memories();
+        // 0028 才加 archived_at/last_used_at；先把旧记忆升级到能写归档列
+        apply_range(&conn, 18, 28);
+        conn.execute(
+            "UPDATE kb_memories
+             SET archived_at='2026-03-01 00:00:00', archived_reason='outdated',
+                 last_used_at='2026-02-20 00:00:00', category='饮品'
+             WHERE id = 1",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM kb_dirty", []).unwrap();
+
+        migrate_for_test(&conn).unwrap();
+
+        let (state, reason, category): (String, Option<String>, String) = conn
+            .query_row(
+                "SELECT state, archived_reason, category FROM memory_shards WHERE legacy_memory_id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "archived");
+        assert_eq!(reason.as_deref(), Some("outdated"));
+        assert_eq!(category, "饮品");
+
+        let events: Vec<String> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT event FROM memory_shard_history h
+                     JOIN memory_shards s ON s.id = h.shard_id
+                     WHERE s.legacy_memory_id = 1 ORDER BY seq",
+                )
+                .unwrap();
+            stmt.query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap()
+        };
+        assert_eq!(events, vec!["birth", "manual_archive"]);
+
+        // active 行只有 birth，且 birth 的 at 是旧 created_at、stability=10
+        let (at, stability): (String, f64) = conn
+            .query_row(
+                "SELECT h.at, h.stability FROM memory_shard_history h
+                 JOIN memory_shards s ON s.id=h.shard_id
+                 WHERE s.legacy_memory_id=2 AND h.event='birth'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(at, "2026-02-02 03:04:05");
+        assert_eq!(stability, 10.0);
+    }
+
+    #[test]
+    fn migration_anchor_backfill_does_not_touch_kb_dirty() {
+        let conn = legacy_db_with_chat_messages();
+        let before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM kb_dirty WHERE source_type='chat_message'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        migrate_for_test(&conn).unwrap();
+
+        let after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM kb_dirty WHERE source_type='chat_message'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(after, before, "0054 摘掉并重建触发器，anchor UPDATE 不应制造 kb_dirty");
+
+        // 触发器必须仍然活着（重建的原样）
+        conn.execute(
+            "UPDATE ai_chat_messages SET text='改' WHERE id='a3'",
+            [],
+        )
+        .unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM kb_dirty WHERE source_type='chat_message' AND source_id='a3'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 1, "0054 之后 ai_chat_messages 的 UPDATE 仍应写 kb_dirty");
+    }
 }
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -2290,9 +2988,16 @@ fn migrate(conn: &Connection) -> Result<()> {
             if version <= current {
                 continue;
             }
-            conn.execute_batch(&format!(
+            if let Err(e) = conn.execute_batch(&format!(
                 "BEGIN; {sql}; INSERT INTO schema_migrations(version) VALUES ({version}); COMMIT;"
-            ))?;
+            )) {
+                // rusqlite 的 execute_batch 在第一条语句出错时直接返回，不会替我们
+                // ROLLBACK；而 `foreign_keys` 的 pragma 在事务内是空操作。不显式回滚
+                // 的话，调用方若保留连接（migrate_for_test / 未来的热迁移），会留下
+                // 一个未结束事务 + FK 仍为 OFF。
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(e.into());
+            }
         }
         Ok(())
     })();

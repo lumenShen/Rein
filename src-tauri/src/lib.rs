@@ -8,6 +8,9 @@ mod error;
 mod modules;
 mod state;
 
+#[cfg(test)]
+mod perf_probe;
+
 use tauri::Manager;
 
 use crate::state::AppState;
@@ -271,6 +274,9 @@ pub fn run() {
             modules::ai::agent::commands::ai_agent_update_context,
             modules::ai::commands::ai_chat_ensure,
             modules::ai::commands::ai_chat_messages,
+            // ai · 会话分页（D 域：整回合切页 + 锚点跳转，方案 §9.2）
+            modules::ai::commands::ai_chat_page,
+            modules::ai::commands::ai_chat_page_around,
             modules::ai::commands::ai_chat_append,
             modules::ai::commands::ai_chat_clear,
             modules::ai::commands::ai_chat_cut,
@@ -344,6 +350,7 @@ pub fn run() {
             modules::kb::commands::kb_probe_embedder,
             modules::kb::commands::kb_rebuild_vectors,
             modules::kb::commands::kb_memories,
+            modules::kb::commands::kb_memory_overview,
             modules::kb::commands::kb_memory_apply,
             modules::kb::commands::kb_memory_delete,
             modules::kb::commands::kb_memory_archive,
@@ -355,6 +362,26 @@ pub fn run() {
             modules::kb::commands::kb_memory_bump,
             modules::kb::commands::kb_memory_duplicates,
             modules::kb::commands::kb_memory_diffs,
+            // kb · 记忆分片层（方案 §7.1 #1–#15：列表/详情/写入/检索/注入/统计/Dream 之外的维护）
+            modules::kb::shard::commands::memory_shard_list,
+            modules::kb::shard::commands::memory_shard_get,
+            modules::kb::shard::commands::memory_shard_apply,
+            modules::kb::shard::commands::memory_shard_update,
+            modules::kb::shard::commands::memory_shard_delete,
+            modules::kb::shard::commands::memory_shard_archive,
+            modules::kb::shard::commands::memory_shard_restore,
+            modules::kb::shard::commands::memory_shard_mark_important,
+            modules::kb::shard::commands::memory_shard_search,
+            modules::kb::shard::commands::memory_shard_inject,
+            modules::kb::shard::commands::memory_shard_overview,
+            modules::kb::shard::commands::memory_shard_stats,
+            modules::kb::shard::commands::memory_shard_sweep,
+            modules::kb::shard::commands::memory_shard_duplicates,
+            modules::kb::shard::commands::memory_shard_events,
+            // kb · Dream（方案 §7.1 #16–#18：门控 / 应用 / 取消，模型调用在前端）
+            modules::kb::shard::dream::memory_dream_begin,
+            modules::kb::shard::dream::memory_dream_apply,
+            modules::kb::shard::dream::memory_dream_cancel,
             modules::kb::commands::kb_glob,
             modules::kb::commands::kb_file_write,
             modules::kb::commands::kb_file_rename,
@@ -374,6 +401,7 @@ pub fn run() {
             modules::kb::commands::kb_injection_get,
             // kb（文件管理器：一层目录列举 + 回收站）
             modules::kb::commands::kb_list_dir,
+            modules::kb::commands::kb_root_stats,
             modules::kb::commands::kb_trash,
             modules::kb::commands::kb_trash_list,
             modules::kb::commands::kb_trash_restore,
@@ -470,6 +498,11 @@ pub fn run() {
             // 运行态上报（前端 → 后端：番茄钟快照写 app_meta；contract §14.1）
             modules::gateway::commands::focus_publish,
             modules::gateway::commands::focus_unpublish,
+            // 连接本机应用（17 个原生 app；health 仍走 health_sync_*）
+            modules::connected_apps::commands::connected_app_status,
+            modules::connected_apps::commands::connected_app_request,
+            modules::connected_apps::commands::connected_app_invoke,
+            modules::connected_apps::commands::connected_app_update,
         ])
         .run(tauri::generate_context!())
         .expect("Rein 启动失败");

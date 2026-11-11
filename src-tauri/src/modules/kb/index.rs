@@ -32,7 +32,7 @@ pub struct ApplyOutcome {
 
 /// FNV-1a 64 位。用它而不是 `DefaultHasher`：后者不保证跨 Rust 版本稳定，
 /// 一旦变化会导致升级后全库无谓重建。这里只是变更检测，不需要抗碰撞强度。
-fn content_hash(parts: &[&str]) -> String {
+pub(crate) fn content_hash(parts: &[&str]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for p in parts {
         for b in p.as_bytes() {
@@ -45,7 +45,14 @@ fn content_hash(parts: &[&str]) -> String {
     format!("{h:016x}")
 }
 
-/// 写一条文档（含分块）。已存在且内容未变时只刷新 updated_at，不重建分块与向量。
+/// 写一条文档（含分块）。已存在且内容未变时**什么都不写**，不重建分块与向量。
+///
+/// 从前这条分支会 `UPDATE kb_docs SET updated_at = datetime('now')`。两个后果都是坏的：
+/// 1. 启动对账每次都会重放全部源（生产库 1.7k 条，其中 1.4k 条内容没变），于是每次
+///    启动都白写 1.4k 次 + 放大 WAL；
+/// 2. `listing` 把 `kb_docs.updated_at` 当「最近更新时间」显示并按它排序 —— 每次启动
+///    全库时间戳被刷成「刚刚」，关于你 → 文件夹里所有派生文件的排序与时间都失真。
+/// 内容没变就没有「更新」可言，不写才是对的。
 pub fn upsert_doc(
     conn: &Connection,
     source_type: &str,
@@ -78,10 +85,6 @@ pub fn upsert_doc(
 
     if let Some((doc_id, old_hash)) = existing {
         if old_hash == hash {
-            conn.execute(
-                "UPDATE kb_docs SET updated_at = datetime('now') WHERE id = ?1",
-                [doc_id],
-            )?;
             return Ok(ApplyOutcome {
                 doc_id: Some(doc_id),
                 chunks: 0,
@@ -269,7 +272,7 @@ fn id_query(source_type: &str) -> Option<&'static str> {
               UNION ALL SELECT id || ':doc' FROM ai_chat_messages \
               WHERE kind = 'doc' AND text LIKE '%附带文档《%'"
         }
-        "memory" => "SELECT CAST(id AS TEXT) FROM kb_memories",
+        "memory" => "SELECT CAST(id AS TEXT) FROM memory_shards",
         "note" => "SELECT CAST(id AS TEXT) FROM kb_files WHERE trashed_at IS NULL",
         _ => return None,
     })
@@ -494,6 +497,53 @@ mod tests {
         assert_ne!(content_hash(&["a", "b"]), content_hash(&["a", "c"]));
         // 「ab」与「a」「b」必须区分（分隔符的存在意义）
         assert_ne!(content_hash(&["ab"]), content_hash(&["a", "b"]));
+    }
+
+    /// 内容未变的重放**不写库**。
+    ///
+    /// 启动对账每次重放全部源（生产库 1.7k 条），未变分支如果刷新 `updated_at`：
+    /// ① 每次启动白写 1.4k 行、放大 WAL；② `listing` 拿 `kb_docs.updated_at`
+    /// 当「最近更新」显示与排序 —— 于是每次启动全库都变成「刚刚」，关于你 →
+    /// 文件夹的时间与排序全部失真。这条把「不写」钉住。
+    #[test]
+    fn unchanged_upsert_does_not_touch_updated_at() {
+        let conn = db();
+        let d = super::source::Derived {
+            title: "标题".into(),
+            summary: "摘要".into(),
+            body: "正文".into(),
+            path: Some("笔记/测试.md".into()),
+            occurred_on: None,
+            tags: vec![],
+            parent_id: None,
+            meta: serde_json::json!({}),
+            editable: true,
+            system: false,
+            kind: "text".into(),
+        };
+        let first = upsert_doc(&conn, "note", "1", &d, 300, 50).unwrap();
+        let doc_id = first.doc_id.unwrap();
+        assert!(!first.unchanged);
+
+        conn.execute(
+            "UPDATE kb_docs SET updated_at = '2000-01-01 00:00:00' WHERE id = ?1",
+            [doc_id],
+        )
+        .unwrap();
+
+        let again = upsert_doc(&conn, "note", "1", &d, 300, 50).unwrap();
+        assert!(again.unchanged);
+        let ts: String = conn
+            .query_row(
+                "SELECT updated_at FROM kb_docs WHERE id = ?1",
+                [doc_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            ts, "2000-01-01 00:00:00",
+            "内容未变不该刷新 updated_at（每次启动都会重放全部源）"
+        );
     }
 
     #[test]

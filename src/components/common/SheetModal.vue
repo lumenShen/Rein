@@ -33,8 +33,13 @@ const props = withDefaults(
     title: string
     /** 打开时应用的初始定位高度档位 */
     initialSnap?: SnapLevel
+    /**
+     * 遮罩层的 z-index（面板 = zIndex + 1）；默认 90/100，现有调用零变化。
+     * 需要压过普通抽屉时传更大的值（如确认弹层 118）。
+     */
+    zIndex?: number
   }>(),
-  { initialSnap: 'medium' },
+  { initialSnap: 'medium', zIndex: 90 },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -362,14 +367,14 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <Transition name="backdrop">
-      <div v-if="open" class="backdrop" aria-hidden="true" @click="emit('close')" />
+      <div v-if="open" class="backdrop" :style="{ zIndex }" aria-hidden="true" @click="emit('close')" />
     </Transition>
     <Transition name="sheet" @after-leave="onAfterLeave">
       <section
         v-if="open"
         class="panel"
         :class="{ 'is-dragging': dragging }"
-        :style="{ height: `${panelHeight}px` }"
+        :style="{ height: `${panelHeight}px`, zIndex: zIndex + 1 }"
         role="dialog"
         :aria-label="title"
       >

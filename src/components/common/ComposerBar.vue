@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Mic, Plus, SendHorizontal } from 'lucide-vue-next'
+
+import { createComposerFocusToken, setComposerFocus } from '@/system/composerFocus'
 
 /**
  * 全局唯一的输入条（2026-11-09 用户定稿）—— **AI 页与其余页面的输入框从此是同一个组件**：
@@ -26,11 +28,16 @@ import { Mic, Plus, SendHorizontal } from 'lucide-vue-next'
  *
  * 行为归调用方：send / add / voice-down 只上报事件 —— 发送链路（askFrom → AI 页）、
  * 添加入口、语音会话与草稿归属都是调用方的事，本组件零业务。
+ *
+ * 聚焦态写到 system/composerFocus（同一个单例）：底栏据此在输入时收起页签行，
+ * 用户在哪一页聚焦都成立。占位默认是**能力提示轮播**（每句 8s，弹簧式上下换位）；
+ * 调用方给了上下文占位（附图 / 文档）时按调用方那句话显示，轮播暂停。
  */
 const props = withDefaults(
   defineProps<{
     modelValue: string
     interactive?: boolean
+    /** 调用方给的上下文占位（如附图时「问问这张图」）。缺省 = 能力提示轮播 */
     placeholder?: string
     /** 可发送的判定：调用方可并入附件 / 文档等非文本条件；缺省 = 有非空文字。
      *  它同时决定「麦克风 ↔ 发送」的换位（有东西可发时发送钮占位）。 */
@@ -46,7 +53,8 @@ const props = withDefaults(
   }>(),
   {
     interactive: true,
-    placeholder: '点击输入或按住说话…',
+    // 缺省（undefined）= 走能力提示轮播；不能用空串占位，空串会被当成「调用方明确要空占位」
+    placeholder: undefined,
     // 必须显式给 undefined：Boolean 类型的 prop 缺省会被 Vue 铸成 false，
     // 而 sendable 是**三态**（undefined = 按文字判定 / true / false）
     sendable: undefined,
@@ -74,6 +82,72 @@ const hasText = computed(() => !!props.modelValue.trim())
 /** 有东西可发（文字，或调用方并进来的附件 / 引用 / 文档） */
 const hasContent = computed(() => props.sendable ?? hasText.value)
 const canSend = computed(() => props.interactive && !props.busy && hasContent.value)
+
+/* ---------- 占位轮播：提醒「这根输入条能帮你做什么」 ----------
+ *
+ * 不是广告位，是**能力清单**：每个短句都是本应用真能完成的一件事（记饮食 / 查训练 /
+ * 记账 / 加待办 / 拍照算热量 / 搜历史 / 闹钟天气）。首句保留「按住说话」—— 它既是
+ * 麦克风的手势说明，也是底栏回归脚本的锚点。
+ *
+ * 原生的 textarea placeholder 不能做位移动画，所以视觉层是自绘的：原生占位透明，
+ * 上面盖一层绝对定位的轮播文字。每句 8s；旧句向上移走、新句从下面冒上来，两端
+ * 同时起步（delay 0），两行字之间始终留着 0.2em 的间距 —— 用户定的节奏。 */
+const COMPOSER_HINTS = [
+  '按住说话，或直接输入',
+  '记一句「午饭 28 块」',
+  '拍张照，让 AI 算热量',
+  '问训练：「这周练了几次？」',
+  '查体重、睡眠和心率',
+  '加待办：「周五前交方案」',
+  '定个闹钟，或记个提醒',
+  '搜我以前的笔记和对话',
+] as const
+
+/** 每句停留 8 秒：够读完一句，又不至于像在催人 */
+const HINT_MS = 8000
+
+const hintIndex = ref(0)
+/** 调用方给了上下文占位时轮播让位（附图时「问问这张图」比能力清单更该出现在眼前） */
+const rotating = computed(() => props.interactive && !props.placeholder)
+const placeholderText = computed(
+  () => props.placeholder ?? COMPOSER_HINTS[hintIndex.value % COMPOSER_HINTS.length]!,
+)
+
+let hintTimer: number | null = null
+
+function stopHintTimer(): void {
+  if (hintTimer !== null) {
+    window.clearInterval(hintTimer)
+    hintTimer = null
+  }
+}
+
+function startHintTimer(): void {
+  stopHintTimer()
+  if (!rotating.value || COMPOSER_HINTS.length < 2) return
+  hintTimer = window.setInterval(() => {
+    hintIndex.value = (hintIndex.value + 1) % COMPOSER_HINTS.length
+  }, HINT_MS)
+}
+
+/** 页面切到后台时停表：看不见的占位不必继续轮播 */
+function onVisibility(): void {
+  if (document.hidden) stopHintTimer()
+  else startHintTimer()
+}
+
+watch(rotating, startHintTimer)
+
+/* ---------- 聚焦态：底栏在输入时收起页签行（任何页面共用同一份事实） ---------- */
+const focusToken = createComposerFocusToken()
+
+function onFocus(): void {
+  if (props.interactive) setComposerFocus(focusToken, true)
+}
+
+function onBlur(): void {
+  setComposerFocus(focusToken, false)
+}
 
 /** 文本域自适应高度：随内容增高，上限 5 行；清空时复位 */
 function autoGrow(): void {
@@ -115,6 +189,21 @@ function focus(): void {
   inputEl.value?.focus()
 }
 
+onMounted(() => {
+  startHintTimer()
+  document.addEventListener('visibilitychange', onVisibility)
+  // 草稿住在跨页 store：挂载时可能已经有一整段文字（切页带过来的），
+  // watch 只在「变化」时跑，初值要在这里补一次长高
+  if (props.modelValue) void nextTick(autoGrow)
+})
+
+onBeforeUnmount(() => {
+  stopHintTimer()
+  document.removeEventListener('visibilitychange', onVisibility)
+  // 卸载（切页 / 底栏与 AI 页的输入条换手）时把聚焦席位还回去，别让页签行永久收起
+  setComposerFocus(focusToken, false)
+})
+
 defineExpose({ focus, addButton: addEl, textarea: inputEl })
 </script>
 
@@ -132,27 +221,41 @@ defineExpose({ focus, addButton: addEl, textarea: inputEl })
       class="qk-btn qk-add"
       :tabindex="interactive ? undefined : -1"
       :aria-label="addLabel"
+      @mousedown.prevent
       @click="emit('add')"
     >
       <Plus :size="22" :stroke-width="2" />
     </button>
-    <textarea
-      ref="inputEl"
-      class="qk-input"
-      rows="1"
-      :value="modelValue"
-      :placeholder="placeholder"
-      :readonly="!interactive"
-      :tabindex="interactive ? undefined : -1"
-      enterkeyhint="send"
-      @input="onInput"
-      @keydown.enter.exact="onEnter"
-    />
+    <!-- 文本域 + 自绘占位：原生 placeholder 不能做位移动画，所以它只留透明的一份
+         给读屏与回归脚本（:placeholder 仍是最新一句），视觉由 .qk-ph 轮播承担 -->
+    <div class="qk-field">
+      <textarea
+        ref="inputEl"
+        class="qk-input"
+        rows="1"
+        :value="modelValue"
+        :placeholder="placeholderText"
+        :readonly="!interactive"
+        :tabindex="interactive ? undefined : -1"
+        enterkeyhint="send"
+        @focus="onFocus"
+        @blur="onBlur"
+        @input="onInput"
+        @keydown.enter.exact="onEnter"
+      />
+      <div v-show="!modelValue" class="qk-ph" aria-hidden="true">
+        <Transition name="ph-roll">
+          <span :key="placeholderText">{{ placeholderText }}</span>
+        </Transition>
+      </div>
+    </div>
     <!-- 麦克风常驻（参考图的空态就是「＋ / 输入 / 麦克风」三件套 —— 参考图空态没有
          独立发送钮，所以发送钮只在有内容时出现；语音则不因有字而消失：一边打字一边
          补一句是输入条的常规用法）。
          发送钮常驻 DOM（v-show 开关）：e2e 的「打字后发送钮」断言与读屏可达性
-         都按「存在且可按」算；藏起来的那颗 tabindex 由 v-show 自然不可达。 -->
+         都按「存在且可按」算；藏起来的那颗 tabindex 由 v-show 自然不可达。
+         ＋ / 发送用 mousedown.prevent 保住输入框焦点：底栏在聚焦时收起页签行，
+         若按下就把焦点交给按钮，整行会在 click 落地前向下跳 58px（按钮从指下滑走）。 -->
     <button
       type="button"
       class="qk-btn qk-voice"
@@ -172,6 +275,7 @@ defineExpose({ focus, addButton: addEl, textarea: inputEl })
       :tabindex="interactive ? undefined : -1"
       :disabled="!canSend"
       aria-label="发送到 AI"
+      @mousedown.prevent
       @click="emit('send')"
     >
       <SendHorizontal :size="21" :stroke-width="2" />
@@ -246,9 +350,17 @@ defineExpose({ focus, addButton: addEl, textarea: inputEl })
   -webkit-user-select: none;
 }
 
-.qk-input {
+/* 文本域的定位容器：高度仍由 textarea 自己撑（rows/scrollHeight），
+   轮播占位绝对定位盖在它上面，不参与行高计算 */
+.qk-field {
+  position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.qk-input {
+  display: block;
+  width: 100%;
   font-size: var(--fs-subhead);
   font-family: inherit;
   color: var(--text-1);
@@ -268,9 +380,63 @@ defineExpose({ focus, addButton: addEl, textarea: inputEl })
   display: none;
 }
 
-/* 占位与 AI 页同一条配方：--text-1 的 64% 合成，两色主题都够 4.7:1（见那边实测） */
+/* 原生 placeholder 只留给读屏与回归脚本（:placeholder 仍是最新一句）；
+   视觉一律走下面的 .qk-ph —— 原生文本没法做位移动画 */
 .qk-input::placeholder {
+  color: transparent;
+}
+
+/* 轮播占位：与文本域首行同一基线（padding-top 8 + line-height 22），
+   内容超宽时单行省略（文案本身都控制在十几个字，正常宽度不会截）。
+   --ph-line / --ph-gap 是滚动换句的几何：两行字整段上移一行，行与行之间
+   始终隔着 0.2em（用户定的间距）—— 旧句完全移出裁切盒，新句从下方补位。 */
+.qk-ph {
+  --ph-line: 22px;
+  --ph-gap: 0.2em;
+  position: absolute;
+  top: var(--sp-8);
+  left: 0;
+  right: 0;
+  height: var(--ph-line);
+  overflow: hidden;
+  pointer-events: none;
+  font-size: var(--fs-subhead);
+  line-height: var(--ph-line);
+  white-space: nowrap;
+  /* 与 AI 页同一条配方：--text-1 的 64% 合成，两色主题都够 4.7:1 */
   color: color-mix(in srgb, var(--text-1) 64%, transparent);
+}
+
+.qk-ph > span {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 旧句向上移走、新句从下面冒上来：两端同时起步（delay 0），间距 0.2em。
+   弹簧曲线负责「冒」的那一下过冲与回正。 */
+.ph-roll-enter-active,
+.ph-roll-leave-active {
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    opacity var(--dur-base) var(--ease-standard);
+}
+
+.ph-roll-enter-from {
+  opacity: 0;
+  transform: translateY(calc(var(--ph-line) + var(--ph-gap)));
+}
+
+.ph-roll-leave-to {
+  opacity: 0;
+  transform: translateY(calc(0px - var(--ph-line) - var(--ph-gap)));
+}
+
+/* 关闭动效：换句是状态，照常发生；只是不做补间 */
+html[data-motion='off'] .ph-roll-enter-active,
+html[data-motion='off'] .ph-roll-leave-active {
+  transition: none;
 }
 
 /* 有话待发时点亮：没有圆片底可填，主操作改**accent 前景**（参考图里按钮都是

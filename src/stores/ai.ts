@@ -1,12 +1,13 @@
 /** AI 域：对话消息流（Rust SQLite 持久化）+ 解析确认写入饮食。 */
 
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { animate } from 'animejs'
 
 import { aiService } from '@/services/aiService'
 import { dietService } from '@/services/dietService'
 import { kbService } from '@/services/kbService'
+import { useMemoryStore } from '@/stores/memory'
 import { useDietStore } from '@/stores/diet'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useModelsStore } from '@/stores/models'
@@ -20,6 +21,7 @@ import { findAppTool, resolveToolPlan } from '@/ai/tools/registry'
 import type { ToolGroup } from '@/ai/tools/types'
 import { dedupeFiles, fileAttachmentOf, MAX_CHAT_FILES } from '@/ai/chatFiles'
 import { useFeaturesStore } from '@/stores/features'
+import { useConnectedAppsStore } from '@/stores/connectedApps'
 import type { ChatTurn } from '@/ai/chat'
 import { DEFAULT_IMAGE_EDGE } from '@/utils/image'
 import { todayStr } from '@/utils/date'
@@ -145,7 +147,15 @@ function enabledPluginIds(): string[] {
 
 /** 按一段文本重播装载判定（会话历史即会话的「话题足迹」） */
 function seedToolGroups(historyText: string): void {
-  chatToolGroups = new Set(resolveToolPlan({ text: historyText, plugins: enabledPluginIds() }).loaded)
+  chatToolGroups = new Set(
+    resolveToolPlan({
+      text: historyText,
+      plugins: enabledPluginIds(),
+      // 连接应用组只在「已连接 + 允许 AI」时才会进 available；app 组没有 keywords，
+      // 所以历史文本不会把它们自动装回来，模型需要时重新 load_tools。
+      apps: useConnectedAppsStore().aiEnabledAppIds(),
+    }).loaded,
+  )
 }
 
 /** 恢复/切换会话后重建图片注册表 */
@@ -229,6 +239,11 @@ export const useAiStore = defineStore('ai', () => {
   const chats = ref<AiChat[]>([])
   /** 是否已初始化（页面重复挂载不重载） */
   const loaded = ref(false)
+
+  // 每轮生成结束后若空闲，交给 Dream 调度（busy/dreaming/5 分钟节流都在 memory store 内再检查）
+  watch(busy, (b) => {
+    if (!b) void useMemoryStore().maybeDreamOnIdle()
+  })
   /** 目标调整建议：解析后待用户确认，不直接生效 */
   const targetProposal = ref<TargetAdjustProposal | null>(null)
   /**
@@ -323,7 +338,16 @@ export const useAiStore = defineStore('ai', () => {
   }
 
   function fromStored(s: AiChatMessage): AiMessage {
-    const m: AiMessage = { id: s.id, role: s.role, kind: s.kind, at: s.createdAt }
+    const m: AiMessage = {
+      id: s.id,
+      role: s.role,
+      kind: s.kind,
+      at: s.createdAt,
+      // 分页字段随历史一起恢复：冷启动全量加载（ai_chat_messages）与
+      // 分页（ai_chat_page）必须给出同一个 anchor，段构建/跳转才不会漂移。
+      seq: s.seq,
+      anchorId: s.anchorId ?? undefined,
+    }
     if (s.text) m.text = s.text
     if (s.imageBase64) {
       m.imageBase64 = s.imageBase64
@@ -400,12 +424,14 @@ export const useAiStore = defineStore('ai', () => {
       resetStreaming()
       restoreBubbleMetaFromHistory()
       attachChatContext(chatId.value, messages.value)
+      // 打开会话时按最近一条用户消息预取顶部记忆卡（无消息时清除）
+      void useMemoryStore().loadCardsForChat(chatId.value)
     } catch {
       messages.value = []
     }
     if (messages.value.length === 0) greet()
-    // 启动时检查一次整库整理是否到期（每天最多一次；模型未配置则直接跳过）
-    scheduleMemoryConsolidation()
+    // 启动后若空闲，检查一次 Dream（Rust 侧 3h 冷却 + 前端 5 分钟节流；无模型直接跳过）
+    void useMemoryStore().maybeDreamOnIdle()
   }
 
   async function refreshChats(): Promise<void> {
@@ -414,33 +440,17 @@ export const useAiStore = defineStore('ai', () => {
 
   /* ---------- 知识库 / 长期记忆 ---------- */
 
-  /** 认知块短 TTL 缓存：每轮都查库是浪费，但刚改过记忆要能很快生效 */
-  const COGNITION_TTL_MS = 60_000
-  let cognitionCache: { at: number; text: string; ids: number[] } | null = null
-
-  function invalidateCognitionCache(): void {
-    cognitionCache = null
+  /**
+   * 取喂给系统提示词的「用户认知」块（委托 memory store 的分片注入）。
+   * 自动注入严格只读：不写 history/stability/state；失败返回旧缓存/undefined，
+   * 绝不因此让对话发不出去。
+   */
+  async function cognitionForPrompt(query?: string): Promise<string | undefined> {
+    return useMemoryStore().injectForPrompt(query, chatId.value)
   }
 
-  /**
-   * 取喂给系统提示词的「用户认知」块。
-   * 知识库不可用（未初始化、模型加载失败）时返回 undefined，绝不因此让对话发不出去。
-   */
-  async function cognitionForPrompt(): Promise<string | undefined> {
-    const now = Date.now()
-    if (!cognitionCache || now - cognitionCache.at > COGNITION_TTL_MS) {
-      try {
-        const c = await kbService.cognition()
-        cognitionCache = { at: now, text: c.text, ids: c.memories.map((m) => m.id) }
-        // 注入即「用到」，用于后续排序。只在真正刷新时计一次，不是每轮都加。
-        if (cognitionCache.ids.length > 0) {
-          kbService.memoryBump(cognitionCache.ids).catch(() => {})
-        }
-      } catch {
-        return cognitionCache?.text || undefined
-      }
-    }
-    return cognitionCache.text || undefined
+  function invalidateCognitionCache(): void {
+    useMemoryStore().invalidate()
   }
 
   /**
@@ -450,12 +460,13 @@ export const useAiStore = defineStore('ai', () => {
    */
   let injectionCache: { at: number; value: { system: string; memory: string; truncated: boolean } } | null =
     null
+  const INJECTION_TTL_MS = 60_000
 
   async function injectionForPrompt(): Promise<
     { system: string; memory: string; truncated: boolean } | undefined
   > {
     const now = Date.now()
-    if (!injectionCache || now - injectionCache.at > COGNITION_TTL_MS) {
+    if (!injectionCache || now - injectionCache.at > INJECTION_TTL_MS) {
       try {
         const inj = await kbService.injection()
         injectionCache = {
@@ -494,90 +505,7 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
-  /* ---------- 记忆整理（定期去噪的“做梦”任务） ---------- */
-
-  /** LLM 整理的最小间隔：24 小时。多次启动/多次会话共用它节流。 */
-  const CONSOLIDATE_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
-  /** 并发护栏：同一时刻只允许一次整理在跑。 */
-  let consolidating = false
-  /** 上次检查时间：避免一次启动里反复查库。 */
-  let lastConsolidateCheck = 0
-  /** 分批整理的游标（进程内保留）：大库下次从这里继续，尾部记忆也有机会被整理。 */
-  let consolidateCursor = 0
-
-  /** SQLite 的 datetime('now') 是 UTC 的 `YYYY-MM-DD HH:MM:SS`，转成毫秒时间戳。 */
-  function sqliteUtcMs(raw: string | null): number {
-    if (!raw) return 0
-    const ms = Date.parse(`${raw.replace(' ', 'T')}Z`)
-    return Number.isFinite(ms) ? ms : 0
-  }
-
-  /**
-   * 跑一次整库记忆整理（合并重叠 / 统一分类 / 归档噪声 / 清理归档区）。
-   * `force=true` 供 UI 手动触发，跳过开关与 24h 节流；返回实际改动的条数。
-   * 全程静默：整理失败（模型不可用、网络失败）绝不能影响对话。
-   *
-   * **分批**：每批处理完立即落库，再取下一批（下一批看到的是整理后的库）。
-   * 单次最多 `CONSOLIDATE_MAX_BATCHES` 批，游标在进程内保留，下次从断点继续——
-   * 大库不会永远只整理头部。
-   */
-  async function consolidateMemoriesNow(force = false): Promise<number> {
-    if (consolidating) return 0
-    consolidating = true
-    try {
-      const models = useModelsStore()
-      if (!models.loaded) await models.load()
-      const cfg = models.defaultModel()
-      if (!cfg) return 0
-
-      const s = await kbService.settingsGet()
-      if (!force) {
-        if (!s.autoConsolidate) return 0
-        if (Date.now() - sqliteUtcMs(s.lastConsolidateAt) < CONSOLIDATE_MIN_INTERVAL_MS) return 0
-      }
-
-      const { consolidateMemories, CONSOLIDATE_MAX_BATCHES } = await import('@/ai/memoryConsolidate')
-      let changed = 0
-      // 疑似重复对：本地向量算，零模型成本；keyword 模式（无向量）返回空，自然降级。
-      // 一轮整理只查一次（批次之间内容会变，但它是「怀疑名单」，够用）。
-      const duplicates = await kbService.memoryDuplicates(undefined, 30).catch(() => [])
-      for (let round = 0; round < CONSOLIDATE_MAX_BATCHES; round++) {
-        const memories = await kbService.memories(undefined, 'all')
-        const { candidates, nextOffset, coveredAll } = await consolidateMemories({
-          config: cfg,
-          memories,
-          duplicates,
-          offset: consolidateCursor,
-        })
-        if (candidates.length > 0) {
-          const r = await kbService.memoryApply(candidates)
-          invalidateCognitionCache()
-          changed += r.added + r.updated + r.deleted + r.archived + r.restored
-        }
-        // 游标等落库成功之后再前进：apply 抛错时这一窗口下次还会被整理到
-        consolidateCursor = nextOffset
-        // 本批已经看过整个库 → 收工（库大于一批时才会继续轮转到下一批）
-        if (coveredAll) break
-      }
-      if (changed > 0 && force) toast.toast(`已整理 ${changed} 条长期记忆`)
-      // 无论有无变更都记一次：整库健康时不该被反复检查打扰
-      await kbService.memoryConsolidated()
-      return changed
-    } catch {
-      return 0
-    } finally {
-      consolidating = false
-    }
-  }
-
-  /** 会话结束时（抽取之后）检查是否到期需要整理；受开关与节流约束。 */
-  function scheduleMemoryConsolidation(): void {
-    const now = Date.now()
-    // 同一次会话里不必反复查库：节流本身是 24h 粒度
-    if (now - lastConsolidateCheck < 5 * 60_000) return
-    lastConsolidateCheck = now
-    void consolidateMemoriesNow(false).catch(() => {})
-  }
+  /* ---------- 记忆抽取（会话结束） ---------- */
 
   /**
    * 会话结束时的记忆抽取。刻意做成**不 await 的后台任务**：
@@ -603,14 +531,14 @@ export const useAiStore = defineStore('ai', () => {
       const s = await kbService.settingsGet()
       if (!s.autoMemory) return
 
-      // 带上归档条目：模型据此判断「这次提到的旧事该不该复活」
-      const existing = await kbService.memories(undefined, 'all')
+      // 只给模型看 curated（手动/梦境/重要）；conversation 会占满 120 条并把旧记忆挤出上下文
+      const existing = await kbService.memoryShards('all', 'curated', 120)
       const { extractMemories } = await import('@/ai/memoryExtract')
-      const candidates = await extractMemories({ config: cfg, turns, existing })
-      if (candidates.length === 0) return
+      const actions = await extractMemories({ config: cfg, turns, existing })
+      if (actions.length === 0) return
 
-      const r = await kbService.memoryApply(
-        candidates,
+      const r = await kbService.memoryShardApply(
+        actions,
         snapshotChatId,
         snapshot.map((m) => m.id),
       )
@@ -620,8 +548,8 @@ export const useAiStore = defineStore('ai', () => {
     })()
       .catch(() => {})
       .finally(() => {
-        // 抽取之后顺带检查一次整库整理是否到期（每天最多一次）
-        scheduleMemoryConsolidation()
+        // 抽取结束后若空闲，交给 Dream 调度（3h 冷却 + 5 分钟内存节流）
+        void useMemoryStore().maybeDreamOnIdle()
       })
   }
 
@@ -640,6 +568,23 @@ export const useAiStore = defineStore('ai', () => {
       messages.value = []
     }
     if (messages.value.length === 0) greet()
+    // 顶部记忆卡跟随会话：缓存命中时不会多发 IPC
+    void useMemoryStore().loadCardsForChat(id)
+  }
+
+  /**
+   * 新对话 / 清空上下文后重置分页游标。
+   *
+   * 不重置会留下上一轮的 `hasMoreAfter/nextAfterSeq`：清空后新发的消息没有 seq，
+   * 下一次 `loadNewer` 会把它们当成「更早的页」再 append 一遍；切会话时旧游标
+   * 还可能让 `loadTail` 的响应被 `requestedChatId` 提前认领。动态引入避免
+   * ai ↔ chatPaging 的静态循环依赖。
+   */
+  async function resetPaging(reloadTail: boolean): Promise<void> {
+    const { useChatPagingStore } = await import('@/stores/chatPaging')
+    const p = useChatPagingStore()
+    p.reset()
+    if (reloadTail && chatId.value) await p.loadTail(chatId.value)
   }
 
   /** 新对话：新建空会话并写入欢迎语 */
@@ -656,6 +601,8 @@ export const useAiStore = defineStore('ai', () => {
       messages.value = []
       resetStreaming()
       greet()
+      await resetPaging(true)
+      void useMemoryStore().loadCardsForChat(chatId.value)
       await refreshChats()
     } finally {
       busy.value = false
@@ -674,6 +621,8 @@ export const useAiStore = defineStore('ai', () => {
       messages.value = []
       resetStreaming()
       greet()
+      await resetPaging(true)
+      void useMemoryStore().loadCardsForChat(chatId.value)
       await refreshChats()
     } finally {
       busy.value = false
@@ -1011,6 +960,22 @@ export const useAiStore = defineStore('ai', () => {
     const clean = text.trim()
     const sendImages = opts.images ?? []
     if ((!clean && sendImages.length === 0 && !opts.doc) || busy.value) return
+    // 发送必须基于会话尾部：用户可能刚「查看原文」跳到旧 anchor，分页窗口被
+    // around 页整体替换。不先对齐尾页的话，本轮 history 只剩旧页，且之后
+    // loadNewer 会把中间消息追加到新消息之后（数组不再按 seq 有序）。
+    // 动态引入避免 ai ↔ chatPaging 的静态循环依赖。
+    // 对齐有一次异步 IPC：先占住 busy，期间不能被另一次发送插进来。
+    const sendChatId = chatId.value
+    busy.value = true
+    try {
+      const { useChatPagingStore } = await import('@/stores/chatPaging')
+      await useChatPagingStore().alignToTail()
+    } catch {
+      /* 对齐失败不阻塞发送：继续用当前窗口，至少不丢用户刚输入的内容 */
+    } finally {
+      busy.value = false
+    }
+    if (chatId.value !== sendChatId) return
     const quote = opts.quoteText?.trim()
     setActiveChat(chatId.value)
     // 预注册历史轮图片（幂等），保证放大镜 id 与历史清单一致
@@ -1123,8 +1088,10 @@ export const useAiStore = defineStore('ai', () => {
       // 正文出现时按聚合规则「断开合并」另起正文气泡
       agg.openBubble(false)
       // 长期记忆作为「事实前提」预注入，而不是等模型自己去调工具发现；
-      // 系统提示词 + 用户记忆一并全量注入（§3.4）
-      const cognition = await cognitionForPrompt()
+      // 分片注入严格只读，默认只取 curated（手动/梦境/重要），不进 conversation
+      const cognition = await cognitionForPrompt(clean)
+      // 顶部记忆卡与注入同一份结果；不参与消息列表/虚拟滚动
+      void useMemoryStore().loadCardsForChat(chatId.value, clean)
       const injection = await injectionForPrompt()
       // 卡片本身不进历史（下面的 history 只挑 text/analysis/voice/photo/doc），
       // 所以「用户确认了没有、最终写了什么」只能靠这段每轮重发的事实前提带过去：
@@ -1413,8 +1380,6 @@ export const useAiStore = defineStore('ai', () => {
     clearContext,
     /** 知识库页改过记忆后调它，让下一轮的认知注入立刻反映改动而不是等 TTL 过期 */
     invalidateCognitionCache,
-    /** 知识库页「AI 整理」按钮：手动跑一次整库整理（跳过开关与节流），返回改动条数 */
-    consolidateMemoriesNow,
     retract,
     sendText,
     sendVoiceTurn,

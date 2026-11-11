@@ -1432,10 +1432,13 @@ fn unwrap_protocol_json(raw: &str) -> String {
 }
 
 fn memory_doc(conn: &Connection, id: &str) -> Result<Option<Derived>> {
+    // 记忆分片层（memory_shards）：active/dormant 有镜像，archived 与已合并的没有。
+    // id 是 memory_shards.id 的十进制字符串（index::id_query("memory") 现在读新表）。
     let row = conn
         .query_row(
-            "SELECT mem_type, topic, category, content, confidence, created_at, archived_at
-             FROM kb_memories WHERE id = ?1",
+            "SELECT mem_type, topic, category, content, confidence, created_at, state,
+                    consolidated_into
+             FROM memory_shards WHERE id = CAST(?1 AS INTEGER)",
             [id],
             |r| {
                 Ok((
@@ -1445,16 +1448,19 @@ fn memory_doc(conn: &Connection, id: &str) -> Result<Option<Derived>> {
                     r.get::<_, String>(3)?,
                     r.get::<_, f64>(4)?,
                     r.get::<_, String>(5)?,
-                    r.get::<_, Option<String>>(6)?,
+                    r.get::<_, String>(6)?,
+                    r.get::<_, Option<i64>>(7)?,
                 ))
             },
         )
         .optional()?;
-    let Some((mem_type, topic, category, content, confidence, created_at, archived_at)) = row else {
+    let Some((mem_type, topic, category, content, confidence, created_at, state, consolidated_into)) =
+        row
+    else {
         return Ok(None);
     };
-    // 归档记忆退出检索：派生返回 None，对账/重放会自动摘掉旧文档
-    if archived_at.is_some() {
+    // 归档记忆退出检索；已合并的 shard 只保留溯源，不再出现在 kb_docs/ kb_search。
+    if state == "archived" || consolidated_into.is_some() {
         return Ok(None);
     }
 
@@ -1565,14 +1571,16 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::migrate_for_test(&conn).unwrap();
         conn.execute(
-            "INSERT INTO kb_memories(mem_type, topic, category, content, confidence, created_at, updated_at)
-             VALUES ('constraint', '膝盖', '健康/训练', '深蹲不宜超过 60kg', 0.9, datetime('now'), datetime('now'))",
+            "INSERT INTO memory_shards
+               (idempotency_key, origin, mem_type, topic, category, content, confidence,
+                base_weight, floor, stability, last_event_at, state, created_at, updated_at)
+             VALUES ('manual:test', 'manual_write', 'constraint', '膝盖', '健康/训练',
+                     '深蹲不宜超过 60kg', 0.9, 2.5, 0.15, 20.0,
+                     datetime('now'), 'active', datetime('now'), datetime('now'))",
             [],
         )
         .unwrap();
-        let id: i64 = conn
-            .query_row("SELECT id FROM kb_memories", [], |r| r.get(0))
-            .unwrap();
+        let id = conn.last_insert_rowid();
 
         let d = derive(&conn, "memory", &id.to_string()).unwrap().unwrap();
         assert_eq!(
@@ -1581,7 +1589,9 @@ mod tests {
         );
 
         conn.execute(
-            "UPDATE kb_memories SET archived_at = datetime('now') WHERE id = ?1",
+            "UPDATE memory_shards SET state='archived', archived_at=datetime('now'),
+                                      archived_reason='outdated'
+             WHERE id = ?1",
             [id],
         )
         .unwrap();

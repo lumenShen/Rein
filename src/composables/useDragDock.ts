@@ -28,7 +28,7 @@ const PROJECTION_PX = 180 // 慢速释放投影：偏移 = v(px/ms) × 本值（
 const VELOCITY_WINDOW_MS = 100 // 速度采样窗口
 const RUBBER_C = 0.55 // 橡皮筋刚度，越小越软
 export const BLOB_SIZE = 64 // 方块边长：44px 无障碍下限之上刻意做大
-const EDGE_GAP = 12 // 顶 / 底停靠距安全区的呼吸边距
+const EDGE_GAP = 12 // 顶 / 底停靠的呼吸边距：顶部距安全区，底部距 Dock 上缘（--dock-top）
 /** settle 弹簧（半隐式欧拉）：ζ≈0.87、ωn≈12.6rad/s ≈ Apple 式 0.48s/bounce0.16 */
 const SPRING = { stiffness: 160, damping: 22 }
 /** 默认持久化 key；多浮窗实例（运动条 / 录音条）各传各的，互不挤占停靠位 */
@@ -107,21 +107,27 @@ function probeMetrics(): Metrics {
   s.right = 'var(--safe-right)'
   s.bottom = 'var(--safe-bottom)'
   const br = probeEl.getBoundingClientRect()
-  // 底部让位区 = TabBar 本体 + 合并输入行。底栏两行化（2026-11）后 Dock 高
-  // 114（58 + 输入行 56），只让 --tabbar-h 的话浮条底部停靠会扎进输入行里，
-  // 被 Dock 整条盖住（真机 430×930 实测：浮条 752..812 vs Dock 753..869）。
-  // TabBar 把输入行显隐写在 <html data-dock-quick>（AI 页 / 编辑态收起），
-  // 这里跟着它加一截 —— 显隐变化时 useDragDock 的 observer 会重落位。
-  const quickH =
-    document.documentElement.dataset.dockQuick === 'on' ? numToken('--dock-quick-h', 56) : 0
+  const safeB = Math.max(0, vh - br.bottom)
+  // 底部让位区 = Dock 的**上缘**到视口底。直接探 --dock-top（全应用统一口径：
+  // 安全区 + 悬浮距 --dock-float + Dock 高，输入行显隐由 html[data-dock-quick]
+  // 改写，observer 会跟着重落位）。
+  // 从前这里拼 --tabbar-h + --dock-quick-h，漏掉了 Dock 离底的悬浮距 16px ——
+  // 浮条停底时反而扎进 Dock 上沿约 4px（412×915 截图实测：浮条底边压在 Dock
+  // 玻璃上缘之下），看起来就是「浮条与 Dock 之间没有 gap」。
+  s.left = '0'
+  s.top = 'auto'
+  s.right = 'auto'
+  s.bottom = 'var(--dock-top)'
+  const dockTop = probeEl.getBoundingClientRect().top
   return {
     vw,
     vh,
     safeL: tl.left,
     safeT: tl.top,
     safeR: Math.max(0, vw - br.right),
-    safeB: Math.max(0, vh - br.bottom),
-    tabH: numToken('--tabbar-h', 58) + quickH,
+    safeB,
+    // tabH 与 safeB 在下方按「safeB + tabH = Dock 上缘离底距离」相加使用
+    tabH: Math.max(0, vh - dockTop - safeB),
   }
 }
 

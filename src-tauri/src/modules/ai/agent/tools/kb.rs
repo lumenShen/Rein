@@ -1,6 +1,6 @@
 //! 知识库域工具（对应 TS tools/knowledge.ts + notes.ts + workspace.ts + memory.ts）。
 //!
-//! 组：knowledge（检索/读取/路径/笔记读写/模态与治理 10 个）+ memory（长期记忆 4 个）。
+//! 组：knowledge（检索/读取/路径/笔记读写/模态与治理 10 个）+ memory（长期记忆 5 个）。
 //! 命令层直接复用 `modules/kb`（State 从 AppHandle 现取），投影与 TS 版逐字段对齐。
 
 use serde_json::{json, Value};
@@ -9,8 +9,11 @@ use tauri::Manager;
 use crate::error::{ReinError, Result};
 use crate::modules::kb::commands as kb;
 use crate::modules::kb::models::{
-    KbDocDetail, KbFile, KbHit, KbMedia, KbMemory, KbQuery, MemoryCandidate,
+    KbDocDetail, KbFile, KbHit, KbMedia, KbQuery,
 };
+use crate::modules::kb::shard::commands as shard_cmd;
+use crate::modules::kb::shard::model::{MemoryShard, ShardPatch, ShardWriteAction};
+use crate::modules::kb::worker::KbHub;
 use crate::state::AppState;
 use std::sync::Arc;
 
@@ -287,8 +290,27 @@ pub fn list_memories() -> RegisteredTool {
         parameters: json!({
             "type": "object",
             "properties": {
-                "memType": { "type": "string", "enum": ["preference","constraint","event","entity","profile","pattern"], "description": "记忆类型：preference=偏好（喜欢/讨厌）、constraint=约束（伤病/禁忌/时间限制）、event=事件（做过什么及其原因）、entity=实体（人/地点/器械/课程）、profile=稳定画像（作息/经验水平）、pattern=反复出现的规律。不传默认 preference" }
+                "memType": { "type": "string", "enum": ["preference","constraint","event","entity","profile","pattern"], "description": "记忆类型：preference=偏好（喜欢/讨厌）、constraint=约束（伤病/禁忌/时间限制）、event=事件（做过什么及其原因）、entity=实体（人/地点/器械/课程）、profile=稳定画像（作息/经验水平）、pattern=反复出现的规律。不传则列出全部类型" }
             }
+        }),
+    }
+}
+
+pub fn recall_memory() -> RegisteredTool {
+    RegisteredTool {
+        name: "recall_memory",
+        group: "memory",
+        label: "回忆长期记忆",
+        description: "主动检索长期记忆（比 list_memories 更广：含休眠记忆与对话中提炼的片段）。用户问「我之前是不是说过…」「我以前提过…」，或你需要找旧对话里的细节/来源时用它。返回 content、relevance，以及 anchorMessageId/chatId 供界面跳回原对话。命中会轻微强化记忆，不要对同一话题高频重复调用。",
+        parameters: json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "检索词，用 2~6 个字的简短关键词（如「膝盖」「睡眠」）；越长越依赖语义向量" },
+                "topK": { "type": "number", "description": "最多返回几条（默认 8，范围 1~20）" },
+                "includeDormant": { "type": "boolean", "description": "是否包含休眠记忆（默认 true）" },
+                "includeArchived": { "type": "boolean", "description": "是否挖坟已归档记忆（默认 false；只返回，不自动复活）" }
+            },
+            "required": ["query"]
         }),
     }
 }
@@ -399,6 +421,7 @@ pub fn handles(name: &str) -> bool {
             | "find_large_files"
             | "present_file"
             | "list_memories"
+            | "recall_memory"
             | "remember"
             | "edit_memory"
             | "forget"
@@ -422,6 +445,7 @@ pub async fn run(app: &tauri::AppHandle, name: &str, args: &Value) -> Option<Res
         "pin_file" => run_pin_file(app, args).await,
         "make_folder" => run_make_folder(app, args).await,
         "list_memories" => run_list_memories(app, args).await,
+        "recall_memory" => run_recall_memory(app, args).await,
         "remember" => run_remember(app, args).await,
         "edit_memory" => run_edit_memory(app, args).await,
         "forget" => run_forget(app, args).await,
@@ -615,21 +639,96 @@ async fn run_make_folder(app: &tauri::AppHandle, args: &Value) -> Result<Value> 
     Ok(json!({ "ok": true, "path": f.path, "message": format!("已建目录 {}", f.path) }))
 }
 
-fn memory_brief(m: &KbMemory) -> Value {
+fn memory_brief(m: &MemoryShard) -> Value {
     json!({
         "id": m.id,
         "type": m.mem_type,
         "topic": if m.topic.is_empty() { Value::Null } else { json!(m.topic) },
         "content": m.content.chars().take(200).collect::<String>(),
         "confidence": (m.confidence * 100.0).round() / 100.0,
+        "state": m.state,
     })
 }
 
 async fn run_list_memories(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
-    let mem_type = args.get("memType").and_then(|v| v.as_str()).map(str::to_string);
-    let items = kb::kb_memories(app.state::<AppState>(), mem_type, None)?;
-    let items: Vec<Value> = items.iter().take(50).map(memory_brief).collect();
+    let mem_type = args
+        .get("memType")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let items = shard_cmd::memory_shard_list(
+        app.state::<AppState>(),
+        Some("all".into()),
+        Some("curated".into()),
+        Some(120),
+        Some(0),
+    )?;
+    let items: Vec<Value> = items
+        .iter()
+        // 查看长期记忆默认不翻归档区；dormant 仍可见（用户问「你记得什么」时应看到）。
+        .filter(|m| m.state != "archived")
+        .filter(|m| {
+            mem_type
+                .as_deref()
+                .map(|t| m.mem_type == t)
+                .unwrap_or(true)
+        })
+        .take(50)
+        .map(memory_brief)
+        .collect();
     Ok(json!({ "total": items.len(), "items": items }))
+}
+
+async fn run_recall_memory(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
+    let query = str_arg(args, "query")?.trim().to_string();
+    if query.is_empty() {
+        return Err(ReinError::Message("检索词不能为空".into()));
+    }
+    let top_k = super::num_arg(args, "topK", 8.0).clamp(1.0, 20.0) as i64;
+    let include_dormant = args
+        .get("includeDormant")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let include_archived = args
+        .get("includeArchived")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let r = shard_cmd::memory_shard_search(
+        app.state::<AppState>(),
+        app.state::<Arc<KbHub>>(),
+        query,
+        Some(top_k),
+        Some(include_dormant),
+        Some(include_archived),
+        None,
+    )?;
+    let items: Vec<Value> = r
+        .hits
+        .iter()
+        .map(|h| {
+            json!({
+                "id": h.shard_id,
+                "content": h.content,
+                "type": h.mem_type,
+                "topic": h.topic,
+                "category": h.category,
+                "origin": h.origin,
+                "state": h.state,
+                "relevance": h.relevance,
+                "effectiveWeight": h.effective_weight,
+                "anchorMessageId": h.anchor_message_id,
+                "chatId": h.chat_id,
+                "createdAt": h.created_at,
+            })
+        })
+        .collect();
+    Ok(json!({
+        "total": r.hits.len(),
+        "mode": r.mode,
+        "reinforced": r.reinforced,
+        "revived": r.revived,
+        "items": items,
+        "hint": "命中只是摘要；要展开原对话把 anchorMessageId/chatId 交给界面。",
+    }))
 }
 
 async fn run_remember(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
@@ -637,65 +736,95 @@ async fn run_remember(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
     if content.is_empty() {
         return Err(ReinError::Message("要记住的内容不能为空".into()));
     }
-    let candidate = MemoryCandidate {
-        op: "add".into(),
-        id: None,
-        mem_type: args.get("memType").and_then(|v| v.as_str()).unwrap_or("preference").to_string(),
-        topic: args.get("topic").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
-        category: String::new(),
-        content,
-        confidence: None,
-        reason: String::new(),
-    };
-    let r = kb::kb_memory_apply(
+    let mem_type = args
+        .get("memType")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let topic = args
+        .get("topic")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let r = shard_cmd::memory_shard_apply(
         app.state::<AppState>(),
-        app.state::<Arc<crate::modules::kb::worker::KbHub>>(),
-        vec![candidate],
+        app.state::<Arc<KbHub>>(),
+        vec![ShardWriteAction {
+            op: "add".into(),
+            id: None,
+            content: Some(content.clone()),
+            mem_type,
+            topic,
+            category: None,
+            confidence: None,
+            reason: None,
+        }],
         None,
         None,
     )?;
-    Ok(json!({
-        "ok": true,
-        "message": if r.added > 0 { format!("已记住：{}", args.get("content").and_then(|v| v.as_str()).unwrap_or("")) } else { format!("这条已经记过了：{}", args.get("content").and_then(|v| v.as_str()).unwrap_or("")) },
-    }))
+    let message = if r.added > 0 {
+        format!("已记住：{content}")
+    } else if r.restored > 0 {
+        format!("已重新记住：{content}")
+    } else {
+        format!("这条已经记过了：{content}")
+    };
+    Ok(json!({ "ok": true, "message": message }))
 }
 
 async fn run_edit_memory(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
     let id = i64_arg(args, "memoryId")?;
-    let mem_type = args.get("memType").and_then(|v| v.as_str()).map(str::to_string);
-    let topic = args.get("topic").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
-    let content = args.get("content").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    let mem_type = args
+        .get("memType")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let topic = args
+        .get("topic")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let content = args
+        .get("content")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     if mem_type.is_none() && topic.is_none() && content.is_none() {
-        return Err(ReinError::Message("没有要修改的字段：content / topic / memType 至少传一个".into()));
+        return Err(ReinError::Message(
+            "没有要修改的字段：content / topic / memType 至少传一个".into(),
+        ));
     }
-    let candidate = MemoryCandidate {
-        op: "update".into(),
-        id: Some(id),
-        mem_type: mem_type.unwrap_or_default(),
-        topic: topic.unwrap_or_default(),
-        category: String::new(),
-        content: content.unwrap_or_default(),
-        confidence: None,
-        reason: String::new(),
-    };
-    let r = kb::kb_memory_apply(
+    // 部分更新：只改传入字段；归档中的条会被复活（restored 不再误报不存在）。
+    shard_cmd::memory_shard_update(
         app.state::<AppState>(),
-        app.state::<Arc<crate::modules::kb::worker::KbHub>>(),
-        vec![candidate],
-        None,
-        None,
+        app.state::<Arc<KbHub>>(),
+        id,
+        ShardPatch {
+            content,
+            mem_type,
+            topic,
+            category: None,
+        },
     )?;
-    if r.updated == 0 {
-        return Err(ReinError::Message(format!("记忆不存在：id={id}（先用 list_memories 查 id）")));
-    }
     Ok(json!({ "ok": true, "message": "已更新该条记忆" }))
 }
 
 async fn run_forget(app: &tauri::AppHandle, args: &Value) -> Result<Value> {
     let id = i64_arg(args, "memoryId")?;
-    let ok = kb::kb_memory_delete(app.state::<AppState>(), app.state::<Arc<crate::modules::kb::worker::KbHub>>(), id)?;
+    let ok = shard_cmd::memory_shard_delete(
+        app.state::<AppState>(),
+        app.state::<Arc<KbHub>>(),
+        id,
+    )?;
     if !ok {
-        return Err(ReinError::Message(format!("记忆不存在：id={id}（先用 list_memories 查 id）")));
+        return Err(ReinError::Message(format!(
+            "记忆不存在：id={id}（先用 list_memories 查 id）"
+        )));
     }
     Ok(json!({ "ok": true, "message": "已删除该条记忆" }))
 }
@@ -865,4 +994,34 @@ async fn run_present_file(app: &tauri::AppHandle, args: &Value) -> Result<Value>
         "file": entry,
         "message": format!("已把「{name}」挂到聊天里，用户可点开"),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_tools_are_claimed_by_the_kb_executor() {
+        for name in [
+            "list_memories",
+            "recall_memory",
+            "remember",
+            "edit_memory",
+            "forget",
+        ] {
+            assert!(handles(name), "{name} 必须由 kb 域认领");
+        }
+    }
+
+    #[test]
+    fn recall_memory_def_matches_the_tool_contract() {
+        let def = recall_memory();
+        assert_eq!(def.name, "recall_memory");
+        assert_eq!(def.group, "memory");
+        assert_eq!(
+            def.parameters["required"],
+            json!(["query"]),
+            "query 是唯一必填参数"
+        );
+    }
 }

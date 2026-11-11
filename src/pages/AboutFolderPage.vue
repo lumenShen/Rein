@@ -80,6 +80,10 @@ interface FolderRow {
   path: string
   isDir: boolean
   updatedMs?: number
+  /** 行副标（来源 · 时间）—— 列表构建时算一次，模板里别再逐次拼 */
+  meta: string
+  /** 嵌套目录里的父路径提示（根层为空） */
+  hint: string
 }
 
 type Filter = 'all' | 'folder' | 'file'
@@ -177,9 +181,23 @@ async function ensureProfile(): Promise<void> {
  * 文件卡摘要：最多看前 8 个文本文件，每个取 `kb_read('l1')` 的首块截 120 字。
  * 摘要不是必须项 —— 任何一个失败都静默留空，不拖慢列表、不弹错。
  * 超过 8 个的文件只显示来源 / 时间（列表仍然是完整的）。
+ *
+ * 排队节奏：等首屏空闲再开工（`requestIdleCallback`），并发 2 —— 摘要要发最多 8 次
+ * `kb_read`，和列表同时发会挤在同一个 IPC / DB 锁上；而它只是补充信息，晚一两帧
+ * 出现完全不影响阅读。
  */
 const EXCERPT_LIMIT = 8
 const EXCERPT_CHARS = 120
+const EXCERPT_WORKERS = 2
+
+/** 空闲时执行；不支持 requestIdleCallback 的 WebView 退回一个短延时。 */
+function whenIdle(run: () => void): void {
+  const ric = (window as unknown as {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+  }).requestIdleCallback
+  if (ric) ric(run, { timeout: 800 })
+  else window.setTimeout(run, 120)
+}
 
 async function loadExcerpts(list: FolderRow[], seq: number): Promise<void> {
   const my = ++excerptSeq
@@ -212,7 +230,9 @@ async function loadExcerpts(list: FolderRow[], seq: number): Promise<void> {
       }
     }
   }
-  await Promise.all([worker(), worker(), worker()])
+  await Promise.all(
+    Array.from({ length: EXCERPT_WORKERS }, () => worker()),
+  )
   if (my === excerptSeq && seq === loadSeq) excerpts.value = found
 }
 
@@ -267,17 +287,24 @@ async function load(): Promise<void> {
     }
     const list: FolderRow[] = [...byPath.values()].map((entry) => {
       const iconItem = toFileItem(entry)
+      const isDir = entry.kind === 'folder'
+      const updatedMs = iconItem.modifiedAt
       return {
         entry,
         iconItem,
         path: entry.path,
-        isDir: entry.kind === 'folder',
-        updatedMs: iconItem.modifiedAt,
+        isDir,
+        updatedMs,
+        meta: rowMetaOf(entry, isDir, updatedMs),
+        hint: rowHintOf(entry.path, isDir),
       }
     })
     list.sort(compareRows)
     rows.value = list
-    void loadExcerpts(list, seq)
+    // 列表先落地（首屏行立刻可读），摘要等这一帧画完再去排队
+    whenIdle(() => {
+      if (seq === loadSeq) void loadExcerpts(list, seq)
+    })
   } catch (e) {
     if (seq !== loadSeq) return
     rows.value = []
@@ -310,18 +337,18 @@ function sourceLabel(entry: KbEntry): string {
   return kindLabel(entry.kind)
 }
 
-function rowMeta(row: FolderRow): string {
-  if (row.isDir) return `${row.entry.childCount} 项`
-  const parts = [sourceLabel(row.entry)]
-  const when = formatWhen(row.updatedMs)
+function rowMetaOf(entry: KbEntry, isDir: boolean, updatedMs?: number): string {
+  if (isDir) return `${entry.childCount} 项`
+  const parts = [sourceLabel(entry)]
+  const when = formatWhen(updatedMs)
   if (when) parts.push(when)
   return parts.join(' · ')
 }
 
 /** 只在嵌套目录里显示父路径（根层 `用户记忆/` 这种与面包屑重复）。 */
-function rowPathHint(row: FolderRow): string {
-  if (row.isDir) return ''
-  const parent = parentPath(row.path)
+function rowHintOf(path: string, isDir: boolean): string {
+  if (isDir) return ''
+  const parent = parentPath(path)
   return parent.includes('/') ? parent : ''
 }
 
@@ -558,8 +585,8 @@ function nestedCountText(nested: WorkspaceNestedGroup): string {
                   <PillChip v-if="row.entry.system" tone="muted" size="sm">只读</PillChip>
                 </span>
                 <span class="emeta num">
-                  {{ rowMeta(row)
-                  }}<template v-if="rowPathHint(row)"> · {{ rowPathHint(row) }}</template>
+                  {{ row.meta
+                  }}<template v-if="row.hint"> · {{ row.hint }}</template>
                 </span>
                 <span v-if="rowExcerpt(row)" class="eexcerpt">{{ rowExcerpt(row) }}</span>
               </span>
@@ -766,6 +793,11 @@ function nestedCountText(nested: WorkspaceNestedGroup): string {
   text-align: left;
   font: inherit;
   color: inherit;
+  /* 长目录一次挂全部行（生产库「Rein 的角落」实测 184 项）。离屏行跳过布局与绘制，
+     滚动时不再为看不见的卡片付排版钱；`auto` 记住渲染过一次的真实高度，
+     不会因为占位高度猜小了而抖动。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--row-h-double);
 }
 
 .entry:active {

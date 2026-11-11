@@ -413,12 +413,15 @@ pub fn ai_parse_target_adjust(text: String, current: DailyTargets) -> Result<Tar
 /* ---------- 模型配置（存储层；请求由前端 pi-ai 直连 provider） ---------- */
 
 use chrono::Utc;
+use rusqlite::{params, OptionalExtension};
 
 use crate::error::ReinError;
+use crate::modules::kb::shard;
 
+use super::chat_page::{backfill_chat_anchors, chat_page_around_conn, chat_page_conn};
 use super::models::{
-    AiChat, AiChatMessage, AiChatMessageInput, AiModel, AiModelInput, AiProbeResult, AiUsageByModel,
-    AiUsageDay, AiUsageInput, AiUsageSummary, AiUsageTotals, ChatSearchHit,
+    AiChat, AiChatMessage, AiChatMessageInput, AiChatPage, AiModel, AiModelInput, AiProbeResult,
+    AiUsageByModel, AiUsageDay, AiUsageInput, AiUsageSummary, AiUsageTotals, ChatSearchHit,
 };
 
 pub(super) const AI_MODEL_COLS: &str =
@@ -638,12 +641,12 @@ pub fn ai_chat_ensure(state: State<AppState>, id: String, title: Option<String>)
     )?)
 }
 
-/// 会话消息（按 seq 升序）。
+/// 会话消息（按 seq 升序；保留给旧调用与测试，新前端走 `ai_chat_page`）。
 #[tauri::command]
 pub fn ai_chat_messages(state: State<AppState>, chat_id: String) -> Result<Vec<AiChatMessage>> {
     let conn = state.db.lock();
     let mut stmt = conn.prepare(
-        "SELECT id, chat_id, seq, role, kind, text, image_base64, mime, payload, created_at \
+        "SELECT id, chat_id, seq, role, kind, text, image_base64, mime, payload, created_at, anchor_id \
          FROM ai_chat_messages WHERE chat_id = ?1 ORDER BY seq ASC",
     )?;
     let msgs = stmt
@@ -659,40 +662,111 @@ pub fn ai_chat_messages(state: State<AppState>, chat_id: String) -> Result<Vec<A
                 mime: r.get(7)?,
                 payload: r.get(8)?,
                 created_at: r.get(9)?,
+                anchor_id: r.get(10)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(msgs)
 }
 
-/// 追加消息：按 id 幂等 upsert（重复调用或 commit 状态更新只刷新内容，
-/// 保留原 seq 与 created_at），并刷新会话时间。
-#[tauri::command]
-pub fn ai_chat_append(
+/// 一页会话消息（整回合切页）。`before_seq` / `after_seq` 是 exclusive 数值边界，
+/// 都不传 = 最新一页；`limit_turns` 默认 16、clamp 1..50。
+#[tauri::command(async)]
+pub fn ai_chat_page(
     state: State<AppState>,
     chat_id: String,
-    input: AiChatMessageInput,
-) -> Result<()> {
-    let now = Utc::now().to_rfc3339();
+    before_seq: Option<i64>,
+    after_seq: Option<i64>,
+    limit_turns: Option<i64>,
+) -> Result<AiChatPage> {
     let conn = state.db.lock();
+    // 0054 是主回填路径；这里兜底「列已加、数据未回填」的旧库（幂等，只补 NULL）。
+    backfill_chat_anchors(&conn, &chat_id)?;
+    chat_page_conn(&conn, &chat_id, before_seq, after_seq, limit_turns)
+}
+
+/// 「查看原文」定位：目标消息所属回合落在页尾。
+#[tauri::command(async)]
+pub fn ai_chat_page_around(
+    state: State<AppState>,
+    chat_id: String,
+    message_id: String,
+    limit_turns: Option<i64>,
+) -> Result<AiChatPage> {
+    let conn = state.db.lock();
+    backfill_chat_anchors(&conn, &chat_id)?;
+    chat_page_around_conn(&conn, &chat_id, &message_id, limit_turns)
+}
+
+/// terminal assistant：text/analysis 要有正文，food-parse 无论 text 是否为空；
+/// `voice` 是 user 消息，不在 terminal 集合里。
+fn is_terminal_message(role: &str, kind: &str, text: Option<&str>) -> bool {
+    if role != "assistant" {
+        return false;
+    }
+    match kind {
+        "text" | "analysis" => text.is_some_and(|t| !t.trim().is_empty()),
+        "food-parse" => true,
+        _ => false,
+    }
+}
+
+/// 单调分配会话内 seq：`ai_chat_seq` 只增不减，撤回删后缀后不会复用旧 seq。
+///
+/// `max(counter, MAX(ai_chat_messages.seq)) + 1` 同时覆盖同步进来的更高 seq。
+/// sync apply 的冲突重编号也复用本函数（wiring wave）。
+pub(crate) fn allocate_chat_seq(conn: &rusqlite::Connection, chat_id: &str) -> Result<i64> {
     conn.execute(
+        "INSERT INTO ai_chat_seq (chat_id, next_seq) VALUES (?1, 0) \
+         ON CONFLICT(chat_id) DO NOTHING",
+        [chat_id],
+    )?;
+    conn.execute(
+        "UPDATE ai_chat_seq SET next_seq = MAX(next_seq, COALESCE((
+             SELECT MAX(seq) FROM ai_chat_messages WHERE chat_id = ?1
+         ), 0)) + 1 WHERE chat_id = ?1",
+        [chat_id],
+    )?;
+    Ok(conn.query_row(
+        "SELECT next_seq FROM ai_chat_seq WHERE chat_id = ?1",
+        [chat_id],
+        |r| r.get(0),
+    )?)
+}
+
+/// `ai_chat_append` 的纯消息部分（seq + upsert + 回合 anchor）。
+///
+/// 不碰 shard 表：conversation shard 的删除/抽取任务由命令层在**同一事务**里补做。
+/// 拆开是为了让锚点/seq 单测不依赖 A 域 `shard::store` 的实现进度。
+pub(crate) struct AppendOutcome {
+    pub seq: i64,
+    /// 本条是否是 terminal assistant（抽取决定于它，而不是它是否成为 anchor）。
+    pub is_terminal: bool,
+    /// anchor 从哪条旧消息移走（需要删它的 conversation shard）。
+    pub replaced_anchor: Option<String>,
+}
+
+pub(crate) fn append_message_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    chat_id: &str,
+    input: &AiChatMessageInput,
+    now: &str,
+) -> Result<AppendOutcome> {
+    tx.execute(
         "INSERT INTO ai_chats (id, created_at, updated_at) VALUES (?1, ?2, ?2) \
          ON CONFLICT(id) DO NOTHING",
-        rusqlite::params![chat_id, now],
+        params![chat_id, now],
     )?;
-    let seq: i64 = conn.query_row(
-        "SELECT COALESCE(MAX(seq), 0) + 1 FROM ai_chat_messages WHERE chat_id = ?1",
-        [&chat_id],
-        |r| r.get(0),
-    )?;
-    conn.execute(
+    // 先分配再 upsert：id 已存在（流式 upsert）时这个 seq 成为空洞，但计数器继续前进。
+    let seq = allocate_chat_seq(tx, chat_id)?;
+    tx.execute(
         "INSERT INTO ai_chat_messages \
-         (id, chat_id, seq, role, kind, text, image_base64, mime, payload, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+         (id, chat_id, seq, role, kind, text, image_base64, mime, payload, created_at, anchor_id) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL) \
          ON CONFLICT(id) DO UPDATE SET \
            role = excluded.role, kind = excluded.kind, text = excluded.text, \
            image_base64 = excluded.image_base64, mime = excluded.mime, payload = excluded.payload",
-        rusqlite::params![
+        params![
             input.id,
             chat_id,
             seq,
@@ -705,46 +779,273 @@ pub fn ai_chat_append(
             now
         ],
     )?;
-    conn.execute(
-        "UPDATE ai_chats SET updated_at = ?1 WHERE id = ?2",
-        rusqlite::params![now, chat_id],
+
+    let seq: i64 = tx.query_row(
+        "SELECT seq FROM ai_chat_messages WHERE id = ?1",
+        [&input.id],
+        |r| r.get(0),
     )?;
+    let is_terminal = is_terminal_message(&input.role, &input.kind, input.text.as_deref());
+    if input.role != "assistant" {
+        // user 消息先留 NULL，等本回合 terminal assistant 出现后整回合回填。
+        return Ok(AppendOutcome {
+            seq,
+            is_terminal,
+            replaced_anchor: None,
+        });
+    }
+
+    // 本回合范围 `[turn_start, turn_end)`：turn_start = 之前最近一条 user（没有则 0）；
+    // turn_end = 之后第一条 user（没有则 i64::MAX）。
+    let turn_start: i64 = tx.query_row(
+        "SELECT COALESCE(MAX(seq), 0) FROM ai_chat_messages \
+         WHERE chat_id = ?1 AND role = 'user' AND seq < ?2",
+        params![chat_id, seq],
+        |r| r.get(0),
+    )?;
+    let turn_end: Option<i64> = tx.query_row(
+        "SELECT MIN(seq) FROM ai_chat_messages \
+         WHERE chat_id = ?1 AND role = 'user' AND seq > ?2",
+        params![chat_id, turn_start],
+        |r| r.get(0),
+    )?;
+    let turn_end = turn_end.unwrap_or(i64::MAX);
+
+    // 按 seq（而不是到达顺序）决定 anchor：晚到的旧 terminal upsert 不能把锚点往回搬。
+    let newest_terminal_seq: Option<i64> = tx.query_row(
+        "SELECT MAX(seq) FROM ai_chat_messages \
+         WHERE chat_id = ?1 AND seq >= ?2 AND seq < ?3 AND role = 'assistant' \
+           AND ((kind IN ('text','analysis') AND TRIM(COALESCE(text,'')) <> '') \
+                OR kind = 'food-parse')",
+        params![chat_id, turn_start, turn_end],
+        |r| r.get(0),
+    )?;
+    let newest_assistant_seq: Option<i64> = tx.query_row(
+        "SELECT MAX(seq) FROM ai_chat_messages \
+         WHERE chat_id = ?1 AND seq >= ?2 AND seq < ?3 AND role = 'assistant'",
+        params![chat_id, turn_start, turn_end],
+        |r| r.get(0),
+    )?;
+
+    let becomes_anchor = if is_terminal {
+        newest_terminal_seq == Some(seq)
+    } else if newest_terminal_seq.is_some() {
+        // terminal 已存在：过程消息继承当前 anchor，不抢锚点。
+        false
+    } else {
+        // 没有 terminal 时退化为回合最后一条 assistant（与 0054 回填一致）。
+        newest_assistant_seq == Some(seq)
+    };
+
+    let replaced_anchor = if becomes_anchor {
+        let old_anchor: Option<String> = tx
+            .query_row(
+                "SELECT id FROM ai_chat_messages \
+                 WHERE chat_id = ?1 AND seq >= ?2 AND seq < ?3 AND anchor_id = id \
+                 ORDER BY seq DESC LIMIT 1",
+                params![chat_id, turn_start, turn_end],
+                |r| r.get(0),
+            )
+            .optional()?;
+        tx.execute(
+            "UPDATE ai_chat_messages SET anchor_id = ?1 \
+             WHERE chat_id = ?2 AND seq >= ?3 AND seq < ?4",
+            params![input.id, chat_id, turn_start, turn_end],
+        )?;
+        old_anchor.filter(|old| old != &input.id)
+    } else {
+        // 继承当前 anchor（只在为空时写，不覆盖既有的派生值）。
+        tx.execute(
+            "UPDATE ai_chat_messages SET anchor_id = ( \
+                 SELECT anchor_id FROM ai_chat_messages \
+                 WHERE chat_id = ?1 AND seq >= ?2 AND seq < ?3 AND anchor_id IS NOT NULL \
+                 ORDER BY seq DESC LIMIT 1 \
+             ) WHERE id = ?4 AND anchor_id IS NULL",
+            params![chat_id, turn_start, turn_end, input.id],
+        )?;
+        None
+    };
+
+    Ok(AppendOutcome {
+        seq,
+        is_terminal,
+        replaced_anchor,
+    })
+}
+
+/// append 的 shard 侧效应（与消息写入同一事务）：旧 anchor 的 conversation shard 清理 +
+/// terminal 的 extract 任务投递。单独抽出，命令与单测走同一条路径。
+fn apply_append_side_effects(
+    tx: &rusqlite::Transaction<'_>,
+    chat_id: &str,
+    message_id: &str,
+    outcome: &AppendOutcome,
+    now: &str,
+) -> Result<()> {
+    if let Some(old_anchor) = outcome.replaced_anchor.as_deref() {
+        // 空正文的 food-parse 卡只是最终呈现（applyLlmReply 会把正文气泡 morph 成
+        // kind='food-parse' 且 text=undefined）。它抢到 anchor 后如果照旧删掉上一锚点的
+        // conversation shard，而自己又抽不出文本，整个回合的记忆就归零了。只有新锚点
+        // 本身有可读正文时才替换旧 shard；morph 同一消息 id 时 anchor 未变，不需要删。
+        let new_readable: bool = tx
+            .query_row(
+                "SELECT CASE
+                     WHEN kind IN ('text','analysis','food-parse')
+                      AND TRIM(COALESCE(text,'')) <> '' THEN 1
+                     ELSE 0 END
+                 FROM ai_chat_messages WHERE id = ?1",
+                [message_id],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+            .unwrap_or(0)
+            == 1;
+        if new_readable {
+            shard::store::delete_conversation_shards_for_anchors(
+                tx,
+                chat_id,
+                &[old_anchor.to_string()],
+            )?;
+        }
+    }
+    if outcome.is_terminal {
+        // 按 anchor 去重（ref_id=本条 id）；不能按 chat，否则连续 terminal 互相覆盖。
+        shard::store::enqueue_extract(tx, chat_id, message_id, now)?;
+    }
     Ok(())
 }
 
-/// 清空会话消息（会话保留）。
+/// 追加消息：按 id 幂等 upsert（重复调用或 commit 状态更新只刷新内容，
+/// 保留原 seq 与 created_at），并刷新会话时间。
+///
+/// 同一事务内完成：单调 seq 分配、upsert、回合 anchor 回填、旧 anchor 的 conversation
+/// shard 清理、terminal 的 extract 任务投递。
+#[tauri::command]
+pub fn ai_chat_append(
+    state: State<AppState>,
+    chat_id: String,
+    input: AiChatMessageInput,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    let conn = state.db.lock();
+    let tx = conn.unchecked_transaction()?;
+    let outcome = append_message_in_tx(&tx, &chat_id, &input, &now)?;
+    apply_append_side_effects(&tx, &chat_id, &input.id, &outcome, &now)?;
+    tx.execute(
+        "UPDATE ai_chats SET updated_at = ?1 WHERE id = ?2",
+        params![now, chat_id],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// 清空会话消息（会话保留），同一事务清理该会话的 conversation shard 与 curated 悬空锚点。
 #[tauri::command]
 pub fn ai_chat_clear(state: State<AppState>, chat_id: String) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     let conn = state.db.lock();
-    conn.execute(
-        "DELETE FROM ai_chat_messages WHERE chat_id = ?1",
+    let tx = conn.unchecked_transaction()?;
+
+    let anchor_ids = conversation_anchor_ids(&tx, &chat_id)?;
+    if !anchor_ids.is_empty() {
+        shard::store::delete_conversation_shards_for_anchors(&tx, &chat_id, &anchor_ids)?;
+    }
+    // curated shard 保留，但不能留下指向已删消息的「查看原文」。
+    tx.execute(
+        "UPDATE memory_shards SET anchor_message_id = NULL, user_message_id = NULL \
+         WHERE chat_id = ?1 AND origin != 'conversation'",
         [&chat_id],
     )?;
-    conn.execute(
+    tx.execute("DELETE FROM ai_chat_messages WHERE chat_id = ?1", [&chat_id])?;
+    tx.execute(
         "UPDATE ai_chats SET updated_at = ?1 WHERE id = ?2",
-        rusqlite::params![now, chat_id],
+        params![now, chat_id],
     )?;
+    tx.commit()?;
     Ok(())
 }
 
 /// 撤回：删除该消息及其后（按 seq 递增顺序）的所有消息，并刷新会话时间。
+///
+/// conversation shard 按「消息范围内出现过的 anchor_message_id」清理（不能只看
+/// `anchor_id=id`：anchor 可能已经移走/被删）；消息删除与 shard 清理同一事务。
 #[tauri::command]
 pub fn ai_chat_cut(state: State<AppState>, chat_id: String, message_id: String) -> Result<()> {
     let now = Utc::now().to_rfc3339();
     let conn = state.db.lock();
-    let n = conn.execute(
-        "DELETE FROM ai_chat_messages WHERE chat_id = ?1 AND seq >= \
-           (SELECT seq FROM ai_chat_messages WHERE chat_id = ?1 AND id = ?2)",
-        rusqlite::params![chat_id, message_id],
+    let tx = conn.unchecked_transaction()?;
+
+    let cut_seq: Option<i64> = tx
+        .query_row(
+            "SELECT seq FROM ai_chat_messages WHERE chat_id = ?1 AND id = ?2",
+            params![chat_id, message_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(cut_seq) = cut_seq else {
+        // 与旧语义一致：消息不存在 = 没有可撤回的内容，不报错。
+        tx.commit()?;
+        return Ok(());
+    };
+
+    let anchor_ids = conversation_anchor_ids_from_seq(&tx, &chat_id, cut_seq)?;
+    if !anchor_ids.is_empty() {
+        shard::store::delete_conversation_shards_for_anchors(&tx, &chat_id, &anchor_ids)?;
+    }
+    // curated shard 保留，但清掉指向被删消息的锚点（否则「查看原文」跳转报消息不存在）。
+    tx.execute(
+        "UPDATE memory_shards SET anchor_message_id = NULL, user_message_id = NULL \
+         WHERE origin != 'conversation' AND anchor_message_id IN ( \
+             SELECT id FROM ai_chat_messages WHERE chat_id = ?1 AND seq >= ?2 \
+         )",
+        params![chat_id, cut_seq],
+    )?;
+    let n = tx.execute(
+        "DELETE FROM ai_chat_messages WHERE chat_id = ?1 AND seq >= ?2",
+        params![chat_id, cut_seq],
     )?;
     if n > 0 {
-        conn.execute(
+        tx.execute(
             "UPDATE ai_chats SET updated_at = ?1 WHERE id = ?2",
-            rusqlite::params![now, chat_id],
+            params![now, chat_id],
         )?;
     }
+    tx.commit()?;
     Ok(())
+}
+
+/// 该会话所有 conversation shard 的锚点消息 id。
+fn conversation_anchor_ids(
+    conn: &rusqlite::Connection,
+    chat_id: &str,
+) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT anchor_message_id FROM memory_shards \
+         WHERE origin = 'conversation' AND chat_id = ?1 AND anchor_message_id IS NOT NULL",
+    )?;
+    let ids = stmt
+        .query_map([chat_id], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(ids)
+}
+
+/// `seq >= cut_seq` 的消息所涉及过的 conversation 锚点消息 id（含已不在消息表中的）。
+fn conversation_anchor_ids_from_seq(
+    conn: &rusqlite::Connection,
+    chat_id: &str,
+    cut_seq: i64,
+) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT anchor_message_id FROM memory_shards \
+         WHERE origin = 'conversation' AND anchor_message_id IS NOT NULL \
+           AND anchor_message_id IN ( \
+             SELECT id FROM ai_chat_messages WHERE chat_id = ?1 AND seq >= ?2 \
+           )",
+    )?;
+    let ids = stmt
+        .query_map(params![chat_id, cut_seq], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(ids)
 }
 
 /// 会话列表：按最近活动倒序（历史抽屉顶部 = 最新聊天）。
@@ -800,7 +1101,7 @@ pub(crate) fn chat_search_conn(
     let limit = limit.unwrap_or(8).clamp(1, 50);
     let like = format!("%{keyword}%");
     let mut stmt = conn.prepare(
-        "SELECT m.chat_id, c.title, m.seq, m.role, m.kind, m.text, m.created_at \
+        "SELECT m.id, m.chat_id, c.title, m.seq, m.role, m.kind, m.text, m.created_at \
          FROM ai_chat_messages m JOIN ai_chats c ON c.id = m.chat_id \
          WHERE (m.text LIKE ?1 OR m.payload LIKE ?1) \
          ORDER BY m.created_at DESC LIMIT ?2",
@@ -808,13 +1109,14 @@ pub(crate) fn chat_search_conn(
     let hits = stmt
         .query_map(rusqlite::params![like, limit], |r| {
             Ok(ChatSearchHit {
-                chat_id: r.get(0)?,
-                chat_title: r.get(1)?,
-                seq: r.get(2)?,
-                role: r.get(3)?,
-                kind: r.get(4)?,
-                text: r.get(5)?,
-                created_at: r.get(6)?,
+                message_id: r.get(0)?,
+                chat_id: r.get(1)?,
+                chat_title: r.get(2)?,
+                seq: r.get(3)?,
+                role: r.get(4)?,
+                kind: r.get(5)?,
+                text: r.get(6)?,
+                created_at: r.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -955,7 +1257,205 @@ mod tests {
     fn fresh() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         migrate_for_test(&conn).unwrap();
+        // A 域 0053/0054 尚未合入时给会话分页/锚点测试自建 schema；已存在则为空操作。
+        super::super::chat_page::ensure_anchor_schema_for_tests(&conn);
         conn
+    }
+
+    fn input(id: &str, role: &str, kind: &str, text: Option<&str>) -> AiChatMessageInput {
+        AiChatMessageInput {
+            id: id.into(),
+            role: role.into(),
+            kind: kind.into(),
+            text: text.map(str::to_string),
+            image_base64: None,
+            mime: None,
+            payload: None,
+        }
+    }
+
+    /// 走 `append_message_in_tx`（不触发 shard 侧效应）：seq + anchor 逻辑与生产命令一致。
+    fn append(conn: &Connection, chat_id: &str, msg: AiChatMessageInput) {
+        let tx = conn.unchecked_transaction().unwrap();
+        append_message_in_tx(&tx, chat_id, &msg, "2026-11-10T00:00:00+00:00").unwrap();
+        tx.commit().unwrap();
+    }
+
+    /// 与 `ai_chat_append` 相同的完整事务路径（含 shard 侧效应），供任务投递单测用。
+    fn append_full(conn: &Connection, chat_id: &str, msg: AiChatMessageInput) {
+        let now = "2026-11-10T00:00:00+00:00";
+        let tx = conn.unchecked_transaction().unwrap();
+        let outcome = append_message_in_tx(&tx, chat_id, &msg, now).unwrap();
+        apply_append_side_effects(&tx, chat_id, &msg.id, &outcome, now).unwrap();
+        tx.commit().unwrap();
+    }
+
+    fn seq_of(conn: &Connection, id: &str) -> i64 {
+        conn.query_row(
+            "SELECT seq FROM ai_chat_messages WHERE id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    fn anchor_of(conn: &Connection, id: &str) -> Option<String> {
+        conn.query_row(
+            "SELECT anchor_id FROM ai_chat_messages WHERE id = ?1",
+            [id],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    /// user + terminal assistant：整回合 anchor 指向 assistant。
+    #[test]
+    fn append_sets_anchor_on_terminal_assistant() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("你好")));
+        append(&conn, "c", input("a1", "assistant", "text", Some("你好呀")));
+
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("a1"));
+        assert_eq!(anchor_of(&conn, "a1").as_deref(), Some("a1"));
+    }
+
+    /// food-parse 即使 text=NULL 也是 terminal。
+    #[test]
+    fn append_food_parse_without_text_is_terminal() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("记一下")));
+        append(&conn, "c", input("p1", "assistant", "tools", None));
+        append(&conn, "c", input("f1", "assistant", "food-parse", None));
+
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("f1"));
+        assert_eq!(anchor_of(&conn, "p1").as_deref(), Some("f1"));
+    }
+
+    /// 后一条 terminal 到达：整回合 anchor 前移，旧 terminal 也被改写。
+    #[test]
+    fn append_moves_anchor_when_later_terminal_arrives() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        append(&conn, "c", input("a2", "assistant", "text", Some("补充")));
+
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("a2"));
+        assert_eq!(anchor_of(&conn, "a1").as_deref(), Some("a2"), "旧 terminal 归入新 anchor");
+        assert_eq!(anchor_of(&conn, "a2").as_deref(), Some("a2"));
+    }
+
+    /// 晚到的旧 terminal upsert 不能把锚点往回搬（按 seq 而非到达顺序）。
+    #[test]
+    fn append_reupsert_of_earlier_terminal_keeps_newest_anchor() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        append(&conn, "c", input("a2", "assistant", "text", Some("二答")));
+        // 食物卡「加入记录」等操作会再次 upsert 较早的 terminal。
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答（已确认）")));
+
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("a2"));
+        assert_eq!(anchor_of(&conn, "a1").as_deref(), Some("a2"));
+    }
+
+    /// 没有 terminal 时退化为回合最后一条 assistant（process 也会成为落点）。
+    #[test]
+    fn append_falls_back_to_last_assistant_without_terminal() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("查一下")));
+        append(&conn, "c", input("p1", "assistant", "tools", None));
+
+        assert_eq!(anchor_of(&conn, "u1").as_deref(), Some("p1"));
+        assert_eq!(anchor_of(&conn, "p1").as_deref(), Some("p1"));
+    }
+
+    /// terminal 之后的过程消息继承 anchor，不抢锚点。
+    #[test]
+    fn append_does_not_anchor_process_messages() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        append(&conn, "c", input("p1", "assistant", "tools", None));
+
+        assert_eq!(anchor_of(&conn, "p1").as_deref(), Some("a1"));
+        assert_eq!(anchor_of(&conn, "a1").as_deref(), Some("a1"));
+    }
+
+    /// 过程消息晚于 terminal 的 seq 到达时仍继承 anchor（同名行为，独立断言 upsert 路径）。
+    #[test]
+    fn append_process_after_terminal_inherits_anchor() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        append(&conn, "c", input("p1", "assistant", "tools", None));
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        // terminal 之后，工具循环把过程消息重新 upsert 成非空 payload。
+        let mut p1 = input("p1", "assistant", "tools", None);
+        p1.payload = Some(r#"{"segments":[]}"#.into());
+        append(&conn, "c", p1);
+
+        assert_eq!(anchor_of(&conn, "p1").as_deref(), Some("a1"));
+    }
+
+    /// 撤回删后缀后，新 append 不复用被删的 seq。
+    #[test]
+    fn append_after_cut_does_not_reuse_seq() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        append(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        let before = seq_of(&conn, "a1");
+        conn.execute(
+            "DELETE FROM ai_chat_messages WHERE chat_id = 'c' AND seq >= ?1",
+            [before],
+        )
+        .unwrap();
+
+        append(&conn, "c", input("u2", "user", "text", Some("二")));
+        assert!(
+            seq_of(&conn, "u2") > before,
+            "seq 必须单调，分页游标才不会指向新消息"
+        );
+    }
+
+    /// 用户消息本身不设 anchor（等 terminal 出现后整回合回填）。
+    #[test]
+    fn append_leaves_user_without_anchor_until_reply() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("一")));
+        assert_eq!(anchor_of(&conn, "u1"), None);
+    }
+
+    /// 跨会话搜索命中带 message_id，供「查看原文」跳转。
+    #[test]
+    fn chat_search_hit_includes_message_id() {
+        let conn = fresh();
+        append(&conn, "c", input("u1", "user", "text", Some("膝盖疼")));
+        let hits = chat_search_conn(&conn, "膝盖", Some(5)).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].message_id, "u1");
+        assert_eq!(hits[0].chat_id, "c");
+    }
+
+    /// 每个 terminal 各投一个 extract job（ref_id=anchor 消息 id），连续 terminal 不能互相覆盖；
+    /// user/过程消息不投。
+    #[test]
+    fn append_queues_extract_job_per_anchor() {
+        let conn = fresh();
+        append_full(&conn, "c", input("u1", "user", "text", Some("一")));
+        append_full(&conn, "c", input("a1", "assistant", "text", Some("一答")));
+        append_full(&conn, "c", input("p1", "assistant", "tools", None));
+        append_full(&conn, "c", input("a2", "assistant", "text", Some("补充")));
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT ref_id FROM memory_jobs WHERE kind = 'extract' ORDER BY ref_id",
+            )
+            .unwrap();
+        let refs = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(refs, vec!["a1", "a2"], "按 anchor 去重，user/过程消息不投");
     }
 
     /// 一条在线模型调用：100 万输入 token 的模型费 + 128MB 出方向流量费，金额由前端算好传进来

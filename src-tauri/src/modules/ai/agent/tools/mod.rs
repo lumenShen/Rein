@@ -76,6 +76,7 @@ pub fn registry() -> &'static [RegisteredTool] {
             kb::find_large_files(),
             kb::present_file(),
             kb::list_memories(),
+            kb::recall_memory(),
             kb::remember(),
             kb::edit_memory(),
             kb::forget(),

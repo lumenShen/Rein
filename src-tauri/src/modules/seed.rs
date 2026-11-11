@@ -76,7 +76,29 @@ struct PlanSeed {
 }
 
 /// 食物种子：按 name 幂等补齐（见模块注释）。
+///
+/// 快速路径：种子文件指纹 + 内置行数都吻合时**整段跳过**，而且**连 JSON 都不解**。
+/// 启动时 `db::init` 会在主线程跑它：种子 JSON 有 700 KB（解析本身 ~25ms），
+/// `INSERT OR IGNORE` 即便一条都不插入，也要为每一条种子走一次唯一索引冲突
+/// （生产库实测 2722 条 / 34.7ms / debug，安卓闪存上只会更慢）。指纹只在种子
+/// 文件变化时才变，行数则兜住「库被手工删过一行」这种极端情况。
 pub fn seed_foods(conn: &Connection) -> Result<()> {
+    let builtin: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM foods WHERE is_custom = 0",
+        [],
+        |r| r.get(0),
+    )?;
+    let fingerprint = seed_fingerprint(FOODS_JSON);
+    // 存的形态是 `指纹:条数`；读不出来（老版本只存了指纹）就走完整种子
+    let done = crate::db::meta_get(conn, SEED_FOODS_KEY).and_then(|raw| {
+        let (fp, n) = raw.rsplit_once(':')?;
+        Some((fp.to_string(), n.parse::<i64>().ok()?))
+    });
+    if let Some((fp, n)) = done {
+        if fp == fingerprint && builtin >= n {
+            return Ok(());
+        }
+    }
     let seed: SeedFile = serde_json::from_str(FOODS_JSON)?;
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -133,7 +155,26 @@ pub fn seed_foods(conn: &Connection) -> Result<()> {
             return Err(e);
         }
     }
+    // 记下「这版种子已经完整落过库」，下次启动走快速路径（连 JSON 都不解）
+    crate::db::meta_set(
+        conn,
+        SEED_FOODS_KEY,
+        &format!("{fingerprint}:{}", seed.foods.len()),
+    )?;
     Ok(())
+}
+
+/// 食物种子的指纹键（app_meta）。值 = 种子 JSON 的 FNV-1a 64 位十六进制。
+const SEED_FOODS_KEY: &str = "seed.foods.fingerprint.v1";
+
+/// FNV-1a 64：只做「同一个二进制里的同一份种子」比对，不需要抗碰撞强度。
+fn seed_fingerprint(text: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in text.as_bytes() {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
 }
 
 /// 内置课程种子内容版本：种子里的课程内容（exercises/subtitle）变更时 +1。
