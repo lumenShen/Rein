@@ -22,6 +22,11 @@ export interface PomodoroSettings {
   maxPauseMin: number
   /** 计时方向（番茄钟 / 正计时）。缺省 down。新增字段，旧数据缺省 down（与旧行为一致）。 */
   mode: PomodoroMode
+  /**
+   * 智能安排的空档缓冲：没有进行中的待办时，排到「下一个待办 − 这个分钟数」。
+   * 可编辑、会记住；缺省 20。新增字段，旧数据缺省 20。
+   */
+  smartBufferMin: number
 }
 
 /**

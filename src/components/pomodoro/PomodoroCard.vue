@@ -1,43 +1,93 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ChevronDown, Pause, Play, RotateCcw, RotateCw, Timer, X } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  ChevronDown,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+  Sparkles,
+  Timer,
+  X,
+} from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import AppMenu, { type MenuItem } from '@/components/common/AppMenu.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
-import PillChip from '@/components/common/PillChip.vue'
 import RingProgress from '@/components/common/RingProgress.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
+import FocusPlanSheet from '@/components/pomodoro/FocusPlanSheet.vue'
 import FocusTimePicker from '@/components/pomodoro/FocusTimePicker.vue'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useTodoStore } from '@/stores/todo'
 import { enterFocusImmersive } from '@/system/focusImmersive'
-import { todayStr } from '@/utils/date'
+import { fmtClockSec } from '@/utils/clock'
+import { minToHHmm, todayStr } from '@/utils/date'
+import { resolveSmartPlan, type FocusPlan } from '@/utils/focusPlan'
 import type { PomodoroMode } from '@/types'
 
 /**
  * 番茄钟 · 专注视图主面。
  *
- * 结构自顶向下：方向页头（标题即当前方向名 + 分段开关）→ 环内大读数 → 控制簇 →
- * 设置摘要 → 今日番茄计数 → 统计页脚。四段各有自己的唯一真源，卡片只做呈现与转译。
+ * 空闲态不再直接暴露「专注 / 休息 / 暂停」三格设置，而是一条**计划条**：
+ * 智能读取正在进行的待办 → 算出几颗、末颗多长、预计几点结束；主按钮一键开始。
+ * 想换排法点计划条进「安排专注」抽屉（智能 / 到点 / 按颗数 / 正计时）。
  *
- * 几个刻意的口径：
- * · 大读数取 store 的 `clockTime`（HH:MM:SS）而不是 `displayTime`（mm:ss）——
- *   正计时会跨过 59:59，两段式的 mm:ss 在那之后会退化成 60:00 这种读不出来的数；
- *   三段式是这个面的读数规格，浮条那类窄面才用两段式。
- * · 冒号单独着色、数字保持中性：冒号是「分隔符」不是数据，给它一点专注域的色相
- *   既让读数有落点，又不会把数值本身染成彩色（数值要能扫读，不该被色相干扰）。
- * · 计时方向一旦起跑就锁死（见 onModeChange）：已投入的秒数是按当前方向记账的，
- *   中途换向会让读数与已记的番茄对不上；入口由 UI 守住，不能只靠用户自觉。
+ * 读数口径：倒计时用 mm:ss（设置上限 120 分钟，90:00 仍可读）；正计时用 HH:MM:SS
+ * （会跨过 59:59）。冒号单独着色，数字保持中性。
  */
 const pomo = usePomodoroStore()
 const todo = useTodoStore()
+
+/* ---------- 安排抽屉 / 设置抽屉 ---------- */
+const planOpen = ref(false)
+const settingsOpen = ref(false)
+
+/** 智能计划的「现在」：空闲时每 30 秒走一格，待办时间推进后计划条能跟着变 */
+const nowMs = ref(Date.now())
+let idleTick: ReturnType<typeof setInterval> | null = null
+
+function openPlan(): void {
+  if (pomo.active) return
+  planOpen.value = true
+}
+
+function openSettings(): void {
+  planOpen.value = false
+  settingsOpen.value = true
+}
+
+const smart = computed(() =>
+  resolveSmartPlan(
+    { nowMs: nowMs.value, settings: pomo.settings, roundsDone: pomo.completedRounds },
+    todo.dayTodos,
+    pomo.settings.smartBufferMin,
+  ),
+)
+
+/** 空闲态展示的计划（正计时 / 进行中不展示） */
+const idlePlan = computed<FocusPlan | null>(() =>
+  pomo.settings.mode === 'down' && !pomo.active ? smart.value.plan : null,
+)
+
+/** 计划条的待办标题：进行中优先，其次下一个 */
+const planTodoTitle = computed(
+  () => smart.value.chosenTodo?.title ?? smart.value.nextTodo?.title ?? null,
+)
 
 // 保持原有的挂载加载：今日记录 + 今日待办（待办为空时才拉，避免与 FocusPage 重复请求）
 onMounted(() => {
   void pomo.loadToday()
   if (todo.dayTodos.length === 0) void todo.loadDay(todayStr())
+  idleTick = setInterval(() => {
+    if (!pomo.active) nowMs.value = Date.now()
+  }, 30_000)
+})
+
+onBeforeUnmount(() => {
+  if (idleTick) clearInterval(idleTick)
+  idleTick = null
 })
 
 /* ---------- 页头 · 计时方向 ---------- */
@@ -76,14 +126,27 @@ const ringColorVar = computed(() =>
  * completedRounds 是「今天已完成的整轮」，+1 才是「正在做的这一颗」。
  */
 const caption = computed(() => {
-  if (!pomo.active) return '开始专注吧'
+  if (!pomo.active) {
+    if (pomo.settings.mode === 'up') return '开始专注吧'
+    if (!idlePlan.value) return '可用时间不足 10 分钟'
+    return `智能安排 · 共 ${idlePlan.value.rounds.length} 颗`
+  }
   if (!pomo.running) return pomo.phase === 'break' ? '休息已暂停' : '专注已暂停'
   if (pomo.phase === 'break') return '休息一下'
+  if (pomo.plan) return `第 ${pomo.planRoundNo} 颗 / 共 ${pomo.planRounds} 颗`
   return `第 ${pomo.completedRounds + 1} 颗番茄`
 })
 
-/** 按冒号切三段：模板把 `:` 单独渲染成带色相的 span，数字保持中性 */
-const clockParts = computed(() => pomo.clockTime.split(':'))
+/** 空闲态展示计划的第一颗时长（末颗可能被压缩 → 18:00 这种）；正计时仍用三段式 */
+const cardClock = computed(() => {
+  if (!pomo.active && pomo.settings.mode === 'down' && idlePlan.value) {
+    return fmtClockSec((idlePlan.value.rounds[0]?.focusMin ?? pomo.settings.focusMin) * 60)
+  }
+  return pomo.settings.mode === 'up' ? pomo.clockTime : pomo.displayTime
+})
+
+/** 按冒号切段：模板把 `:` 单独渲染成带色相的 span，数字保持中性 */
+const clockParts = computed(() => cardClock.value.split(':'))
 
 /** 双击环 / 读数 = 进沉浸。手势只挂在这一层：不进菜单、不占按钮位 ——
  *  沉浸层是整个专注面的「放大」，手势比按钮更贴它的语义。 */
@@ -100,8 +163,12 @@ const pausedText = computed(() => {
 /* ---------- 关联待办 ---------- */
 
 const linkedTodo = computed(() => todo.dayTodos.find((t) => t.id === pomo.linkedTodoId) ?? null)
-/** 未选时给引导文案「在做哪件」（引导但不阻塞起跑）；已选时显示待办标题（超长省略） */
-const pickLabel = computed(() => linkedTodo.value?.title ?? '在做哪件')
+/** 空闲时优先显示智能计划覆盖的待办；进行中显示本轮关联的待办 */
+const pickLabel = computed(
+  () =>
+    (pomo.active ? linkedTodo.value?.title : planTodoTitle.value ?? linkedTodo.value?.title) ??
+    '在做哪件',
+)
 
 /** 菜单项：done 的待办不可选；已关联时补一条「不关联」 */
 const todoMenu = computed<MenuItem[]>(() => {
@@ -215,9 +282,58 @@ function onEndPick(value: string): void {
   else void pomo.endRound()
 }
 
-/* ---------- 设置摘要 ---------- */
+/* ---------- 计划条 / 开始 ---------- */
 
-const pickerOpen = ref(false)
+function hm(ms: number): string {
+  const d = new Date(ms)
+  return minToHHmm(d.getHours() * 60 + d.getMinutes())
+}
+
+const planEndLabel = computed(() => (idlePlan.value ? hm(idlePlan.value.endAtMs) : ''))
+const planModeLabel = computed(() => (pomo.settings.mode === 'up' ? '正计时' : '智能'))
+const nowMinOfDay = computed(() => {
+  const d = new Date(nowMs.value)
+  return d.getHours() * 60 + d.getMinutes()
+})
+
+function formatRemain(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return h > 0 ? `${h} 小时${m > 0 ? ` ${m} 分` : ''}` : `${m} 分钟`
+}
+
+/** 空档 / 没有待办时的原因行；进行中时由 store 的计划说话 */
+const planHeadline = computed(() => {
+  if (pomo.settings.mode === 'up') return '正计时 · 不限时'
+  if (smart.value.kind === 'ongoing' && smart.value.chosenTodo) {
+    return `正在做《${smart.value.chosenTodo.title}》`
+  }
+  if (smart.value.kind === 'gap' && smart.value.nextTodo) {
+    return `接下来《${smart.value.nextTodo.title}》`
+  }
+  if (smart.value.kind === 'fallback') return '今天没有后续安排'
+  return '可用时间不足 10 分钟'
+})
+
+/** 运行中计划还剩多少分钟（含后续颗/休息；暂停不实时累加） */
+const planRemainMin = computed(() => {
+  const end = pomo.estimatedEndAt
+  if (!end) return null
+  return Math.max(0, Math.round((end.getTime() - nowMs.value) / 60_000))
+})
+
+/** 主按钮：有计划直接开；没计划（时间不够）进抽屉调整；正计时直接开始 */
+function onStart(): void {
+  if (pomo.settings.mode === 'up') {
+    pomo.start()
+    return
+  }
+  if (idlePlan.value) {
+    pomo.startPlan(idlePlan.value)
+    return
+  }
+  planOpen.value = true
+}
 
 /* ---------- 今日番茄计数 ---------- */
 
@@ -237,16 +353,6 @@ const interruptedMin = computed(() =>
   pomo.todaySessions.filter((s) => !s.completed).reduce((a, s) => a + s.focusMin, 0),
 )
 const hasToday = computed(() => pomo.todayCompletedCount > 0 || pomo.todayInterruptedCount > 0)
-
-/* ---------- 建议时长（循证：从近 7 天完成段中位数给建议，用户显式采纳才改） ---------- */
-
-const showSuggest = computed(
-  () => pomo.suggestedFocusMin != null && pomo.suggestedFocusMin !== pomo.settings.focusMin,
-)
-function adoptSuggest(): void {
-  const v = pomo.suggestedFocusMin
-  if (v != null) pomo.settings.focusMin = v
-}
 </script>
 
 <template>
@@ -273,7 +379,12 @@ function adoptSuggest(): void {
     <div class="col center body">
       <!-- 双击进沉浸：手势面覆盖环与读数，但不含下面的关联待办（那一颗有自己的单击语义） -->
       <div class="ring-wrap" title="双击时间进入沉浸模式" @dblclick="onEnterImmersive">
-        <RingProgress :value="pomo.progress" :color-var="ringColorVar" :size="200" :stroke="12">
+        <RingProgress
+          :value="pomo.active ? pomo.progress : 1"
+          :color-var="pomo.active ? ringColorVar : '--mod-focus-soft'"
+          :size="200"
+          :stroke="12"
+        >
           <div class="hero">
             <span class="cap">
               <!-- 运行态色点：色相只在点上，文案保持中性；暂停时不呼吸（它不在计数） -->
@@ -335,68 +446,115 @@ function adoptSuggest(): void {
         <span class="num">{{ pomo.settings.maxPauseMin }}</span> 分钟会自动结束本段
       </p>
 
-      <!-- 控制簇：空闲态一颗宽胶囊主操作；进行中换成四颗 —— 左右两颗是「回退 / 前进」，
-           中间那颗是暂停/继续（视觉主体），最后一颗是破坏性的放弃（红 + 二次确认）。 -->
-      <button v-if="!pomo.active" type="button" class="cta" @click="pomo.start()">开始专注</button>
-      <div v-else class="acts">
-        <button
-          type="button"
-          class="ibtn"
-          :disabled="!canRewind"
-          aria-label="回到本番茄钟初"
-          @click="pomo.rewindPhase()"
-        >
-          <RotateCcw :size="20" />
-        </button>
-        <button
-          type="button"
-          class="ibtn main"
-          :aria-label="pomo.running ? '暂停' : '继续'"
-          @click="toggleRun"
-        >
-          <Pause v-if="pomo.running" :size="24" />
-          <Play v-else :size="24" style="margin-left: 3px" />
-        </button>
-        <button type="button" class="ibtn" aria-label="提前结束本阶段" @click="onEndPhase">
-          <RotateCw :size="20" />
-        </button>
-        <button type="button" class="ibtn danger" aria-label="放弃本轮" @click="giveUpOpen = true">
-          <X :size="20" />
-        </button>
-      </div>
+      <!-- ═══ 空闲：计划条 + 一键开始 ═══ -->
+      <template v-if="!pomo.active">
+        <button type="button" class="plan" aria-label="调整专注安排" @click="openPlan">
+          <div class="plan-top">
+            <span class="plan-now">
+              <i
+                class="cdot"
+                :class="{ live: pomo.settings.mode === 'down' && smart.kind === 'ongoing' }"
+                aria-hidden="true"
+              />
+              <span class="plan-now-t">{{ planHeadline }}</span>
+            </span>
+            <span class="mode-chip">
+              <component
+                :is="pomo.settings.mode === 'up' ? Timer : Sparkles"
+                :size="11"
+                :stroke-width="2.2"
+              />
+              {{ planModeLabel }}
+            </span>
+            <span class="plan-edit">调整</span>
+          </div>
 
-      <!-- 建议时长：循证给值，用户点了才写进设置（不自动改） -->
-      <PillChip
-        v-if="showSuggest"
-        as="button"
-        tone="action"
-        size="sm"
-        :aria-label="`采纳建议：专注 ${pomo.suggestedFocusMin} 分钟`"
-        @click="adoptSuggest"
-      >
-        试试 <span class="num">{{ pomo.suggestedFocusMin }}</span> 分钟
-      </PillChip>
+          <div v-if="pomo.settings.mode === 'down' && idlePlan" class="plan-nums">
+            <span>专注 <b class="num">{{ idlePlan.focusMin }}</b></span>
+            <span>休息 <b class="num">{{ idlePlan.breakMin }}</b></span>
+            <span>共 <b class="num">{{ idlePlan.rounds.length }}</b> 颗</span>
+            <span v-if="idlePlan.lastFocusMin">末颗 <b class="num">{{ idlePlan.lastFocusMin }}</b></span>
+            <span class="end">预计 <b class="num">{{ planEndLabel }}</b> 结束</span>
+          </div>
+          <div v-else-if="pomo.settings.mode === 'up'" class="plan-nums">
+            <span>每满 <b class="num">{{ pomo.settings.focusMin }}</b> 分钟记一颗</span>
+            <span class="end">不限时 · 由你结束</span>
+          </div>
+          <div v-else class="plan-nums">
+            <span>先选一个更晚的结束时间，或切到正计时</span>
+            <span class="end">至少 10 分钟</span>
+          </div>
 
-      <!-- 设置摘要：三格发丝线分隔，整行可点开专注设置抽屉。
-           只有数字带语义色相（专注 / 休息 / 暂停），「分钟」保持三级灰 —— 单位是量纲不是数据。 -->
-      <button type="button" class="summary" aria-label="专注设置" @click="pickerOpen = true">
-        <span class="cell">
-          <span class="slab">专注</span>
-          <b class="num sv work">{{ pomo.settings.focusMin }}</b>
-          <span class="sunit">分钟</span>
-        </span>
-        <span class="cell">
-          <span class="slab">休息</span>
-          <b class="num sv rest">{{ pomo.settings.breakMin }}</b>
-          <span class="sunit">分钟</span>
-        </span>
-        <span class="cell">
-          <span class="slab">暂停</span>
-          <!-- 0 是「不限制」，写成 0 分钟会被读成「不许暂停」 -->
-          <b class="num sv pause">{{ pomo.settings.maxPauseMin > 0 ? pomo.settings.maxPauseMin : '不限' }}</b>
-          <span v-if="pomo.settings.maxPauseMin > 0" class="sunit">分钟</span>
-        </span>
-      </button>
+          <template v-if="pomo.settings.mode === 'down' && idlePlan">
+            <div class="plan-bar" aria-hidden="true">
+              <template v-for="(r, i) in idlePlan.rounds" :key="i">
+                <i class="pf" :style="{ flex: r.focusMin }" />
+                <i
+                  v-if="r.breakAfterMin"
+                  class="pb"
+                  :class="{ long: r.longBreak }"
+                  :style="{ flex: r.breakAfterMin }"
+                />
+              </template>
+            </div>
+            <div class="plan-axis">
+              <span>现在 {{ minToHHmm(nowMinOfDay) }}</span>
+              <span v-if="idlePlan.deadlineMs">
+                {{ smart.kind === 'gap' ? `${hm(idlePlan.deadlineMs)} 收手` : `待办结束 ${hm(idlePlan.deadlineMs)}` }}
+              </span>
+              <span v-else>{{ planEndLabel }} 结束</span>
+            </div>
+          </template>
+        </button>
+
+        <button type="button" class="cta" @click="onStart">
+          {{ pomo.settings.mode === 'up' || idlePlan ? '开始专注' : '调整安排' }}
+        </button>
+      </template>
+
+      <!-- ═══ 进行中：预计结束 + 控制簇 + 下一段 ═══ -->
+      <template v-else>
+        <div v-if="pomo.estimatedEndAt" class="run-est">
+          <Timer :size="13" :stroke-width="2.2" />
+          预计 <b class="num">{{ hm(pomo.estimatedEndAt.getTime()) }}</b> 结束
+          <span v-if="planRemainMin != null">· 还剩 {{ formatRemain(planRemainMin) }}</span>
+        </div>
+
+        <div class="acts">
+          <button
+            type="button"
+            class="ibtn"
+            :disabled="!canRewind"
+            aria-label="回到本番茄钟初"
+            @click="pomo.rewindPhase()"
+          >
+            <RotateCcw :size="20" />
+          </button>
+          <button
+            type="button"
+            class="ibtn main"
+            :aria-label="pomo.running ? '暂停' : '继续'"
+            @click="toggleRun"
+          >
+            <Pause v-if="pomo.running" :size="24" />
+            <Play v-else :size="24" style="margin-left: 3px" />
+          </button>
+          <button type="button" class="ibtn" aria-label="提前结束本阶段" @click="onEndPhase">
+            <RotateCw :size="20" />
+          </button>
+          <button type="button" class="ibtn danger" aria-label="放弃本轮" @click="giveUpOpen = true">
+            <X :size="20" />
+          </button>
+        </div>
+
+        <div v-if="pomo.nextPhaseLabel" class="next-line">
+          <span>下一个：{{ pomo.nextPhaseLabel }}</span>
+          <span v-if="pomo.plan">
+            专注 {{ pomo.plan.focusMin }} · 休息 {{ pomo.plan.breakMin }} · 共
+            {{ pomo.planRounds }} 颗<template v-if="pomo.plan.lastFocusMin"> · 末颗 {{ pomo.plan.lastFocusMin }}</template>
+          </span>
+        </div>
+      </template>
 
       <!-- 今日番茄：左侧一排番茄图形（超出上限折成 +N），右侧是完整计数。
            番茄是内联 SVG（currentColor）而不是 emoji —— emoji 在不同平台是另一套字形，
@@ -475,7 +633,13 @@ function adoptSuggest(): void {
       @close="giveUpOpen = false"
     />
 
-    <FocusTimePicker :open="pickerOpen" @close="pickerOpen = false" />
+    <FocusPlanSheet
+      :open="planOpen"
+      :initial-mode="pomo.settings.mode === 'up' ? 'up' : 'smart'"
+      @close="planOpen = false"
+      @settings="openSettings"
+    />
+    <FocusTimePicker :open="settingsOpen" @close="settingsOpen = false" />
   </section>
 </template>
 
@@ -642,6 +806,142 @@ function adoptSuggest(): void {
   text-wrap: balance;
 }
 
+/* ---------- 计划条（空闲态） ---------- */
+.plan {
+  width: 100%;
+  padding: var(--sp-12);
+  border: 0;
+  border-radius: var(--radius-m-nest);
+  background: var(--surface-inset);
+  color: var(--text-1);
+  font-family: inherit;
+  text-align: left;
+}
+
+.plan:active { background: var(--surface-2); }
+
+.plan-top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+
+.plan-now {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-6);
+  min-width: 0;
+  flex: 1;
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+.plan-now-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 2px 7px 2px 5px;
+  border-radius: var(--radius-full);
+  background: var(--mod-focus-soft);
+  color: var(--mod-focus-strong);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+}
+
+.plan-edit {
+  flex: none;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  color: var(--text-3);
+}
+
+.plan-nums {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-10);
+  margin-top: var(--sp-6);
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+.plan-nums .num {
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-bold);
+  color: var(--text-1);
+}
+
+.plan-nums .end { margin-left: auto; color: var(--text-2); }
+.plan-nums .end .num { color: var(--mod-focus-strong); }
+
+.plan-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 6px;
+  margin-top: var(--sp-8);
+}
+
+.plan-bar .pf {
+  display: block;
+  border-radius: 3px;
+  background: var(--mod-focus-tone);
+}
+
+.plan-bar .pb {
+  display: block;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-1) 9%, transparent);
+}
+
+.plan-bar .pb.long { background: color-mix(in srgb, var(--text-1) 14%, transparent); }
+
+.plan-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--sp-4);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 进行中：预计结束 / 下一段 ---------- */
+.run-est {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+}
+
+.run-est svg { color: var(--text-3); }
+.run-est b { font-size: var(--fs-footnote); font-weight: var(--fw-bold); color: var(--text-1); }
+.run-est span { color: var(--text-3); }
+
+.next-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--sp-10);
+  font-size: var(--fs-caption);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.next-line span + span { color: var(--text-3); }
+
 /* 空闲态主操作：满宽胶囊。实底主色档（--accent + --on-accent）是项目里主操作的统一写法，
    也是唯一能同时保证白字对比度的实底档。 */
 .cta {
@@ -697,65 +997,6 @@ function adoptSuggest(): void {
 .ibtn:disabled {
   opacity: var(--disabled-opacity);
   cursor: default;
-}
-
-/* 设置摘要：三格等分，格间一条发丝线。整行是一颗按钮，但**不吃**全局的按压缩放
-   （整行缩一下会把卡片里的版心晃一下），改成铺一层浅底。 */
-.summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  width: 100%;
-  padding: var(--sp-12) 0;
-  border-radius: var(--radius-m);
-  background: var(--surface-2);
-}
-
-.summary:active {
-  transform: none;
-  background: var(--surface-3);
-}
-
-.cell {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--gap-tight);
-  min-width: 0;
-  /* 上下留一口气：发丝线跟着格子的高度走，不留白的话分隔线只有一行字那么高，
-     读起来像一条划在字上的删除线 */
-  padding: var(--gap-tight) 0;
-}
-
-.cell + .cell {
-  border-left: 0.5px solid var(--line-strong);
-}
-
-.slab {
-  font-size: var(--fs-caption);
-  color: var(--text-2);
-}
-
-/* 数值带语义色相，且只落到数值上：这是「一眼扫到三个参数」的锚点 */
-.sv {
-  font-size: var(--fs-subhead);
-  font-weight: var(--fw-bold);
-}
-
-.sv.work {
-  color: var(--mod-focus-strong);
-}
-
-.sv.rest {
-  color: var(--cat-general);
-}
-
-.sv.pause {
-  color: var(--warn);
-}
-
-.sunit {
-  font-size: var(--fs-micro);
-  color: var(--text-3);
 }
 
 .tomatos {
@@ -847,10 +1088,6 @@ function adoptSuggest(): void {
     opacity: 0.92;
   }
 
-  .summary:hover {
-    background: var(--surface-3);
-  }
-
   .pick:not(.pick-idle):hover {
     color: var(--text-1);
   }
@@ -896,7 +1133,6 @@ function adoptSuggest(): void {
   }
 
   .cta,
-  .summary,
   .ibtn {
     transition: none;
   }

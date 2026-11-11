@@ -38,6 +38,15 @@ html.float-win body {
   padding: 0;
 }
 
+/* 专注卡面撑满窗口：360×450 的圆角卡就是窗口本身 */
+.float-app.is-card {
+  padding: 0;
+}
+
+.float-app.is-card .float-shell {
+  border-radius: var(--radius-l);
+}
+
 /* 浏览器直接打开 float.html（不是 Tauri 小窗）：按一条浮条的高度预览，别把整页
    拉成一块全屏玻璃。真正的窗口尺寸只由 Rust 决定，这里只服务人工预览。 */
 .float-app.is-preview {

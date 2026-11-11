@@ -68,17 +68,28 @@ export interface GlobalFloatSnapshot {
   route: string
   /** 是否给「进入沉浸」按钮（专注有、训练课有；跑步是路由沉浸页也走打开） */
   canImmersive: boolean
+  /**
+   * 专注计划的轮次信息（训练课为 undefined）：
+   * 浮窗标题「专注时间段（第 1 个/共 5 个）」与「下一个：休息 5 分钟」用它。
+   */
+  roundIndex?: number
+  roundTotal?: number
+  nextLabel?: string | null
+  /** 专注计划预计结束 HH:mm（普通单轮 / 正计时为 null） */
+  estimatedEnd?: string | null
+  /** 当前相位总秒数：浮窗「显示剩余时间 / 已用时间」互相换算用 */
+  phaseTotalSec?: number
 }
 
 /** 浮窗形态：bar 全宽条 / blob 64×64 泊车方块（与程序内两态同义，用户偏好会持久化） */
 export type GlobalFloatForm = 'bar' | 'blob'
 
 /**
- * 浮窗**窗口形状**：在两种持久形态之外，多一个「确认态」。
- * 结束确认要把 ActionSheet 的完整标题与两条动作文案原样放下（430 宽下一行放不下），
- * 所以确认时窗口临时长高；取消/完成即回到 bar，`confirm` 不进持久化偏好。
+ * 浮窗**窗口形状**：在两种持久形态之外，多一个专注卡面与一个「确认态」。
+ * 专注在桌面用 360×450 的卡（`card`），训练仍用 430×92 的条（`bar`）；
+ * 训练的结束确认要把完整标题与两条动作放下，所以确认时窗口临时长高（`confirm`）。
  */
-export type GlobalFloatWindowShape = GlobalFloatForm | 'confirm'
+export type GlobalFloatWindowShape = GlobalFloatForm | 'card' | 'confirm'
 
 /** 主窗口 → 浮窗的完整推送载荷（内容 + 形态 + 首帧画质档） */
 export interface GlobalFloatStatePayload {
@@ -116,6 +127,7 @@ export type GlobalFloatActionName =
   | 'pause'
   | 'resume'
   | 'complete'
+  | 'skip-phase'
   | 'end'
   | 'open'
   | 'immerse'

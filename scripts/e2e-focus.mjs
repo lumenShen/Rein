@@ -221,7 +221,7 @@ async function resetState(settings = DEFAULT_SETTINGS, extras = {}) {
 
 /* ---------------- 读取界面事实 ---------------- */
 
-/** 卡片相位文案（开始专注吧 / 第 N 颗番茄 / 休息一下 / 专注已暂停 …） */
+/** 卡片相位文案（智能安排 · 共 N 颗 / 第 N 颗番茄 / 休息一下 / 专注已暂停 …） */
 const cardPhase = () => evalJS(`document.querySelector('.page .card .cap')?.textContent.trim() ?? null`)
 /** 点亮圆点数 / 圆点总数 */
 const dotCounts = () =>
@@ -260,6 +260,15 @@ const ring = () =>
 /** 起跑 / 续跑：空闲态是宽胶囊 .cta，进行中（含暂停）是控制簇里的 .ibtn.main */
 const startOrResume = () =>
   evalJS(`(() => {
+    // 2026-11 专注改版：界面默认先排计划再开始。以下时序用例需要「单轮 + 小数分钟」
+    // 的快速回归，dev 构建提供了一个直达 store 的入口（生产构建不含）。
+    const hook = window.__reinTestStartPomodoro
+    if (typeof hook === 'function') {
+      let s = {}
+      try { s = JSON.parse(localStorage.getItem('rein.pomodoro.settings.v1') || '{}') } catch {}
+      hook({ focusMin: s.focusMin, breakMin: s.breakMin })
+      return true
+    }
     const el = document.querySelector('.page .card .cta') ?? document.querySelector('.page .card .acts .ibtn.main')
     if (!el) return false
     el.click()
@@ -301,7 +310,7 @@ const visualInvariants = () =>
     document.body.appendChild(probe)
     const tok = (name) => { probe.style.color = 'var(--' + name + ')'; return getComputedStyle(probe).color }
     const T = {
-      work: tok('cat-work'), general: tok('cat-general'),
+      work: tok('cat-work'), focusTone: tok('mod-focus-tone'), general: tok('cat-general'),
       text1: tok('text-1'), text2: tok('text-2'), text3: tok('text-3'),
       surface2: tok('surface-2'), surface3: tok('surface-3'),
     }
@@ -309,7 +318,7 @@ const visualInvariants = () =>
     const card = document.querySelector('.page .card')
     const val = card?.querySelector('.val')
     // 设置摘要条是卡片里唯一的 --surface-2 面片；未点亮圆点（--surface-3）要与它拉开一档
-    const chip = card?.querySelector('.summary')
+    const chip = card?.querySelector('.acts')
     const rdot = card?.querySelector('.rdot:not(.on)')
     const phase = card?.querySelector('.cap')
     const time = card?.querySelector('.readout')
@@ -467,7 +476,7 @@ async function main() {
     // 第 1 轮（含短休）
     await startOrResume()
     await waitText('.page .card .cap', '休息', 40000, '第 1 轮结束进入短休')
-    await waitText('.page .card .cap', '开始专注吧', 40000, '短休结束回到专注空闲')
+    await waitText('.page .card .cap', '智能安排', 40000, '短休结束回到专注空闲（空闲卡现在展示智能计划）')
     const dotsAfter1 = await dotCounts()
 
     await reload()
@@ -529,6 +538,10 @@ async function main() {
     ok('不足 1 分钟的「结束」不落库（无「中途停下」记录）', interruptedAfterShort === false, `见到中途停下=${interruptedAfterShort}`)
 
     /* ---------- F. 中断 ≥1 分钟：借快照造出已投入，落库为「中途停下」 ---------- */
+    // 跨零点夹具：起点不能落到昨天，否则 loadToday 按本地日期收窄时会把记录滤掉
+    const dayStart = new Date()
+    dayStart.setHours(0, 0, 0, 0)
+    const fStart = Math.max(dayStart.getTime() + 60000, Date.now() - 480000)
     // 快照：phaseTotalSec=600、remainingSec=120 → 已投入 480s（≥60s）；running=true 但 endAt 在未来 → 接管为暂停态
     await resetState(DEFAULT_SETTINGS, {
       live: {
@@ -541,7 +554,7 @@ async function main() {
         runFocusMin: null,
         runBreakMin: null,
         completedRounds: 0,
-        phaseStartedAtMs: Date.now() - 480000,
+        phaseStartedAtMs: fStart,
       },
     })
     await goto('#/focus')
@@ -563,14 +576,14 @@ async function main() {
       live: {
         phase: 'focus',
         running: true,
-        endAtMs: Date.now() - 60000, // 关闭期间已到点
-        remainingSec: 300,
-        phaseTotalSec: 1500,
+        endAtMs: Date.now() - 1000, // 关闭期间已到点
+        remainingSec: 0,
+        phaseTotalSec: 60,
         linkedTodoId: null,
-        runFocusMin: null,
+        runFocusMin: 1,
         runBreakMin: null,
         completedRounds: 0,
-        phaseStartedAtMs: Date.now() - 1500000,
+        phaseStartedAtMs: Math.max(dayStart.getTime() + 1000, Date.now() - 30000),
       },
     })
     await goto('#/focus')
@@ -634,9 +647,9 @@ async function main() {
 
     const inv = await visualInvariants()
     ok(
-      '进度环色相 = 专注 accent（--cat-work），不再借营养三环的粉',
-      inv.ringStroke === inv.tokens.work,
-      `环=${inv.ringStroke} --cat-work=${inv.tokens.work}`,
+      '进度环色相 = 专注模块色（--mod-focus-tone），不再借营养三环的粉',
+      inv.ringStroke === inv.tokens.focusTone,
+      `环=${inv.ringStroke} --mod-focus-tone=${inv.tokens.focusTone}`,
     )
     ok(
       '未点亮圆点的底与胶囊底**拉开一档**（修复「圆点与胶囊同色、看不见」）',
@@ -673,8 +686,8 @@ async function main() {
     const invDark = await visualInvariants()
     const cPhaseDark = contrast(invDark.phaseColor, invDark.cardBackground)
     ok(
-      '暗色档：环仍走 --cat-work、圆点仍与胶囊底分档、相位字 < --text-2、对比度 ≥ 3',
-      invDark.ringStroke === invDark.tokens.work &&
+      '暗色档：环仍走 --mod-focus-tone、圆点仍与胶囊底分档、相位字 < --text-2、对比度 ≥ 3',
+      invDark.ringStroke === invDark.tokens.focusTone &&
         invDark.rdotBackground === invDark.tokens.surface3 &&
         invDark.rdotBackground !== invDark.chipBackground &&
         invDark.phaseColor === invDark.tokens.text2 &&
@@ -702,16 +715,26 @@ async function main() {
     await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
 
     /* 专注页的设置抽屉（番茄钟配置已从设置页移回本页）：
-       不回到 /me 找卡，直接断言「专注设置」里的时长 / 轮次 / 提示音仍能改。 */
+       2026-11 起「设置」入口收进安排抽屉的右上角 —— 先放弃本轮回到空闲，
+       点计划条开「安排专注」，再点「设置」。 */
+    await evalJS(`document.querySelector('.page .card .ibtn.danger')?.click()`)
+    await sleep(350)
+    await evalJS(`(() => {
+      const b = [...document.querySelectorAll('[role=dialog] button')].find((x) => (x.textContent || '').includes('放弃本轮'))
+      if (b) b.click()
+    })()`)
+    await sleep(600)
     const pickerOpened = await evalJS(`(() => {
-      const btn = document.querySelector('[aria-label="专注设置"]')
-      if (!btn) return false
-      btn.click()
+      const plan = document.querySelector('.page .card .plan')
+      if (!plan) return false
+      plan.click()
       return true
     })()`)
     await sleep(500)
+    await evalJS(`document.querySelector('.fps-panel .fps-settings')?.click()`)
+    await sleep(500)
     const picker = await evalJS(`(() => {
-      const dlg = document.querySelector('[role="dialog"]')
+      const dlg = document.querySelector('[role="dialog"][aria-label="专注设置"]')
       if (!dlg) return null
       const text = dlg.textContent || ''
       return {

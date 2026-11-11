@@ -7,7 +7,7 @@ import { useToast } from '@/composables/useToast'
 import { router } from '@/router'
 import { floatService } from '@/services/floatService'
 import { isTauri } from '@/services/transport'
-import { enterFocusImmersive } from '@/system/focusImmersive'
+import { enterFocusImmersive, focusImmersiveLevel } from '@/system/focusImmersive'
 import { motionEffective } from '@/system/motion'
 import { perfMode } from '@/system/perf'
 import { openImmersive } from '@/system/sessionImmersive'
@@ -19,6 +19,7 @@ import type {
   GlobalFloatSnapshot,
   GlobalFloatStatePayload,
   GlobalFloatStatus,
+  GlobalFloatWindowShape,
 } from '@/types'
 
 /**
@@ -108,6 +109,8 @@ let pomo: ReturnType<typeof usePomodoroStore> | null = null
 let initialized = false
 /** 浮窗（桌面窗口 / Android 服务）当前是否已拉起，避免每次快照变化都重复 open */
 let shown = false
+/** 最近一次下发给窗口的形状：避免每秒心跳都重复发 set_form */
+let lastShape: GlobalFloatWindowShape | null = null
 let pushTimer: ReturnType<typeof setInterval> | null = null
 const unlisteners: UnlistenFn[] = []
 
@@ -141,9 +144,18 @@ function buildPayload(): GlobalFloatStatePayload | null {
 }
 
 /** 此刻应不应该有系统浮窗 */
+/** 持久形态 + 当前会话种类 → 窗口形状（专注卡面 / 训练条 / blob） */
+function effectiveFloatShape(snapshot = currentSnapshot.value): GlobalFloatWindowShape {
+  if (floatForm.value === 'blob') return 'blob'
+  return snapshot?.kind === 'focus' ? 'card' : 'bar'
+}
+
+/** 此刻应不应该有系统浮窗 */
 function wantVisible(): boolean {
   if (!floatEnabled.value) return false
   if (!currentSnapshot.value) return false
+  // 进了专注全屏（沉浸层）：系统浮窗让位（与页内浮条同一条规则）
+  if (currentSnapshot.value.kind === 'focus' && focusImmersiveLevel.value > 0) return false
   // 用户点过「关闭」→ 本次不再自动出现（桌面：主窗口回焦解除；Android：回到应用解除）
   if (dismissed.value) return false
   // Android：原生侧按 Activity 前台态自己显隐浮层，这里只决定「服务要不要在跑」
@@ -166,13 +178,17 @@ async function sync(): Promise<void> {
   if (want && payload) {
     try {
       await floatService.push(payload)
-      if (!shown) {
-        // 先归一窗口形状再显示：上一次可能是确认态的高度，直接 show 会先闪一帧高窗
+      const shape = effectiveFloatShape(payload.snapshot)
+      if (!shown || shape !== lastShape) {
+        // 先归一窗口形状再显示：上一次可能是确认态 / 另一种会话的高度，直接 show 会闪一帧
         try {
-          await floatService.setForm(floatForm.value)
+          await floatService.setForm(shape)
+          lastShape = shape
         } catch {
           /* 归一失败不影响显示 */
         }
+      }
+      if (!shown) {
         const st = await floatService.open()
         floatStatus.value = st
         shown = st.visible || (isAndroidShell && st.permitted)
@@ -248,7 +264,7 @@ export function setFloatForm(form: GlobalFloatForm): void {
   void (async () => {
     if (!isTauri) return
     try {
-      await floatService.setForm(form)
+      await floatService.setForm(effectiveFloatShape())
     } catch {
       /* 改尺寸失败不影响内容：下一次 push 仍带新形态 */
     }
@@ -326,6 +342,9 @@ async function handleAction(raw: GlobalFloatAction | null | undefined): Promise<
       break
     case 'complete':
       workoutRuntime.completeCurrentSet()
+      break
+    case 'skip-phase':
+      if (snapshot?.kind === 'focus') await pomo?.endPhase()
       break
     case 'end':
       await endSession(raw.option)
@@ -420,6 +439,8 @@ function init(): void {
   // 快照一变就对齐一次：开新会话 / 暂停 / 切相位 / 训练换动作都走这条
   watch(currentSnapshot, () => void sync(), { flush: 'post' })
   watch([floatEnabled, appFocused, dismissed], () => void sync())
+  // 进入 / 退出专注全屏：系统浮窗与页内浮条同步让位 / 回来
+  watch(focusImmersiveLevel, () => void sync())
 
   // 心跳：训练课的 stat 含计时读数、专注的 clock 也要保持新鲜；推送很便宜（一条 IPC）。
   // 「该显示但还没 shown」也要对齐：桌面首次建窗是异步的（Rust 侧 open 立即返回

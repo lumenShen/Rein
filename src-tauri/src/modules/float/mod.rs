@@ -53,6 +53,7 @@ pub(crate) fn latest_payload() -> String {
 /// 浮窗窗口形状（逻辑像素尺寸见 §6.2）。
 ///
 /// `bar` / `blob` 是两种**持久形态**（用户在标题栏里切，偏好存前端 localStorage）；
+/// `card` 是专注在桌面的 360×450 卡面（训练仍用 bar；Android 原生浮层没有卡面，回落 bar）；
 /// `confirm` 不是形态，是结束确认时窗口临时长高的一档 —— 430 宽一行放不下
 /// 「结束会拿走什么」那句话与两个动作文案，所以确认期间把窗口撑到 430×172。
 #[cfg(any(target_os = "windows", target_os = "android"))]
@@ -60,6 +61,7 @@ pub(crate) fn latest_payload() -> String {
 pub(crate) enum FloatShape {
     Bar,
     Blob,
+    Card,
     Confirm,
 }
 
@@ -71,6 +73,7 @@ impl FloatShape {
         match form {
             "bar" => Some(Self::Bar),
             "blob" => Some(Self::Blob),
+            "card" => Some(Self::Card),
             "confirm" => Some(Self::Confirm),
             _ => None,
         }
@@ -83,6 +86,8 @@ impl FloatShape {
             Self::Bar => (430.0, 92.0),
             // blob 是泊车方块：只留状态点与读数
             Self::Blob => (64.0, 64.0),
+            // card = 专注卡面：60 格刻度环 + 分钟读数 + 下一段
+            Self::Card => (360.0, 450.0),
             // confirm = 两行确认文案 + 动作行，固定高度避免文字换行时窗口抖动
             Self::Confirm => (430.0, 172.0),
         }
@@ -94,6 +99,8 @@ impl FloatShape {
         match self {
             Self::Bar => "bar",
             Self::Blob => "blob",
+            // Android 原生浮层没有卡面：专注仍用条形态（Kotlin 的 setForm 只认 bar/blob）
+            Self::Card => "bar",
             Self::Confirm => "confirm",
         }
     }

@@ -91,6 +91,7 @@ export function buildFocusSnapshot(pomo: ReturnType<typeof usePomodoroStore>): G
     baseSec: up ? pomo.upElapsedSec : pomo.remainingSec,
     atEpochMs: running ? Date.now() : null,
   }
+  const end = pomo.estimatedEndAt
   return {
     kind: 'focus',
     tone,
@@ -102,6 +103,14 @@ export function buildFocusSnapshot(pomo: ReturnType<typeof usePomodoroStore>): G
     route: FOCUS_ROUTE,
     // 专注的「进入沉浸」是全局沉浸层（不走路由），两种形态都有入口
     canImmersive: true,
+    // 计划轮次 / 下一段 / 预计结束：桌面卡面用；普通单轮与正计时按 undefined 处理
+    roundIndex: pomo.plan ? pomo.planRoundNo : undefined,
+    roundTotal: pomo.plan ? pomo.planRounds : undefined,
+    nextLabel: pomo.nextPhaseLabel,
+    estimatedEnd: end
+      ? `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+      : null,
+    phaseTotalSec: pomo.phaseTotalSec,
   }
 }
 

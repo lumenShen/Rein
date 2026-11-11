@@ -37,6 +37,7 @@ const SPRING = { stiffness: 160, damping: 22 } // ζ≈0.87，与程序内同一
 /** 窗口形状尺寸（逻辑像素）—— 与 Rust FloatShape::size 逐字对齐（docs/GLOBAL-FLOAT.md §6.2） */
 export const FLOAT_SIZE = {
   bar: { w: 430, h: 92 },
+  card: { w: 360, h: 450 },
   blob: { w: 64, h: 64 },
   confirm: { w: 430, h: 172 },
 } as const
@@ -88,6 +89,8 @@ export interface FloatDockOptions {
   changeForm: (next: GlobalFloatForm) => Promise<void>
   /** 此刻是否允许手势（桌面 + 有会话 + 非确认态） */
   active: Ref<boolean>
+  /** 专注卡面：form 仍是 bar，但窗口实际是 360×450（停靠计算要按真实尺寸走） */
+  card?: Ref<boolean>
 }
 
 export function useFloatDock(opts: FloatDockOptions) {
@@ -112,8 +115,8 @@ export function useFloatDock(opts: FloatDockOptions) {
   let preConfirmCy = 0
 
   function curSize(): { w: number; h: number } {
-    const blob = opts.form.value === 'blob'
-    const base = blob ? FLOAT_SIZE.blob : FLOAT_SIZE.bar
+    if (opts.form.value === 'blob') return { w: FLOAT_SIZE.blob.w, h: heightOverride ?? FLOAT_SIZE.blob.h }
+    const base = opts.card?.value ? FLOAT_SIZE.card : FLOAT_SIZE.bar
     return { w: base.w, h: heightOverride ?? base.h }
   }
 
@@ -169,9 +172,9 @@ export function useFloatDock(opts: FloatDockOptions) {
     const midX = work.x + work.width / 2
     switch (s) {
       case 'bottom':
-        return { x: midX, y: work.y + work.height - EDGE_GAP - FLOAT_SIZE.bar.h / 2 }
+        return { x: midX, y: work.y + work.height - EDGE_GAP - curSize().h / 2 }
       case 'top':
-        return { x: midX, y: work.y + EDGE_GAP + FLOAT_SIZE.bar.h / 2 }
+        return { x: midX, y: work.y + EDGE_GAP + curSize().h / 2 }
       case 'left':
       case 'right': {
         const { lo, hi } = sideYRange()

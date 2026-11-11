@@ -7,6 +7,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event'
 import GlassFilter from '@/components/common/GlassFilter.vue'
 import FloatTitleBar from '@/components/float/FloatTitleBar.vue'
 import FocusFloatBlob from '@/components/float/FocusFloatBlob.vue'
+import FocusFloatCard from '@/components/float/FocusFloatCard.vue'
 import FocusFloatContent from '@/components/float/FocusFloatContent.vue'
 import WorkoutFloatBlob from '@/components/float/WorkoutFloatBlob.vue'
 import WorkoutFloatContent from '@/components/float/WorkoutFloatContent.vue'
@@ -64,8 +65,17 @@ const nowMs = ref(Date.now())
 
 /* ---------- 派生 ---------- */
 
+/** 持久形态 → 窗口形状：专注用 360×450 卡面，训练仍是 430×92 条 */
+function effectiveShape(next: GlobalFloatForm, snap = displaySnapshot.value): GlobalFloatWindowShape {
+  if (next === 'blob') return 'blob'
+  return snap?.kind === 'focus' ? 'card' : 'bar'
+}
+
 /** 窗口此刻的形状：确认态压过持久形态（confirm 不进偏好） */
-const shape = computed<GlobalFloatWindowShape>(() => (confirmOpen.value ? 'confirm' : form.value))
+const shape = computed<GlobalFloatWindowShape>(() => {
+  if (confirmOpen.value) return 'confirm'
+  return effectiveShape(form.value)
+})
 const shapeClass = computed(() => `is-${shape.value}`)
 
 /** 本地走秒后的读数（秒）；静止 / 训练课为 null（不做覆盖） */
@@ -119,6 +129,8 @@ const emptyHint = isTauri
 let formEchoPending = false
 let formEchoAt = 0
 
+const cardMode = computed(() => effectiveShape(form.value) === 'card')
+
 const {
   pressing,
   dragging,
@@ -130,13 +142,14 @@ const {
   closeConfirm,
 } = useFloatDock({
   form,
+  card: cardMode,
   active: computed(() => isTauriDesktopWindow && displaySnapshot.value != null && !confirmOpen.value),
   changeForm: async (next) => {
     formEchoPending = true
     formEchoAt = Date.now()
     // 先改尺寸再渲染新形态：避免 blob 内容先在 430 宽的窗里拉成一帧
     try {
-      await floatService.setForm(next)
+      await floatService.setForm(effectiveShape(next))
     } catch {
       /* 改尺寸失败不影响内容：下一次主窗口归一形状会再改一次 */
     }
@@ -259,6 +272,16 @@ function onOpen(): void {
 
 function onImmerse(): void {
   sendAction({ action: 'immerse' })
+}
+
+/** 专注卡面的「跳到休息 / 跳过休息」：走 store 的 endPhase 分流 */
+function onSkipPhase(): void {
+  sendAction({ action: 'skip-phase' })
+}
+
+/** 专注卡面内的结束确认：选项 id 来自 snapshot.end.sheet */
+function onEndOption(option: string): void {
+  sendAction({ action: 'end', option })
 }
 
 function closeWindow(): void {
@@ -393,6 +416,31 @@ onBeforeUnmount(() => {
         :snapshot="workoutSnapshot"
       />
     </div>
+
+    <!-- 专注卡面：360×450。头部 / 刻度环 / 读数 / 菜单 / 结束确认都在卡内，
+         窗口尺寸由 Rust 的 card 形状给；这里只提供玻璃壳与整壳拖拽。 -->
+    <section
+      v-else-if="shape === 'card' && focusSnapshot"
+      class="float-shell glass-surface is-card"
+      :class="{ pressing, dragging }"
+      :style="glassStyle"
+      @pointerdown="onPointerDown"
+    >
+      <GlassFilter
+        :id="glassFilterId"
+        :enabled="liquidGlass"
+      />
+      <FocusFloatCard
+        :snapshot="focusSnapshot"
+        :live-sec="liveSec"
+        @primary="onPrimary"
+        @park="parkToSide"
+        @close="closeWindow"
+        @immerse="onImmerse"
+        @skip-phase="onSkipPhase"
+        @end="onEndOption"
+      />
+    </section>
 
     <!-- 条 / 确认形态：同一块玻璃壳 + 常驻紧凑标题栏。
          整壳自定义拖拽（useFloatDock）：不挂原生 drag region —— 它会吞掉指针事件，

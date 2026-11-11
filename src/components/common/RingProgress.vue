@@ -9,14 +9,22 @@ const props = withDefaults(
     colorVar: string
     size?: number
     stroke?: number
+    /** 是否在进度头画一枚圆点（沉浸层用；卡片不需要） */
+    head?: boolean
   }>(),
-  { max: 1, size: 64, stroke: 10 },
+  { max: 1, size: 64, stroke: 10, head: false },
 )
 
 const R = computed(() => 50 - props.stroke / 2 - 1)
 const C = computed(() => 2 * Math.PI * R.value)
 const pct = computed(() => Math.min(Math.max(props.value / props.max, 0), 1))
 const dashOffset = computed(() => C.value * (1 - pct.value))
+
+/** 进度头圆点：从 12 点方向顺时针走到 pct 的位置 */
+const headPos = computed(() => {
+  const a = pct.value * Math.PI * 2 - Math.PI / 2
+  return { x: 50 + R.value * Math.cos(a), y: 50 + R.value * Math.sin(a) }
+})
 </script>
 
 <template>
@@ -32,6 +40,16 @@ const dashOffset = computed(() => C.value * (1 - pct.value))
         :stroke="`var(${colorVar})`"
         :stroke-dasharray="C"
         :stroke-dashoffset="dashOffset"
+      />
+      <circle
+        v-if="head"
+        class="head"
+        :cx="headPos.x"
+        :cy="headPos.y"
+        :r="stroke * 0.42"
+        :fill="`var(${colorVar})`"
+        stroke="var(--bg)"
+        :stroke-width="stroke * 0.2"
       />
     </svg>
     <div class="center"><slot /></div>

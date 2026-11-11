@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ChevronDown, Lock, LockOpen, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-vue-next'
+import { ChevronDown, Flag, Lock, LockOpen, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-vue-next'
 
 import RingProgress from '@/components/common/RingProgress.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
@@ -46,10 +46,12 @@ const parts = computed<[string, string, string]>(() => {
   return tuple
 })
 
-/** 环上的说明：专注显第几颗番茄（今日已完成轮次 + 1），休息显「休息」 */
-const capText = computed(() =>
-  pomo.phase === 'focus' ? `第 ${pomo.completedRounds + 1} 颗番茄` : '休息',
-)
+/** 环上的说明：有计划的轮次优先；普通单轮用今日已完成轮次 + 1 */
+const capText = computed(() => {
+  if (pomo.phase === 'break') return '休息'
+  if (pomo.plan) return `第 ${pomo.planRoundNo} 颗 / 共 ${pomo.planRounds} 颗`
+  return `第 ${pomo.completedRounds + 1} 颗番茄`
+})
 
 /** 相位色：专注 --mod-focus-tone、休息 --cat-general。冒号与环共用它 —— 情绪色只在环与冒号上，
  * 数字保持中性（与浮条「色相只落状态点」同一条色彩纪律）。 */
@@ -64,9 +66,15 @@ function onResize(): void {
   vw.value = window.innerWidth
   vh.value = window.innerHeight
 }
-const ringSize = computed(() => Math.round(Math.min(vw.value * 0.7, vh.value * 0.7)))
-/** 环粗细：viewBox 是 0–100，故粗细全看这一个数；随直径走并留下限，免得小屏细成一根线 */
-const ringStroke = computed(() => Math.max(5, Math.round(ringSize.value / 55)))
+const landscape = computed(() => vw.value > vh.value)
+/** 竖屏取宽度为主（~74vw），横屏取高度为主（~70vh）：两边都不顶到上下边 */
+const ringSize = computed(() =>
+  landscape.value
+    ? Math.round(Math.min(vh.value * 0.7, vw.value * 0.36))
+    : Math.round(Math.min(vw.value * 0.74, vh.value * 0.4)),
+)
+/** 厚环：目标视觉 16px，换算回 viewBox 的 0–100 单位 */
+const ringStroke = computed(() => Math.max(4, Math.round((16 / ringSize.value) * 100)))
 
 /* ---------- 关联待办（完全沉浸层底部唯一的一行字） ---------- */
 
@@ -74,6 +82,33 @@ const ringStroke = computed(() => Math.max(5, Math.round(ringSize.value / 55)))
 const linkedTitle = computed(
   () => todos.dayTodos.find((t) => t.id === pomo.linkedTodoId)?.title ?? null,
 )
+
+/* ---------- 预计结束（一级才显示；二级按约定不显示） ---------- */
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+const estEndLabel = computed(() => {
+  const end = pomo.estimatedEndAt
+  return end ? `${pad2(end.getHours())}:${pad2(end.getMinutes())}` : null
+})
+
+/** 还剩多少分钟（含后续颗与休息）：依赖 remainingSec，让运行中每秒重算 */
+const remainMin = computed(() => {
+  const end = pomo.estimatedEndAt
+  if (!end) return null
+  void pomo.remainingSec
+  return Math.max(0, Math.round((end.getTime() - Date.now()) / 60_000))
+})
+
+function formatRemain(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return h > 0 ? `${h} 小时${m > 0 ? ` ${m} 分` : ''}` : `${m} 分钟`
+}
+
+const nextLabel = computed(() => pomo.nextPhaseLabel)
 
 /* ---------- 控制 ---------- */
 
@@ -192,45 +227,106 @@ onBeforeUnmount(() => {
           <component :is="focusForced ? Lock : LockOpen" :size="20" :stroke-width="2.4" />
         </button>
 
-        <!-- 双击环 / 读数（含其下的提示）深入一层 -->
-        <div class="center" @dblclick="deeper()">
-          <RingProgress
-            :value="pomo.progress"
-            :color-var="phaseColorVar"
-            :size="ringSize"
-            :stroke="ringStroke"
-          >
-            <span class="cap">{{ capText }}</span>
-            <span class="clock">
-              <span class="grp">{{ parts[0] }}</span>
-              <span class="colon" :style="colonStyle">:</span>
-              <span class="grp">{{ parts[1] }}</span>
-              <span class="colon" :style="colonStyle">:</span>
-              <span class="grp">{{ parts[2] }}</span>
-            </span>
-          </RingProgress>
-          <p class="hint">继续双击时间，可切换到完全沉浸模式</p>
-        </div>
+        <!-- ═══ 竖屏：环内三件事（第几颗 / 读数 / 待办）+ 环下预计 + 底部控制条 ═══ -->
+        <template v-if="!landscape">
+          <div class="center" @dblclick="deeper()">
+            <RingProgress
+              :value="pomo.progress"
+              :color-var="phaseColorVar"
+              :size="ringSize"
+              :stroke="ringStroke"
+              head
+            >
+              <span class="cap">{{ capText }}</span>
+              <span class="clock">
+                <span class="grp">{{ parts[0] }}</span>
+                <span class="colon" :style="colonStyle">:</span>
+                <span class="grp">{{ parts[1] }}</span>
+                <span class="colon" :style="colonStyle">:</span>
+                <span class="grp">{{ parts[2] }}</span>
+              </span>
+              <span v-if="linkedTitle" class="imm-todo">{{ linkedTitle }}</span>
+            </RingProgress>
+            <div v-if="estEndLabel" class="imm-est">
+              <Flag :size="14" :stroke-width="2.2" />
+              预计 <b class="num">{{ estEndLabel }}</b> 结束
+              <span v-if="remainMin != null">· 还剩 {{ formatRemain(remainMin) }}</span>
+            </div>
+            <p class="hint">双击时间 · 进入完全沉浸</p>
+          </div>
 
-        <!-- 贴左缘、垂直居中的控制簇（对应参考设计里那列贴边工具） -->
-        <div class="cluster" role="toolbar" aria-label="专注控制">
-          <button
-            class="btn"
-            type="button"
-            :aria-label="pomo.running ? '暂停' : '继续'"
-            @click="toggleRun()"
-          >
-            <component :is="pomo.running ? Pause : Play" :size="20" :stroke-width="2.4" />
-          </button>
-          <button class="btn" type="button" aria-label="回到本番茄钟初" @click="pomo.rewindPhase()">
-            <RotateCcw :size="20" :stroke-width="2.4" />
-          </button>
-          <button class="btn" type="button" aria-label="结束本段" @click="endSeg()">
-            <RotateCw :size="20" :stroke-width="2.4" />
-          </button>
-          <button class="btn" type="button" aria-label="退出沉浸模式" @click="exitFocusImmersive()">
-            <X :size="20" :stroke-width="2.4" />
-          </button>
+          <div class="imm-controls" role="toolbar" aria-label="专注控制">
+            <button class="btn" type="button" aria-label="回到本番茄钟初" @click="pomo.rewindPhase()">
+              <RotateCcw :size="20" :stroke-width="2.4" />
+            </button>
+            <button
+              class="btn main"
+              type="button"
+              :aria-label="pomo.running ? '暂停' : '继续'"
+              @click="toggleRun()"
+            >
+              <component :is="pomo.running ? Pause : Play" :size="24" :stroke-width="2.4" />
+            </button>
+            <button class="btn" type="button" aria-label="结束本段" @click="endSeg()">
+              <RotateCw :size="20" :stroke-width="2.4" />
+            </button>
+            <button class="btn" type="button" aria-label="退出沉浸模式" @click="exitFocusImmersive()">
+              <X :size="20" :stroke-width="2.4" />
+            </button>
+          </div>
+        </template>
+
+        <!-- ═══ 横屏：环 | 状态 两栏（430 高再上下堆会溢出） ═══ -->
+        <div v-else class="l1l">
+          <div class="ls-left" @dblclick="deeper()">
+            <RingProgress
+              :value="pomo.progress"
+              :color-var="phaseColorVar"
+              :size="ringSize"
+              :stroke="ringStroke"
+              head
+            >
+              <span class="clock ls-clock">
+                <span class="grp">{{ parts[0] }}</span>
+                <span class="colon" :style="colonStyle">:</span>
+                <span class="grp">{{ parts[1] }}</span>
+                <span class="colon" :style="colonStyle">:</span>
+                <span class="grp">{{ parts[2] }}</span>
+              </span>
+            </RingProgress>
+          </div>
+
+          <div class="ls-info">
+            <span class="cap ls-cap">{{ capText }}</span>
+            <span v-if="linkedTitle" class="ls-todo">{{ linkedTitle }}</span>
+            <div v-if="estEndLabel" class="imm-est ls-est">
+              <Flag :size="14" :stroke-width="2.2" />
+              预计 <b class="num">{{ estEndLabel }}</b> 结束
+              <span v-if="remainMin != null">· 还剩 {{ formatRemain(remainMin) }}</span>
+            </div>
+            <p v-if="nextLabel" class="ls-next">下一个：{{ nextLabel }}</p>
+
+            <div class="imm-controls ls-controls" role="toolbar" aria-label="专注控制">
+              <button class="btn" type="button" aria-label="回到本番茄钟初" @click="pomo.rewindPhase()">
+                <RotateCcw :size="20" :stroke-width="2.4" />
+              </button>
+              <button
+                class="btn main"
+                type="button"
+                :aria-label="pomo.running ? '暂停' : '继续'"
+                @click="toggleRun()"
+              >
+                <component :is="pomo.running ? Pause : Play" :size="24" :stroke-width="2.4" />
+              </button>
+              <button class="btn" type="button" aria-label="结束本段" @click="endSeg()">
+                <RotateCw :size="20" :stroke-width="2.4" />
+              </button>
+              <button class="btn" type="button" aria-label="退出沉浸模式" @click="exitFocusImmersive()">
+                <X :size="20" :stroke-width="2.4" />
+              </button>
+            </div>
+            <p class="hint ls-hint">双击时间 · 进入完全沉浸</p>
+          </div>
         </div>
       </div>
     </Transition>
@@ -293,6 +389,8 @@ onBeforeUnmount(() => {
   inset: 0;
   display: grid;
   place-items: center;
+  /* 厚环的轨道：9% 墨色，亮暗都看得见（不再用几乎隐形的 surface-3） */
+  --ring-track: color-mix(in srgb, var(--text-1) 9%, transparent);
 }
 
 .center {
@@ -310,14 +408,14 @@ onBeforeUnmount(() => {
   justify-content: center;
   font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--text-1);
 }
 
 .l1 .clock {
-  /* 环内读数：令牌给上下限 —— 小屏不溢出环、大屏仍够「巨」 */
-  font-size: clamp(var(--fs-display-m), 9vmin, var(--fs-display-2xl));
+  /* 沉浸读数：56 Bold（用户口径：大字重）；环内三件事都靠它撑住 */
+  font-size: var(--fs-display-2xl);
 }
 
 .cap {
@@ -325,6 +423,143 @@ onBeforeUnmount(() => {
   font-size: var(--fs-subhead);
   font-weight: var(--fw-semibold);
   color: var(--text-2);
+}
+
+/* 环内「正在做什么」：一颗矮胶囊，不抢读数的位置 */
+.imm-todo {
+  margin-top: var(--gap-sm);
+  max-width: 210px;
+  padding: var(--gap-tight) var(--sp-10);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 环下预计结束 */
+.imm-est {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  font-size: var(--fs-callout);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.imm-est svg { color: var(--text-3); }
+.imm-est b { color: var(--text-1); }
+.imm-est span { color: var(--text-3); }
+
+/* 底部控制条：与专注卡同一套按钮，只是移到拇指边 */
+.imm-controls {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + var(--sp-32));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+  padding: var(--sp-6) var(--sp-12);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.65),
+    var(--shadow-float);
+}
+
+.imm-controls .btn {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  color: var(--text-2);
+}
+
+.imm-controls .btn.main {
+  width: 56px;
+  height: 56px;
+  background: var(--text-1);
+  color: var(--bg);
+  box-shadow: var(--shadow-float);
+}
+
+/* ---------- 横屏：环 | 状态 两栏 ---------- */
+.l1l {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: var(--sp-24);
+  padding: 0 var(--sp-56);
+}
+
+.l1l::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 74px;
+  bottom: 74px;
+  width: 0.5px;
+  background: var(--line-strong);
+}
+
+.ls-left {
+  display: flex;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ls-clock { font-size: var(--fs-display-2xl); }
+
+.ls-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-tight);
+  padding-left: var(--sp-12);
+}
+
+.ls-cap { margin-bottom: 0; }
+
+.ls-todo {
+  font-size: var(--fs-large-title);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.5px;
+  line-height: var(--lh-title);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls-est { margin-top: var(--sp-4); }
+
+.ls-next {
+  margin: 0;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+}
+
+.imm-controls.ls-controls {
+  position: static;
+  transform: none;
+  align-self: flex-start;
+  margin-top: var(--sp-14);
+}
+
+.ls-hint {
+  margin: 0;
+  padding: 0;
+  background: none;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
 }
 
 /* 提示气泡：中性三级字，不与读数抢视线 */

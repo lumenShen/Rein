@@ -19,6 +19,22 @@ app.use(createPinia())
 app.use(router)
 // 番茄钟状态核：恢复今日轮次 / 关联待办，并接管上次未走完的运行态（幂等，只在这里调一次）
 usePomodoroStore().init()
+
+// DEV 专用：e2e 直接驱动 store 的**单轮**路径。界面现在默认先排计划再开始
+// （计划里的末颗压缩 / 休息下限 5 分钟不适合用小数分钟做快速回归），旧套件的
+// 时序语义需要一条不经过计划的最小起跑入口。生产构建里这段会被 tree-shake 掉。
+if (import.meta.env.DEV) {
+  ;(
+    window as unknown as {
+      __reinTestStartPomodoro?: (opts?: { focusMin?: number; breakMin?: number }) => void
+    }
+  ).__reinTestStartPomodoro = (opts) => {
+    const p = usePomodoroStore()
+    if (p.active) p.reset()
+    p.setMode('down')
+    p.start(opts)
+  }
+}
 // 运动系统运行时：启动即接管未完成的运动（计时/GPS/落盘独立于组件，
 // 悬浮运动条与沉浸页共用这一份数据源）
 workoutRuntime.init()

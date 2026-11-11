@@ -34,6 +34,7 @@ import { compatActive } from '@/compat/layers'
 import { fmtClockHms, fmtClockSec } from '@/utils/clock'
 import { addDays, localDateOf, todayStr } from '@/utils/date'
 import { playPhaseChime } from '@/utils/notifyTone'
+import type { FocusPlan } from '@/utils/focusPlan'
 import type {
   FocusNotice,
   FocusRuntime,
@@ -76,6 +77,12 @@ interface LiveSnapshot {
   mode?: PomodoroMode
   /** 正计时已累计秒数（down 模式恒为 0）；旧快照缺省 0。 */
   upElapsedSec?: number
+  /** 本轮计划（智能 / 到点 / 按颗数）；旧快照没有 = 普通单轮。 */
+  plan?: FocusPlan | null
+  /** 计划进行到第几颗（1-based）。 */
+  planRound?: number
+  /** 计划预计结束墙钟毫秒（暂停续跑会顺延）。 */
+  planEndAtMs?: number
 }
 
 function loadSettings(): PomodoroSettings {
@@ -87,6 +94,7 @@ function loadSettings(): PomodoroSettings {
     chime: true,
     maxPauseMin: 9,
     mode: 'down',
+    smartBufferMin: 20,
   }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -181,6 +189,24 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   const runFocusMin = ref<number | null>(null)
   const runBreakMin = ref<number | null>(null)
 
+  /**
+   * 本轮计划（智能 / 到点 / 按颗数）。null = 普通单轮（手动开始 / 外部 start）。
+   * 计划只描述「这一轮怎么排」，不改 settings；整颗时长用 runFocusMin 覆盖，
+   * 末颗压缩由进入该颗时改写 runFocusMin / phaseTotalSec 实现。
+   */
+  const plan = ref<FocusPlan | null>(null)
+  /** 计划进行到第几颗（1-based）；计划为空时无意义。 */
+  const planRound = ref(1)
+  /** 计划预计结束墙钟毫秒：暂停续跑 / 回退 / 加时都会顺延。 */
+  const planEndAtMs = ref(0)
+
+  /** 清掉本轮计划（结束 / 放弃 / 提前结束 / 换模式时调用）。 */
+  function clearPlan(): void {
+    plan.value = null
+    planRound.value = 1
+    planEndAtMs.value = 0
+  }
+
   /** 本轮生效的专注时长（分钟）：外部起跑覆盖优先，否则本地设置。 */
   function focusMinValue(): number {
     return runFocusMin.value ?? settings.value.focusMin
@@ -262,6 +288,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
       phaseStartedAtMs,
       mode: mode(),
       upElapsedSec: upElapsedSec.value,
+      plan: plan.value,
+      planRound: planRound.value,
+      planEndAtMs: planEndAtMs.value,
     }
     writeLocal(LIVE_KEY, JSON.stringify(snap))
   }
@@ -415,7 +444,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   function advanceFocusToBreak(): void {
     resetPause()
     phase.value = 'break'
-    phaseTotalSec.value = breakPlannedMin() * 60
+    // 计划里已经算好这一颗之后休多久；没有计划才回落到今日长休周期
+    const plannedBreak = plan.value?.rounds[planRound.value - 1]?.breakAfterMin
+    phaseTotalSec.value = (plannedBreak ?? breakPlannedMin()) * 60
     remainingSec.value = phaseTotalSec.value
     phaseStartedAtMs = 0
     // 转入休息：接着 start() 会立刻报一份休息态，所以这里不先清（免得白跑一趟 unpublish）
@@ -426,13 +457,47 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     clearRuntime() // 休息结束：这一轮专注结束，对外回到「没有进行中的计时」
     resetPause()
     phase.value = 'focus'
+    const nextRound = plan.value?.rounds[planRound.value]
+    if (plan.value && nextRound) {
+      // 计划还有下一颗：轮次 +1，专注时长用计划里这一颗的值（末颗可能被压缩）
+      planRound.value += 1
+      runFocusMin.value = nextRound.focusMin
+      // runBreakMin 保持计划值，不回到 settings
+      phaseTotalSec.value = nextRound.focusMin * 60
+      remainingSec.value = phaseTotalSec.value
+      phaseStartedAtMs = 0
+      persistLive()
+      // 计划是一整段日程：休息结束自动续跑下一颗，不再等用户按开始
+      start()
+      return
+    }
     // 外部起跑的一次性覆盖只覆盖「这一轮专注 + 它的休息」；回到新轮次即失效（回到本地设置）
+    clearPlan()
     runFocusMin.value = null
     runBreakMin.value = null
     phaseTotalSec.value = settings.value.focusMin * 60
     remainingSec.value = phaseTotalSec.value
     phaseStartedAtMs = 0
     persistLive() // 全新空闲相位：快照随之清空
+  }
+
+  /** 最后一句自然走完：收掉计划，回到空闲专注态（不再排收尾休息）。 */
+  function finishPlanState(): void {
+    stopTimer()
+    resetPause()
+    clearRuntime()
+    clearPlan()
+    phase.value = 'focus'
+    runFocusMin.value = null
+    runBreakMin.value = null
+    phaseTotalSec.value = settings.value.focusMin * 60
+    remainingSec.value = phaseTotalSec.value
+    upElapsedSec.value = 0
+    upBaseSec = 0
+    upAnchorAt = 0
+    recordedCycles = 0
+    phaseStartedAtMs = 0
+    persistLive()
   }
 
   /* ---------- 计时 ---------- */
@@ -495,7 +560,10 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   /** 续跑：把本次暂停段计入累计并停表 */
   function freezePause(): void {
     if (pauseStartedAt > 0) {
-      pausedAccumSec.value += Math.round((Date.now() - pauseStartedAt) / 1000)
+      const delta = Math.round((Date.now() - pauseStartedAt) / 1000)
+      pausedAccumSec.value += delta
+      // 计划结束时间随暂停顺延：暂停多久，预计结束就往后推多久
+      if (plan.value) planEndAtMs.value += delta * 1000
       pauseStartedAt = 0
     }
     if (pauseTimer) {
@@ -557,6 +625,46 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     persistLive()
   }
 
+  /**
+   * 按一份计划起跑（智能 / 到点 / 按颗数）。
+   *
+   * 计划可能在抽屉里停留了几分钟：这里用**点击开始这一刻**重新锚定起止，
+   * 轮次时长保持不变（totalMin 已含颗间休息），所以预计结束不会停在旧时刻。
+   */
+  function startPlan(p: FocusPlan): void {
+    if (running.value || active.value) return
+    const first = p.rounds[0]
+    if (!first) return
+    const now = Date.now()
+    const normalized: FocusPlan = {
+      ...p,
+      startAtMs: now,
+      endAtMs: now + p.totalMin * 60_000,
+    }
+    // 计划都是倒计时；正计时模式下先切回来（setMode 会清 plan，所以直接写 settings）
+    if (settings.value.mode !== 'down') settings.value.mode = 'down'
+    stopTimer()
+    resetPause()
+    clearRuntime()
+    plan.value = normalized
+    planRound.value = 1
+    planEndAtMs.value = normalized.endAtMs
+    phase.value = 'focus'
+    runFocusMin.value = first.focusMin
+    runBreakMin.value = normalized.breakMin
+    phaseTotalSec.value = first.focusMin * 60
+    remainingSec.value = phaseTotalSec.value
+    upElapsedSec.value = 0
+    upBaseSec = 0
+    upAnchorAt = 0
+    recordedCycles = 0
+    phaseStartedAtMs = 0
+    // 进行中的待办由智能计划覆盖；空档计划（todoId 为 null）保留用户手动选的「在做哪件」
+    if (normalized.todoId != null) setLinkedTodo(normalized.todoId)
+    persistLive()
+    start()
+  }
+
   function pause(): void {
     if (!running.value) return
     if (mode() === 'up') {
@@ -585,8 +693,11 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
       return
     }
     if (phase.value === 'focus') phaseTotalSec.value = focusMinValue() * 60
+    const restoredSec = Math.max(0, phaseTotalSec.value - remainingSec.value)
     remainingSec.value = phaseTotalSec.value
     if (running.value) endAt = Date.now() + remainingSec.value * 1000
+    // 回退把「已经走掉的时间」还回来：计划预计结束跟着顺延同样长度
+    if (plan.value && planEndAtMs.value > 0) planEndAtMs.value += restoredSec * 1000
     phaseStartedAtMs = running.value ? Date.now() : 0
     persistLive()
   }
@@ -601,6 +712,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   function setMode(m: PomodoroMode): void {
     if (settings.value.mode === m) return
     if (active.value) return
+    clearPlan()
     settings.value.mode = m
     phase.value = 'focus'
     phaseTotalSec.value = settings.value.focusMin * 60
@@ -615,9 +727,17 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
 
   /** 放弃 / 跳过休息：不落库、回专注相位、**不动 completedRounds**（见下方注释）。 */
   function reset(): void {
+    // 休息里点「跳过」：计划还有下一颗就继续，不能把整份计划一起丢掉
+    if (phase.value === 'break' && plan.value) {
+      stopTimer()
+      resetPause()
+      advanceBreakToFocus() // 计划内会直接 start() 下一颗
+      return
+    }
     stopTimer()
     resetPause()
     clearRuntime()
+    clearPlan()
     phase.value = 'focus'
     // 外部起跑带来的一次性覆盖随「停止」作废：回到用户本地设置
     runFocusMin.value = null
@@ -724,6 +844,8 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     }
     const investedMin = Math.round(elapsedSec / 60)
     const restMin = breakPlannedMin()
+    // 提前结束 = 放弃这份计划；休息照旧，回来是普通单轮
+    clearPlan()
     advanceFocusToBreak()
     await announcePhaseEnd(
       'focus',
@@ -743,6 +865,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     phaseTotalSec.value += sec
     remainingSec.value += sec
     if (running.value) endAt += sec * 1000
+    if (plan.value && planEndAtMs.value > 0) planEndAtMs.value += sec * 1000
     persistLive()
   }
 
@@ -781,11 +904,20 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
   async function finishPhase(): Promise<void> {
     stopTimer()
     if (phase.value === 'focus') {
+      const planRounds = plan.value?.rounds.length ?? 0
+      const planTotalMin = plan.value?.totalMin ?? 0
+      const finishingPlan = plan.value != null && planRound.value >= planRounds
       await recordFocusFinished()
-      const roundNo = completedRounds.value
-      const body = `第 ${roundNo} 段 · ${focusMinValue()} 分钟 · 休息 ${breakPlannedMin()} 分钟`
-      advanceFocusToBreak() // 相位推进：无论写库成败都必须执行
-      await announcePhaseEnd('focus', '专注完成', body)
+      if (finishingPlan) {
+        // 计划的最后一颗走完：不排收尾休息，直接回空闲态
+        finishPlanState()
+        await announcePhaseEnd('focus', '计划完成', `共 ${planRounds} 颗 · ${planTotalMin} 分钟`)
+      } else {
+        const roundNo = completedRounds.value
+        const body = `第 ${roundNo} 段 · ${focusMinValue()} 分钟 · 休息 ${breakPlannedMin()} 分钟`
+        advanceFocusToBreak() // 相位推进：无论写库成败都必须执行
+        await announcePhaseEnd('focus', '专注完成', body)
+      }
       await loadToday().catch(() => {})
     } else {
       clearRuntime()
@@ -874,6 +1006,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     if ((snap.mode ?? 'down') === 'up') {
       const el = Math.max(0, snap.upElapsedSec ?? 0)
       if (el < MIN_RECORD_SEC) return
+      clearPlan()
       phase.value = 'focus'
       upElapsedSec.value = el
       upBaseSec = el
@@ -900,6 +1033,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
       if (!(await tryPersistSession(input))) pendingSessions.push(input)
       completedRounds.value = snap.completedRounds + 1
       saveRounds()
+      clearPlan()
       phase.value = 'focus'
       phaseTotalSec.value = settings.value.focusMin * 60
       remainingSec.value = phaseTotalSec.value
@@ -910,6 +1044,7 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
 
     if (snap.phase === 'break' && finished) {
       // 休息在关闭期间走完：不落库，直接回专注空闲态
+      clearPlan()
       phase.value = 'focus'
       phaseTotalSec.value = settings.value.focusMin * 60
       remainingSec.value = phaseTotalSec.value
@@ -922,6 +1057,9 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     runBreakMin.value = snap.runBreakMin
     completedRounds.value = snap.completedRounds
     linkedTodoId.value = snap.linkedTodoId
+    plan.value = snap.plan ?? null
+    planRound.value = snap.planRound ?? 1
+    planEndAtMs.value = snap.planEndAtMs ?? 0
     phaseTotalSec.value = snap.phaseTotalSec
     phaseStartedAtMs = snap.phaseStartedAtMs
     const liveRemaining =
@@ -979,6 +1117,33 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     return Array.from({ length: n }, (_, i) => i < filled)
   })
 
+  /** 计划总颗数（0 = 普通单轮） */
+  const planRounds = computed(() => plan.value?.rounds.length ?? 0)
+
+  /** 当前第几颗（1-based）；普通单轮按今日已完成轮次 +1 兜底 */
+  const planRoundNo = computed(() => {
+    if (plan.value) return Math.min(planRound.value, plan.value.rounds.length)
+    return phase.value === 'focus' ? completedRounds.value + 1 : Math.max(1, completedRounds.value)
+  })
+
+  /** 计划预计结束；暂停期间不实时累加，续跑时一次性顺延 */
+  const estimatedEndAt = computed<Date | null>(() =>
+    plan.value && planEndAtMs.value > 0 ? new Date(planEndAtMs.value) : null,
+  )
+
+  /** 浮窗 / 卡片底部「下一个：…」 */
+  const nextPhaseLabel = computed<string | null>(() => {
+    if (mode() === 'up') return null
+    if (phase.value === 'focus') {
+      if (plan.value && planRound.value >= plan.value.rounds.length) return '完成'
+      const min = plan.value?.rounds[planRound.value - 1]?.breakAfterMin ?? breakPlannedMin()
+      return `休息 ${min} 分钟`
+    }
+    const next = plan.value?.rounds[planRound.value]
+    const min = next?.focusMin ?? settings.value.focusMin
+    return `专注 ${min} 分钟`
+  })
+
   /** 是否在本相位中途（计时中，或暂停在半途 / 正计时已有累计）。浮条/卡片据此决定是否露出。 */
   const active = computed(() => {
     if (mode() === 'up') return running.value || upElapsedSec.value > 0
@@ -1007,10 +1172,16 @@ export const usePomodoroStore = defineStore('pomodoro', () => {
     roundDots,
     suggestedFocusMin,
     active,
+    plan,
+    planRounds,
+    planRoundNo,
+    estimatedEndAt,
+    nextPhaseLabel,
     init,
     loadToday,
     loadRecent,
     start,
+    startPlan,
     pause,
     endRound,
     endPhase,
