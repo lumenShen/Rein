@@ -2,14 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import ActionSheet from '@/components/common/ActionSheet.vue'
 import FloatDock from '@/components/common/FloatDock.vue'
 import WorkoutFloatBlob from '@/components/float/WorkoutFloatBlob.vue'
 import WorkoutFloatContent from '@/components/float/WorkoutFloatContent.vue'
-import { buildWorkoutSnapshot, workoutEndSheet } from '@/components/float/snapshot'
+import { buildWorkoutSnapshot } from '@/components/float/snapshot'
 import { workoutRuntime } from '@/system/workoutRuntime'
 import { immersiveClosing, immersiveOpen, immersiveReturning, openImmersive, setImmersiveOriginProvider } from '@/system/sessionImmersive'
-import { useToast } from '@/composables/useToast'
 
 /**
  * 悬浮运动条：导航栏上方常驻的「当前运动」视图（App.vue 挂载，
@@ -29,14 +27,12 @@ import { useToast } from '@/composables/useToast'
  */
 const rt = workoutRuntime
 const router = useRouter()
-const { toast } = useToast()
 
 const view = rt.view
 /** 本条渲染的全部内容：状态点语义 / 标题 / 统计行 / 主动作 / 结束文案都由它派生，
  *  与推给系统浮窗的快照是**同一个函数**（buildWorkoutSnapshot），不是两份文案。
  *  插槽只在 FloatDock 打开时渲染，这里给模板一个非空快照，免去逐字段判空。 */
 const barSnapshot = computed(() => buildWorkoutSnapshot(rt)!)
-const endOpen = ref(false)
 /** FloatDock 暴露的定位层：停靠 / 形变锚点都从它量 */
 const dock = ref<InstanceType<typeof FloatDock> | null>(null)
 
@@ -104,24 +100,22 @@ onBeforeUnmount(() => {
 })
 
 /* ---------- 原有动作语义不变 ---------- */
-/* 结束确认的标题与动作取自 components/float/snapshot 的同一份构造器：
-   标题说后果不说规定（文案即代价），与系统浮窗的内联确认逐字一致。 */
-const endSheet = computed(() => {
-  const v = view.value
-  return v ? workoutEndSheet(v) : null
-})
-const endTitle = computed(() => endSheet.value?.title ?? '')
-const endActions = computed(() =>
-  (endSheet.value?.actions ?? []).map((a) => ({ label: a.label, value: a.id, danger: a.danger })),
-)
-
-/** 主动作：暂停 / 继续 / 完成本组 —— 与快照里的 primary 同源，不在模板里再判一遍相位 */
+/** 主动作：暂停 / 继续 / 完成当组 / 跳过休息 —— 与快照里的 primary 同源，不在模板里再判一遍相位 */
 function onPrimary(): void {
   const p = barSnapshot.value?.primary
   if (!p) return
   if (p.id === 'pause') rt.pauseActive()
   else if (p.id === 'resume') rt.resumeActive()
+  else if (p.id === 'skip-rest') rt.skipRestActive()
   else rt.completeCurrentSet()
+}
+
+/** 次级动作：跳过动作；总结态只有「去保存」（= 恢复沉浸去保存） */
+function onSecondary(): void {
+  const s = barSnapshot.value?.secondary
+  if (!s) return
+  if (s.id === 'skip') rt.skipExercise()
+  else goImmersive()
 }
 
 function goImmersive(): void {
@@ -130,33 +124,6 @@ function goImmersive(): void {
   const target = rt.immersiveRoute.value
   if (target) void router.push(target)
   else openImmersive()
-}
-
-async function onEndPick(value: string): Promise<void> {
-  if (value === 'finish') {
-    if (rt.kind.value === 'run') {
-      // 跑步先冻结进总结页，距离核对 / 补填在沉浸页完成
-      rt.enterRunSummary()
-      goImmersive()
-    } else {
-      try {
-        const r = await rt.finishCourse()
-        if (r) toast(`已保存 ${r.done} 组 · 约 ${r.durationMin} 分钟 · ${r.kcal} 大卡`)
-      } catch (e) {
-        // 写库失败：会话仍 active、浮条照常，可原样再点（重试用同一 sessionId）
-        toast(e instanceof Error ? e.message : '保存失败，请重试')
-      }
-    }
-  } else if (value === 'discard') {
-    const wasRun = rt.kind.value === 'run'
-    try {
-      await rt.discardActive()
-      toast(wasRun ? '已放弃本次跑步' : '已放弃本次训练')
-    } catch (e) {
-      // 放弃失败：保留会话与浮条，供原样重试
-      toast(e instanceof Error ? e.message : '放弃失败，请重试')
-    }
-  }
 }
 
 </script>
@@ -175,7 +142,7 @@ async function onEndPick(value: string): Promise<void> {
       <WorkoutFloatContent
         :snapshot="barSnapshot"
         @primary="onPrimary"
-        @end="endOpen = true"
+        @secondary="onSecondary"
         @open="goImmersive"
         @immerse="goImmersive"
       />
@@ -184,15 +151,6 @@ async function onEndPick(value: string): Promise<void> {
     <template #blob>
       <WorkoutFloatBlob :snapshot="barSnapshot" />
     </template>
-
-    <!-- 结束（二级确认）：与沉浸页同一条结束语义 -->
-    <ActionSheet
-      :open="endOpen"
-      :title="endTitle"
-      :actions="endActions"
-      @select="void onEndPick($event)"
-      @close="endOpen = false"
-    />
   </FloatDock>
 </template>
 

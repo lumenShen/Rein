@@ -19,7 +19,6 @@ import type {
 } from '@/types'
 import type { usePomodoroStore } from '@/stores/pomodoro'
 import type { WorkoutBarView, workoutRuntime } from '@/system/workoutRuntime'
-
 /** 「打开」落地路由：专注页 / 跑步沉浸页 / 运动页（与 globalFloat 的落地逻辑同一份名字） */
 const FOCUS_ROUTE = 'focus'
 const RUN_ROUTE = '/session/run'
@@ -117,41 +116,20 @@ export function buildFocusSnapshot(pomo: ReturnType<typeof usePomodoroStore>): G
 /* ---------- 训练（课程 / 跑步） ---------- */
 
 /**
- * 训练结束确认（与 ActiveWorkoutBar 原实现逐字一致）。
- * 跑步先冻结进总结页（距离核对在沉浸页完成），课程直接落库。
+ * 主动作：跑步按相位给暂停 / 继续；课程由运行时按阶段给「完成当组 / 跳过休息」。
+ * 文案只在 workoutRuntime.view 里写一次，浮条与浮窗共用。
  */
-export function workoutEndSheet(view: WorkoutBarView): GlobalFloatEndSheet {
-  if (view.kind === 'run') {
-    return {
-      title: '现在结束会进入总结页，核对距离与时长后再保存；放弃则这次跑步不会留下记录',
-      actions: [
-        { id: 'finish', label: '结束并保存' },
-        { id: 'discard', label: '放弃本次跑步（不保存）', danger: true },
-      ],
-    }
-  }
-  return {
-    title: '现在结束会保存这次训练已完成的组数；放弃则一条记录都不留',
-    actions: [
-      { id: 'finish', label: '结束并保存' },
-      { id: 'discard', label: '放弃本次训练（不保存）', danger: true },
-    ],
-  }
-}
-
-/** 主动作：跑步按相位给暂停 / 继续，课程给「完成本组 / 完成」（与浮条按钮同一句文案） */
 function workoutPrimary(view: WorkoutBarView): GlobalFloatPrimary | null {
-  if (view.kind === 'run') {
-    if (view.running) return { id: 'pause', label: '暂停' }
-    if (view.paused) return { id: 'resume', label: '继续' }
-    return null
-  }
-  if (!view.completeLabel) return null
-  return { id: 'complete', label: view.completeLabel }
+  return view.primary ? { id: view.primary.id, label: view.primary.label } : null
 }
 
 /**
  * 训练快照；无进行中的运动时返回 null（浮条 / 浮窗都据此整条收起）。
+ *
+ * 训练浮窗只留两颗业务按钮：**完成当组 / 跳过动作**（休息时前者变「跳过休息」）。
+ * 结束不再上浮窗（end 恒为 null）：结束是低频率、需二次确认的动作，留在沉浸页
+ * 顶栏；浮窗上点信息区即可回到应用。总结态给一颗「去保存」，否则会话收尾后
+ * 用户找不到落点。
  *
  * clock 恒为 null：训练的统计行里本来就带着计时读数（跑步时长 / 休息倒数 / 计时组），
  * 主窗口每秒推一次心跳载荷，浮窗直接换 stat 即可 —— 再给一条本地秒针反而会和主窗口
@@ -170,7 +148,8 @@ export function buildWorkoutSnapshot(rt: typeof workoutRuntime): GlobalFloatSnap
     clock: null,
     blob: view.blob,
     primary: workoutPrimary(view),
-    end: view.canEnd ? { label: '结束', sheet: workoutEndSheet(view) } : null,
+    secondary: view.secondary,
+    end: null,
     // 跑步是路由沉浸页（/session/run）；课程没有路由（沉浸层已与路由解耦），回运动页
     route: rt.immersiveRoute.value ?? (view.kind === 'run' ? RUN_ROUTE : COURSE_ROUTE),
     canImmersive: true,

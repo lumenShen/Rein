@@ -764,6 +764,15 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
   function startRest(toNext: boolean): void {
     const ex = currentEx.value
     if (!ex) return endLocal()
+    // 最后一个动作的最后一组做完 = 整门课已经没有下一组可等：不再插一段空休息，
+    // 直接进总结（浮条 / 浮窗同步显示「运动结束」）。旧流程要等这段休息走完
+    // 才在 restOver 里落 summary，用户在最后一个动作结束后会白等 45~90 秒。
+    if (toNext && isLastExercise.value) {
+      restTargetIsNextSet.value = true
+      phase.value = 'summary'
+      touch()
+      return
+    }
     restTargetIsNextSet.value = !toNext
     phase.value = 'rest'
     restTotal.value = toNext && ex.restSec < 45 ? 45 : ex.restSec
@@ -1113,6 +1122,87 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     if (p === 'timed-run') stopTimer()
     markSkipped(ex.id, setIndex.value)
     startRest(setIndex.value >= effSets(ex))
+    return true
+  }
+
+  /**
+   * 跳过动作（浮条 / 浮窗的第二颗按钮）：本动作尚未完成的正式组全部记为跳过
+   * （不计入完成数与容量），立即进入下一个动作 —— 不插休息，没做就没有恢复需要。
+   *
+   * 「要跳的是哪个动作」按休息目标判：
+   *  · 同动作下一组 / 热身组间 / 临时休息 → 跳**当前动作**剩余的组；
+   *  · 本动作最后一组后的组间休息 → 休息完本来就要换动作，跳的是**下一个动作**，
+   *    进度直接落到它后面的那个动作。
+   * 已是最后一个动作（或跳掉的正是最后一个）→ 直接进总结，与「最后一组做完」同一落点。
+   */
+  function skipExercise(): boolean {
+    const p = plan.value
+    const ex = currentEx.value
+    if (!p || !ex || phase.value === 'idle' || phase.value === 'summary') return false
+    const phaseNow = phase.value
+    const wasTempRest = restIsTemp.value
+    const wasWarmupRest = restWarmup.value
+    const wasNextSet = restTargetIsNextSet.value
+    const restEndsAtNextExercise = phaseNow === 'rest' && !wasTempRest && !wasWarmupRest && !wasNextSet
+    stopTimer()
+    restIsTemp.value = false
+    restWarmup.value = false
+    restTargetIsNextSet.value = true
+
+    if (restEndsAtNextExercise) {
+      const skipped = p.exercises[exIndex.value + 1]
+      if (!skipped) {
+        phase.value = 'summary'
+        touch()
+        return true
+      }
+      for (let n = 1; n <= effSets(skipped); n++) markSkipped(skipped.id, n)
+      const targetIdx = exIndex.value + 2
+      if (targetIdx >= p.exercises.length) {
+        phase.value = 'summary'
+        touch()
+        return true
+      }
+      exIndex.value = targetIdx
+      setIndex.value = 1
+      const target = currentEx.value!
+      weight.value = weightForPhase(target, warmupPending(target))
+      syncReps(target)
+      phase.value = warmupPending(target)
+        ? 'warmup'
+        : target.kind === 'strength'
+          ? 'exercise'
+          : 'timed-ready'
+      flashOverlay(`已跳过 ${skipped.name}`, `下一个：${target.name}`)
+      touch()
+      return true
+    }
+
+    // 当前动作：从「休息完要做的那一组」起，剩余正式组全部记为跳过。
+    // 临时休息 / 热身组间停在同一组，起点就是当前组；同动作组间休息停在刚做完的那组，起点 +1。
+    const startSet =
+      phaseNow === 'rest' && wasNextSet && !wasTempRest && !wasWarmupRest
+        ? setIndex.value + 1
+        : setIndex.value
+    for (let n = startSet; n <= effSets(ex); n++) markSkipped(ex.id, n)
+    // 热身未做的组不用登记：越过该动作后 warmupSlotsFor 会自己标成 skipped
+    if (isLastExercise.value) {
+      phase.value = 'summary'
+      touch()
+      return true
+    }
+    exIndex.value++
+    setIndex.value = 1
+    const next = currentEx.value!
+    weight.value = weightForPhase(next, warmupPending(next))
+    syncReps(next)
+    phase.value = warmupPending(next)
+      ? 'warmup'
+      : next.kind === 'strength'
+        ? 'exercise'
+        : 'timed-ready'
+    flashOverlay(`已跳过 ${ex.name}`, `下一个：${next.name}`)
+    touch()
     return true
   }
 
@@ -1915,6 +2005,7 @@ export const useSessionStore = defineStore('session', () => {  const sessionId =
     exDoneCount,
     skipCurrentSet,
     skipToSet,
+    skipExercise,
     canSwapExercise,
     swapExercise,
     onOverlayDone,

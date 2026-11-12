@@ -22,6 +22,7 @@
 
 import { computed, watch } from 'vue'
 
+import { fmtKg } from '@/utils/format'
 import { router } from '@/router'
 import { sessionService } from '@/services/sessionService'
 import { trackingService } from '@/services/trackingService'
@@ -30,9 +31,21 @@ import { fmtClock, fmtPace, useRunStore } from '@/stores/run'
 import { useSessionStore } from '@/stores/session'
 import type { SessionFinishResult } from '@/stores/session'
 import { openImmersive } from '@/system/sessionImmersive'
-import { RUN_PLAN_ID } from '@/types'
+import { RUN_PLAN_ID, type PlanExercise } from '@/types'
 
 export type WorkoutKind = 'none' | 'run' | 'course'
+
+/** 浮条 / 浮窗的主动作（训练课的「跳过休息」也在这一格） */
+export interface WorkoutPrimary {
+  id: 'pause' | 'resume' | 'complete' | 'skip-rest'
+  label: string
+}
+
+/** 浮条 / 浮窗的次级动作：跳过动作 / 总结态的「去保存」 */
+export interface WorkoutSecondary {
+  id: 'skip' | 'open'
+  label: string
+}
 
 /** 悬浮运动条 / 外部控制用的统一视图（无运动时为 null） */
 export interface WorkoutBarView {
@@ -43,15 +56,20 @@ export interface WorkoutBarView {
   paused: boolean
   /** 已到总结、待保存 */
   summary: boolean
+  /**
+   * 首行：动作名（课程）/ 户外跑（跑步）。
+   * 训练课不再显示课程名 —— 浮条与浮窗要回答的是「此刻练的是哪个动作」；
+   * 休息中显示休息完要做的那个动作（同动作下一组 = 本动作名，换动作 = 下一个动作名）。
+   */
   title: string
-  /** 主统计行：跑步 = 时长 · 配速 · 里程；课程 = 动作名 · 组进度 */
+  /** 次行：课程 = 组进度 / 重量配置 / 休息目标；跑步 = 时长 · 配速 · 里程 */
   stat: string
   /** 方块泊车态的一行短统计（64px 方块内只放得下它）：跑步=时长，课程=组/休息进度 */
   blob: string
-  /** 课程主动作按钮文案（完成本组 / 完成）；无则为 null */
-  completeLabel: string | null
-  /** 允许走「结束 → 二级确认」；跑步仅暂停后为 true（必须暂停再结束） */
-  canEnd: boolean
+  /** 主动作（完成当组 / 跳过休息 / 暂停 / 继续）；无则为 null */
+  primary: WorkoutPrimary | null
+  /** 次级动作（跳过动作 / 去保存）；无则为 null */
+  secondary: WorkoutSecondary | null
 }
 
 /* ---------- 启动接管 ---------- */
@@ -124,62 +142,123 @@ const view = computed<WorkoutBarView | null>(() => {
       title: paused ? '户外跑 · 已暂停' : '户外跑',
       stat: `${fmtClock(r.elapsedSec)} · ${pace}/km · ${km} km`,
       blob: fmtClock(r.elapsedSec),
-      completeLabel: null,
-      canEnd: paused,
+      primary: r.phase === 'running' ? { id: 'pause', label: '暂停' } : paused ? { id: 'resume', label: '继续' } : null,
+      secondary: null,
     }
   }
   if (kind.value === 'course') {
     const s = useSessionStore()
     const lib = useExerciseLibStore()
     const ex = s.currentEx
+    if (!ex) return null
     // 动作名一律取库内名（改名跟随），库里查不到才回落课程条目快照
-    const exName = ex ? lib.resolveName(ex) : ''
+    const exName = lib.resolveName(ex)
     const summary = s.phase === 'summary'
+    const nextEx = s.plan?.exercises[s.exIndex + 1] ?? null
+    const nextName = nextEx ? lib.resolveName(nextEx) : ''
+    const kg = (v: number): string => `${fmtKg(v)}kg`
+    /** 热身重量配置：20/30kg（只有一组时 20kg）—— 浮条只有一行字，次数留给沉浸页的「接下来」卡片 */
+    const warmupText = (e: PlanExercise): string => {
+      const rx = s.warmupsFor(e)
+      if (!rx.length) return ''
+      return `热身 ${rx.map((w) => fmtKg(w.weightKg)).join('/')}kg`
+    }
+    /** 一次「正式组配置」：4×12 · 40kg（+ 热身重量） */
+    const strengthConfig = (e: PlanExercise, workingKg: number, withWarmup: boolean): string => {
+      const bits = [`${s.effSets(e)}×${e.reps ?? '—'}`]
+      if (workingKg > 0) bits.push(kg(workingKg))
+      const warm = withWarmup ? warmupText(e) : ''
+      if (warm) bits.push(warm)
+      return bits.join(' · ')
+    }
+    let title = exName
     let stat = ''
     let blob = ''
     switch (s.phase) {
-      case 'warmup':
-        stat = ex ? `${exName} · 激活热身 ${s.warmupDone(ex)}/${s.warmupsFor(ex).length}` : ''
+      case 'warmup': {
+        const warmups = s.warmupsFor(ex)
+        const cur = warmups[s.warmupDone(ex)]
+        stat = `激活热身 ${s.warmupDone(ex) + 1}/${warmups.length}`
+        if (cur) stat += ` · ${kg(cur.weightKg)} × ${cur.reps} 次`
         blob = '热身'
         break
+      }
       case 'exercise':
-        stat = ex ? `${exName} · 第 ${s.setIndex}/${s.effSets(ex)} 组 × ${ex.reps ?? '—'} 次` : ''
-        blob = ex ? `${s.setIndex}/${s.effSets(ex)} 组` : ''
+        stat = `第 ${s.setIndex}/${s.effSets(ex)} 组 · ${s.weight > 0 ? `${kg(s.weight)} × ` : ''}${s.reps ?? '—'} 次`
+        blob = `${s.setIndex}/${s.effSets(ex)} 组`
         break
-      case 'rest':
-        stat =
-          `休息 ${s.restLeft}s · ` +
-          (s.restWarmup
-            ? '热身中'
-            : s.restTargetIsNextSet
-              ? `第 ${s.setIndex + 1} 组`
-              : `下一个 ${s.plan?.exercises[s.exIndex + 1] ? lib.resolveName(s.plan.exercises[s.exIndex + 1]!) : ''}`)
+      case 'rest': {
+        const left = `休息 ${s.restLeft}s`
+        if (s.restWarmup) {
+          // 热身组间：休息完还是（或回到）热身，标题停在当前动作
+          const cur = s.warmupsFor(ex)[s.warmupDone(ex)]
+          title = exName
+          stat = cur ? `${left} · 热身 ${kg(cur.weightKg)}×${cur.reps}` : `${left} · 准备正式组`
+        } else if (s.restIsTemp) {
+          title = exName
+          stat = `${left} · 结束后继续第 ${s.setIndex} 组`
+        } else if (s.restTargetIsNextSet) {
+          title = exName
+          stat = `${left} · 第 ${s.setIndex + 1}/${s.effSets(ex)} 组 · ${s.weight > 0 ? `${kg(s.weight)}×` : ''}${s.reps ?? '—'}`
+        } else if (nextEx) {
+          // 休息完就换动作：标题、组数、重量与热身处方全部按**下一个动作**给
+          title = nextName
+          if (nextEx.kind === 'strength') {
+            // 下一动作还没开做，现场 weight 还是上一个动作的 —— 用它的预填/建议值
+            stat = `${left} · ${strengthConfig(nextEx, s.workingWeightFor(nextEx), true)}`
+          } else if (nextEx.kind === 'timed') {
+            stat = `${left} · ${s.effSets(nextEx)} 组 × ${nextEx.targetSec ?? '—'} 秒`
+          } else {
+            stat = `${left} · ${nextEx.durationMin ?? '—'} 分钟`
+          }
+        } else {
+          title = exName
+          stat = left
+        }
         blob = `${s.restLeft}s`
         break
+      }
       case 'timed-ready':
-        stat = ex ? `${exName} · 准备中` : ''
+        title = exName
+        stat = `准备中 · 目标 ${
+          ex.kind === 'timed' ? `${ex.targetSec ?? '—'} 秒 × ${s.effSets(ex)} 组` : `${ex.durationMin ?? '—'} 分钟`
+        }`
         blob = '准备'
         break
       case 'timed-run':
-        stat = ex ? `${exName} · ${Math.floor(s.timedElapsed)} / ${s.timedTotal}s` : ''
+        title = exName
+        stat = `已用时 ${Math.floor(s.timedElapsed)} / ${s.timedTotal}s`
         blob = `${Math.floor(s.timedElapsed)}s`
         break
       case 'summary':
+        title = '运动结束'
         stat = `已完成 ${s.doneCount}/${s.totalCount} 组 · 待保存`
         blob = `${s.doneCount} 组`
         break
     }
+    const primary: WorkoutPrimary | null =
+      s.phase === 'warmup'
+        ? { id: 'complete', label: '完成热身组' }
+        : s.phase === 'exercise'
+          ? { id: 'complete', label: '完成当组' }
+          : s.phase === 'timed-run'
+            ? { id: 'complete', label: '完成' }
+            : s.phase === 'rest'
+              ? {
+                  id: 'skip-rest',
+                  label: s.restIsTemp ? '继续训练' : s.restWarmup || s.restTargetIsNextSet ? '跳过休息' : '开始下一动作',
+                }
+              : null
     return {
       kind: 'course',
       running: !summary,
       paused: false,
       summary,
-      title: s.plan?.name ?? '训练课',
+      title,
       stat,
       blob,
-      completeLabel:
-        s.phase === 'exercise' ? '完成本组' : s.phase === 'timed-run' ? '完成' : null,
-      canEnd: !summary,
+      primary,
+      secondary: summary ? { id: 'open', label: '去保存' } : { id: 'skip', label: '跳过动作' },
     }
   }
   return null
@@ -195,12 +274,25 @@ function resumeActive(): void {
   if (kind.value === 'run') useRunStore().resume()
 }
 
-/** 课程主动作：做组中 = 完成本组（与沉浸页坞内一致）；计时中 = 完成计时 */
+/** 课程主动作：热身中 = 完成热身组；做组中 = 完成当组（与沉浸页坞内一致）；计时中 = 完成计时 */
 function completeCurrentSet(): void {
   if (kind.value !== 'course') return
   const s = useSessionStore()
-  if (s.phase === 'exercise') s.completeSet()
+  if (s.phase === 'warmup') s.completeWarmup()
+  else if (s.phase === 'exercise') s.completeSet()
   else if (s.phase === 'timed-run') s.finishTimed()
+}
+
+/** 跳过休息（浮条第二态的主按钮）：临时休息 = 继续训练，组间休息 = 直接开下一组 / 下一动作 */
+function skipRestActive(): void {
+  if (kind.value !== 'course') return
+  useSessionStore().skipRest()
+}
+
+/** 跳过动作（浮条次级按钮）：剩余组记为未做，直接进下一个动作；最后一个动作则收尾 */
+function skipExercise(): void {
+  if (kind.value !== 'course') return
+  useSessionStore().skipExercise()
 }
 
 /** 跑步「结束并保存」：冻结计时进总结页（距离补填在沉浸页完成） */
@@ -550,6 +642,8 @@ export const workoutRuntime = {
   pauseActive,
   resumeActive,
   completeCurrentSet,
+  skipRestActive,
+  skipExercise,
   enterRunSummary,
   finishCourse,
   discardActive,

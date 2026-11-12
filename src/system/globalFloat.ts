@@ -143,7 +143,6 @@ function buildPayload(): GlobalFloatStatePayload | null {
   }
 }
 
-/** 此刻应不应该有系统浮窗 */
 /** 持久形态 + 当前会话种类 → 窗口形状（专注卡面 / 训练条 / blob） */
 function effectiveFloatShape(snapshot = currentSnapshot.value): GlobalFloatWindowShape {
   if (floatForm.value === 'blob') return 'blob'
@@ -342,6 +341,12 @@ async function handleAction(raw: GlobalFloatAction | null | undefined): Promise<
       break
     case 'complete':
       workoutRuntime.completeCurrentSet()
+      break
+    case 'skip-rest':
+      workoutRuntime.skipRestActive()
+      break
+    case 'skip':
+      workoutRuntime.skipExercise()
       break
     case 'skip-phase':
       if (snapshot?.kind === 'focus') await pomo?.endPhase()

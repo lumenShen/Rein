@@ -475,6 +475,8 @@ class GlobalFloatService : Service() {
     sb.append(form).append('|').append(confirming).append('|').append(kind).append('|').append(tone)
     val primary = snap.optJSONObject("primary")
     sb.append("|p=").append(primary?.optString("id")).append(':').append(primary?.optString("label"))
+    val secondary = snap.optJSONObject("secondary")
+    sb.append("|s=").append(secondary?.optString("id")).append(':').append(secondary?.optString("label"))
     val end = snap.optJSONObject("end")
     sb.append("|e=").append(end?.optString("label"))
     val actions = end?.optJSONObject("sheet")?.optJSONArray("actions")
@@ -638,6 +640,21 @@ class GlobalFloatService : Service() {
         )
       }
     }
+    // 训练条的次级动作（跳过动作 / 总结态去保存）：训练浮窗只有这两颗业务按钮，
+    // 结束与「打开」都不在上面 —— 结束在沉浸页顶栏，点信息区即可回到应用。
+    val secondary = snap.optJSONObject("secondary")
+    if (secondary != null) {
+      val id = secondary.optString("id")
+      if (id.isNotEmpty()) {
+        val style = if (snap.optString("tone") == "done") Style.MAIN else Style.PLAIN
+        acts.addView(
+          makeButton(secondary.optString("label").ifEmpty { "跳过动作" }, style) {
+            emit(actionJson(id))
+          },
+          buttonLp(),
+        )
+      }
+    }
     val end = snap.optJSONObject("end")
     if (end != null && end.optJSONObject("sheet") != null) {
       acts.addView(
@@ -645,7 +662,10 @@ class GlobalFloatService : Service() {
         buttonLp(),
       )
     }
-    acts.addView(makeButton("打开", Style.PLAIN) { openApp(actionJson("open")) }, buttonLp())
+    // 专注浮窗保留「打开」：它没有可以点的沉浸层入口；训练条的打开 = 点信息区
+    if (snap.optString("kind") == "focus") {
+      acts.addView(makeButton("打开", Style.PLAIN) { openApp(actionJson("open")) }, buttonLp())
+    }
     // 关闭：后台没有别的收起入口（通知点开只是回应用）。语义由主窗口解释 —— 本次离开期
     // 不再弹，并停服务；回前台后复位，下次离开照常出现（§3.1）。
     acts.addView(

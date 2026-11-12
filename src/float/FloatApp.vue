@@ -8,7 +8,6 @@ import GlassFilter from '@/components/common/GlassFilter.vue'
 import FloatTitleBar from '@/components/float/FloatTitleBar.vue'
 import FocusFloatBlob from '@/components/float/FocusFloatBlob.vue'
 import FocusFloatCard from '@/components/float/FocusFloatCard.vue'
-import FocusFloatContent from '@/components/float/FocusFloatContent.vue'
 import WorkoutFloatBlob from '@/components/float/WorkoutFloatBlob.vue'
 import WorkoutFloatContent from '@/components/float/WorkoutFloatContent.vue'
 import { useFloatDock } from '@/composables/useFloatDock'
@@ -138,7 +137,6 @@ const {
   parkToSide,
   expandToBar,
   redock,
-  openConfirm,
   closeConfirm,
 } = useFloatDock({
   form,
@@ -246,11 +244,11 @@ function onPrimary(): void {
   sendAction({ action: primary.id })
 }
 
-/** 结束按钮：进入内联确认，窗口临时长高（底边锚定由 useFloatDock 落实，不发 form 动作） */
-function startEnd(): void {
-  if (!displaySnapshot.value?.end || confirmOpen.value) return
-  confirmOpen.value = true
-  void openConfirm()
+/** 训练条的第二颗按钮：跳过动作 / 总结态去保存（专注浮窗没有次级动作） */
+function onSecondary(): void {
+  const secondary = displaySnapshot.value?.secondary
+  if (!secondary) return
+  sendAction({ action: secondary.id === 'skip' ? 'skip' : 'open' })
 }
 
 function cancelEnd(): void {
@@ -470,19 +468,11 @@ onBeforeUnmount(() => {
         class="float-stage"
       >
         <div class="float-row">
-          <FocusFloatContent
-            v-if="focusSnapshot"
-            :snapshot="focusSnapshot"
-            @primary="onPrimary"
-            @end="startEnd"
-            @open="onOpen"
-            @immerse="onImmerse"
-          />
           <WorkoutFloatContent
-            v-else-if="workoutSnapshot"
+            v-if="workoutSnapshot"
             :snapshot="workoutSnapshot"
             @primary="onPrimary"
-            @end="startEnd"
+            @secondary="onSecondary"
             @open="onOpen"
             @immerse="onImmerse"
           />

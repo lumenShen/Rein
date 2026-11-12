@@ -31,9 +31,19 @@ export interface GlobalFloatEndSheet {
   actions: GlobalFloatEndAction[]
 }
 
-/** 主动作：暂停 / 继续 / 完成本组 */
+/** 主动作：暂停 / 继续 / 完成当组 / 跳过休息 */
 export interface GlobalFloatPrimary {
-  id: 'pause' | 'resume' | 'complete'
+  id: 'pause' | 'resume' | 'complete' | 'skip-rest'
+  label: string
+}
+
+/**
+ * 次级动作：训练条的「跳过动作」与总结态的「去保存」。
+ * 训练浮窗只给两颗业务按钮（完成当组 / 跳过动作），结束与打开不再上浮窗 ——
+ * 结束留在沉浸页顶栏，点信息区即可回到应用。
+ */
+export interface GlobalFloatSecondary {
+  id: 'skip' | 'open'
   label: string
 }
 
@@ -63,6 +73,9 @@ export interface GlobalFloatSnapshot {
    */
   blob?: string
   primary: GlobalFloatPrimary | null
+  /** 训练条的次级动作（跳过动作 / 去保存）；专注浮窗为 null */
+  secondary?: GlobalFloatSecondary | null
+  /** 结束确认：专注浮窗保留内联结束；训练浮窗不再提供结束（end 恒为 null） */
   end: { label: string; sheet: GlobalFloatEndSheet } | null
   /** 「打开」落地路由名（专注页 / 运动页） */
   route: string
@@ -127,6 +140,8 @@ export type GlobalFloatActionName =
   | 'pause'
   | 'resume'
   | 'complete'
+  | 'skip-rest'
+  | 'skip'
   | 'skip-phase'
   | 'end'
   | 'open'

@@ -7,19 +7,20 @@ import type { GlobalFloatSnapshot } from '@/types'
 /**
  * 训练浮条内容 · 程序内浮条与系统浮窗共用的唯一一份。
  *
- * 两行版：状态点 + title / stat（动作名 / 配速里程等）。DOM 结构与类名逐字沿用
- * ActiveWorkoutBar 原来的 #bar 插槽，样式也一起搬过来 —— 浮窗是另一个 webview，
- * 没有 Pinia / router，能共享的只有这份模板与 CSS。
+ * 两行版：状态点 + title / stat（动作名 / 组与重量配置 / 休息目标）。
+ * 训练浮条只有两颗业务按钮：**完成当组（或跳过休息）** 与 **跳过动作** ——
+ * 结束、打开都不再占浮条：结束在沉浸页顶栏做二次确认，点信息区即可回到应用。
+ * 总结态没有训练动作可做，只留一颗「去保存」。
  *
  * emits：
- *  · primary —— 暂停 / 继续 / 完成本组（由快照 primary.id 决定）
- *  · end     —— 打开结束确认
- *  · open    —— 点信息区 / 总结态的「去保存」（使用方决定落地：程序内是恢复沉浸，
- *               浮窗是把应用叫回来并落到对应页面）
- *  · immerse —— 展开图标（恢复沉浸）
+ *  · primary   —— 完成当组 / 跳过休息 / 暂停 / 继续（由快照 primary.id 决定）
+ *  · secondary —— 跳过动作 / 总结态去保存（由快照 secondary.id 决定）
+ *  · open      —— 点信息区（使用方决定落地：程序内是恢复沉浸，
+ *                 浮窗是把应用叫回来并落到对应页面）
+ *  · immerse   —— 展开图标（恢复沉浸）
  */
 const props = defineProps<{ snapshot: GlobalFloatSnapshot }>()
-const emit = defineEmits<{ primary: []; end: []; open: []; immerse: [] }>()
+const emit = defineEmits<{ primary: []; secondary: []; open: []; immerse: [] }>()
 
 /** tone → 原浮条的点类名：live（在跑）/ pause（暂停）/ done（待保存）；break 在训练里不出现，兜底 live */
 const dotClass = computed(() => {
@@ -34,8 +35,7 @@ const dotClass = computed(() => {
 })
 
 const primary = computed(() => props.snapshot.primary)
-/** 总结态没有主动作，只有「去保存」—— 与原来 barView.summary 那一颗同义 */
-const summary = computed(() => props.snapshot.tone === 'done')
+const secondary = computed(() => props.snapshot.secondary ?? null)
 </script>
 
 <template>
@@ -60,20 +60,13 @@ const summary = computed(() => props.snapshot.tone === 'done')
       {{ primary.label }}
     </button>
     <button
-      v-if="summary"
-      class="abtn main"
+      v-if="secondary"
+      class="abtn"
+      :class="snapshot.tone === 'done' ? 'main' : 'alt'"
       type="button"
-      @click="emit('open')"
+      @click="emit('secondary')"
     >
-      去保存
-    </button>
-    <button
-      v-if="snapshot.end"
-      class="abtn end"
-      type="button"
-      @click="emit('end')"
-    >
-      {{ snapshot.end.label }}
+      {{ secondary.label }}
     </button>
     <button
       v-if="snapshot.canImmersive"
@@ -182,10 +175,10 @@ const summary = computed(() => props.snapshot.tone === 'done')
   color: var(--bg);
 }
 
-/* soft 底 + strong 字（tokens.css:163-168）：结束是危险动作，底与字都走令牌 */
-.abtn.end {
-  color: var(--danger-strong);
-  background: var(--danger-soft);
+/* 次级动作（跳过动作）：中性底，不与「完成当组」抢主行动的位置 */
+.abtn.alt {
+  background: var(--surface-2);
+  color: var(--text-1);
 }
 
 .abtn.ico {
