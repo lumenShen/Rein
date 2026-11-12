@@ -54,7 +54,7 @@ import {
 import { setDurationSec } from '@/config/exerciseGuide'
 import ExerciseGuideBlock from '@/components/exercise/ExerciseGuideBlock.vue'
 import { fmtKg } from '@/utils/strength'
-import type { SwapCandidate } from '@/types'
+import type { PlanExercise, SwapCandidate } from '@/types'
 
 /**
  * 运动模式 · 训练课沉浸层（底部坞 × 组格矩阵）：覆盖整个窗口（含底部导航栏）。
@@ -405,8 +405,61 @@ const restMeta = computed(() => {
     if (s.weight > 0) bits.push(`${fmtKg(s.weight)} kg`)
     return { lead: `第 ${s.setIndex + 1} 组`, rest: bits.join(' · ') }
   }
-  return { lead: '', rest: `下一个 · ${nextExName.value}` }
+  // 名称与重量配置交给下面的「接下来」卡片：休息完就换动作时，那里要给
+  // 下一个动作的完整处方（含热身），这一行只交代「马上要换动作」这件事。
+  return { lead: '', rest: '下一个动作' }
 })
+
+/**
+ * 休息屏的「接下来」动作：临时休息 / 热身组间 / 同动作下一组仍是当前动作；
+ * 组间休息结束要换动作时，才是下一个动作。
+ *
+ * 为什么要单独算：动作要点卡片原先把「刚做完那个动作」的讲解留在屏上 ——
+ * 可组间休息正是抬头看下一步怎么做的时候。休息完就换动作时，屏上却还是
+ * 上一个动作的讲解，用户会照着错的要点准备。动作名与处方（含热身）也一起跟随。
+ */
+const restUpcomingEx = computed<PlanExercise | null>(() => {
+  if (s.restIsTemp || s.restWarmup || s.restTargetIsNextSet) return s.currentEx
+  return nextEx.value
+})
+
+const restUpcomingName = computed(() =>
+  restUpcomingEx.value ? lib.resolveName(restUpcomingEx.value) : '',
+)
+
+const restUpcomingGuide = computed(() =>
+  restUpcomingEx.value ? lib.guideOf(restUpcomingEx.value) : null,
+)
+
+const restUpcomingTips = computed(() => (restUpcomingEx.value ? lib.tipsOf(restUpcomingEx.value) : ''))
+
+/** 「接下来」卡片的处方摘要：组数 × 次数 · 重量 · 热身（含热身组的重量与次数） */
+const restUpcomingRx = computed(() => {
+  const e = restUpcomingEx.value
+  if (!e) return ''
+  if (e.kind === 'timed') return `${s.effSets(e)} 组 × ${e.targetSec ?? '—'} 秒`
+  if (e.kind === 'cardio') return e.durationMin != null ? `${e.durationMin} 分钟` : ''
+  const sameEx = e.id === s.currentEx?.id
+  // 热身组间：下一组仍是小重量激活，先把它的处方给出来
+  if (sameEx && s.restWarmup) {
+    const nextWarm = s.warmupsFor(e)[s.warmupDone(e)]
+    if (nextWarm) return `下一组热身 ${fmtKg(nextWarm.weightKg)} kg × ${nextWarm.reps} 次`
+  }
+  // 同动作下一组用现场重量（用户可能改过）；下一个动作用它的预填 / 建议重量
+  const working = sameEx ? s.weight : s.workingWeightFor(e)
+  const bits = [`${s.effSets(e)} 组`, `${e.reps ?? '—'} 次`]
+  if (working > 0) bits.push(`${fmtKg(working)} kg`)
+  if (!sameEx) {
+    const warm = s.warmupsFor(e)
+    if (warm.length) bits.push(`热身 ${warm.map((w) => `${fmtKg(w.weightKg)}×${w.reps}`).join(' / ')}`)
+  }
+  return bits.join(' · ')
+})
+
+/** 休息完就换动作（组间休息的下一目标是新动作）：才需要单独一块「接下来」 */
+const restSwitchesExercise = computed(
+  () => s.phase === 'rest' && !s.restIsTemp && !s.restWarmup && !s.restTargetIsNextSet && !!nextEx.value,
+)
 
 const restSheetTitle = computed(() => `还要休息多久？剩余 ${s.restLeft} 秒`)
 
@@ -1476,10 +1529,25 @@ function trapFocus(e: KeyboardEvent): void {
               @open="hrOpen = true"
             />
 
-            <!-- 组间休息正是「抬头看下一步怎么做」的时机：把刚做完那个动作的要点留在屏上 -->
-            <div v-if="curGuide" class="blockcard">
-              <h3>{{ displayName }} · 动作要点</h3>
-              <ExerciseGuideBlock :guide="curGuide" density="compact" />
+            <!-- 通关目标与处方：组间休息结束就换动作时，把下一个动作的组数 / 次数 /
+                 重量 / 热身一次给全；同动作下一组与热身组间也给一条简短处方。 -->
+            <div v-if="restUpcomingEx && (restSwitchesExercise || s.restWarmup)" class="blockcard">
+              <h3>接下来</h3>
+              <p class="nextrow">
+                <b>{{ restUpcomingName }}</b>
+                <span>{{ restUpcomingRx }}</span>
+              </p>
+            </div>
+
+            <!-- 组间休息正是「抬头看下一步怎么做」的时机：讲解必须跟着**休息后要做的那一个动作**，
+                 否则休息完换动作时屏上还留着上一个动作的要点（照着错的要点准备最糟）。 -->
+            <div v-if="restUpcomingGuide" class="blockcard">
+              <h3>{{ restUpcomingName }} · 动作要点</h3>
+              <ExerciseGuideBlock :guide="restUpcomingGuide" density="compact" />
+            </div>
+            <div v-else-if="restUpcomingTips" class="blockcard">
+              <h3>{{ restUpcomingName }} · 动作要点</h3>
+              <p>{{ restUpcomingTips }}</p>
             </div>
           </div>
 
