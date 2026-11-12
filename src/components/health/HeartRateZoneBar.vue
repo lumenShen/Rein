@@ -55,11 +55,11 @@ const showMarker = computed(() => props.live && progress.value != null)
         :style="{ background: `var(${z.colorVar})` }"
       />
     </span>
-    <!-- 圆角三角：三条边都收圆（1.566/5.234 是各顶点向内 2px 的弧起点），
-         尖顶正好落在条的下沿。 -->
-    <svg v-if="showMarker" class="hzb-marker" viewBox="0 0 12 7.6" aria-hidden="true">
+    <!-- 圆角三角：三条边都收圆（各顶点向内 2.6px 的弧起点），尖顶正好落在条的下沿。
+         路径上移 1.018px，让二次曲线的顶点（控制点的一半）压在 y=0 上。 -->
+    <svg v-if="showMarker" class="hzb-marker" viewBox="0 0 12 6" aria-hidden="true">
       <path
-        d="M4.756 1.566Q6 0 7.244 1.566L10.156 5.234Q11.4 6.8 9.4 6.8L2.6 6.8Q0.6 6.8 1.844 5.234Z"
+        d="M4.383 1.018Q6 -1.018 7.617 1.018L9.783 3.746Q11.4 5.782 8.8 5.782L3.2 5.782Q0.6 5.782 2.217 3.746Z"
       />
     </svg>
   </span>
@@ -73,15 +73,16 @@ const showMarker = computed(() => props.live && progress.value != null)
   height: 10px;
   /* cqw 的基准：三角与 mask 缺口都按 --p 换算成这条的真实像素宽度 */
   container-type: inline-size;
-  /* 缺口尺寸：标准档 18×12（三角 12 宽 + 两侧各 3、深度 = 横长一半 6） */
-  --hole-w: 18px;
-  --hole-h: 12px;
+  /* 缺口尺寸：标准档 20×5 —— 三角轮廓真正外扩 4.5px 后的圆角形状
+     （底边最宽 ~11.5px、最深 4.5px），比旧的 18×6 硬 V 更贴、更像「按进去」 */
+  --hole-w: 20px;
+  --hole-h: 5px;
 }
 
 .hzb.compact {
   height: 4px;
   --hole-w: 12px;
-  --hole-h: 8px;
+  --hole-h: 3px;
 }
 
 .hzb-track {
@@ -106,16 +107,19 @@ const showMarker = computed(() => props.live && progress.value != null)
   opacity: 0.35;
 }
 
-/* 有实时样本才挖缺口：两层 mask 用 exclude 合成，三角形区域从条带上消失。
-   第二层是 18×12 的黑底矩形 + 透明圆角三角（三角宽 18 = 指示器 12 + 两侧各 3，
-   可见深度 6 = 指示器横长的一半；底边贴住条的下沿）—— 也就是「指示器外轮廓 +
-   横长 1/2」的缺口图。位置用长度（cqw）而不是百分比 —— mask-position 的百分比
-   会按「剩余空间」对齐，洞会随 --p 偏移；长度是绝对位移，洞心始终压在三角上。 */
+/* 有实时样本才挖缺口：两层 mask 用 exclude 合成。第二层是**透明底 + 黑色洞形**
+   （洞口 = 三角轮廓按 4.5px 均匀外扩后的圆角形状，三条边各外推 4.5、三个角
+   以 4.5 为半径倒圆），exclude 只挖黑形本身；窗口只留条带高度里的那 5px，
+   可见缺口是「底边 ~11.5px 宽、最深 4.5px」的一小口。
+   ⚠ 第二层**不能**画成「黑底矩形 + 透明洞」—— exclude 会把整块图像区域一起
+   挖掉（实测表现为一整段全高方缺口，像条带被切断）。位置用长度（cqw）而不是
+   百分比 —— mask-position 的百分比会按「剩余空间」对齐，洞会随 --p 偏移；
+   长度是绝对位移，洞心始终压在三角上。 */
 .hzb:not(.dim) .hzb-track {
   -webkit-mask-image: linear-gradient(#000, #000),
-    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'18'%20height%3D'12'%20viewBox%3D'0%200%2018%2012'%3E%3Cpath%20fill%3D'%23000'%20fill-rule%3D'evenodd'%20d%3D'M0%200h18v12H0zM7.33%207.1Q9%206%2010.67%207.1L16.03%2010.6Q17.7%2011.7%2015.7%2011.7H2.3Q0.3%2011.7%201.97%2010.6Z'%2F%3E%3C%2Fsvg%3E");
+    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'20'%20height%3D'5'%20viewBox%3D'0%200%2020%205'%3E%3Cpath%20fill%3D'%23000'%20d%3D'M6.47%202.21A4.5%204.5%200%200%201%2013.53%202.21L19.53%209.81A4.5%204.5%200%200%201%2016%2017.1L4%2017.1A4.5%204.5%200%200%201%20.47%209.81Z'%2F%3E%3C%2Fsvg%3E");
   mask-image: linear-gradient(#000, #000),
-    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'18'%20height%3D'12'%20viewBox%3D'0%200%2018%2012'%3E%3Cpath%20fill%3D'%23000'%20fill-rule%3D'evenodd'%20d%3D'M0%200h18v12H0zM7.33%207.1Q9%206%2010.67%207.1L16.03%2010.6Q17.7%2011.7%2015.7%2011.7H2.3Q0.3%2011.7%201.97%2010.6Z'%2F%3E%3C%2Fsvg%3E");
+    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'20'%20height%3D'5'%20viewBox%3D'0%200%2020%205'%3E%3Cpath%20fill%3D'%23000'%20d%3D'M6.47%202.21A4.5%204.5%200%200%201%2013.53%202.21L19.53%209.81A4.5%204.5%200%200%201%2016%2017.1L4%2017.1A4.5%204.5%200%200%201%20.47%209.81Z'%2F%3E%3C%2Fsvg%3E");
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-size: 100% 100%, var(--hole-w) var(--hole-h);
@@ -134,9 +138,9 @@ const showMarker = computed(() => props.live && progress.value != null)
 .hzb-marker {
   position: absolute;
   left: 0;
-  bottom: -7.6px;
+  bottom: -6px;
   width: 12px;
-  height: 7.6px;
+  height: 6px;
   margin-left: -6px;
   color: var(--text-1);
   fill: currentColor;
@@ -146,9 +150,9 @@ const showMarker = computed(() => props.live && progress.value != null)
 }
 
 .hzb.compact .hzb-marker {
-  bottom: -5.07px;
+  bottom: -4px;
   width: 8px;
-  height: 5.07px;
+  height: 4px;
   margin-left: -4px;
 }
 </style>
