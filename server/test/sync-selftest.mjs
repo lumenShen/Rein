@@ -140,6 +140,31 @@ async function main() {
   const weirdRoom = await api('GET', '/api/v1/sync/relay/zz')
   check('坏房间号被拒', weirdRoom.status === 400, JSON.stringify(weirdRoom.json))
 
+  // 残留清理：上一轮的帧还躺在环形缓存里，新会话第一帧捎带 resetBefore 清掉它们，
+  // 但刚投进来（30 秒内）的对端握手帧必须毫发无损。
+  const resetRoom = 'd'.repeat(32)
+  await api('POST', `/api/v1/sync/relay/${resetRoom}`, { frames: ['c3RhbGUtMQ=='] })
+  // 服务端按投递时刻（at）判定新旧；测试里把「上一轮的帧」直接拨回一分钟前。
+  sync.rooms.get(resetRoom).frames[0].at = Date.now() - 60_000
+  await api('POST', `/api/v1/sync/relay/${resetRoom}`, { frames: ['ZmFrZS0x'] })
+  const stale = await api('POST', `/api/v1/sync/relay/${resetRoom}`, {
+    frames: ['aGVsbG8='],
+    resetBefore: Date.now() - 30_000,
+  })
+  const afterReset = await api('GET', `/api/v1/sync/relay/${resetRoom}?after=0`)
+  check(
+    'resetBefore 清掉旧帧但留下新帧',
+    stale.status === 200 && afterReset.json?.frames?.length === 2 && afterReset.json.frames[0].data === 'ZmFrZS0x',
+    JSON.stringify(afterReset.json),
+  )
+  const resetOnly = await api('POST', `/api/v1/sync/relay/${resetRoom}`, { resetBefore: Date.now() })
+  const afterResetOnly = await api('GET', `/api/v1/sync/relay/${resetRoom}?after=0`)
+  check(
+    '只带 resetBefore 的空投递也能清房',
+    resetOnly.status === 200 && afterResetOnly.json?.frames?.length === 0,
+    JSON.stringify(afterResetOnly.json),
+  )
+
   // ---------- UDP 会合 ----------
   process.stdout.write('\nUDP 会合\n')
   const room2 = 'c'.repeat(32)

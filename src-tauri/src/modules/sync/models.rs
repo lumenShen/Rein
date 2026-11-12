@@ -1,6 +1,11 @@
 //! 同步域的数据结构（跨 IPC 的那些）。
 
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+
+use crate::error::Result;
+
+use super::{meta_get, meta_set};
 
 /// 一台已配对的设备。`path` 是上次同步走成的传输路径（`lan` / `punch` / `relay`）——
 /// 界面上如实显示它，用户才看得到「打洞到底通没通」。
@@ -64,10 +69,10 @@ pub struct SyncStatus {
 
 /// 同步设置（存 `sync_meta`，与业务数据一起同步没有意义，因此只在本机）。
 ///
-/// **尚未接线**：`sync_set_settings` 命令与前端设置卡都还没做（前端 `syncService` 里也没有这一项），
-/// 所以这份数据形状目前只有定义。留着是为了让「自动同步间隔 / 蜂窝媒体 / 自动落中继」
-/// 这三个已定下的语义不丢；实现那条命令时它就该被构造出来。
-#[allow(dead_code)]
+/// 「打开应用时自动同步」由 `sync/auto.rs` 的常驻线程读取；间隔是**两次自动同步之间
+/// 的最小时间**，不是精确的定时器（线程每 30 秒看一次表，省电，也不跟手动同步抢）。
+/// 目前实际生效的是 `auto` 与 `interval_min`；`media_over_cellular` / `auto_over_relay`
+/// 是给媒体与中继策略预留的字段，默认值就是当前行为（大块照传、打洞不通落中继）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SyncSettings {
@@ -92,8 +97,7 @@ impl Default for SyncSettings {
     }
 }
 
-/// `sync_set_settings` 的入参：只带要改的字段（同上，命令尚未实现）。
-#[allow(dead_code)]
+/// `sync_set_settings` 的入参：只带要改的字段。
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SyncSettingsPatch {
@@ -101,4 +105,93 @@ pub struct SyncSettingsPatch {
     pub interval_min: Option<i64>,
     pub media_over_cellular: Option<bool>,
     pub auto_over_relay: Option<bool>,
+}
+
+/// 设置落在 `sync_meta` 的这把键下（整个对象一个 JSON）。
+const K_SETTINGS: &str = "settings";
+
+/// 自动同步的最小间隔上限：一天。再长就不叫「自动」了，而失控的 0 / 负数会让线程
+/// 每 30 秒都跑一轮同步 —— 在入口处夹住，别让坏值变成网络风暴。
+const MAX_INTERVAL_MIN: i64 = 24 * 60;
+
+impl SyncSettings {
+    /// 读设置；没存过 / 存坏了都用默认值（默认 `auto = true`，与用户预期一致）。
+    pub fn load(conn: &Connection) -> Self {
+        meta_get(conn, K_SETTINGS)
+            .and_then(|raw| serde_json::from_str::<Self>(&raw).ok())
+            .unwrap_or_default()
+    }
+
+    /// 合并补丁并落库，返回合并后的完整设置（前端拿它对齐开关状态）。
+    pub fn apply(conn: &Connection, patch: SyncSettingsPatch) -> Result<Self> {
+        let mut next = Self::load(conn);
+        if let Some(v) = patch.auto {
+            next.auto = v;
+        }
+        if let Some(v) = patch.interval_min {
+            next.interval_min = v.clamp(1, MAX_INTERVAL_MIN);
+        }
+        if let Some(v) = patch.media_over_cellular {
+            next.media_over_cellular = v;
+        }
+        if let Some(v) = patch.auto_over_relay {
+            next.auto_over_relay = v;
+        }
+        meta_set(conn, K_SETTINGS, &serde_json::to_string(&next)?)?;
+        Ok(next)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::migrate_for_test;
+
+    fn conn() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate_for_test(&conn).unwrap();
+        conn
+    }
+
+    /// 默认值得是「启动就自动同步」：没存过设置的用户升级上来就生效。
+    #[test]
+    fn settings_default_to_auto_sync() {
+        let s = SyncSettings::load(&conn());
+        assert!(s.auto);
+        assert_eq!(s.interval_min, 15);
+    }
+
+    /// 补丁只改传了的字段；间隔在入口处夹到 1 分钟..24 小时，坏值不会变成每次 30 秒的网络风暴。
+    #[test]
+    fn settings_patch_only_touches_given_fields_and_clamps_interval() {
+        let conn = conn();
+        let s = SyncSettings::apply(
+            &conn,
+            SyncSettingsPatch {
+                auto: Some(false),
+                interval_min: Some(0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(!s.auto);
+        assert_eq!(s.interval_min, 1);
+        assert!(s.auto_over_relay, "没传的字段保持默认");
+
+        let s = SyncSettings::apply(
+            &conn,
+            SyncSettingsPatch {
+                interval_min: Some(99_999),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(s.interval_min, MAX_INTERVAL_MIN);
+        assert!(!s.auto, "第二次补丁没提 auto，不该把它翻回默认值");
+
+        // 落库的是整个对象：重新 load 与返回的一致
+        let again = SyncSettings::load(&conn);
+        assert_eq!(again.interval_min, MAX_INTERVAL_MIN);
+        assert!(!again.auto);
+    }
 }

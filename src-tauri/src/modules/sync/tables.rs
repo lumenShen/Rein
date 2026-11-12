@@ -165,6 +165,9 @@ pub const TABLES: &[TableSpec] = &[
         None,
     ),
     // ---- 依赖上一层的 ----
+    // 单位只跟着**自建食物**走：内置食物的单位是种子数据，两端各自播种。
+    // 不过滤的话，两端把同一份内置单位当成两条对象互换，应用到对端时
+    // 撞 `UNIQUE(food_id, name)`，整批同步当场失败。
     t(
         "food_units",
         Pk::Local,
@@ -176,7 +179,7 @@ pub const TABLES: &[TableSpec] = &[
         None,
         &[],
         &[],
-        None,
+        Some("food_id IN (SELECT id FROM foods WHERE is_custom = 1)"),
     ),
     t(
         "meal_logs",

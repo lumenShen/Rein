@@ -158,6 +158,16 @@ fn apply_one(conn: &Connection, store: &BlobStore, obj: &RemoteObject) -> Result
         None => return Ok(Outcome::Skipped),
     };
 
+    // HLC 的「收到」半场：本地时钟可能比对端慢，应用过的最大 hlc 必须成为下一次
+    // 本地改动的下界。少了这一步，同一毫秒内的本地新改动会拿到与远端相同的 hlc，
+    // LWW 只能按设备号决胜负 —— 设备号小的那台会把真正较新的本地改动判输。
+    let last_hlc: i64 = super::meta_get(conn, "last_hlc")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    if obj.hlc > last_hlc {
+        super::meta_set(conn, "last_hlc", &obj.hlc.to_string())?;
+    }
+
     let local: Option<(i64, String, i64, String)> = conn
         .query_row(
             "SELECT hlc, device, deleted, blob FROM sync_objects WHERE uuid = ?1",

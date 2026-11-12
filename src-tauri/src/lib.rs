@@ -86,6 +86,9 @@ pub fn run() {
             let gateway = std::sync::Arc::new(modules::gateway::auth::GatewayHub::new());
             sync_hub.set_feed(std::sync::Arc::clone(&gateway.feed));
             app.manage(sync_hub);
+            // 自动同步：启动即拉一轮，之后按间隔兜底（设置与礼让规则见 sync/auto.rs）。
+            // 必须在 manage(sync_hub) 之后 —— 会话线程要用它算 blob 目录。
+            modules::sync::auto::start(app.handle().clone());
             // 服务默认不启动：只有设置里开过（app_meta `gateway.enabled=1`）才在启动时监听。
             {
                 let st = app.state::<AppState>();
@@ -314,6 +317,8 @@ pub fn run() {
             // sync（多设备同步：设备身份 / 状态 / 配对 / 传输）
             modules::sync::commands::sync_status,
             modules::sync::commands::sync_set_device_name,
+            modules::sync::commands::sync_settings_get,
+            modules::sync::commands::sync_set_settings,
             modules::sync::commands::sync_pair_start,
             modules::sync::commands::sync_pair_poll,
             modules::sync::commands::sync_pair_claim,

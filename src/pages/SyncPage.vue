@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { listen } from '@tauri-apps/api/event'
-import { ChevronRight, Fingerprint, KeyRound, Link2, LogIn, Package, Smartphone, Zap } from 'lucide-vue-next'
+import { ChevronRight, Fingerprint, KeyRound, Link2, LogIn, Package, RefreshCw, Smartphone, Zap } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import PillChip from '@/components/common/PillChip.vue'
+import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { useToast } from '@/composables/useToast'
 import { syncService } from '@/services/syncService'
 import { fmtRelativeTime, humanBytes } from '@/utils/format'
-import type { PairStatus, SyncPeerInfo, SyncRunResult, SyncRunStats, SyncStatus } from '@/types'
+import type {
+  PairStatus,
+  SyncPeerInfo,
+  SyncRunResult,
+  SyncRunStats,
+  SyncSettings,
+  SyncStatus,
+} from '@/types'
 
 /**
  * 设备（三级页，入口在「设置 › 能力与连接 › 设备」；route name / path 仍为 settings-sync）。
@@ -33,6 +41,7 @@ const SYNC_ERRORS = {
   pairStart: '开码失败，请重试',
   pairClaim: '配对失败，请重试',
   run: '同步没成功，请稍后重试',
+  settings: '设置没保存成功，请重试',
 } as const
 
 function failToast(key: keyof typeof SYNC_ERRORS, e: unknown): void {
@@ -41,12 +50,21 @@ function failToast(key: keyof typeof SYNC_ERRORS, e: unknown): void {
 }
 
 const status = ref<SyncStatus | null>(null)
+const settings = ref<SyncSettings | null>(null)
 const busy = ref(false)
 const offer = ref<string | null>(null)
 const claimCode = ref('')
 const lastRun = ref<SyncRunStats | null>(null)
 const peerSheet = ref<SyncPeerInfo | null>(null)
 let pollTimer: number | null = null
+
+/** 自动同步：开关与间隔都在 Rust 侧（`sync_meta`），界面只读写，不自己计时 */
+const autoOn = computed(() => settings.value?.auto ?? false)
+const autoHint = computed(() =>
+  settings.value?.auto
+    ? `每次打开自动连上已配对设备并拉取，之后每 ${settings.value.intervalMin} 分钟一次`
+    : '关闭后只在点「立即同步」时联网',
+)
 
 const PATH_TEXT: Record<string, string> = {
   lan: '局域网直连',
@@ -126,7 +144,22 @@ function secs(ms: number): string {
 }
 
 async function refresh(): Promise<void> {
-  status.value = await syncService.status()
+  const [st, set] = await Promise.all([syncService.status(), syncService.settings()])
+  status.value = st
+  settings.value = set
+}
+
+/** 自动同步开关：先落本地（开关手感不等 IPC），失败再翻回去 */
+async function toggleAuto(value: boolean): Promise<void> {
+  const current = settings.value
+  if (!current) return
+  settings.value = { ...current, auto: value }
+  try {
+    settings.value = await syncService.setSettings({ auto: value })
+  } catch (e) {
+    settings.value = { ...current, auto: current.auto }
+    failToast('settings', e)
+  }
 }
 
 function stopPoll(): void {
@@ -227,17 +260,20 @@ onMounted(async () => {
     busy.value = false
     const payload = event.payload
     const first = payload.stats?.[0] ?? null
+    // 启动 / 定时触发的自动同步不弹浮条：用户没点任何东西，突然一条结果提示只会打扰。
+    // 结果照样落进页内（lastRun + refresh），打开这一页就看得到。
+    const auto = payload.auto === true
     lastRun.value = first
     if (payload.error) {
       // 结果事件里的 error 同样是诊断串：控制台留原文，toast 只说结论
       console.warn('[sync] 同步结果返回错误', payload.error)
-      toast('同步没成功，请稍后重试')
+      if (!auto) toast('同步没成功，请稍后重试')
     } else if (payload.errors && payload.errors.length > 0) {
       console.warn('[sync] 部分设备同步失败', payload.errors)
-      toast('部分设备没同步成，请稍后重试')
+      if (!auto) toast('部分设备没同步成，请稍后重试')
     } else if (first) {
-      toast(`${first.pathLabel} · 收到 ${first.applied} 条，用时 ${secs(first.ms)} 秒`)
-    } else {
+      if (!auto) toast(`${first.pathLabel} · 收到 ${first.applied} 条，用时 ${secs(first.ms)} 秒`)
+    } else if (!auto) {
       toast('还没有配对的设备')
     }
     void refresh()
@@ -293,6 +329,20 @@ onUnmounted(() => {
             <b class="num">本机共 {{ status?.objects ?? 0 }} 条记录在同步里</b>
             <em v-if="pendingHint" class="t-3 num">{{ pendingHint }}</em>
           </span>
+        </div>
+        <div class="frow row">
+          <i class="fic"><RefreshCw :size="17" /></i>
+          <span class="col ftxt">
+            <b>启动时自动同步</b>
+            <em class="t-2">{{ autoHint }}</em>
+          </span>
+          <ToggleSwitch
+            :model-value="autoOn"
+            label="启动时自动同步"
+            :disabled="!settings"
+            data-testid="sync-auto-toggle"
+            @update:model-value="toggleAuto"
+          />
         </div>
       </div>
       <p class="pnote t-2">两端指纹一致，才说明没有被中间人插入。</p>

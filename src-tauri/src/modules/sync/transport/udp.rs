@@ -408,10 +408,12 @@ pub fn lan_listen(ep: &Endpoint, wait: Duration) -> Result<Ready> {
 /// 打洞：向云服务器要双方的公网映射，然后同时向对方捅。
 pub fn punch_connect(ep: &Endpoint) -> Result<Ready> {
     let sock = bind(0, false)?;
-    let hello = encode_tag(
-        K_PING,
-        json!({ "t": "hello", "room": ep.room, "device": ep.device }).to_string().as_bytes(),
-    );
+    // 会合服务端只认**裸 JSON**（不是帧协议的 tag + JSON）：它会直接 JSON.parse 整个数据报。
+    // 这里曾经套了 `encode_tag(K_PING, …)`，服务端解析失败后一个 hello 都看不到，
+    // 打洞于是永远超时、落中继 —— 两端格式必须与 server/src/sync.mjs 的 attachUdp 一致。
+    let hello = json!({ "t": "hello", "room": ep.room, "device": ep.device })
+        .to_string()
+        .into_bytes();
     let deadline = Instant::now() + Duration::from_secs(8);
     let mut peer: Option<SocketAddr> = None;
     while Instant::now() < deadline && peer.is_none() {
@@ -422,7 +424,11 @@ pub fn punch_connect(ep: &Endpoint) -> Result<Ready> {
             if from.ip() != ep.udp.ip() || n == 0 {
                 continue;
             }
-            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf[1..n]) {
+            // 服务端回的是裸 JSON。第二个分支兼容「带 tag 的回执」——老版本服务端或
+            // 未来加 tag 时不至于又是一场静默失败。
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf[..n])
+                .or_else(|_| serde_json::from_slice::<serde_json::Value>(&buf[1..n]))
+            {
                 if let Some(p) = v.get("peer") {
                     let ip = p.get("ip").and_then(|x| x.as_str()).unwrap_or_default().parse::<Ipv4Addr>();
                     let port = p.get("port").and_then(|x| x.as_u64()).unwrap_or(0) as u16;

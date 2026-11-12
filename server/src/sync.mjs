@@ -150,9 +150,24 @@ export class SyncService {
     return r
   }
 
-  relaySend(roomId, frames) {
+  /**
+   * 投递帧到房间。`resetBefore`（毫秒时间戳）可选：清掉早于它的旧帧再投。
+   *
+   * 邮箱按 seq 从 0 重放、取过的帧不删除 —— 上一轮会话的帧（包括握手帧）留在环形
+   * 缓存里，下一轮会话从 0 取起会先读到它们，握手接上旧帧后密文计数对不上，两端
+   * 一起报解密失败。客户端在每轮的第一帧上捎带 `resetBefore`（约 30 秒前），把
+   * 上一轮的残留清走；刚投进来的对端握手帧（两端连接只差几秒）不受影响。
+   */
+  relaySend(roomId, frames, resetBefore = 0) {
     const r = this.room(roomId)
     const now = Date.now()
+    if (resetBefore > 0) {
+      const keep = r.frames.filter((f) => f.at >= resetBefore)
+      if (keep.length !== r.frames.length) {
+        r.frames = keep
+        r.bytes = keep.reduce((n, f) => n + f.data.length, 0)
+      }
+    }
     for (const data of frames) {
       if (typeof data !== 'string' || data.length === 0 || data.length > CHUNK_MAX) {
         return { error: `帧太大或为空（上限 ${CHUNK_MAX} 字节的 base64）` }
@@ -256,14 +271,15 @@ export class SyncService {
       return sendJson(res, 200, { ok: true, ...out })
     }
 
-    // POST /api/v1/sync/relay/<room> { frames: [b64] }
+    // POST /api/v1/sync/relay/<room> { frames: [b64], resetBefore?: ms }
     if (req.method === 'POST' && parts[0] === 'relay' && parts.length === 2) {
       const room = parts[1]
       if (!validRoom(room)) return sendError(res, 400, 'bad_request', '房间号非法')
       const body = await readJsonBody(req, BODY_MAX)
       const frames = Array.isArray(body.frames) ? body.frames : []
-      if (frames.length === 0) return sendError(res, 400, 'bad_request', '没有要转发的帧')
-      const out = this.relaySend(room, frames)
+      const resetBefore = Number(body.resetBefore ?? 0) || 0
+      if (frames.length === 0 && !resetBefore) return sendError(res, 400, 'bad_request', '没有要转发的帧')
+      const out = this.relaySend(room, frames, resetBefore)
       if (out.error) return sendError(res, 400, 'bad_request', out.error)
       return sendJson(res, 200, { ok: true, ...out })
     }

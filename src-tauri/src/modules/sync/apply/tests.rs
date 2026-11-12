@@ -127,6 +127,58 @@ fn two_devices_converge() {
     assert_eq!(a.int("SELECT COUNT(*) FROM todos"), 1, "不该多出一行");
 }
 
+/// 内置食物与它的单位都是种子数据：两端各自播种，不进同步。
+/// 自建食物与它的单位照常同步；对端按食物的自然键并到同一条后，单位插到那条食物下。
+#[test]
+fn builtin_food_units_are_not_synced_but_custom_ones_are() {
+    let a = Dev::new();
+    let b = Dev::new();
+    for d in [&a, &b] {
+        d.conn
+            .execute(
+                "INSERT INTO foods (id, name, is_custom, created_at) VALUES (1, '米饭', 0, 'now')",
+                [],
+            )
+            .unwrap();
+        d.conn
+            .execute(
+                "INSERT INTO food_units (id, food_id, name, grams) VALUES (1, 1, '碗', 150)",
+                [],
+            )
+            .unwrap();
+    }
+    assert!(a.touch("foods", 1, 'i').is_none(), "内置食物不该进同步");
+    assert!(
+        a.touch("food_units", 1, 'i').is_none(),
+        "内置食物的单位不该进同步（否则对端 UNIQUE(food_id,name) 必炸）"
+    );
+
+    a.conn
+        .execute(
+            "INSERT INTO foods (id, name, is_custom, created_at) VALUES (2, '自制酱', 1, 'now')",
+            [],
+        )
+        .unwrap();
+    assert!(a.touch("foods", 2, 'i').is_some());
+    a.conn
+        .execute(
+            "INSERT INTO food_units (id, food_id, name, grams) VALUES (2, 2, '勺', 10)",
+            [],
+        )
+        .unwrap();
+    assert!(a.touch("food_units", 2, 'i').is_some());
+
+    let stats = a.send_to(&b);
+    assert_eq!(stats.applied, 2, "自建食物 + 它的单位");
+    // B 本来就有米饭，合并后仍是两条食物；单位是米饭 1 + 自制酱 1
+    assert_eq!(b.int("SELECT COUNT(*) FROM foods"), 2);
+    assert_eq!(b.int("SELECT COUNT(*) FROM food_units"), 2);
+    assert_eq!(
+        b.text("SELECT f.name FROM food_units u JOIN foods f ON f.id = u.food_id WHERE u.name = '勺'"),
+        "自制酱"
+    );
+}
+
 /// 应用过的对象不会被自己再捕获一遍（不回声）。
 #[test]
 fn apply_does_not_echo() {

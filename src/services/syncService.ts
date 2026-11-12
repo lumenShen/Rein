@@ -4,7 +4,7 @@
  * 界面拿到的永远是已经推好的状态（含这次走了哪条路）。
  */
 
-import type { PairOffer, PairStatus, SyncStatus } from '@/types'
+import type { PairOffer, PairStatus, SyncSettings, SyncSettingsPatch, SyncStatus } from '@/types'
 import { invoke } from './transport'
 
 export const syncService = {
@@ -22,6 +22,13 @@ export const syncService = {
 
   /** 报码侧：输入另一台设备上的同步码 */
   pairClaim: (code: string) => invoke<PairStatus>('sync_pair_claim', { code }),
+
+  /** 本机的自动同步设置 */
+  settings: () => invoke<SyncSettings>('sync_settings_get', {}),
+
+  /** 改自动同步设置（只传要改的字段） */
+  setSettings: (patch: SyncSettingsPatch) =>
+    invoke<SyncSettings>('sync_set_settings', { patch }),
 
   /** 跑一轮同步（后台线程；结果通过 `sync://result` 事件回来） */
   run: () => invoke<void>('sync_run', {}),

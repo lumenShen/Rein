@@ -254,14 +254,14 @@ pub fn run(
     let reply = read_frame(link, None, Duration::from_secs(15))?
         .ok_or_else(|| ReinError::Message("等不到对端握手".into()))?;
     let peer_hello: Msg = serde_json::from_slice(&reply)?;
-    let (peer_device, peer_key, peer_epoch, peer_mac) = match peer_hello {
+    let (peer_device, peer_name, peer_key, peer_epoch, peer_mac) = match peer_hello {
         Msg::Hello {
             device,
+            name,
             key,
             epoch,
             mac,
-            ..
-        } => (device, key, crypto::epoch_from_b64(&epoch)?, mac),
+        } => (device, name, key, crypto::epoch_from_b64(&epoch)?, mac),
         other => {
             return Err(ReinError::Message(format!(
                 "握手阶段收到别的消息：{other:?}"
@@ -289,6 +289,15 @@ pub fn run(
         return Err(ReinError::Message(
             "握手校验失败：对面没有组密钥（同步码不对，或有人冒充）".into(),
         ));
+    }
+    // 配对时只换了公钥，名字是空的；第一次会话握手带来名字，落库后设备页才不用
+    // 一直显示「未命名设备」。空名字不覆盖已有名字（对端可能只是没设过）。
+    let peer_name = peer_name.trim();
+    if !peer_name.is_empty() {
+        conn.execute(
+            "UPDATE sync_peers SET name = ?2 WHERE device = ?1",
+            rusqlite::params![peer.device, peer_name],
+        )?;
     }
     let mut c = SessionCrypto::new(secret, &epoch, &peer_epoch);
     let driver = me.device_id < peer.device;

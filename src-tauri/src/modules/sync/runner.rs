@@ -11,7 +11,7 @@ use rusqlite::{params, Connection};
 use crate::error::{ReinError, Result};
 use crate::modules::ai::models::OnlineServiceSettings;
 
-use super::{blobs::BlobStore, crypto, identity::Identity, meta_get, meta_set, protocol, transport};
+use super::{blobs::BlobStore, crypto, identity::Identity, meta_del, meta_get, meta_set, protocol, transport};
 
 /// 一次会话的结果（写进 sync_peers / sync_meta，也回报给界面）。
 #[derive(Debug, Clone, serde::Serialize)]
@@ -202,6 +202,9 @@ pub fn run_all(
     }
     if !errors.is_empty() {
         meta_set(conn, "last_error", &errors.join("；"))?;
+    } else {
+        // 全部对端都成功：清掉上一轮留下的错误，别让旧失败一直挂在设备页上。
+        meta_del(conn, "last_error")?;
     }
     Ok((stats, errors))
 }

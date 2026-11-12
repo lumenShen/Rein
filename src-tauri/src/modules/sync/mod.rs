@@ -32,6 +32,7 @@
 //! 知识库的索引与向量是派生物，本机重建。名单见 `tables.rs`。
 
 pub mod apply;
+pub mod auto;
 pub mod blobs;
 pub mod commands;
 pub mod crypto;
@@ -77,5 +78,11 @@ pub(crate) fn meta_set(conn: &Connection, key: &str, value: &str) -> Result<()> 
          ON CONFLICT(k) DO UPDATE SET v = excluded.v",
         rusqlite::params![key, value],
     )?;
+    Ok(())
+}
+
+/// `sync_meta` 删（比如错误已随下一次成功消失，状态里不该再挂着旧的）。
+pub(crate) fn meta_del(conn: &Connection, key: &str) -> Result<()> {
+    conn.execute("DELETE FROM sync_meta WHERE k = ?1", [key])?;
     Ok(())
 }

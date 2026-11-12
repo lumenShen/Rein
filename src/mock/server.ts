@@ -3107,6 +3107,12 @@ const syncMock = {
   lastUp: 5120,
   lastDown: 262144,
   runCount: 1,
+  settings: {
+    auto: true,
+    intervalMin: 15,
+    mediaOverCellular: false,
+    autoOverRelay: true,
+  } as Record<string, unknown>,
 }
 
 const SYNC_MOCK_PATHS = ['lan', 'punch', 'relay'] as const
@@ -9643,6 +9649,13 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     case 'sync_set_device_name':
       syncMock.name = String((args as { name?: string } | undefined)?.name ?? syncMock.name)
       return delay(syncMockStatus() as T)
+    case 'sync_settings_get':
+      return delay({ ...syncMock.settings } as T)
+    case 'sync_set_settings': {
+      const patch = (args as { patch?: Record<string, unknown> } | undefined)?.patch ?? {}
+      syncMock.settings = { ...syncMock.settings, ...patch }
+      return delay({ ...syncMock.settings } as T)
+    }
     case 'sync_pair_start':
       // 短码固定，方便在浏览器里把「开码 → 报码 → 完成」这条流程点一遍
       return delay({ code: 'MOCKCODE', expiresAt: Date.now() + 5 * 60 * 1000 } as T)

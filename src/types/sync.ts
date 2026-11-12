@@ -58,6 +58,21 @@ export interface PairStatus {
   room: string | null
 }
 
+/** 本机的自动同步设置（存 Rust 侧 `sync_meta`，只在本机生效）。 */
+export interface SyncSettings {
+  /** 打开应用时自动同步 */
+  auto: boolean
+  /** 自动同步的最小间隔（分钟） */
+  intervalMin: number
+  /** 允许走蜂窝网络同步媒体（大块） */
+  mediaOverCellular: boolean
+  /** 打洞失败时自动落云端中继 */
+  autoOverRelay: boolean
+}
+
+/** 只带要改的字段。 */
+export type SyncSettingsPatch = Partial<SyncSettings>
+
 /** 一轮同步的结果（`sync://result` 事件的载荷）。 */
 export interface SyncRunStats {
   peer: string
@@ -78,4 +93,6 @@ export interface SyncRunResult {
   stats?: SyncRunStats[]
   errors?: string[]
   error?: string
+  /** 这轮是启动 / 定时自动触发的：界面不弹结果浮条，只更新页内状态 */
+  auto?: boolean
 }

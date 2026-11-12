@@ -114,7 +114,7 @@ pub fn connect(ep: &Endpoint) -> Result<(Ready, Vec<String>)> {
         Err(e) => notes.push(format!("打洞：{e}")),
     }
 
-    let link = relay::RelayLink::new(&ep.base_url, &ep.room)?;
+    let link = relay::RelayLink::new(&ep.base_url, &ep.room, &ep.device)?;
     notes.push("已改用云端中继".to_string());
     Ok((
         Ready {
@@ -141,7 +141,7 @@ pub fn accept(ep: &Endpoint, lan_wait: Duration) -> Result<(Ready, Vec<String>)>
         }
     }
 
-    let link = relay::RelayLink::new(&ep.base_url, &ep.room)?;
+    let link = relay::RelayLink::new(&ep.base_url, &ep.room, &ep.device)?;
     notes.push("已改用云端中继".to_string());
     Ok((
         Ready {
