@@ -359,10 +359,16 @@ pub(crate) fn spawn_session(app: AppHandle, auto: bool) -> Result<()> {
                 let store = super::blobs::BlobStore::new(hub.data_dir());
                 // 先把手头还没落成对象的改动冲掉，否则「刚改的没过去」。
                 // `flush` 自己取锁、并在锁外投递变更事件（见 engine.rs::flush）；
-                // 因此它必须在这一轮会话取锁**之前**调用 —— 别把它挪回 `conn` 的持锁区间里。
+                // 它必须在这一轮会话开始**之前**调用，别把它挪进会话的读库区间里。
                 hub.flush(&state, &store)?;
-                let conn = state.db.lock();
-                let me = identity::ensure(&conn)?;
+                // 身份只需要在全局连接上短读一次。真正的一轮会话走独立连接：
+                // 中继/打洞的等待可能几十秒，抱着 UI 的全局锁跑完整轮会把首屏所有
+                // 查询一起堵死（见 `db::open_background` 的注释）。
+                let me = {
+                    let conn = state.db.lock();
+                    identity::ensure(&conn)?
+                };
+                let conn = crate::db::open_background(&handle)?;
                 super::runner::run_all(&conn, &store, &me)
             })();
             let payload = match outcome {

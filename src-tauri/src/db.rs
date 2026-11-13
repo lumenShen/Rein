@@ -9,6 +9,7 @@ use tauri::Manager;
 use crate::error::{ReinError, Result};
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// 数据目录整体搬家的环境变量。桌面端有效；未设置时行为与从前一字不差。
 pub const DATA_DIR_ENV: &str = "REIN_DATA_DIR";
@@ -84,6 +85,27 @@ pub fn init(app: &tauri::AppHandle) -> Result<Connection> {
     Ok(conn)
 }
 
+/// 给后台长会话（多设备同步）开一条**独立连接**。
+///
+/// 同步一轮里会反复读库，但中继取件、打洞会合这些等待可能长达几十秒。如果整轮都
+/// 抱着 `AppState.db` 那把锁，首屏的每条查询都会排在会话后面 —— 0.9.1 加上「启动
+/// 自动同步」之后，用户看到的就是「开屏要等半分钟」。WAL 本来就允许读读并发：
+/// 独立连接让 UI 的读不被网络等待堵住，写仍由 SQLite 串行化，`busy_timeout` 把偶发
+/// 的写冲突变成短暂等待而不是直接报错。
+///
+/// 这条连接没有 `update_hook`（钩子只装在 `AppState.db` 上）。这不是漏装：同步的
+/// `apply_one` 自己维护 `sync_objects` / `sync_log`，远端对象不该再被本地捕获一遍；
+/// 「应用远端对象」与「捕获本地改动」从设计上就是两条路。
+pub fn open_background(app: &tauri::AppHandle) -> Result<Connection> {
+    let dir = data_dir(app)?;
+    let conn = Connection::open(dir.join("rein.db"))?;
+    // journal_mode 是库级设置、init 已经设成 WAL；新连接只补连接级 pragma。
+    conn.busy_timeout(Duration::from_secs(5))?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    Ok(conn)
+}
+
 /// 连接级 pragma —— **全应用只在这里设一次**，各域不许再各自 `pragma_update`。
 ///
 /// `synchronous = NORMAL`（2026-09-30 加）是这里唯一一条与性能有关的设置，也是本仓库
@@ -105,6 +127,9 @@ pub(crate) fn tune(conn: &Connection) -> Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
+    // 不是 pragma，但同属「连接怎么等锁」：后台同步用的是另一条连接，偶发的写冲突
+    // 交给 SQLite 自己等，不该把 "database is locked" 直接甩给用户。
+    conn.busy_timeout(Duration::from_secs(5))?;
     Ok(())
 }
 
