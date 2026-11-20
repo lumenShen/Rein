@@ -10,11 +10,13 @@ import MuscleMap from '@/components/exercise/MuscleMap.vue'
 import WeightCurve from '@/components/exercise/WeightCurve.vue'
 import { sessionService } from '@/services/sessionService'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
+import { inferLoadSetup, readLoad } from '@/utils/loadBasis'
 import { fmtDateCn, todayStr } from '@/utils/date'
 import { buildExerciseHistory } from '@/utils/strengthStats'
 import { computeStrengthTrend, type StrengthTrend } from '@/utils/strengthTrend'
 import { aggregateStrengthDays, fmtKg, type StrengthDay } from '@/utils/strength'
 import type { PlanExercise } from '@/types'
+import type { LoadSetup } from '@/types/load'
 import { exerciseBadge } from '@/utils/plan'
 
 /** 动作详情抽屉：课程详情页点击动作唤起。
@@ -101,14 +103,32 @@ const lastSetDate = computed(() => {
   return d ? fmtDateCn(d.date) : ''
 })
 
-const stats = computed<{ k: string; v: string }[]>(() => {
+/**
+ * 负重口径：课程条目本身只带 exerciseId，器械（equipment）要回动作库取。
+ *
+ * 同一个动作在不同健身房可能是插片式或挂片式 —— 课程里写死「40 kg」时，
+ * 只有把读法一起给出来（每侧 / 含杠 / 插片读数），用户才知道往两边各挂多少。
+ */
+const loadSetup = computed<LoadSetup>(() => {
+  const e = props.exercise
+  if (!e) return inferLoadSetup('strength', null, '')
+  const rec = lib.get(e.exerciseId) ?? lib.list.find((x) => x.name === displayName.value) ?? null
+  return inferLoadSetup(e.kind, rec?.equipment ?? null, rec?.name ?? e.name, rec?.weightStep ?? 0)
+})
+
+const stats = computed<{ k: string; v: string; note?: string }[]>(() => {
   const e = props.exercise
   if (!e) return []
   if (e.kind === 'strength') {
+    const read = readLoad(e.weightKg, loadSetup.value)
     const rows = [
       { k: '组数', v: `${e.sets} 组` },
       { k: '每组次数', v: e.reps != null ? `${e.reps} 次` : '—' },
-      { k: '建议重量', v: e.weightKg != null ? `${e.weightKg} kg` : '自重' },
+      {
+        k: '建议重量',
+        v: e.weightKg != null ? `${read.main} ${read.unit}` : '自重',
+        note: e.weightKg != null ? read.sub : undefined,
+      },
       { k: '组间休息', v: `${e.restSec} 秒` },
     ]
     if (e.warmups?.length) {
@@ -163,6 +183,7 @@ const stats = computed<{ k: string; v: string }[]>(() => {
       <div class="stats">
         <div v-for="s in stats" :key="s.k" class="cell">
           <div class="v num">{{ s.v }}</div>
+          <div v-if="s.note" class="note">{{ s.note }}</div>
           <div class="k">{{ s.k }}</div>
         </div>
       </div>
@@ -333,6 +354,15 @@ const stats = computed<{ k: string; v: string }[]>(() => {
   font-size: var(--fs-caption);
   color: var(--text-2);
   margin-top: var(--sp-2);
+}
+
+/* 口径副标（合计 / 含杠每侧）：压在数值与标签之间，只能是灰字 ——
+   它回答「这个数怎么读」，不与数值争主次 */
+.cell .note {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .tips {

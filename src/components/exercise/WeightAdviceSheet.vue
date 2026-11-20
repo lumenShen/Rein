@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import ExerciseTrendCard from '@/components/exercise/ExerciseTrendCard.vue'
+import LoadReadout from '@/components/exercise/LoadReadout.vue'
 import type { ExerciseAdvice } from '@/utils/trainingAdvice'
 
 /**
@@ -82,9 +83,10 @@ const lastDateShort = computed(() => {
           <span class="hero-name">{{ exerciseName }}</span>
           <span class="htag">今日建议</span>
         </div>
+        <!-- 主数字按口径读：挂片读「每侧」、哑铃读「每只」、杠铃读含杠总重；
+             合计只做灰字副标 —— 一屏两个大 kg 用户只会问「到底挂哪个」 -->
         <div class="hero-score row">
-          <b class="big num">{{ fmt(advice.suggestedWeight) }}</b>
-          <span class="unit num">kg</span>
+          <LoadReadout :kg="advice.suggestedWeight" :setup="advice.load" size="lg" show-sub />
           <span class="band num">× {{ advice.suggestedReps }} 次 × {{ advice.suggestedSets }} 组</span>
         </div>
 
@@ -271,22 +273,6 @@ const lastDateShort = computed(() => {
   margin-top: var(--sp-6);
   align-items: baseline;
   gap: var(--gap-sm);
-}
-
-.big {
-  /* 展示级读数走令牌：44px 就是 --fs-display-l 这一档，
-     桌面壳整体降一档字号阶梯时这处要跟随 */
-  font-size: var(--fs-display-l);
-  font-weight: var(--fw-bold);
-  letter-spacing: -1.5px;
-  color: var(--text-1);
-  line-height: 1.05;
-}
-
-.unit {
-  font-size: var(--fs-subhead);
-  font-weight: var(--fw-semibold);
-  color: var(--text-3);
 }
 
 .band {

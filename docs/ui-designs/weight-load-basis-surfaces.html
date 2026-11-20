@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rein · 负重口径 · 扩面设计稿</title>
+<style>
+/* ============ 画廊外壳 ============ */
+:root{
+  --g-bg:#0f1012; --g-surface:#17181b; --g-surface-2:#1f2125;
+  --g-text:#ececf1; --g-text-2:#9a9ba3; --g-text-3:#6a6b73;
+  --g-line:rgba(255,255,255,.09); --g-accent:#5b9cff; --g-accent-soft:rgba(91,156,255,.14);
+  --g-ok:#4ecf7a; --g-warn:#f5a623; --g-danger:#ff6b63;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--g-bg); color:var(--g-text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+
+header.hero{padding:64px 0 40px;border-bottom:1px solid var(--g-line)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--g-accent);font-weight:600}
+h1{font-size:34px;font-weight:600;letter-spacing:-.6px;margin:10px 0 12px}
+.lede{font-size:15px;color:var(--g-text-2);max-width:800px}
+.lede b{color:var(--g-text);font-weight:600}
+.lede code{background:var(--g-surface-2);padding:1px 6px;border-radius:5px;font-size:13px;color:#c9d1d9}
+.themebar{margin-top:24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.tbtn{
+  padding:8px 16px;border-radius:9px;border:1px solid var(--g-line);
+  background:var(--g-surface-2);color:var(--g-text);font-size:13px;font-weight:500;cursor:pointer;
+  font-family:inherit;transition:background .15s,border-color .15s;
+}
+.tbtn:hover{background:#2a2d33}
+.tbtn.on{background:var(--g-accent-soft);border-color:var(--g-accent);color:var(--g-accent)}
+.legend-note{font-size:12.5px;color:var(--g-text-3)}
+
+.toc{display:flex;flex-wrap:wrap;gap:7px;padding:26px 0 8px}
+.toc a{
+  font-size:12.5px;text-decoration:none;color:var(--g-text-2);
+  padding:5px 11px;border-radius:7px;background:var(--g-surface);border:1px solid var(--g-line);
+  transition:color .15s,border-color .15s;
+}
+.toc a:hover{color:var(--g-accent);border-color:var(--g-accent)}
+
+main{padding:20px 0 90px}
+.concept{
+  display:grid;grid-template-columns:1fr 400px;gap:52px;align-items:start;
+  padding:52px 0;border-top:1px solid var(--g-line);
+}
+.concept.wide{grid-template-columns:1fr}
+.concept:first-child{border-top:none}
+.num{font-variant-numeric:tabular-nums}
+.numtag{
+  display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;
+  color:var(--g-accent);background:var(--g-accent-soft);
+  padding:4px 10px;border-radius:6px;margin-bottom:14px;
+}
+.concept h2{font-size:24px;font-weight:600;letter-spacing:-.4px;margin-bottom:10px}
+.tagline{font-size:15px;color:var(--g-text-2);margin-bottom:22px}
+.block{margin-bottom:18px}
+.block h3{
+  font-size:11.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--g-text-3);margin-bottom:8px;
+}
+.block p,.block li{font-size:14px;color:var(--g-text-2)}
+.block ul{padding-left:17px}
+.block li{margin-bottom:5px}
+.block li b,.block p b{color:var(--g-text);font-weight:600}
+.block code,.callout code,.tbl code{background:var(--g-surface-2);padding:1px 5px;border-radius:4px;font-size:12.5px;color:#c9d1d9}
+.pain{
+  background:var(--g-surface);border:1px solid var(--g-line);border-left:2px solid var(--g-danger);
+  border-radius:0 10px 10px 0;padding:13px 16px;
+}
+.pain li{margin-bottom:6px}
+.pain li:last-child{margin-bottom:0}
+
+/* 候选表 */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th,.tbl td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--g-line);vertical-align:top}
+.tbl thead th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--g-text-3);font-weight:600}
+.tbl tbody td{color:var(--g-text-2)}
+.tbl tbody td:first-child{color:var(--g-text);font-weight:600;white-space:nowrap}
+.tbl .good{color:var(--g-ok)}
+.tbl .bad{color:var(--g-danger)}
+.tbl tr.pick{background:var(--g-accent-soft)}
+.tbl tr.pick td{border-bottom-color:rgba(91,156,255,.28)}
+
+/* 三个数 */
+.threenum{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px}
+.tn{background:var(--g-surface);border:1px solid var(--g-line);border-radius:14px;padding:16px 18px}
+.tn em{display:block;font-style:normal;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--g-text-3);margin-bottom:6px}
+.tn b{display:block;font-size:26px;font-weight:600;letter-spacing:-.6px;color:var(--g-text);font-variant-numeric:tabular-nums}
+.tn span{display:block;font-size:12.5px;color:var(--g-text-2);margin-top:4px}
+.tn.hi{border-color:rgba(91,156,255,.45);background:var(--g-accent-soft)}
+.tn.hi b{color:#8fbaff}
+
+.callout{
+  background:var(--g-surface);border:1px solid var(--g-line);border-radius:12px;
+  padding:14px 16px;font-size:13.5px;color:var(--g-text-2);line-height:1.6;
+}
+.callout b{color:var(--g-text);font-weight:600}
+.callout.accent{border-color:rgba(91,156,255,.35);background:var(--g-accent-soft)}
+.callout.warn{border-color:rgba(245,166,35,.35);background:rgba(245,166,35,.1)}
+
+/* 口径 tabs（画廊侧） */
+.btabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.btab{
+  padding:7px 14px;border-radius:9px;border:1px solid var(--g-line);background:var(--g-surface);
+  color:var(--g-text-2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.btab:hover{border-color:var(--g-text-3)}
+.btab.on{background:var(--g-accent-soft);border-color:var(--g-accent);color:var(--g-accent);font-weight:600}
+
+/* ============ 手机外壳 ============ */
+.phone{
+  --bg:#f5f5f7; --surface:#ffffff; --surface-2:#f2f2f4; --surface-3:#e5e5ea;
+  --text-1:#1d1d1f; --text-2:#6e6e73; --text-3:#a1a1a6;
+  --line:rgba(0,0,0,.07); --line-strong:rgba(0,0,0,.12);
+  --accent:#007aff; --accent-soft:rgba(0,122,255,.12); --on-accent:#fff;
+  --ok:#34c759; --warn:#ff9500; --danger:#ff3b30;
+  --radius-s:10px; --radius-m:14px; --radius-l:20px;
+  position:sticky;top:24px;
+  width:400px;border-radius:34px;padding:9px;
+  background:linear-gradient(#3a3a3c,#1c1c1e);
+  box-shadow:0 22px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.07);
+}
+.phone[data-theme="dark"]{
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#2c2c2e; --surface-3:#3a3a3c;
+  --text-1:#ffffff; --text-2:#98989f; --text-3:#636366;
+  --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16);
+  --accent:#0a84ff; --accent-soft:rgba(10,132,255,.18);
+}
+.screen{
+  border-radius:26px;overflow:hidden;background:var(--bg);
+  min-height:660px;display:flex;flex-direction:column;
+  font-size:13px;color:var(--text-1);
+}
+.statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:11px 24px 5px;font-size:12px;font-weight:600;color:var(--text-1);
+}
+.navbar{
+  display:grid;grid-template-columns:52px 1fr 52px;align-items:center;
+  padding:7px 12px 11px;
+}
+.navbar .title{text-align:center;font-size:16px;font-weight:600;letter-spacing:-.3px}
+.navbar .back{
+  justify-self:start;width:30px;height:30px;border:none;background:none;
+  color:var(--accent);font-size:26px;line-height:1;cursor:pointer;font-family:inherit;
+}
+.body{padding:0 16px 26px;display:flex;flex-direction:column;gap:12px;flex:1}
+.mcard{background:var(--surface);border-radius:var(--radius-l);padding:15px 16px}
+.mc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px}
+.mc-head b{font-size:15px;font-weight:600;letter-spacing:-.2px}
+.mc-sub{font-size:12px;color:var(--text-3)}
+.tag{
+  font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;
+  background:var(--accent-soft);color:var(--accent);white-space:nowrap;
+}
+.tag.n{background:var(--surface-2);color:var(--text-3)}
+.tag.g{background:rgba(52,199,89,.15);color:var(--ok)}
+.tag.o{background:rgba(255,149,0,.16);color:var(--warn)}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.cta{
+  width:100%;padding:14px;border:none;border-radius:var(--radius-m);
+  background:var(--accent);color:var(--on-accent);font-size:15px;font-weight:600;
+  cursor:pointer;font-family:inherit;
+}
+.cta.ghost{background:var(--surface-2);color:var(--accent)}
+.divider{height:.5px;background:var(--line);margin:3px 0}
+.mini{font-size:11.5px;color:var(--text-3);line-height:1.5}
+.mini b{color:var(--text-2);font-weight:600}
+
+/* 口径徽标 */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;
+  background:var(--surface-2);color:var(--text-2);white-space:nowrap;
+}
+.badge.a{background:var(--accent-soft);color:var(--accent)}
+.badge i{font-style:normal;font-size:12px;line-height:1}
+.badge svg{display:block;flex:none}
+
+/* 换算卡 */
+.conv{background:var(--surface);border-radius:var(--radius-l);padding:16px}
+.conv .cap{font-size:11.5px;color:var(--text-3);letter-spacing:.02em}
+.conv .big{
+  display:flex;align-items:baseline;gap:6px;margin-top:2px;
+  font-variant-numeric:tabular-nums;
+}
+.conv .big b{font-size:40px;font-weight:600;letter-spacing:-1.4px;line-height:1.05}
+.conv .big .u{font-size:16px;font-weight:500;color:var(--text-2)}
+.conv .big .pre{font-size:14px;font-weight:600;color:var(--text-2);margin-right:2px}
+.conv .eq{
+  display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
+  border-top:.5px solid var(--line);font-size:12.5px;color:var(--text-2);
+  font-variant-numeric:tabular-nums;
+}
+.conv .eq b{color:var(--text-1);font-weight:600}
+.conv .eq .arrow{color:var(--text-3)}
+
+/* 片盘 */
+.plates{margin-top:12px}
+.plates .ph{font-size:11.5px;color:var(--text-3);margin-bottom:7px;display:flex;justify-content:space-between}
+.pl-row{display:flex;gap:7px;flex-wrap:wrap}
+.pl{
+  width:46px;height:46px;border-radius:12px;border:1px solid var(--line-strong);
+  background:var(--surface-2);color:var(--text-1);font-size:13px;font-weight:600;
+  cursor:pointer;font-family:inherit;font-variant-numeric:tabular-nums;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .08s,background .15s,border-color .15s;
+}
+.pl:hover{border-color:var(--accent);color:var(--accent)}
+.pl:active{transform:scale(.94)}
+.plsel{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;min-height:28px}
+.plchip{
+  display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;
+  background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;
+  cursor:pointer;font-variant-numeric:tabular-nums;
+}
+.plchip i{font-style:normal;font-size:10px;opacity:.6}
+.plsum{font-size:12.5px;color:var(--text-2);margin-top:8px;font-variant-numeric:tabular-nums}
+.plsum b{color:var(--text-1);font-weight:600}
+
+/* 器械配置行 */
+.implement{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:.5px solid var(--line)}
+.implement:first-of-type{border-top:none}
+.implement .nm{font-size:13px;font-weight:600}
+.implement .ds{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.implement .ck{font-size:12px;color:var(--accent);font-weight:600}
+
+/* 计划行 */
+.plrow{padding:11px 0;border-top:.5px solid var(--line)}
+.plrow:first-child{border-top:none}
+.plrow .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.plrow .nm{font-size:13.5px;font-weight:600}
+.plrow .lo{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.plrow .lo em{font-style:normal;font-size:11.5px;font-weight:500;color:var(--text-3);margin-left:3px}
+.plrow .sub{font-size:11.5px;color:var(--text-3);margin-top:2px;font-variant-numeric:tabular-nums}
+.plrow .sub b{color:var(--text-2);font-weight:600}
+.plrow.open{background:var(--surface-2);border-radius:12px;padding:11px 12px;margin:4px -12px 0}
+.plrow.open .inner{
+  margin-top:9px;padding-top:9px;border-top:.5px solid var(--line);
+  font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums;
+}
+
+/* 训练中重量卡 */
+.wcard{background:var(--surface);border-radius:var(--radius-l);padding:15px 16px}
+.wcard .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.wcard .top b{font-size:14.5px;font-weight:600;letter-spacing:-.2px}
+.wcard .setno{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.wmain{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.wmain .l .k{font-size:11.5px;color:var(--text-3);margin-bottom:1px}
+.wmain .l .v{font-size:42px;font-weight:600;letter-spacing:-1.6px;line-height:1;font-variant-numeric:tabular-nums;margin-top:-7px}
+.wmain .l .v span{font-size:15px;font-weight:500;color:var(--text-2);letter-spacing:0;margin-left:4px}
+.wmain .r{text-align:right;padding-bottom:3px}
+.wmain .r .k{font-size:10.5px;color:var(--text-3)}
+.wmain .r .v{font-size:19px;font-weight:600;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.wmain .r .v span{font-size:11px;font-weight:500;color:var(--text-2);margin-left:2px}
+.quick{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.setrail{display:flex;align-items:center;gap:7px}
+.sdot{
+  width:30px;height:30px;border-radius:10px;background:var(--surface-2);color:var(--text-3);
+  font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums;
+}
+.sdot.done{background:var(--accent-soft);color:var(--accent)}
+.sdot.cur{background:var(--accent);color:var(--on-accent)}
+.srest{margin-left:auto;font-size:11.5px;color:var(--text-3)}
+.qchip{
+  flex:1;min-width:0;padding:8px 6px;border-radius:10px;border:.5px solid var(--line-strong);
+  background:transparent;color:var(--text-2);font-size:11.5px;cursor:pointer;font-family:inherit;
+  font-variant-numeric:tabular-nums;text-align:center;line-height:1.35;
+}
+.qchip b{display:block;color:var(--text-1);font-size:12.5px;font-weight:600}
+.qchip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.qchip.on b{color:var(--accent)}
+.steprow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.stepbtn{
+  width:52px;height:44px;border-radius:12px;border:none;background:var(--surface-2);
+  color:var(--text-1);font-size:20px;font-weight:600;cursor:pointer;font-family:inherit;
+}
+.stepbtn:active{background:var(--surface-3)}
+.switch{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2)}
+.swn{width:42px;height:25px;border-radius:14px;background:var(--surface-3);position:relative;cursor:pointer;transition:background .18s}
+.swn::after{content:"";position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .18s}
+.swn.on{background:var(--ok)}
+.swn.on::after{left:19px}
+
+/* 建议抽屉 hero */
+.sheet-head{display:flex;align-items:center;justify-content:center;padding:2px 0 10px;position:relative}
+.sheet-head .grab{width:36px;height:5px;border-radius:3px;background:var(--surface-3)}
+.hero-num{display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
+.hero-num b{font-size:46px;font-weight:600;letter-spacing:-1.8px;line-height:1.05}
+.hero-num .u{font-size:15px;color:var(--text-2);font-weight:500}
+.hero-num .per{font-size:13px;color:var(--text-3);font-weight:600;align-self:flex-end;padding-bottom:8px;margin-left:-4px}
+.rirdots{display:flex;gap:4px;margin-top:12px}
+.rirdot{width:11px;height:11px;border-radius:50%;background:var(--ok)}
+.rirdot.left{border:1.5px solid var(--ok);background:transparent}
+.chain{display:flex;flex-direction:column;gap:0}
+.cnode{position:relative;padding:0 0 16px 26px}
+.cnode:last-child{padding-bottom:0}
+.cnode::before{content:"";position:absolute;left:9px;top:16px;bottom:0;width:1px;background:var(--line-strong)}
+.cnode:last-child::before{display:none}
+.cnode .ndot{
+  position:absolute;left:0;top:0;width:19px;height:19px;border-radius:50%;
+  background:var(--surface-2);color:var(--text-2);font-size:10.5px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-style:normal;
+}
+.cnode.final .ndot{background:var(--accent);color:var(--on-accent)}
+.cnode .ntop{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cnode .ntit{font-size:12.5px;color:var(--text-2)}
+.cnode .nval{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.cnode .ncap{font-size:11px;color:var(--text-3);margin-top:2px}
+.cnode.final .nval{color:var(--accent)}
+
+/* 口径选择卡 */
+.optlist{display:flex;flex-direction:column;gap:9px}
+.opt{
+  display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;
+  border:1.5px solid var(--line-strong);background:var(--surface);cursor:pointer;text-align:left;
+  font-family:inherit;color:var(--text-1);
+}
+.opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.opt .ic{
+  width:40px;height:40px;border-radius:11px;background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex:none;
+}
+.opt.on .ic{background:var(--surface)}
+.opt .tx b{display:block;font-size:13.5px;font-weight:600}
+.opt .tx span{display:block;font-size:11.5px;color:var(--text-3);margin-top:1px}
+
+/* 记录行 */
+.vrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:.5px solid var(--line)}
+.vrow:first-child{border-top:none}
+.vrow .nm{font-size:13px;font-weight:600}
+.vrow .nm em{font-style:normal;font-size:11px;font-weight:500;color:var(--text-3);margin-left:5px}
+.vrow .rt{text-align:right;font-variant-numeric:tabular-nums}
+.vrow .rt b{font-size:13.5px;font-weight:600}
+.vrow .rt span{display:block;font-size:11px;color:var(--text-3)}
+.hist-note{
+  background:var(--surface-2);border-radius:12px;padding:11px 13px;
+  font-size:11.5px;color:var(--text-2);line-height:1.55;
+}
+.hist-note b{color:var(--text-1)}
+
+.bigstat{
+  display:flex;align-items:baseline;gap:7px;font-variant-numeric:tabular-nums;
+}
+.bigstat b{font-size:38px;font-weight:600;letter-spacing:-1.5px;line-height:1.05}
+.bigstat .u{font-size:14px;color:var(--text-2);font-weight:500}
+.bigstat .lb{font-size:11.5px;color:var(--text-3);margin-left:2px}
+
+/* 现状标注 */
+.lv{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.lv .lo{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.note{
+  font-size:10px;font-weight:700;color:#ff6b63;background:rgba(255,59,48,.14);
+  padding:1px 6px;border-radius:5px;white-space:nowrap;
+}
+
+footer.end{padding:44px 0 70px;border-top:1px solid var(--g-line);color:var(--g-text-3);font-size:13px}
+footer.end b{color:var(--g-text)}
+@media(max-width:1020px){
+  .concept{grid-template-columns:1fr;gap:28px}
+  .phone{position:static;width:100%;max-width:400px}
+  .wrap{padding:0 20px}
+  .threenum{grid-template-columns:1fr}
+}
+
+/* ================== 扩面稿新增 ================== */
+.lede a{color:#8fbaff;text-decoration:none;border-bottom:1px solid rgba(91,156,255,.4)}
+.lede a:hover{color:#b9d4ff}
+
+/* 动作选择器 */
+.srch{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:12px;padding:9px 12px}
+.srch .mg{font-size:13px;color:var(--text-3)}
+.srch .q{font-size:13px;font-weight:500;color:var(--text-1)}
+.srch .clr{margin-left:auto;color:var(--text-3);font-size:13px}
+.fchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.fchip{font-family:inherit;font-size:11px;padding:4px 10px;border-radius:20px;border:none;background:var(--surface-2);color:var(--text-2);cursor:pointer}
+.fchip.on{background:var(--accent);color:var(--on-accent);font-weight:600}
+.rescount{font-size:10.5px;color:var(--text-3);padding:2px 2px 0}
+.exrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:none;border-top:.5px solid var(--line);padding:10px 2px;font-family:inherit;color:var(--text-1);cursor:pointer;transition:background .15s,box-shadow .15s,padding .15s}
+.exrow:first-of-type{border-top:none}
+.exrow:hover{background:var(--surface-2);border-radius:11px}
+.exrow .ic{width:34px;height:34px;border-radius:10px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-2);flex:none}
+.exrow .tx{flex:1;min-width:0}
+.exrow .tx b{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:-.1px}
+.exrow .tx > span{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exrow .ldg{text-align:right;flex:none;font-variant-numeric:tabular-nums;min-width:72px}
+.exrow .ldg b{display:block;font-size:13.5px;font-weight:600;letter-spacing:-.2px;color:var(--text-1)}
+.exrow .ldg b em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--text-2);margin-left:1px}
+.exrow .ldg span{display:block;font-size:10px;color:var(--text-3);margin-top:1px}
+.exrow.on{background:var(--accent-soft);border-radius:11px;box-shadow:inset 0 0 0 1px var(--accent);border-top-color:transparent;padding-left:8px;padding-right:8px}
+.exrow.on .ic{background:var(--surface);color:var(--accent)}
+.pickfoot{background:var(--surface);border-radius:var(--radius-l);padding:13px 15px 14px;margin-top:auto}
+.pf-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pf-name{font-size:11.5px;color:var(--text-3)}
+.pf-big{display:flex;align-items:baseline;gap:4px;font-variant-numeric:tabular-nums;margin-top:1px}
+.pf-big b{font-size:31px;font-weight:600;letter-spacing:-1.2px;line-height:1.1}
+.pf-big .u{font-size:13px;color:var(--text-2);font-weight:500}
+.pf-sub{font-size:11px;color:var(--text-3);margin-top:1px;font-variant-numeric:tabular-nums}
+.pf-note{font-size:11px;color:var(--text-2);margin:9px 0 10px;padding-top:9px;border-top:.5px solid var(--line);line-height:1.5}
+.pf-note b{color:var(--text-1)}
+
+/* 训练历史 */
+.bigstat .lb{font-size:10.5px;color:var(--text-3);margin-left:3px}
+.hist-legend{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.hist-legend button{font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:7px;border:none;background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:background .15s,color .15s}
+.hist-legend button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.leg-hint{font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.45;min-height:15px}
+.setcard{background:var(--surface);border-radius:var(--radius-l);padding:13px 14px}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+.sec-head .nm{font-size:13.5px;font-weight:600;letter-spacing:-.1px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.sec-head .agg{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.srow{display:grid;grid-template-columns:40px 1fr 54px 18px;align-items:center;gap:4px;padding:6px 5px;border-top:.5px solid var(--line);border-radius:8px;transition:background .15s,opacity .15s}
+.srow.first{border-top:none}
+.srow .sn{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.srow .sw{display:flex;align-items:baseline;gap:5px;min-width:0}
+.srow .sw b{font-size:13.5px;font-weight:600;letter-spacing:-.2px;font-variant-numeric:tabular-nums;line-height:1.3}
+.srow .sw b em{font-style:normal;font-size:10px;font-weight:500;color:var(--text-2);margin-left:1px}
+.srow .sw .ss{display:inline-block;font-size:9.5px;color:var(--text-3);line-height:1.2;white-space:nowrap}
+.srow .sw .ss::before{content:"·";margin-right:3px;color:var(--text-3)}
+.srow .sr{text-align:right;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.srow .sr em{font-style:normal;font-size:9.5px;color:var(--text-3)}
+.srow .ck{text-align:right;font-size:11px;color:var(--ok)}
+.srow.mute{opacity:.25}
+.srow.hl{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+.switchnote{display:flex;align-items:center;gap:7px;margin:7px 0 3px;padding:6px 8px;background:var(--surface-2);border-radius:8px;font-size:10px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.switchnote b{color:var(--text-1);font-weight:600}
+.switchnote .bar{width:2px;height:12px;border-radius:1px;background:var(--accent)}
+.groupno{font-size:9.5px;color:var(--text-3);margin:7px 0 1px;letter-spacing:.04em}
+
+/* AI 对话 */
+.chatwrap{display:flex;flex-direction:column;gap:9px}
+.airow{display:flex;align-items:flex-start;gap:7px}
+.aiav{width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--text-2);font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;margin-top:2px}
+.bub{max-width:88%;padding:9px 12px;border-radius:15px;font-size:12.5px;line-height:1.55;color:var(--text-1);font-variant-numeric:tabular-nums}
+.bub.me{align-self:flex-end;background:var(--accent);color:var(--on-accent);border-bottom-right-radius:5px}
+.airow .bub.ai{border-bottom-left-radius:5px;background:var(--surface);max-width:calc(100% - 30px)}
+.bub b{font-weight:600}
+.bub .cap{font-size:10px;color:var(--text-3);margin-top:7px;padding-top:7px;border-top:.5px solid var(--line);line-height:1.45}
+.bub .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.sys{text-align:center;font-size:10px;color:var(--text-3);padding:1px 0}
+.qreps{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.qrep{font-family:inherit;font-size:11.5px;padding:7px 10px;border-radius:10px;border:.5px solid var(--line-strong);background:transparent;color:var(--text-1);cursor:pointer}
+.qrep.primary{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+#exchange2{display:flex;flex-direction:column;gap:9px}
+#exchange2[hidden]{display:none}
+.composer{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:16px;padding:8px 11px;font-size:12px;color:var(--text-3)}
+.composer .plus{width:24px;height:24px;border-radius:50%;background:var(--surface-2);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+.composer .ph{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.composer .send{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+
+/* 首次引导 */
+.onb-row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:.5px solid var(--line)}
+.onb-row:first-of-type{border-top:none}
+.onb-row .ic{width:30px;height:30px;border-radius:9px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-2);flex:none}
+.onb-row .tx b{display:block;font-size:12.5px;font-weight:600}
+.onb-row .tx span{display:block;font-size:10.5px;color:var(--text-3);margin-top:1px}
+.onb-row .tx span em{font-style:normal;color:var(--text-2);font-weight:600;font-variant-numeric:tabular-nums}
+.qmark{width:20px;height:20px;border-radius:50%;background:rgba(255,149,0,.16);color:var(--warn);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.qrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:.5px solid var(--line)}
+.qrow:first-of-type{border-top:none}
+.qrow .nm{flex:1;min-width:0}
+.qrow .nm b{display:block;font-size:12.5px;font-weight:600}
+.qrow .nm span{display:block;font-size:10px;color:var(--text-3);margin-top:1px;line-height:1.35}
+.qbtns{display:flex;gap:5px;flex:none}
+.qb{font-family:inherit;font-size:10.5px;font-weight:600;padding:5px 8px;border-radius:7px;border:.5px solid var(--line-strong);background:transparent;color:var(--text-2);cursor:pointer}
+.qb:hover{border-color:var(--accent);color:var(--accent)}
+.qrow.done .qmark{background:rgba(52,199,89,.15);color:var(--ok)}
+.empty{text-align:center;padding:14px 10px 4px}
+.empty .eic{width:34px;height:34px;border-radius:50%;background:var(--surface-2);color:var(--text-3);display:flex;align-items:center;justify-content:center;font-size:15px;margin:0 auto 6px}
+.empty b{display:block;font-size:12.5px;font-weight:600}
+.empty span{display:block;font-size:10.5px;color:var(--text-3);margin-top:2px;line-height:1.45}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Rein · 负重口径 · 扩面稿 · 与主稿配套</div>
+  <h1>同一个 40，在四个界面里怎么读</h1>
+  <p class="lede">
+    主稿把「口径」补成模型的一个维度（<code>LoadBasis</code>）；这份扩面稿只做一件事：
+    让<b>动作选择、训练历史、AI 对话、首次引导</b>四个界面说同一种语言。
+    数值取自 <code>resources/exercises.json</code>，模型以
+    <a href="weight-load-basis.html">weight-load-basis.html</a> 与
+    <a href="../design/weight-load-basis.md">docs/design/weight-load-basis.md</a> 为准，不另起一套。
+  </p>
+  <div class="themebar">
+    <button class="tbtn on" id="tDark" onclick="setTheme('dark')">深色</button>
+    <button class="tbtn" id="tLight" onclick="setTheme('light')">浅色</button>
+    <span class="legend-note">浅 / 暗两版随主稿切换（STANDARDS §7）。选择器可点两条同名动作，历史图例可点，AI 可点「我这台是插片的」。</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s1">01 动作选择器</a>
+  <a href="#s2">02 训练历史</a>
+  <a href="#s3">03 AI 教练</a>
+  <a href="#s4">04 首次引导</a>
+  <a href="#s0">05 落地顺序</a>
+</nav>
+
+<main>
+<!-- ================= 01 动作选择器 ================= -->
+<section class="concept" id="s1">
+  <div>
+    <span class="numtag">01 · 动作选择器</span>
+    <h2>两条同名动作，必须在列表里就分开</h2>
+    <p class="tagline">选动作是这节课唯一一次「选机器」的机会；过了这一步，只能靠记账去猜。</p>
+
+    <div class="block pain">
+      <h3>现状：一条动作，两台机器</h3>
+      <ul>
+        <li>搜索「推胸」只有一条「器械推胸 · 默认重量 40 kg」。挂片式和插片式在库里是同一条
+          （<code>lever-chest-press</code>），因为 <code>equipment</code> 只有 <code>machine</code>，没有体裁。</li>
+        <li>挂片机实际每侧挂 20（合计 40），旧界面把这一组记成 <b>20 kg</b>：
+          容量 <b>20 × 10 × 3 = 600</b>，真实负荷 <b>1,200</b> —— 一节课少一半。</li>
+        <li>如果用户照着「40 kg」每侧挂 40（合计 80），真实容量 2,400，入库仍是 1,200。
+          <b>数字差一倍，界面没有任何信号。</b></li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>新设计：把「器械」变成结果行的身份</h3>
+      <ul>
+        <li>同名两条：「挂片式」「插片式」，用<b>口径徽标</b>区分，而不是塞进副标题 ——
+          徽标可扫读、可进表格、可被筛选。</li>
+        <li>右侧永远是操作数：挂片 <code>20/侧</code> + 灰字「合计 40」；插片 <code>40</code> + 灰字「插片档位」。
+          插片<b>不给合计</b>，那只是读数的同义词，多一个数就是噪声。</li>
+        <li>点任一条，底部卡片把操作数放大确认，并翻译成动作：挂片给片组合，插片给孔位。
+          这一屏只决定「怎么做」，不决定「做多少」。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>为什么不那样做</h3>
+      <ul>
+        <li>不在动作名后加「(挂片)」：动作名是搜索与历史的主键，改名会让同一动作在记录里裂成两条，
+          而且表格列宽也容不下。</li>
+        <li>不选完再弹窗问：那是用户已经离开选择器后的补一次打断，同一个动作下次还得再问。</li>
+      </ul>
+    </div>
+
+    <div class="callout accent">
+      <b>纪律</b>：同名动作必须由器械拆行；口径徽标属于行，永远不降级成副标题、后缀或 tooltip。
+    </div>
+  </div>
+
+  <div class="phone" data-theme="dark">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>●●● ⌁ ▮</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">添加动作</span><span style="text-align:right;font-size:13px;color:var(--accent);font-weight:500">完成</span></div>
+      <div class="body">
+        <div>
+          <div class="srch"><span class="mg">⌕</span><span class="q">推胸</span><span class="clr">✕</span></div>
+          <div class="fchips">
+            <button class="fchip on">全部 5</button>
+            <button class="fchip">器械 2</button>
+            <button class="fchip">杠铃 1</button>
+            <button class="fchip">哑铃 1</button>
+            <button class="fchip">助力 1</button>
+          </div>
+        </div>
+
+        <div class="mcard" style="padding:6px 12px 4px">
+          <div class="rescount">搜索结果 · 按「动作 + 器械」拆行</div>
+          <div id="pickRows">
+            <button class="exrow on" data-basis="side" data-name="器械推胸 · 挂片式" data-main="20" data-unit="/ 侧" data-sub="合计 40 kg · 3 组 × 10 次" data-note="每侧挂 10 + 10，两侧各一套；合计 40 只是同一个读数的另一面。" data-badge="挂片" data-kind="a">
+              <span class="ic">◧</span>
+              <span class="tx"><b>器械推胸 <span class="badge a">挂片</span></b><span>胸大肌 · 肱三头肌 · 固定轨迹</span></span>
+              <span class="ldg"><b class="num">20<em>/侧</em></b><span>合计 40</span></span>
+            </button>
+            <button class="exrow" data-basis="stack" data-name="器械推胸 · 插片式" data-main="40" data-unit="kg" data-sub="插片档位 · 3 组 × 10 次" data-note="插到 40 的孔。插片读数就是负荷，不给合计。" data-badge="插片" data-kind="">
+              <span class="ic">▤</span>
+              <span class="tx"><b>器械推胸 <span class="badge">插片</span></b><span>胸大肌 · 肱三头肌 · 固定轨迹</span></span>
+              <span class="ldg"><b class="num">40<em>kg</em></b><span>插片档位</span></span>
+            </button>
+            <button class="exrow" data-basis="hand" data-name="上斜哑铃卧推 · 每只" data-main="22" data-unit="/ 只" data-sub="一对 44 kg · 3 组 × 10 次" data-note="双手各拿一只 22，不是一对总重 22。" data-badge="哑铃" data-kind="">
+              <span class="ic">▮</span>
+              <span class="tx"><b>上斜哑铃卧推 <span class="badge">哑铃</span></b><span>胸大肌上束 · 三角前束</span></span>
+              <span class="ldg"><b class="num">22<em>/只</em></b><span>一对 44</span></span>
+            </button>
+            <button class="exrow" data-basis="total" data-name="杠铃卧推 · 含杠" data-main="60" data-unit="kg" data-sub="含杠 20 · 每侧 20" data-note="杆 20 + 每侧 20；60 是总重，含杆。" data-badge="杠铃" data-kind="">
+              <span class="ic">═</span>
+              <span class="tx"><b>杠铃卧推 <span class="badge">杠铃</span></b><span>胸大肌 · 肱三头肌 · 三角前束</span></span>
+              <span class="ldg"><b class="num">60<em>kg</em></b><span>含杠 20</span></span>
+            </button>
+            <button class="exrow" data-basis="assist" data-name="助力引体 · 减重" data-main="减 25" data-unit="kg" data-sub="越大越轻 · 不计容量" data-note="插销 25 是减重，不是负重；越轻越难。" data-badge="助力" data-kind="o">
+              <span class="ic">↑</span>
+              <span class="tx"><b>助力引体 <span class="badge o">助力</span></b><span>背阔肌 · 肱二头肌 · 辅助</span></span>
+              <span class="ldg"><b class="num">减 25<em>kg</em></b><span>越大越轻</span></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="mini" style="padding:0 4px">
+          两条同名动作是两台机器：<b>20/侧</b> 与 <b>40 插片</b> 负荷相同、读法不同。选错，这节课每一组都记错。
+        </div>
+
+        <div class="pickfoot">
+          <div class="pf-top">
+            <span class="pf-name" id="pfName">将加入 · 器械推胸（挂片式）</span>
+            <span class="badge a" id="pfBadge">挂片</span>
+          </div>
+          <div class="pf-big"><b class="num" id="pfBig">20</b><span class="u" id="pfUnit">/ 侧</span></div>
+          <div class="pf-sub" id="pfSub">合计 40 kg · 3 组 × 10 次</div>
+          <div class="pf-note" id="pfNote">每侧挂 10 + 10，两侧各一套；合计 40 只是同一个读数的另一面。</div>
+          <button class="cta">加入训练</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 训练历史 ================= -->
+<section class="concept" id="s2">
+  <div>
+    <span class="numtag">02 · 训练历史 / 记录详情</span>
+    <h2>逐组列表要保留当时的读法</h2>
+    <p class="tagline">历史不是当前器械的投影。每行只解释它自己那一刻的口径。</p>
+
+    <div class="block pain">
+      <h3>现状：五条数字，看不出换过机器</h3>
+      <ul>
+        <li>11/17 这次：前三组挂片机每侧 20（第三组 22），后两组换插片机 40 / 45。旧列表是
+          <b>20 kg、20 kg、22 kg、40 kg、45 kg</b> —— 五条一模一样的格式。</li>
+        <li>前三条看起来最轻，其实它们是「每侧」：合计 40 / 40 / 44，与后两条同量级。
+          用户看图只会得出「换机器后我加重了」这个错误结论。</li>
+        <li>旧界面按「读数即负荷」记这 5 组：<b>20×10 + 20×10 + 22×8 + 40×10 + 45×8 = 1,336</b>；
+          真实负荷 <b>40×10 + 40×10 + 44×8 + 40×10 + 45×8 = 1,912</b>，少 <b>576（30%）</b>。
+          <code>SessionSummaryPane.vue:210</code> 现在就是这么加的。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>新设计：操作数做主，换机器留痕</h3>
+      <ul>
+        <li>每行主数字是操作数：<code>20/侧</code> 或 <code>40</code>；合计与档位只在灰字副标，
+          一行只讲一个数，避免两个 kg 打架。</li>
+        <li>换机器处插一条时间分隔「16:42 · 换到插片机」，把一次训练切成两段口径，
+          而不是假装连续。</li>
+        <li>顶部图例可点：挂片 / 插片 / 哑铃，点一下只高亮该口径的行（再点取消），
+          用来核对「我到底在哪台机器上做了几组」。</li>
+        <li>单边动作按左 / 右分行：单臂哑铃划船 <code>20/只 × 10 × 3 组 × 两侧 = 1,200</code>，
+          左、右各自入组，不把单只 ×2 塞进一行。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>为什么不那样做</h3>
+      <ul>
+        <li>不把所有行统一换算成「合计 40 kg」：用户在器械前要再除回去，而插片机根本没有「合计」这个东西。</li>
+        <li>不做 hover tooltip：手机没有 hover，历史又是快速扫读的场景，要点开才懂的说明等于没有。</li>
+        <li>不按当前器械重算历史：那会让昨天的记录随今天换机器而变，比错更糟。</li>
+      </ul>
+    </div>
+
+    <div class="callout accent">
+      <b>纪律</b>：每组记录携带它当时的 <code>load_basis</code> 快照；展示只读快照，统计时才归一到 workload。
+    </div>
+  </div>
+
+  <div class="phone" data-theme="dark">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>●●● ⌁ ▮</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">训练详情</span><span style="text-align:right;font-size:13px;color:var(--accent);font-weight:500">编辑</span></div>
+      <div class="body">
+        <div class="mcard">
+          <div class="mc-sub">11/17 周一 · 19:05–20:02</div>
+          <div class="bigstat"><b class="num">3,112</b><span class="u">kg</span><span class="lb">总容量 · 合计口径</span></div>
+          <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+            <span class="badge n">2 个动作</span>
+            <span class="badge n">8 组</span>
+            <span class="badge n">57 分钟</span>
+          </div>
+          <div class="hist-legend" id="histLegend">
+            <button data-basis="side" data-hint="挂片：主数字是每侧，合计 = ×2；后两条插片行不会被改写。">挂片 3 组</button>
+            <button data-basis="stack" data-hint="插片：数字就是插销读数，没有合计；与挂片每侧 20 同负荷。">插片 2 组</button>
+            <button data-basis="hand" data-hint="哑铃：主数字是每只，一对 = ×2；单边动作左右分行。">哑铃 3 组</button>
+          </div>
+          <div class="leg-hint" id="histHint">点一个口径，只高亮当次训练里按它记录的行。</div>
+        </div>
+
+        <div class="setcard">
+          <div class="sec-head">
+            <span class="nm">器械推胸 <span class="badge">挂片</span><span class="badge">插片</span></span>
+            <span class="agg">5 组 · 1,912 kg</span>
+          </div>
+          <div id="histSets">
+            <div class="srow first" data-basis="side">
+              <span class="sn">第1组</span>
+              <span class="sw"><b class="num">20<em>/侧</em></b><span class="ss">合计 40</span></span>
+              <span class="sr num">10<em> 次</em></span>
+              <span class="ck">✓</span>
+            </div>
+            <div class="srow" data-basis="side">
+              <span class="sn">第2组</span>
+              <span class="sw"><b class="num">20<em>/侧</em></b><span class="ss">合计 40</span></span>
+              <span class="sr num">10<em> 次</em></span>
+              <span class="ck">✓</span>
+            </div>
+            <div class="srow" data-basis="side">
+              <span class="sn">第3组</span>
+              <span class="sw"><b class="num">22<em>/侧</em></b><span class="ss">合计 44</span></span>
+              <span class="sr num">8<em> 次</em></span>
+              <span class="ck">✓</span>
+            </div>
+            <div class="switchnote">
+              <span class="bar"></span>
+              <span><b>16:42</b> · 换到插片机</span>
+              <span style="margin-left:auto">之后 2 组按插销记</span>
+            </div>
+            <div class="srow" data-basis="stack">
+              <span class="sn">第4组</span>
+              <span class="sw"><b class="num">40<em>kg</em></b><span class="ss">插片档位</span></span>
+              <span class="sr num">10<em> 次</em></span>
+              <span class="ck">✓</span>
+            </div>
+            <div class="srow" data-basis="stack">
+              <span class="sn">第5组</span>
+              <span class="sw"><b class="num">45<em>kg</em></b><span class="ss">插片档位</span></span>
+              <span class="sr num">8<em> 次</em></span>
+              <span class="ck">✓</span>
+            </div>
+          </div>
+          <div class="mini" style="margin-top:8px">前三条「每侧」与后两条「插销」是同量级，旧界面把它们印成了 20 和 40。</div>
+        </div>
+
+        <div class="setcard">
+          <div class="sec-head">
+            <span class="nm">单臂哑铃划船 <span class="badge">哑铃</span><span class="badge n">可单边</span></span>
+            <span class="agg">3 组 · 1,200 kg</span>
+          </div>
+          <div class="srow first" data-basis="hand">
+            <span class="sn">1L</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">左</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="srow" data-basis="hand">
+            <span class="sn">1R</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">右</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="srow" data-basis="hand">
+            <span class="sn">2L</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">左</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="srow" data-basis="hand">
+            <span class="sn">2R</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">右</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="srow" data-basis="hand">
+            <span class="sn">3L</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">左</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="srow" data-basis="hand">
+            <span class="sn">3R</span>
+            <span class="sw"><b class="num">20<em>/只</em></b><span class="ss">右</span></span>
+            <span class="sr num">10<em> 次</em></span>
+            <span class="ck">✓</span>
+          </div>
+          <div class="mini" style="margin-top:8px">单边：左 / 右分行入组，合计 = 左 + 右；不把一只的重量 ×2 塞进同一行。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 AI 教练 ================= -->
+<section class="concept" id="s3">
+  <div>
+    <span class="numtag">03 · AI 教练对话</span>
+    <h2>每个重量后面必须跟一个口径词</h2>
+    <p class="tagline">AI 不是算错，是说得太省。省掉的两个字，会变成器械上两倍的片。</p>
+
+    <div class="block pain">
+      <h3>现状：一句「建议 40 kg」执行成两种负荷</h3>
+      <ul>
+        <li><code>ai/tools/exercise.ts:303</code> 返回 <code>defaultWeightKg</code> 纯数字；器械推胸是
+          <code>null</code>，推断成 40。气泡答「建议 40 kg」，没有任何读法。</li>
+        <li>挂片机上这句话被用户执行成<b>每侧 40（合计 80）</b>：AI 想给 40 的负荷，用户做了 80，
+          容量直接翻倍；反过来，用户也可能只挂 20，做成一半。</li>
+        <li>哑铃同理：「22 kg」可以是一只，也可以是一对总重。AI 越确定，误差越大，
+          因为它从不解释这个数怎么读。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>新设计：一句话完成「读法 → 总量 → 执行」</h3>
+      <ul>
+        <li>先给操作数 <code>每侧 22 kg</code>，紧跟括号合计 <code>（合计 44）</code>，
+          再落到动作 <code>每侧挂 10 + 10 + 2</code>。用户不用做任何二次换算。</li>
+        <li>用户报机器类型后，同一处方换口径重述：「插销 44 kg，插到 44 的孔」，
+          并明说一句<b>「处方没变，只是算法变了」</b> —— 否则用户会以为 AI 改了计划。</li>
+        <li>tool 返回值增加 <code>basis</code> 字段；气泡渲染时口径词与数字绑定，
+          无法单独渲染一个裸 kg。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>为什么不那样做</h3>
+      <ul>
+        <li>不只报合计 44：用户在挂片机前仍要自己除以 2、再拼片，AI 只是把换算推回给人。</li>
+        <li>不只报每侧 22：容量与 e1RM 是合计口径，AI 自己在下一句就对不上账。</li>
+        <li>不两个大字并排：两个 kg 抢同一层级，用户只会问「到底挂哪个」—— 合计只能是从属信息。</li>
+      </ul>
+    </div>
+
+    <div class="callout accent">
+      <b>纪律</b>：气泡里不允许出现不带口径词的裸数字（只有 kg、没有每侧 / 每只 / 插销 / 含杠）。
+      由 tool schema 强制，不靠 prompt 提醒。
+    </div>
+  </div>
+
+  <div class="phone" data-theme="dark">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>●●● ⌁ ▮</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">AI 教练</span><span style="text-align:right;font-size:15px;color:var(--text-3)">⋯</span></div>
+      <div class="body">
+        <div class="row between" style="padding:0 4px">
+          <span class="mini">今天 09:12</span>
+          <span class="badge" id="aiBasisBadge">合计口径 · 挂片</span>
+        </div>
+
+        <div class="chatwrap">
+          <div class="bub me">我推胸该上多重？今天只有挂片机。</div>
+
+          <div class="airow">
+            <span class="aiav">AI</span>
+            <div class="bub ai">
+              <div>今天器械推胸 <b>每侧 22 kg</b>（合计 44）。</div>
+              <div style="margin-top:3px">挂片：每侧 <b>10 + 10 + 2</b>，两边各挂一套。</div>
+              <div class="tags">
+                <span class="badge">3 组 × 8 次</span>
+                <span class="badge n">留 2 次余力</span>
+              </div>
+              <div class="cap">处方 44 kg · 按合计算，按每侧说给你听</div>
+            </div>
+          </div>
+
+          <div class="qreps" id="aiQuick">
+            <button class="qrep primary" id="btnStack">我这台是插片的</button>
+            <button class="qrep">我想换哑铃</button>
+          </div>
+
+          <div id="exchange2" hidden>
+            <div class="sys">已切换为插片口径 · 09:14</div>
+            <div class="bub me">我这台是插片的。</div>
+            <div class="airow">
+              <span class="aiav">AI</span>
+              <div class="bub ai">
+                <div>那这台不用换算：插销 <b>44 kg</b>，插到 44 的孔。</div>
+                <div style="margin-top:3px">3 组 × 8 次不变。<b>处方没变，只是算法变了</b> ——
+                  44 一直是合计负荷：刚才是每侧 22，现在是插销读数。</div>
+                <div class="cap">这台插片机 2 kg 一档 → 44 正好落档</div>
+              </div>
+            </div>
+            <div class="qreps">
+              <button class="qrep">记下这台器械</button>
+              <button class="qrep">为什么不是 45？</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini" style="text-align:center;padding-top:2px">
+          每个重量都带口径词；裸 kg 由 schema 拦截，不靠模型自觉。
+        </div>
+
+        <div class="mcard" style="padding:11px 13px">
+          <div class="row between" style="margin-bottom:3px">
+            <span class="mini" style="font-weight:600;color:var(--text-2)">这一句为什么这么说</span>
+            <span class="badge n">LoadBasis = side</span>
+          </div>
+          <div class="mini">先给每侧（可执行），再给合计（可对账），最后给片组合。换机器只换读法，处方 44 不变。</div>
+        </div>
+
+        <div class="composer" style="margin-top:auto">
+          <span class="plus">+</span>
+          <span class="ph">问点别的，比如「换成哑铃呢」</span>
+          <span class="send">↑</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 空态 / 首次引导 ================= -->
+<section class="concept" id="s4">
+  <div>
+    <span class="numtag">04 · 空态 / 首次引导</span>
+    <h2>第一次进来，只教「怎么读」</h2>
+    <p class="tagline">动作库有 81 个动作，其中只有 2 个的读法是真歧义。空态的责任是把这件事说清楚，而不是把屏幕填满。</p>
+
+    <div class="block pain">
+      <h3>现状：还没开始练，错已经埋好</h3>
+      <ul>
+        <li>首次进入，每条动作都写「默认重量 40 kg」。站姿提踵是器械，40 是插销还是每侧挂片？界面不说。</li>
+        <li>81 个动作里只有 <b>2 个</b>落在这条歧义带上（<b>器械推胸、站姿提踵</b>）——
+          其余机器 / 绳索几乎清一色插片，直接按插片走，多问只会烦人。默认值一旦被当成事实，
+          用户练完才发现记错，且没有任何回溯信号。</li>
+        <li>空态本身也是空的：没有最近动作、没有我的器械，只有搜索框和一串不知道该怎么读的默认值。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>新设计：一张三行卡 + 一个入口 + 一个问号</h3>
+      <ul>
+        <li><b>三行卡</b>只讲三种读法：挂片 <code>20/侧 = 合计 40</code>、插片 <code>40</code>、
+          杠铃 <code>60 = 含杠 20 + 每侧 20</code>。首次进入不需要七种口径的词典，哑铃遇到时再讲。</li>
+        <li><b>「设立我的器械」</b>放在首屏：选一次，默认值变成「你的机器」，推断值不再出现。</li>
+        <li><b>待确认列表</b>用问号徽标，就地给两个按钮（挂片 / 插片）。点完变 ✓ 并记住这台；
+          不弹窗、不打断浏览。</li>
+        <li>底部留一个真正的空态：「还没有练过的动作」，说明第一次训练后会按器械分组出现。</li>
+      </ul>
+    </div>
+
+    <div class="block">
+      <h3>为什么不那样做</h3>
+      <ul>
+        <li>不做七种口径的 onboarding 轮播：用户还没练，认知预算为零，滑完就忘。</li>
+        <li>不静默按插片推断：机器类猜错的概率不低，而错了没有信号 —— 这正是主稿 §07 的结论。</li>
+        <li>不把「设立器械」藏进设置：这是首次进入唯一有价值的动作，就该在首屏。</li>
+      </ul>
+    </div>
+
+    <div class="callout accent">
+      <b>纪律</b>：推断值永远带问号，只有用户点过才转成口径徽标；空态只教「怎么读」，不教「怎么算」。
+    </div>
+  </div>
+
+  <div class="phone" data-theme="dark">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>●●● ⌁ ▮</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">动作库</span><span style="text-align:right;font-size:13px;color:var(--accent);font-weight:500">我的</span></div>
+      <div class="body">
+        <div class="srch"><span class="mg">⌕</span><span class="q" style="color:var(--text-3);font-weight:400">搜索动作或器械</span><span class="clr">⚙</span></div>
+
+        <div class="mcard">
+          <div class="mc-head">
+            <b>重量到底怎么读</b>
+            <span class="tag n">首次</span>
+          </div>
+          <div class="mini" style="margin-bottom:2px">同一个 40，三种机器三种意思。学一次就够。</div>
+          <div class="onb-row">
+            <span class="ic">◧</span>
+            <span class="tx"><b>挂片机 · 数字是每侧</b><span><em>20/侧</em> = 合计 40 —— 每侧挂 10 + 10，两侧各一套</span></span>
+          </div>
+          <div class="onb-row">
+            <span class="ic">▤</span>
+            <span class="tx"><b>插片机 · 数字是插销读数</b><span>插到 <em>40</em> 的孔，不换算、没有合计</span></span>
+          </div>
+          <div class="onb-row">
+            <span class="ic">═</span>
+            <span class="tx"><b>杠铃 · 数字含杠</b><span><em>60</em> = 杆 20 + 每侧 20</span></span>
+          </div>
+          <button class="cta" style="margin-top:12px">设立我的器械</button>
+        </div>
+
+        <div class="mcard">
+          <div class="mc-head">
+            <b style="font-size:13.5px">待确认 · 2</b>
+            <span class="badge o" id="qCount">? 两处</span>
+          </div>
+          <div class="mini" style="margin-bottom:4px">这两台机器是插片还是挂片？确认后重量才准，也才会进训练建议。</div>
+          <div class="qrow">
+            <span class="qmark">?</span>
+            <div class="nm"><b>器械推胸</b><span>固定轨迹 · 库内默认读法未知</span></div>
+            <div class="qbtns">
+              <button class="qb" data-basis="side">挂片</button>
+              <button class="qb" data-basis="stack">插片</button>
+            </div>
+          </div>
+          <div class="qrow">
+            <span class="qmark">?</span>
+            <div class="nm"><b>站姿提踵</b><span>器械 · 40 是插销还是每侧？</span></div>
+            <div class="qbtns">
+              <button class="qb" data-basis="side">挂片</button>
+              <button class="qb" data-basis="stack">插片</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mcard" style="padding-bottom:12px">
+          <div class="empty">
+            <span class="eic">○</span>
+            <b>还没有练过的动作</b>
+            <span>第一次训练后，这里会按你用的器械分组出现。</span>
+          </div>
+        </div>
+
+        <div class="mini" style="text-align:center;padding:0 6px">
+          推断值带问号，你点过才转成口径徽标；空态只教怎么读，不教怎么算。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="end" id="s0">
+  <p><b style="color:var(--g-text)">优先级建议</b>：<b style="color:var(--g-text)">02 训练历史</b>先做 —— 只读展示，行上带 <code>load_basis</code> 快照即可止住「同一次训练五条读数看不出换过机器」的误读；
+  <b style="color:var(--g-text)">01 动作选择器</b>与<b style="color:var(--g-text)">04 首次引导</b>同批做（都依赖 <code>exercise_load_profiles</code>，一个写入、一个消费）；
+  <b style="color:var(--g-text)">03 AI 话术</b>放最后（要改 tool schema 与 prompt，但收益是防止用户照着一个含糊数字把片加两倍）。
+  四屏都不新增字段：<code>LoadBasis</code>、<code>LoadProfile</code>、<code>load_basis</code> 全部来自主稿 §2 / §4。</p>
+  <p style="margin-top:12px">未改任何 <code>.vue</code>；本稿交互只用于验证设计里的状态切换。字体、圆角、色彩配额与主稿一致：数值中性色，颜色只出现在图标 / 徽标 / 图上。</p>
+</footer>
+</div>
+
+<script>
+/* ============ 主题（默认 dark） ============ */
+function setTheme(t){
+  document.querySelectorAll('.phone').forEach(function(p){ p.setAttribute('data-theme', t); });
+  document.getElementById('tDark').classList.toggle('on', t === 'dark');
+  document.getElementById('tLight').classList.toggle('on', t === 'light');
+}
+
+/* ============ 01 动作选择器：点两条同名动作，底部处方换读法 ============ */
+(function(){
+  var rows = document.querySelectorAll('#pickRows .exrow');
+  if (!rows.length) return;
+  rows.forEach(function(row){
+    row.addEventListener('click', function(){
+      rows.forEach(function(r){ r.classList.remove('on'); });
+      row.classList.add('on');
+      document.getElementById('pfName').textContent = '将加入 · ' + row.dataset.name;
+      document.getElementById('pfBig').textContent = row.dataset.main;
+      document.getElementById('pfUnit').textContent = row.dataset.unit;
+      document.getElementById('pfSub').textContent = row.dataset.sub;
+      document.getElementById('pfNote').textContent = row.dataset.note;
+      var b = document.getElementById('pfBadge');
+      b.textContent = row.dataset.badge;
+      b.className = 'badge' + (row.dataset.kind ? ' ' + row.dataset.kind : '');
+    });
+  });
+})();
+
+/* ============ 02 训练历史：口径图例高亮 ============ */
+(function(){
+  var legend = document.getElementById('histLegend');
+  if (!legend) return;
+  var btns = legend.querySelectorAll('button');
+  var active = null;
+  function paint(){
+    btns.forEach(function(b){ b.classList.toggle('on', b.dataset.basis === active); });
+    document.querySelectorAll('#histSets .srow').forEach(function(r){
+      r.classList.remove('hl','mute');
+      if (active){
+        if (r.dataset.basis === active) r.classList.add('hl');
+        else r.classList.add('mute');
+      }
+    });
+    /* 单臂那组也一起响应 */
+    document.querySelectorAll('.setcard .srow').forEach(function(r){
+      if (r.closest('#histSets')) return;
+      r.classList.remove('hl','mute');
+      if (active){
+        if (r.dataset.basis === active) r.classList.add('hl');
+        else r.classList.add('mute');
+      }
+    });
+    var hint = document.getElementById('histHint');
+    if (!active){
+      hint.textContent = '点一个口径，只高亮当次训练里按它记录的行。';
+    } else {
+      var cur = legend.querySelector('button[data-basis="' + active + '"]');
+      hint.textContent = cur ? cur.dataset.hint : '';
+    }
+  }
+  btns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      active = (active === btn.dataset.basis) ? null : btn.dataset.basis;
+      paint();
+    });
+  });
+})();
+
+/* ============ 03 AI 教练：换口径重述同一处方 ============ */
+(function(){
+  var btn = document.getElementById('btnStack');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    document.getElementById('aiQuick').hidden = true;
+    document.getElementById('exchange2').hidden = false;
+    var badge = document.getElementById('aiBasisBadge');
+    badge.textContent = '合计口径 · 插片';
+    badge.className = 'badge';
+  });
+})();
+
+/* ============ 04 首次引导：待确认就地确认 ============ */
+(function(){
+  var rows = document.querySelectorAll('.qrow');
+  if (!rows.length) return;
+  rows.forEach(function(row){
+    row.querySelectorAll('.qb').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var label = btn.dataset.basis === 'side' ? '挂片 · 每侧' : '插片 · 读数';
+        row.classList.add('done');
+        row.querySelector('.qmark').textContent = '✓';
+        row.querySelector('.nm span').textContent = '已确认 · ' + label + ' · 记住这台';
+        row.querySelector('.qbtns').innerHTML = '<span class="badge">' + (btn.dataset.basis === 'side' ? '挂片' : '插片') + '</span>';
+        var left = document.querySelectorAll('.qrow:not(.done)').length;
+        var c = document.getElementById('qCount');
+        c.textContent = left ? '? ' + (left === 1 ? '一处' : '两处') : '✓ 已确认';
+        c.className = 'badge' + (left ? ' o' : '');
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

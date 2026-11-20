@@ -38,6 +38,8 @@
 
 import { MUSCLE_LABELS, resolveActivation, type Level, type MuscleKey } from '@/config/muscles'
 import type { ExerciseRecord, PlanExercise, StrengthSetRecord } from '@/types'
+import type { LoadSetup } from '@/types/load'
+import { inferLoadSetup } from './loadBasis'
 import { computeStrengthTrend, type StrengthTrend } from './strengthTrend'
 
 /* ---------------- 科学依据数据表 ---------------- */
@@ -209,6 +211,13 @@ export interface ExerciseAdvice {
   factors: ReadinessFactor[]
   /** 锚定修正一句话（做满递增/状态差降载），无修正时为空 */
   anchorNote?: string
+  /**
+   * 负重口径：这个动作的重量该怎么读（每侧 / 含杠 / 每只…）。
+   *
+   * 建议值本身仍是同一个标量（合计口径），口径只决定它怎么被念出来 ——
+   * 所以容量、e1RM、PR 继续吃 suggestedWeight，展示侧才拆成「操作数 + 副标」。
+   */
+  load: LoadSetup
 }
 
 export interface MuscleLoadRow {
@@ -366,6 +375,7 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
     const stat = stats.get(key)
     const name = lib?.name ?? item.name
     const weightStep = lib?.weightStep && lib.weightStep > 0 ? lib.weightStep : 0
+    const load = inferLoadSetup(item.kind, lib?.equipment ?? null, name, weightStep)
     const targetReps = item.reps ?? lib?.defaultReps ?? 8
     const targetSets = item.sets ?? lib?.defaultSets ?? 3
     const rationale: string[] = []
@@ -394,6 +404,7 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
         hasHistory: false,
         rationale: [`${item.kind === 'timed' ? '计时' : '有氧'}动作不做重量建议`],
         factors: [],
+        load,
       }
       continue
     }
@@ -608,6 +619,7 @@ export function computeTrainingAdvice(input: TrainingAdviceInput): TrainingAdvic
       rationale,
       factors: exFactors,
       anchorNote: anchorNote ?? undefined,
+      load,
     }
   }
 

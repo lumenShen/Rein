@@ -6,6 +6,7 @@ import ActionSheet from '@/components/common/ActionSheet.vue'
 import ExerciseGuideBlock from '@/components/exercise/ExerciseGuideBlock.vue'
 import ExerciseHistoryPanel from '@/components/exercise/ExerciseHistoryPanel.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
+import LoadReadout from '@/components/exercise/LoadReadout.vue'
 import MuscleMap from '@/components/exercise/MuscleMap.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import WeightCurve from '@/components/exercise/WeightCurve.vue'
@@ -14,10 +15,12 @@ import { sessionService } from '@/services/sessionService'
 import { useExerciseLibStore } from '@/stores/exerciseLib'
 import { useToast } from '@/composables/useToast'
 import { fmtDateCn, todayStr } from '@/utils/date'
+import { inferLoadSetup, readLoad } from '@/utils/loadBasis'
 import { libraryMuscles } from '@/utils/libraryMuscles'
 import { aggregateStrengthDays, fmtKg, type StrengthDay } from '@/utils/strength'
 import { computeTrainingAdvice, type ExerciseAdvice } from '@/utils/trainingAdvice'
 import type { ExerciseRecord, PlanExercise } from '@/types'
+import type { LoadSetup } from '@/types/load'
 
 /**
  * 动作库 · 动作详情。
@@ -116,14 +119,19 @@ const metaLine = computed(() => {
 })
 
 /** 训练参数：值与单位拆开，给程序页 stats 同款「标签在上 / 值+单位在下」的排法 */
-const stats = computed<{ k: string; v: string; unit?: string }[]>(() => {
+const stats = computed<{ k: string; v: string; unit?: string; note?: string }[]>(() => {
   const e = props.exercise
   if (!e) return []
   if (e.kind === 'strength') {
     return [
       { k: '默认组数', v: `${e.defaultSets}`, unit: '组' },
       { k: '每组次数', v: e.defaultReps != null ? `${e.defaultReps}` : '—', unit: e.defaultReps != null ? '次' : undefined },
-      { k: '默认重量', v: e.defaultWeightKg != null ? fmtKg(e.defaultWeightKg) : '自重', unit: e.defaultWeightKg != null ? 'kg' : undefined },
+      {
+        k: '默认重量',
+        v: weightRead.value ? weightRead.value.main : '自重',
+        unit: e.defaultWeightKg != null && weightRead.value?.unit ? weightRead.value.unit : undefined,
+        note: e.defaultWeightKg != null && weightRead.value ? weightRead.value.sub : undefined,
+      },
       { k: '组间休息', v: `${e.defaultRestSec}`, unit: '秒' },
     ]
   }
@@ -155,13 +163,32 @@ const ADVICE_FALLBACK: Record<string, string> = {
   cardio: '有氧动作不做重量建议',
 }
 
+/**
+ * 负重口径：这个动作的「重」该怎么读（每侧 / 含杠 / 每只 / 读数…）。
+ *
+ * 同一个动作在不同健身房可能是插片式或挂片式两台机器 —— 所以口径由动作库推断（P0），
+ * 区分不出体裁时（器械推胸、站姿提踵）只做到「每侧 + 合计」这一层，不做静默单向假设。
+ */
+const loadSetup = computed<LoadSetup>(() => {
+  const e = props.exercise
+  if (!e) return inferLoadSetup('strength', null, '')
+  return inferLoadSetup(e.kind, e.equipment ?? null, e.name, e.weightStep)
+})
+
+/** 库内默认重量的读法（训练参数格用） */
+const weightRead = computed(() => {
+  const e = props.exercise
+  if (!e || e.defaultWeightKg == null) return null
+  return readLoad(e.defaultWeightKg, loadSetup.value)
+})
+
 const adviceLine = computed(() => {
   const a = advice.value
   if (!a) return ''
   if (a.suggestedWeight == null) {
     return a.hasHistory ? '自重动作：按目标次数推进' : ADVICE_FALLBACK[props.exercise?.kind ?? 'strength']
   }
-  return `建议 ${fmtKg(a.suggestedWeight)} kg × ${a.suggestedReps ?? '—'} 次 × ${a.suggestedSets} 组`
+  return ''
 })
 
 /**
@@ -258,7 +285,15 @@ async function removeCustom(): Promise<void> {
         />
       </p>
       <div class="advicecard">
-        <p class="adviceline num">{{ loading ? '计算中…' : adviceLine }}</p>
+        <p class="adviceline num">
+          <template v-if="loading">计算中…</template>
+          <template v-else-if="advice && advice.suggestedWeight != null">
+            建议
+            <LoadReadout :kg="advice.suggestedWeight" :setup="loadSetup" show-sub />
+            × {{ advice.suggestedReps ?? '—' }} 次 × {{ advice.suggestedSets }} 组
+          </template>
+          <template v-else>{{ adviceLine }}</template>
+        </p>
         <p v-if="readinessText" class="advicestate">{{ readinessText }}</p>
         <p v-if="advice?.rationale.length" class="advicewhy">{{ advice.rationale[0] }}</p>
       </div>
@@ -289,6 +324,7 @@ async function removeCustom(): Promise<void> {
         <div v-for="s in stats" :key="s.k" class="cell">
           <em>{{ s.k }}</em>
           <b class="num">{{ s.v }}<i v-if="s.unit">{{ s.unit }}</i></b>
+          <span v-if="s.note" class="cellnote">{{ s.note }}</span>
         </div>
       </div>
 
@@ -444,6 +480,8 @@ async function removeCustom(): Promise<void> {
 .adviceline {
   font-size: var(--fs-callout);
   font-weight: var(--fw-bold);
+  /* 口径副标（合计 / 含杠）另起一行：同一行里放两个数字会先把主数字压小 */
+  line-height: var(--lh-body);
 }
 
 /* 「今日状态 ×…」是次要行：系数只微调重量，不能和重量建议同字号并列 */
@@ -505,6 +543,15 @@ async function removeCustom(): Promise<void> {
   font-size: var(--fs-micro);
   color: var(--text-3);
   margin-left: var(--sp-2);
+}
+
+/* 口径副标（每侧合计 / 含杠每侧）：只能当灰字，不与数值争主次 */
+.cellnote {
+  display: block;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 .tips {
