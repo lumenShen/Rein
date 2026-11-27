@@ -171,6 +171,7 @@ jobs:
         run: |
           node scripts/release/publish.mjs \
             --version "${{ steps.ver.outputs.version }}" \
+            --notes-file RELEASE_NOTES.md \
             --to server,github \
             ${{ steps.targets.outputs.args }}
       - name: 发布后校验（以客户端视角重跑一遍验签与下载）

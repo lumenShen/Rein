@@ -225,9 +225,8 @@ async function main() {
   // 说明只取**这一版**那一节，并按《更新文案规范》校验（scripts/release/notes.mjs）。
   // 从前是把整份 RELEASE_NOTES.md 塞进清单：线上实测 79,848 字节里 77,481 是 notes，
   // 每个客户端每次检查更新都要下这一整份历史，而用户要看的只有最后一节。
-  const notesSource = args.notesFile
-    ? fs.readFileSync(path.resolve(REPO_ROOT, args.notesFile), 'utf8')
-    : null
+  const notesFile = args.notesFile ?? 'RELEASE_NOTES.md'
+  const notesSource = fs.readFileSync(path.resolve(REPO_ROOT, notesFile), 'utf8')
   const prepared = prepareNotes({ fullText: notesSource, version, inline: args.notes })
   const notes = prepared.body
   if (!prepared.ok) {
@@ -255,7 +254,7 @@ async function main() {
   log(`\n▶ Rein ${tag}（通道 ${channel}）`)
   if (prepared.found) {
     const lines = notes.split('\n').length
-    log(`   · 说明取自${prepared.source === 'inline' ? ' --notes' : ` ${args.notesFile} 的 v${version} 一节`}：${lines} 行 · ${notes.replace(/\s+/g, '').length} 字`)
+    log(`   · 说明取自${prepared.source === 'inline' ? ' --notes' : ` ${notesFile} 的 v${version} 一节`}：${lines} 行 · ${notes.replace(/\s+/g, '').length} 字`)
   } else {
     log('   · 说明：无')
   }
