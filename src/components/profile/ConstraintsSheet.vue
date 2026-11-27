@@ -6,6 +6,7 @@ import NumberStepper from '@/components/common/NumberStepper.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import { DIET_RESTRICTION_PRESETS, EQUIPMENT_LABELS, TIME_SLOT_LABELS } from '@/config/domain'
+import { useToast } from '@/composables/useToast'
 import { useNutritionStore } from '@/stores/nutrition'
 import type { Equipment, Experience, Sex, TimeSlot } from '@/types'
 import { bmiBand, bmiOf } from '@/utils/health'
@@ -29,6 +30,7 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const n = useNutritionStore()
+const { toast } = useToast()
 const saving = ref(false)
 
 /* ---------- 草稿：打开时从 profile 同步 ---------- */
@@ -54,27 +56,6 @@ const EXP_OPTIONS = (['beginner', 'intermediate', 'advanced'] as const).map((val
   label: { beginner: '新手', intermediate: '有基础', advanced: '进阶' }[value],
 }))
 const SLOT_OPTIONS: TimeSlot[] = ['morning', 'noon', 'evening']
-
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) return
-    const p = n.profile
-    draftSex.value = p?.sex ?? 'male'
-    draftHeight.value = Math.round(p?.heightCm ?? 170)
-    draftWeight.value = Math.round((p?.weightKg ?? 65) * 10) / 10
-    // 目标体重没有历史值时拿当前体重当起点（语义上就是「维持」），不让数值格空着
-    draftTarget.value = Math.round((p?.targetWeightKg ?? p?.weightKg ?? 65) * 10) / 10
-    draftDays.value = p?.trainingDaysPerWeek ?? 3
-    draftSlots.value = [...(p?.preferredTimeSlots ?? [])]
-    draftEquipment.value = p?.equipment ?? 'gym'
-    draftExperience.value = p?.experience ?? 'beginner'
-    draftRestrictions.value = [...(p?.dietRestrictions ?? [])]
-    newRestriction.value = ''
-    setBirthday(p?.birthday ?? null)
-  },
-  { immediate: true },
-)
 
 /* ---------- 生日：年 / 月 / 日 三个下拉 ---------- */
 
@@ -104,6 +85,61 @@ const DAY_OPTIONS = computed(() => Array.from({ length: dayCount.value }, (_, i)
 watch([draftYear, draftMonth], () => {
   if (draftDay.value && draftDay.value > dayCount.value) draftDay.value = dayCount.value
 })
+
+function draftSnapshot(): string {
+  return JSON.stringify({
+    sex: draftSex.value,
+    height: draftHeight.value,
+    weight: draftWeight.value,
+    target: draftTarget.value,
+    days: draftDays.value,
+    slots: draftSlots.value,
+    equipment: draftEquipment.value,
+    experience: draftExperience.value,
+    restrictions: draftRestrictions.value,
+    newRestriction: newRestriction.value,
+    year: draftYear.value,
+    month: draftMonth.value,
+    day: draftDay.value,
+  })
+}
+
+let savedSnapshot = ''
+const dirty = computed(() => draftSnapshot() !== savedSnapshot)
+const discardOpen = ref(false)
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return
+    const p = n.profile
+    draftSex.value = p?.sex ?? 'male'
+    draftHeight.value = Math.round(p?.heightCm ?? 170)
+    draftWeight.value = Math.round((p?.weightKg ?? 65) * 10) / 10
+    // 目标体重没有历史值时拿当前体重当起点（语义上就是「维持」），不让数值格空着
+    draftTarget.value = Math.round((p?.targetWeightKg ?? p?.weightKg ?? 65) * 10) / 10
+    draftDays.value = p?.trainingDaysPerWeek ?? 3
+    draftSlots.value = [...(p?.preferredTimeSlots ?? [])]
+    draftEquipment.value = p?.equipment ?? 'gym'
+    draftExperience.value = p?.experience ?? 'beginner'
+    draftRestrictions.value = [...(p?.dietRestrictions ?? [])]
+    newRestriction.value = ''
+    setBirthday(p?.birthday ?? null)
+    savedSnapshot = draftSnapshot()
+  },
+  { immediate: true },
+)
+
+function requestClose(): void {
+  if (saving.value) return
+  if (dirty.value) discardOpen.value = true
+  else emit('close')
+}
+
+function confirmDiscard(): void {
+  discardOpen.value = false
+  emit('close')
+}
 
 /* select 走 :value + @change 而不是 v-model.number：占位 option 的 null 值
    经过 number 修饰符的 looseToNumber 属于边角行为，不值得赌 */
@@ -179,6 +215,8 @@ async function save(): Promise<void> {
       dietRestrictions: draftRestrictions.value.length ? draftRestrictions.value : null,
     })
     emit('close')
+  } catch (e) {
+    toast(e instanceof Error ? `保存失败：${e.message}` : '保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -186,7 +224,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <SheetModal :open="open" title="个人约束" initial-snap="large" @close="emit('close')">
+  <SheetModal :open="open" title="个人约束" initial-snap="large" @close="requestClose">
     <div class="csform">
       <!-- 身体数据：方案热卡的硬前置 -->
       <section class="sec">
@@ -355,6 +393,14 @@ async function save(): Promise<void> {
         {{ saving ? '保存中…' : '保存' }}
       </button>
     </template>
+  </SheetModal>
+
+  <SheetModal :open="discardOpen" title="放弃未保存的修改？" @close="discardOpen = false">
+    <div class="form">
+      <p class="t-2">身体数据与训练约束的改动还没有保存，离开后需要重新填写。</p>
+      <button class="cancel" type="button" @click="discardOpen = false">继续编辑</button>
+      <button class="primary danger" type="button" @click="confirmDiscard">放弃修改</button>
+    </div>
   </SheetModal>
 </template>
 

@@ -48,6 +48,8 @@ const curveDays = ref<StrengthDay[]>([])
 const advice = ref<ExerciseAdvice | null>(null)
 const loading = ref(false)
 const confirmDelete = ref(false)
+const confirmHide = ref(false)
+let loadSeq = 0
 
 /** 展示用肌群：显式数据优先，空表按动作名兜底（与课程侧口径一致） */
 const shownMuscles = computed(() => libraryMuscles(props.exercise))
@@ -78,6 +80,7 @@ function asPlanExercise(e: ExerciseRecord): PlanExercise {
 }
 
 async function load(e: ExerciseRecord): Promise<void> {
+  const seq = ++loadSeq
   loading.value = true
   advice.value = null
   curveDays.value = []
@@ -86,6 +89,7 @@ async function load(e: ExerciseRecord): Promise<void> {
       sessionService.strengthHistory(e.id),
       sessionService.strengthRecentSets(42),
     ])
+    if (seq !== loadSeq) return
     curveDays.value = aggregateStrengthDays(rows).slice(-10)
     const result = computeTrainingAdvice({
       sets: recent,
@@ -95,9 +99,9 @@ async function load(e: ExerciseRecord): Promise<void> {
     })
     advice.value = result.perExercise[e.id] ?? null
   } catch {
-    /* 建议与曲线都只是参考：失败静默，页面其余内容照常 */
+    // 建议与曲线都只是参考：失败静默，页面其余内容照常
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -206,6 +210,7 @@ const readinessText = computed(() => {
 async function hideFromLibrary(): Promise<void> {
   const e = props.exercise
   if (!e) return
+  confirmHide.value = false
   try {
     await lib.remove(e.id)
     toast('已从动作库隐藏（历史记录保留）')
@@ -357,12 +362,20 @@ async function removeCustom(): Promise<void> {
         <button v-else-if="exercise.hidden" class="op" @click="void restoreToLibrary()">
           <Eye :size="14" />恢复显示
         </button>
-        <button v-else class="op" @click="void hideFromLibrary()">
+        <button v-else class="op" @click="confirmHide = true">
           <EyeOff :size="14" />从库中隐藏
         </button>
       </div>
     </template>
   </SheetModal>
+
+  <ActionSheet
+    :open="confirmHide"
+    title="隐藏后可从「已隐藏」恢复；训练历史不受影响"
+    :actions="[{ label: '从库中隐藏', value: 'hide', danger: true }]"
+    @select="(v: string) => (v === 'hide' ? void hideFromLibrary() : (confirmHide = false))"
+    @close="confirmHide = false"
+  />
 
   <ActionSheet
     :open="confirmDelete"

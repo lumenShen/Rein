@@ -16,6 +16,8 @@ import { usePomodoroStore } from '@/stores/pomodoro'
  * 再叠一条只会打扰。放在**顶部居中**、z 78（低于 GrabFloatBar 的 80）：它是「抬头看一眼」的
  * 送达条，与抢课监视器同一族定位，但把上位让给抢课条，避免两条抢同一处落点。
  */
+defineProps<{ inert?: boolean }>()
+
 const pomo = usePomodoroStore()
 
 /* 只在「有提示 且 系统通知没送达」时返回那条提示，否则 null。
@@ -30,6 +32,7 @@ const shown = computed(() => (pomo.notice && !pomo.notice.delivered ? pomo.notic
         v-if="shown"
         class="fnb glass-surface"
         :class="`tone-${shown.tone}`"
+        :inert="inert"
         role="status"
         aria-label="专注提示"
       >

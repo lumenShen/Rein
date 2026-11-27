@@ -154,6 +154,10 @@ function holdKey(e: KeyboardEvent): void {
   }
 }
 
+function requestClose(): void {
+  if (!running.value) emit('close')
+}
+
 onBeforeUnmount(holdStop)
 
 async function execute(): Promise<void> {
@@ -173,7 +177,7 @@ async function execute(): Promise<void> {
       }, 1400)
     }
   } catch (e) {
-    toast(e instanceof Error ? e.message : '清除失败，数据未受影响')
+    toast(e instanceof Error ? e.message : '清除失败，请重试')
   } finally {
     running.value = false
   }
@@ -181,7 +185,7 @@ async function execute(): Promise<void> {
 </script>
 
 <template>
-  <SheetModal :open="open" title="清除软件数据" @close="emit('close')">
+  <SheetModal :open="open" title="清除软件数据" @close="requestClose">
     <!-- ① 选档 -->
     <div v-if="step === 'choose'" class="steps">
       <p class="lead t-2">选一档要清除的深度。每一档只清自己声明的范围，都不可撤销——下一步会先给你看完整清单。</p>
@@ -265,6 +269,7 @@ async function execute(): Promise<void> {
         @pointerup="holdStop"
         @pointercancel="holdStop"
         @pointerleave="holdStop"
+        @blur="holdStop"
         @contextmenu.prevent
         @keydown="holdKey"
         @keyup="holdKey"

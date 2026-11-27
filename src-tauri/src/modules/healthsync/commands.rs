@@ -64,6 +64,7 @@ const STEP_TIMEOUT: Duration = Duration::from_secs(45);
 struct BridgeState {
     /// `available` / `unavailable` / `update_required`
     availability: String,
+    /// 旧桥只报运动读权限；新桥以 `granted_categories` 为准。
     read_granted: bool,
     write_granted: bool,
     /// 四组读权限各自是否齐全（exercise/activity/body/vitals）。
@@ -73,6 +74,13 @@ struct BridgeState {
     /// 上一轮操作的失败原因（Kotlin 每次开新操作会清掉）
     #[serde(default)]
     error: Option<String>,
+}
+
+impl BridgeState {
+    /// 任一读权限组已授权即可同步；Kotlin 会按权限逐项读取。
+    fn has_read_permission(&self) -> bool {
+        self.read_granted || self.granted_categories.values().any(|granted| *granted)
+    }
 }
 
 /// Kotlin 写的 `push-result.json`
@@ -218,7 +226,7 @@ pub fn health_sync_start(
     if bridge.availability != "available" {
         return Ok(SyncStep::phase("unavailable"));
     }
-    if !bridge.read_granted {
+    if !bridge.has_read_permission() {
         return Ok(SyncStep::phase("needs_auth"));
     }
     let push = push && bridge.write_granted;
@@ -914,6 +922,24 @@ mod tests {
             intensity: "moderate".into(),
             note: None,
         }
+    }
+
+    /// 分组授权：只有身体成分也能同步，旧桥仍按运动读权限兼容。
+    #[test]
+    fn any_granted_read_category_allows_sync() {
+        let mut bridge = BridgeState {
+            availability: "available".into(),
+            read_granted: false,
+            write_granted: false,
+            granted_categories: HashMap::new(),
+            error: None,
+        };
+        assert!(!bridge.has_read_permission());
+        bridge.granted_categories.insert("body".into(), true);
+        assert!(bridge.has_read_permission());
+        bridge.granted_categories.clear();
+        bridge.read_granted = true;
+        assert!(bridge.has_read_permission(), "旧桥继续按运动权限兼容");
     }
 
     /// 回归：`external_updated_at` 列亲和性是 TEXT，而本模块写入的是整数毫秒

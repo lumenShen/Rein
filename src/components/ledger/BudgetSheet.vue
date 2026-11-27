@@ -40,17 +40,25 @@ const cents = (): number => {
 async function save(): Promise<void> {
   const c = cents()
   if (c <= 0) return
-  await store.setBudget(c)
-  toast.toast('预算已更新')
-  emit('saved')
-  emit('close')
+  try {
+    await store.setBudget(c)
+    toast.toast('预算已更新')
+    emit('saved')
+    emit('close')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '预算保存失败，请重试')
+  }
 }
 
 async function clear(): Promise<void> {
-  await store.setBudget(0)
-  toast.toast('已清除预算')
-  emit('saved')
-  emit('close')
+  try {
+    await store.setBudget(0)
+    toast.toast('已清除预算')
+    emit('saved')
+    emit('close')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '预算清除失败，请重试')
+  }
 }
 </script>
 

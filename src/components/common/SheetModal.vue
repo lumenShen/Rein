@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { X } from 'lucide-vue-next'
+
+import { pushOverlay } from '@/system/overlayStack'
 
 /**
  * iOS 风格底部抽屉：毛玻璃遮罩 + 弹簧曲线滑入，进出同路径。
@@ -24,8 +26,8 @@ const RUBBER = 0.4
 /** 越过最小档继续下拉、阻尼后面板高度低于最小档此距离（px）时松手即关闭 */
 const DISMISS_PULL = 36
 
-/** 打开中的抽屉栈：Esc 只关最上层，嵌套弹层（智能添加 → 编辑器）逐层退出 */
-const sheetStack: ((e: KeyboardEvent) => void)[] = []
+/** 打开中的抽屉栈：只用于背景滚动锁；键盘事件由 overlayStack 派发给最上层。 */
+const sheetStack: symbol[] = []
 
 const props = withDefaults(
   defineProps<{
@@ -43,6 +45,58 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ close: [] }>()
+const panelEl = ref<HTMLElement>()
+let previousFocus: HTMLElement | null = null
+let removeOverlay: (() => void) | null = null
+let openToken: symbol | null = null
+
+function focusableElements(): HTMLElement[] {
+  const root = panelEl.value
+  if (!root) return []
+  return [...root.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((el) => el.getClientRects().length > 0)
+}
+
+function onOverlayKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab') return
+  const items = focusableElements()
+  if (!items.length) {
+    e.preventDefault()
+    panelEl.value?.focus()
+    return
+  }
+  const first = items[0]!
+  const last = items[items.length - 1]!
+  const active = document.activeElement
+  const index = active instanceof HTMLElement ? items.indexOf(active) : -1
+  if (index < 0) {
+    e.preventDefault()
+    ;(e.shiftKey ? last : first).focus()
+  } else if (e.shiftKey && index === 0) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && index === items.length - 1) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+function restoreFocus(): void {
+  if (previousFocus?.isConnected) {
+    previousFocus.focus()
+    return
+  }
+  const dialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')]
+    .filter((el) => el !== panelEl.value)
+  dialogs[dialogs.length - 1]?.focus()
+}
 
 /* ---------- 定位高度与组件高度 ---------- */
 const viewportH = ref(window.innerHeight)
@@ -129,30 +183,35 @@ function onViewportResize(): void {
 }
 window.addEventListener('resize', onViewportResize)
 
-/** Esc 关闭：仅响应栈顶抽屉，嵌套弹层逐层退出 */
-function onEsc(e: KeyboardEvent): void {
-  if (e.key !== 'Escape') return
-  if (sheetStack[sheetStack.length - 1] !== onEsc) return
-  emit('close')
-}
-
+/** Esc 关闭与 Tab 圈定由 overlayStack 统一派发，嵌套弹层只响应栈顶。 */
 watch(
   () => props.open,
   (open) => {
     if (open) {
-      // 栈深 0→1 才锁背景滚动；嵌套打开/关闭不互相干扰
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const token = Symbol('sheet')
+      openToken = token
       if (sheetStack.length === 0) document.documentElement.style.overflow = 'hidden'
-      sheetStack.push(onEsc)
-      snap.value = props.initialSnap // 每次打开回到初始定位档位
+      sheetStack.push(token)
+      removeOverlay = pushOverlay(onOverlayKeydown)
+      snap.value = props.initialSnap
       dragHeight.value = null
       dismissing = false
+      void nextTick(() => panelEl.value?.focus())
     } else {
-      const i = sheetStack.indexOf(onEsc)
+      if (!openToken) return
+      const i = sheetStack.indexOf(openToken)
       if (i >= 0) sheetStack.splice(i, 1)
+      openToken = null
+      removeOverlay?.()
+      removeOverlay = null
       if (sheetStack.length === 0) document.documentElement.style.overflow = ''
       teardownGesture()
+      restoreFocus()
+      previousFocus = null
     }
   },
+  { immediate: true },
 )
 
 /* ---------- 拖动条：自由拖动 → 松手吸附最近档位 ---------- */
@@ -161,6 +220,7 @@ let handleStartY = 0
 let handleStartH = 0
 
 function onHandleDown(e: PointerEvent): void {
+  if (document.documentElement.dataset.shell === 'desk') return
   dragging.value = true
   handleStartY = e.clientY
   handleStartH = snapHeight.value
@@ -284,6 +344,7 @@ function endGesture(): void {
 }
 
 function onTouchStart(e: TouchEvent): void {
+  if (document.documentElement.dataset.shell === 'desk') return
   if (!props.open || gestureActive || e.touches.length !== 1) return
   beginGesture(e.touches[0].clientX, e.touches[0].clientY)
   window.addEventListener('touchmove', onTouchMove, CAPTURE_MOVE)
@@ -314,6 +375,7 @@ function onTouchEnd(): void {
 }
 
 function onBodyPointerDown(e: PointerEvent): void {
+  if (document.documentElement.dataset.shell === 'desk') return
   if (e.pointerType !== 'mouse' || !props.open || gestureActive) return
   beginGesture(e.clientX, e.clientY)
   // 注意：这里不能 setPointerCapture —— 一旦捕获，拖拽期间的 pointerup/click 会被
@@ -357,8 +419,13 @@ defineExpose({ bodyEl })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onViewportResize)
-  const i = sheetStack.indexOf(onEsc)
-  if (i >= 0) sheetStack.splice(i, 1)
+  removeOverlay?.()
+  removeOverlay = null
+  if (openToken) {
+    const i = sheetStack.indexOf(openToken)
+    if (i >= 0) sheetStack.splice(i, 1)
+    openToken = null
+  }
   if (sheetStack.length === 0) document.documentElement.style.overflow = ''
   teardownGesture()
 })
@@ -372,11 +439,14 @@ onBeforeUnmount(() => {
     <Transition name="sheet" @after-leave="onAfterLeave">
       <section
         v-if="open"
+        ref="panelEl"
         class="panel"
         :class="{ 'is-dragging': dragging }"
-        :style="{ height: `${panelHeight}px`, zIndex: zIndex + 1 }"
+        :style="{ '--sheet-h': `${panelHeight}px`, zIndex: zIndex + 1 }"
         role="dialog"
+        aria-modal="true"
         :aria-label="title"
+        tabindex="-1"
       >
         <!-- 拖动条：整条热区可拖拽/键盘调档 -->
         <div
@@ -451,6 +521,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   background: var(--surface);
+  height: var(--sheet-h);
+  max-height: var(--sheet-h);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: var(--shadow-float);
   /* 【动效契约例外 · 登记】本项目唯一一处动布局属性（height）的过渡，特此登记。
@@ -464,12 +536,54 @@ onBeforeUnmount(() => {
      代价可控：height 的一帧一次重排只发生在松手/改窗口尺寸那一刻，不跟手 ——
      拖拽期间 .is-dragging 已是 transition:none；开关动效与减弱动效时由 base.css
      的全局规则把 duration 压成 0.01ms。250ms 取 --dur-base。 */
+  /* impeccable-disable-next-line layout-transition: sheet height anchors body scroll and footer */
   transition: height var(--dur-base) var(--ease-sheet);
 }
 
 .panel.is-dragging {
   transition: none;
   user-select: none;
+}
+
+html[data-shell='desk'] .panel {
+  bottom: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 64px));
+  max-width: none;
+  height: min(720px, calc(100dvh - 96px));
+  max-height: calc(100dvh - 96px);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow-lifted);
+}
+
+html[data-shell='desk'] .grabber-zone {
+  display: none;
+}
+
+html[data-shell='desk'] .head {
+  padding: var(--sp-12) var(--sp-24) var(--sp-8);
+}
+
+html[data-shell='desk'] .body {
+  padding: var(--sp-8) var(--sp-24) var(--sp-24);
+}
+
+html[data-shell='desk'] .foot {
+  padding: var(--sp-16) var(--sp-24);
+}
+
+html[data-shell='desk'] .panel.sheet-enter-active {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
+}
+
+html[data-shell='desk'] .panel.sheet-enter-from,
+html[data-shell='desk'] .panel.sheet-leave-to {
+  transform: translate(-50%, -48%) scale(0.98);
+  opacity: 0;
 }
 
 .grabber-zone {

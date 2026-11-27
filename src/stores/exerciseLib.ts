@@ -28,6 +28,7 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
   const list = ref<ExerciseRecord[]>([])
   const loaded = ref(false)
   const loading = ref(false)
+  const error = ref('')
 
   /**
    * 动作详解覆盖层（0048）：只含**被改过的动作**。
@@ -44,6 +45,7 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
 
   async function load(includeHidden = false): Promise<void> {
     loading.value = true
+    error.value = ''
     try {
       // 覆盖层与动作列表一起刷：列表页与沉浸页都靠 guideOf 取文案，
       // 分开刷会让「AI 刚改完」的那一屏读到旧值。覆盖层失败不该挡住列表（离线/老库），
@@ -57,6 +59,8 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
       for (const g of overrides) map[g.exerciseId] = g
       guides.value = map
       loaded.value = true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '动作库读取失败'
     } finally {
       loading.value = false
     }
@@ -236,6 +240,7 @@ export const useExerciseLibStore = defineStore('exerciseLib', () => {
     list,
     loaded,
     loading,
+    error,
     byId,
     load,
     ensureLoaded,

@@ -55,6 +55,8 @@ const AUDIT_LIMIT = 20
 
 const status = ref<GatewayStatus | null>(null)
 const audit = ref<GatewayAuditEntry[]>([])
+const statusError = ref('')
+const auditError = ref('')
 /** 「允许的网页来源」输入框的待添加串（回车或点「添加」提交）。 */
 const originDraft = ref('')
 const busy = ref(false)
@@ -88,6 +90,8 @@ async function copyPairToken(): Promise<void> {
 
 /** 卡头右侧的一句话：不开卡片也知道现在是什么状态 */
 const stateHint = computed(() => {
+  if (statusError.value) return '状态未知'
+  if (!status.value) return '读取中'
   if (pendingCount.value > 0) return `等待授权 ${pendingCount.value} 个`
   if (!enabled.value) return '未开启'
   return clients.value.length > 0 ? `已授权 ${clients.value.length} 个程序` : '监听中 · 还没有程序接入'
@@ -101,7 +105,9 @@ const portHint = computed(() => {
 async function refresh(): Promise<void> {
   try {
     status.value = await gatewayService.status()
+    statusError.value = ''
   } catch (e) {
+    statusError.value = '无法读取网关状态，请重试'
     console.warn('[gateway] 读取服务状态失败', e)
   }
 }
@@ -111,7 +117,9 @@ async function refresh(): Promise<void> {
 async function refreshAudit(): Promise<void> {
   try {
     audit.value = await gatewayService.auditRecent(AUDIT_LIMIT)
+    auditError.value = ''
   } catch (e) {
+    auditError.value = '无法读取访问记录，请重试'
     console.warn('[gateway] 读取访问记录失败', e)
   }
 }
@@ -122,6 +130,7 @@ async function run(action: () => Promise<GatewayStatus>, failText: string): Prom
   busy.value = true
   try {
     status.value = await action()
+    statusError.value = ''
     return true
   } catch (e) {
     console.warn('[gateway] 操作失败', e)
@@ -159,6 +168,7 @@ async function revoke(c: { clientId: string; name: string }): Promise<void> {
 
 /** 写白名单是**整表替换**：增与删都算出新表，交给同一个命令。 */
 async function writeOrigins(next: string[], okText: string): Promise<boolean> {
+  if (!status.value || statusError.value) return false
   const ok = await run(() => gatewayService.setAllowedOrigins(next), '设置失败，请稍后重试')
   if (ok) toast(okText)
   return ok
@@ -167,7 +177,7 @@ async function writeOrigins(next: string[], okText: string): Promise<boolean> {
 /** 加一个来源。空串 / 重复一律不提交（匹配是精确字符串相等，重复项没有意义）。 */
 async function addOrigin(): Promise<void> {
   const origin = originDraft.value.trim()
-  if (!origin) return
+  if (!origin || !status.value || statusError.value) return
   if (allowedOrigins.value.includes(origin)) {
     toast('这个来源已经在白名单里了')
     return
@@ -269,6 +279,12 @@ onUnmounted(() => {
       每个程序连上来都要你当面批一次，只拿到你勾的那几项权限；下面随时可以撤销。
     </p>
 
+    <p v-if="statusError" class="read-fault" role="alert" data-testid="gateway-status-error">
+      <TriangleAlert :size="15" />
+      <span class="flex-1">{{ statusError }}；当前开关与端口可能不准确。</span>
+      <button type="button" class="retry" :disabled="busy" @click="refresh">重试</button>
+    </p>
+
     <div class="card sub rows">
       <div class="frow row">
         <i class="fic" :class="{ on: enabled }"><Power :size="17" /></i>
@@ -276,7 +292,7 @@ onUnmounted(() => {
           <b>对外服务</b>
           <em class="t-2">{{ enabled ? '正在监听，外部程序可以连' : '默认关闭，不监听任何端口' }}</em>
         </span>
-        <ToggleSwitch v-model="toggleChoice" label="对外服务" :disabled="busy" data-testid="gateway-toggle-enabled" />
+        <ToggleSwitch v-model="toggleChoice" label="对外服务" :disabled="busy || !status || !!statusError" data-testid="gateway-toggle-enabled" />
       </div>
 
       <div class="frow row">
@@ -290,7 +306,7 @@ onUnmounted(() => {
     </div>
 
     <h3 class="stitle">谁能连</h3>
-    <div class="segwrap" data-testid="gateway-bind-mode">
+    <div class="segwrap" data-testid="gateway-bind-mode" :inert="busy || !status || !!statusError">
       <SegmentedControl v-model="bindChoice" :options="BIND_OPTIONS" />
     </div>
     <p class="pnote t-2">
@@ -430,13 +446,14 @@ onUnmounted(() => {
         placeholder="http://localhost:5173 或 null"
         autocomplete="off"
         spellcheck="false"
+        :disabled="busy || !status || !!statusError"
         data-testid="gateway-origin-input"
         @keyup.enter="addOrigin"
       />
       <button
         type="button"
         class="copy"
-        :disabled="busy || !originDraft.trim()"
+        :disabled="busy || !status || !!statusError || !originDraft.trim()"
         data-testid="gateway-origin-add"
         @click="addOrigin"
       >
@@ -528,8 +545,13 @@ onUnmounted(() => {
 记下的参数按域白名单挑字段并做截断，附件一类大字段不入表 —— 这是存储边界，不是审计范围的变化。"
       />
     </div>
+    <p v-if="auditError" class="read-fault" role="alert" data-testid="gateway-audit-error">
+      <TriangleAlert :size="15" />
+      <span class="flex-1">{{ auditError }}；当前列表可能是上次结果。</span>
+      <button type="button" class="retry" :disabled="busy" @click="refreshAudit">重试</button>
+    </p>
     <EmptyState
-      v-if="audit.length === 0"
+      v-if="audit.length === 0 && !auditError"
       :icon="History"
       title="还没有访问记录"
       hint="有外部程序连上来（哪怕被拒）之后，这里就会出现条目"
@@ -659,6 +681,31 @@ onUnmounted(() => {
 /* 行间细线，首行不留线 */
 .rows > * + * {
   border-top: 0.5px solid var(--line);
+}
+
+.read-fault {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-md);
+  padding: var(--sp-12) var(--pad-inline);
+  border-radius: var(--radius-m);
+  background: var(--warn-soft);
+  color: var(--warn-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.read-fault > svg {
+  flex: none;
+}
+
+.retry {
+  flex: none;
+  min-height: var(--control-sm);
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
 }
 
 /* 局域网风险提示：说的是「数据可能被谁拿走」，用危险色，别做成一句可有可无的注脚 */

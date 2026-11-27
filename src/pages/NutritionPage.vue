@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Camera, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
+import { useToday } from '@/composables/useToday'
 import QuickTile from '@/components/common/QuickTile.vue'
 import SmartAddSheet from '@/components/common/SmartAddSheet.vue'
 import EnergySummary from '@/components/nutrition/EnergySummary.vue'
@@ -14,24 +15,25 @@ import { useDietStore } from '@/stores/diet'
 import { useFeaturesStore } from '@/stores/features'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useProgramStore } from '@/stores/program'
-import { todayStr } from '@/utils/date'
 
 /** 营养全览 · 二级页：能量总览 + 宏量/微量元素详解 + 记饮食/改目标快捷入口。
  *  方案生效时多一张「今日菜单」卡（菜单归营养，方案页只管方案）。 */
 const router = useRouter()
-const today = todayStr()
+const { today } = useToday()
 
 const nutrition = useNutritionStore()
 const diet = useDietStore()
 const program = useProgramStore()
 const features = useFeaturesStore()
 
-onMounted(() => {
-  void nutrition.loadSummary(today)
-  void diet.load(today)
-  // 关掉方案模块时不产生请求（与主页同一条纪律）
+function loadDay(): void {
+  void nutrition.loadSummary(today.value)
+  void diet.load(today.value)
   if (features.isEnabled('program')) void program.load()
-})
+}
+
+watch(today, loadDay)
+onMounted(loadDay)
 
 const quickOpen = ref(false)
 </script>
@@ -47,19 +49,19 @@ const quickOpen = ref(false)
          浅井只负责把它们读成「一组快捷入口」，而不是三张互不相干的卡。 -->
     <ul class="card sub quick">
       <li>
-        <QuickTile label="记饮食" icon-bg="var(--mod-nutrition-soft)" icon-color="var(--mod-nutrition-strong)" @click="quickOpen = true">
+        <QuickTile label="记饮食" @click="quickOpen = true">
           <Camera :size="20" />
         </QuickTile>
       </li>
       <li>
         <!-- 改目标属于「方案」域（目标值就是一套计划参数），用方案青绿；
              不借 --warn 橙 —— 运动模块已占橙，同一屏两个橙会被读成同一件事 -->
-        <QuickTile label="改目标" icon-bg="var(--mod-program-soft)" icon-color="var(--mod-program-strong)" @click="router.push('/nutrition/adjust')">
+        <QuickTile label="改目标" @click="router.push('/nutrition/adjust')">
           <SlidersHorizontal :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="AI 助手" icon-bg="var(--mod-ai-soft)" icon-color="var(--mod-ai-strong)" @click="router.push('/ai')">
+        <QuickTile label="AI 助手" @click="router.push('/ai')">
           <Sparkles :size="20" />
         </QuickTile>
       </li>

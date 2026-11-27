@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Trash2 } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Pencil, Trash2 } from 'lucide-vue-next'
+
+import MealEditSheet from '@/components/diet/MealEditSheet.vue'
 
 import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
@@ -19,7 +21,13 @@ const props = defineProps<{
   targets: DailyTargets | null
 }>()
 
-const emit = defineEmits<{ close: []; delete: [] }>()
+const emit = defineEmits<{ close: []; delete: []; updated: [log: MealLog] }>()
+const editOpen = ref(false)
+
+function onUpdated(log: MealLog): void {
+  editOpen.value = false
+  emit('updated', log)
+}
 
 /** Food 与 NutrientIntake 同名同义的字段（均为每 100g 的数值列） */
 const NUTRIENT_KEYS: (keyof NutrientIntake)[] = [
@@ -183,11 +191,23 @@ const grown = useGrowOnOpen(() => props.open)
     <p v-else class="missing">这条记录缺少食物详情</p>
 
     <template v-if="log?.food" #footer>
-      <button class="del" @click="emit('delete')">
-        <Trash2 :size="17" /> 删除这条记录
-      </button>
+      <div class="detail-actions">
+        <button class="edit" data-testid="meal-edit-entry" @click="editOpen = true">
+          <Pencil :size="17" /> 编辑记录
+        </button>
+        <button class="del" @click="emit('delete')">
+          <Trash2 :size="17" /> 删除
+        </button>
+      </div>
     </template>
   </SheetModal>
+
+  <MealEditSheet
+    :open="editOpen"
+    :log="log"
+    @close="editOpen = false"
+    @updated="onUpdated"
+  />
 </template>
 
 <style scoped>
@@ -402,19 +422,31 @@ const grown = useGrowOnOpen(() => props.open)
   clip-path: inset(0 100% 0 0 round var(--radius-full));
 }
 
-/* 删除入口：抽屉固定操作区，内容从下方滚过时不被顶走 */
-.del {
+/* 详情底部操作：编辑与删除同级，破坏性操作使用更轻的危险底。 */
+.detail-actions {
+  display: flex;
+  gap: var(--gap-md);
+}
+
+.detail-actions button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--gap-sm);
-  width: 100%;
-  /* 高度是尺寸：底部操作区按钮统一 48（--row-h） */
+  flex: 1;
   height: var(--row-h);
   border-radius: var(--radius-l);
-  background: var(--danger-soft);
-  color: var(--danger);
   font-size: var(--fs-body);
   font-weight: var(--fw-bold);
+}
+
+.edit {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.del {
+  background: var(--danger-soft);
+  color: var(--danger-strong);
 }
 </style>

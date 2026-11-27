@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 
 import type { ScheduleEntry } from '@/types'
-import { monthGrid, parseDate, todayStr } from '@/utils/date'
+import { useToday } from '@/composables/useToday'
+import { monthGrid, parseDate } from '@/utils/date'
 
 /**
  * 月视图 · 整月概览。每格最多画两条课程色条，其余折成「+N」。
@@ -16,7 +17,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [date: string] }>()
 
-const today = todayStr()
+const { today } = useToday()
 
 const cells = computed(() => {
   const d = parseDate(props.anchor)
@@ -214,6 +215,7 @@ const stats = computed(() => {
   white-space: nowrap;
 }
 
+/* impeccable-disable-next-line side-tab: course identity color marker */
 .chip::before {
   content: '';
   position: absolute;

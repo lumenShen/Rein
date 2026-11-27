@@ -164,7 +164,7 @@ async function onSync(): Promise<void> {
 async function onSemesterChange(id: number): Promise<void> {
   try {
     await store.setCurrentSemester(id)
-    toast.toast('已切换学期，时间线已重建')
+    toast.toast('已切换学期；点击「同步课程」更新时间线')
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : '切换学期失败')
   }

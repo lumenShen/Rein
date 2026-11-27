@@ -47,6 +47,7 @@ const extra = ref<Record<string, string>>({})
 const urlTouched = ref(false)
 const saving = ref(false)
 const fetching = ref(false)
+const deleting = ref(false)
 const confirming = ref(false)
 /** 拉取结果提示（成功/失败都留一行，用户不必猜） */
 const fetchNote = ref<{ ok: boolean; text: string } | null>(null)
@@ -139,7 +140,7 @@ function pickStyle(id: string): void {
 }
 
 const canSave = computed(
-  () => !!adapterId.value && !!baseUrl.value.trim() && !saving.value && !fetching.value,
+  () => !!adapterId.value && !!baseUrl.value.trim() && !saving.value && !fetching.value && !deleting.value,
 )
 
 function extraJson(): string | null {
@@ -196,10 +197,17 @@ const deleteActions = computed(() => [
 
 async function onDelete(value: string): Promise<void> {
   confirming.value = false
-  if (value !== 'delete' || !props.provider) return
-  await providers.remove(props.provider.id)
-  toast.toast('已删除提供商（已启用的模型不受影响）')
-  emit('close')
+  if (value !== 'delete' || !props.provider || deleting.value) return
+  deleting.value = true
+  try {
+    await providers.remove(props.provider.id)
+    toast.toast('已删除提供商（已启用的模型不受影响）')
+    emit('close')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '删除提供商失败，请重试')
+  } finally {
+    deleting.value = false
+  }
 }
 </script>
 
@@ -334,9 +342,9 @@ async function onDelete(value: string): Promise<void> {
         </button>
       </div>
 
-      <button v-if="editing" type="button" class="del" @click="confirming = true">
+      <button v-if="editing" type="button" class="del" :disabled="deleting" @click="confirming = true">
         <Trash2 :size="14" />
-        删除提供商
+        {{ deleting ? '删除中…' : '删除提供商' }}
       </button>
 
       <p class="hint t-3">密钥只存本机；拉不到清单时会给出内置参考目录，也可手填模型 ID</p>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+import { pushOverlay } from '@/system/overlayStack'
 
 /** iOS 操作面板：底部圆角卡片 + 选项列表 + 取消。用于确认类操作。 */
 const props = defineProps<{
@@ -15,22 +17,71 @@ const emit = defineEmits<{
 
 /** 锁背景滚动；恢复打开前的值而非直接清空，避免盖在 SheetModal 上时提前解锁背景 */
 let prevOverflow = ''
+let previousFocus: HTMLElement | null = null
+let removeOverlay: (() => void) | null = null
+const cardEl = ref<HTMLElement>()
+
+function focusableElements(): HTMLElement[] {
+  return [...(cardEl.value?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [])]
+    .filter((el) => el.getClientRects().length > 0)
+}
+
+function onOverlayKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab') return
+  const items = focusableElements()
+  if (!items.length) {
+    e.preventDefault()
+    cardEl.value?.focus()
+    return
+  }
+  const first = items[0]!
+  const last = items[items.length - 1]!
+  const active = document.activeElement
+  const index = active instanceof HTMLElement ? items.indexOf(active) : -1
+  if (index < 0) {
+    e.preventDefault()
+    ;(e.shiftKey ? last : first).focus()
+  } else if (e.shiftKey && index === 0) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && index === items.length - 1) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 watch(
   () => props.open,
   (open) => {
     if (open) {
       prevOverflow = document.documentElement.style.overflow
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
       document.documentElement.style.overflow = 'hidden'
+      removeOverlay = pushOverlay(onOverlayKeydown)
+      void nextTick(() => cardEl.value?.querySelector<HTMLElement>('.cancel')?.focus())
     } else {
+      removeOverlay?.()
+      removeOverlay = null
       document.documentElement.style.overflow = prevOverflow
+      if (previousFocus?.isConnected) previousFocus.focus()
+      previousFocus = null
     }
   },
+  { immediate: true },
 )
 
 function pick(value: string): void {
   emit('select', value)
   emit('close')
 }
+
+onBeforeUnmount(() => removeOverlay?.())
 </script>
 
 <template>
@@ -39,7 +90,7 @@ function pick(value: string): void {
       <div v-if="open" class="mask" @click="emit('close')" />
     </Transition>
     <Transition name="as-card">
-      <div v-if="open" class="card-wrap" role="dialog" :aria-label="title ?? '操作'">
+      <div ref="cardEl" v-if="open" class="card-wrap" role="dialog" aria-modal="true" :aria-label="title ?? '操作'" tabindex="-1">
         <p v-if="title" class="title">{{ title }}</p>
         <button
           v-for="a in actions"
@@ -82,6 +133,21 @@ function pick(value: string): void {
   border-radius: var(--radius-xl);
   padding: var(--pad-sheet);
   box-shadow: var(--shadow-float);
+}
+
+html[data-shell='desk'] .card-wrap {
+  bottom: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 64px));
+  max-width: none;
+  box-shadow: var(--glass-shadow-lifted);
+}
+
+html[data-shell='desk'] .as-card-enter-from,
+html[data-shell='desk'] .as-card-leave-to {
+  transform: translate(-50%, -48%) scale(0.98);
 }
 
 .title {

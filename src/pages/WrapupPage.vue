@@ -100,7 +100,7 @@ async function nextPhase(): Promise<void> {
       archiving.value = false
     }
   }
-  void router.push('/program')
+  void router.push({ name: 'program', query: { tier: data.value?.nextTier ?? 'balanced' } })
 }
 </script>
 

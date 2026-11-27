@@ -647,7 +647,19 @@ onBeforeUnmount(() => {
       </template>
     </EmptyState>
 
-    <!-- 会话过期时给一条明确的路：重登一次即可恢复（不再抛「登录态/令牌」术语） -->
+    <!-- 瞬时刷新失败时保留上次成功读取的面板；只有从未读到数据才让错误态独占页面。 -->
+    <p v-else-if="store.error && status" class="refresh-fault" role="status">
+      <AlertTriangle :size="14" />
+      <span class="flex-1">刷新失败，正在显示上次结果：{{ store.error }}</span>
+      <RouterLink
+        v-if="isSessionLostMessage(store.error)"
+        :to="{ name: 'campus-settings' }"
+        class="inline-link"
+      >去重新登录</RouterLink>
+      <button type="button" class="inline-link" :disabled="refresh" @click="onRefresh">重试</button>
+    </p>
+
+    <!-- 会话过期或首次读取失败：给一条明确的路，不再抛「登录态/令牌」术语 -->
     <EmptyState
       v-else-if="store.error"
       :icon="AlertTriangle"
@@ -954,6 +966,33 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.refresh-fault {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
+  padding: var(--sp-10) var(--pad-inline);
+  border-radius: var(--radius-m);
+  background: var(--warn-soft);
+  color: var(--warn-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
+}
+
+.refresh-fault svg {
+  flex: none;
+}
+
+.inline-link {
+  flex: none;
+  color: var(--accent-strong);
+  font-weight: var(--fw-semibold);
+}
+
+.inline-link:disabled {
+  opacity: var(--disabled-opacity);
+}
+
 .page {
   /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
   padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);

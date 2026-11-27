@@ -20,11 +20,10 @@ export interface ProgramStatus {
   progress: number
 }
 
-export function programStatus(record: ProgramRecord, blob: ProgramBlob): ProgramStatus | null {
+export function programStatus(record: ProgramRecord, blob: ProgramBlob, today = todayStr()): ProgramStatus | null {
   const startDate = blob.days[0]?.date
   const endDate = blob.days.at(-1)?.date
   if (!startDate || !endDate) return null
-  const today = todayStr()
   const total = Math.max(blob.days.length, 1)
   const passed = diffDays(startDate, today) + 1
   const clamped = Math.min(Math.max(passed, 0), total)
@@ -55,10 +54,9 @@ const REVIEW_INTERVAL_DAYS = 7
 const reviewedKey = (id: number): string => `rein.program.reviewed.${id}`
 
 /** 距上次复盘（或方案开始）满 7 天、且周期进行中时到期 */
-export function reviewDue(record: ProgramRecord, blob: ProgramBlob): boolean {
-  const st = programStatus(record, blob)
+export function reviewDue(record: ProgramRecord, blob: ProgramBlob, today = todayStr()): boolean {
+  const st = programStatus(record, blob, today)
   if (!st || st.ended || st.upcoming) return false
-  const today = todayStr()
   if (diffDays(st.startDate, today) < REVIEW_INTERVAL_DAYS) return false
   let last = ''
   try {

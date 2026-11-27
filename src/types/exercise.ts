@@ -228,6 +228,20 @@ export interface WorkoutInput {
   note?: string | null
 }
 
+export interface WorkoutUpdateInput {
+  name: string
+  type: WorkoutType
+  date: string
+  startMin?: number | null
+  durationMin: number
+  /** None = 保留原客观档位（课程 / 跑步记录） */
+  intensity?: Intensity | null
+  /** 手动补录的体感；课程 / 跑步传 null */
+  effort?: EffortLevel | null
+  kcal: number
+  note?: string | null
+}
+
 /* ---------------- 动作库筛选（动作库页与动作选择器共用） ---------------- */
 
 /** 排序口径：最近使用 / 名称 / 训练次数（收藏永远置顶） */

@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 import { useTodoStore } from '@/stores/todo'
-import { fmtMonthTitle, monthGrid, todayStr } from '@/utils/date'
+import { useToday } from '@/composables/useToday'
+import { fmtMonthTitle, monthGrid } from '@/utils/date'
 
 /** 月视图：todolist 完成度日历。格子下方进度条 = 当日完成比例。 */
 const props = defineProps<{
@@ -13,11 +14,19 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [date: string] }>()
 
 const store = useTodoStore()
-const today = todayStr()
+const { today } = useToday()
+const initial = new Date()
+const year = ref(initial.getFullYear())
+const month = ref(initial.getMonth() + 1)
 
-const now = new Date()
-const year = ref(now.getFullYear())
-const month = ref(now.getMonth() + 1)
+watch(today, (next, previous) => {
+  const prev = new Date(`${previous}T00:00:00`)
+  const current = new Date(`${next}T00:00:00`)
+  if (year.value === prev.getFullYear() && month.value === prev.getMonth() + 1) {
+    year.value = current.getFullYear()
+    month.value = current.getMonth() + 1
+  }
+})
 
 const cells = computed(() => monthGrid(year.value, month.value))
 const title = computed(() => fmtMonthTitle(year.value, month.value))

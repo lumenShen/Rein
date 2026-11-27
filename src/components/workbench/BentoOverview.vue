@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Camera, Dumbbell, GripVertical, LayoutGrid, Plus, Sparkles, Timer, Utensils, Wallet } from 'lucide-vue-next'
 
@@ -12,6 +12,7 @@ import EnergySummary from '@/components/nutrition/EnergySummary.vue'
 import HomeTodoCard from '@/components/todo/HomeTodoCard.vue'
 import PomodoroCard from '@/components/pomodoro/PomodoroCard.vue'
 import { useBentoDrag, useBentoLayout, type BentoItemId } from '@/composables/useBentoLayout'
+import { useToday } from '@/composables/useToday'
 import { MEAL_LABELS, MEAL_META, MEAL_ORDER, mealKcal } from '@/config/domain'
 import { categoryOf, fmtCents } from '@/config/ledger'
 import { useDietStore } from '@/stores/diet'
@@ -19,7 +20,6 @@ import { useExerciseStore } from '@/stores/exercise'
 import { useLedgerStore } from '@/stores/ledger'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePomodoroStore } from '@/stores/pomodoro'
-import { todayStr } from '@/utils/date'
 
 /**
  * 桌面主页 · 便当总览：能量与营养磁贴 + 待办 + 番茄/AI + 快捷入口 + 饮食/记账/运动概览。
@@ -28,7 +28,7 @@ import { todayStr } from '@/utils/date'
  * （顺序、尺寸、拖动、落盘、键盘替代路径都在 composables/useBentoLayout）。
  * 这里只负责：把每张卡的内容画进自己的项里、把抓手柄挂上、把容器断点写对。
  */
-const today = todayStr()
+const { today } = useToday()
 const router = useRouter()
 
 const exercise = useExerciseStore()
@@ -85,12 +85,17 @@ const ITEM_CLASS: Record<BentoItemId, string> = {
   diet: 't-diet',
 }
 
-onMounted(() => {
-  void exercise.loadWeek(today)
-  // 饮食/营养不再依赖 HomePage 挂载链，桌面端直接进入总览时也需自备数据
-  void diet.load(today)
-  void nutrition.loadSummary(today)
-})
+function loadDay(): void {
+  void exercise.loadWeek(today.value)
+  void diet.load(today.value)
+  void nutrition.loadSummary(today.value)
+  ledger.month = today.value.slice(0, 7)
+  void ledger.loadMonth()
+  void ledger.loadBudget()
+}
+
+watch(today, loadDay)
+onMounted(loadDay)
 
 const topCats = computed(() => ledger.expenseByCategory.slice(0, 2))
 /** 本周已练次数：与同卡「分钟」同为本周口径（从前次数取当日、分钟取本周，读成「本周一次练了 320 分钟」） */
@@ -161,7 +166,7 @@ const mealChips = computed(() =>
         <!-- AI 入口 -->
         <section v-else-if="c.id === 'ai'" class="card b-surf b-ai">
           <div class="row" style="gap: var(--sp-10)">
-            <i class="qic" style="background: var(--mod-ai-soft); color: var(--mod-ai-strong)"><Sparkles :size="19" /></i>
+            <i class="qic" style="background: var(--surface-2); color: var(--text-1)"><Sparkles :size="19" /></i>
             <div class="col">
               <b style="font-size: var(--fs-headline)">AI 助手</b>
               <span class="t-3" style="font-size: var(--fs-caption); font-weight: var(--fw-semibold)">提问 · 拍照记饮食 · 生成周计划</span>
@@ -177,8 +182,6 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-food'"
           class="b-surf"
           label="记饮食"
-          icon-bg="var(--mod-nutrition-soft)"
-          icon-color="var(--mod-nutrition-strong)"
           @click="quickOpen = true"
         >
           <Camera :size="20" />
@@ -187,8 +190,6 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-workout'"
           class="b-surf"
           label="记运动"
-          icon-bg="var(--mod-sports-soft)"
-          icon-color="var(--mod-sports-strong)"
           @click="workoutOpen = true"
         >
           <Dumbbell :size="20" />
@@ -197,8 +198,6 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-focus'"
           class="b-surf"
           label="专注"
-          icon-bg="var(--mod-focus-soft)"
-          icon-color="var(--mod-focus-strong)"
           @click="startFocus"
         >
           <Timer :size="20" />
@@ -207,8 +206,6 @@ const mealChips = computed(() =>
           v-else-if="c.id === 'qa-ai'"
           class="b-surf"
           label="问 AI"
-          icon-bg="var(--mod-ai-soft)"
-          icon-color="var(--mod-ai-strong)"
           @click="router.push({ name: 'ai' })"
         >
           <Sparkles :size="20" />
@@ -225,7 +222,7 @@ const mealChips = computed(() =>
             @keydown.enter.prevent="router.push({ name: 'ledger' })"
             @keydown.space.prevent="router.push({ name: 'ledger' })"
           >
-            <i class="qic" style="background: var(--mod-ledger-soft); color: var(--mod-ledger-strong)"><Wallet :size="21" /></i>
+            <i class="qic" style="background: var(--surface-2); color: var(--text-1)"><Wallet :size="21" /></i>
             <div class="col" style="gap: var(--gap-text); min-width: 0">
               <b>记账</b>
               <!-- 支出与预算各占一行（各自 nowrap）：挤在一行时「预算」会被右栏类目拦腰折断 -->

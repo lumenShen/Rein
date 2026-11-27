@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { AlertCircle } from 'lucide-vue-next'
+import { AlertCircle, Pencil } from 'lucide-vue-next'
+
+import WorkoutEditSheet from '@/components/exercise/WorkoutEditSheet.vue'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
@@ -36,7 +38,7 @@ const props = defineProps<{
   workout: Workout | null
 }>()
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; updated: [workout: Workout] }>()
 
 /* ---------- 删除这次训练（抽屉内的显式入口） ----------
  * 第一轮把行尾删除钮改成了 ActionSheet 确认层，且触态下 .del 整个隐藏 ——
@@ -49,6 +51,12 @@ const emit = defineEmits<{ close: [] }>()
  * 因此抽屉自己开确认层、自己落库，成功后关掉自己即可。 */
 const exerciseStore = useExerciseStore()
 const delOpen = ref(false)
+const editOpen = ref(false)
+
+function onUpdated(workout: Workout): void {
+  editOpen.value = false
+  emit('updated', workout)
+}
 
 /** 只开门，不删除 —— 破坏性操作必须过确认层 */
 function askDelete(): void {
@@ -300,8 +308,8 @@ const runKm = computed<number | null>(() => {
 })
 
 const runDurationSec = computed(() => {
-  if (detail.value?.source !== 'run') return 0
-  return Math.round((detail.value.snap.accumMs ?? 0) / 1000)
+  if (detail.value?.source !== 'run' || !props.workout) return 0
+  return Math.round(props.workout.durationMin * 60)
 })
 
 const runAvgPace = computed(() => {
@@ -581,11 +589,29 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
 
       <p v-if="workout.note" class="note t-3">{{ workout.note }}</p>
 
+      <button
+        v-if="workout.source !== 'health_connect'"
+        type="button"
+        class="edit-row"
+        data-testid="workout-edit-entry"
+        @click="editOpen = true"
+      >
+        <Pencil :size="16" /> 编辑这次记录
+      </button>
+
       <!-- 删除入口：触态下列表行尾的删除钮是隐藏的，这里是可见的那一条。
            不加图标只留文字，放在内容末尾（不占首屏），不与上面的数据抢层级。 -->
       <button type="button" class="del-row" @click="askDelete">删除这次训练</button>
     </template>
   </SheetModal>
+
+  <WorkoutEditSheet
+    :open="editOpen"
+    :workout="workout"
+    :distance-km="detail?.source === 'run' ? runKm : null"
+    @close="editOpen = false"
+    @updated="onUpdated"
+  />
 
   <!-- 删除确认层：与 WorkoutRecordsPage 行尾删除钮同一套（ActionSheet + danger 项） -->
   <ActionSheet
@@ -993,6 +1019,25 @@ const courseTotals = computed(() => detailTotals(courseRows.value))
 .note {
   margin-top: var(--sp-14);
   font-size: var(--fs-caption);
+}
+
+.edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-sm);
+  width: 100%;
+  min-height: var(--row-h);
+  margin-top: var(--sp-20);
+  border-radius: var(--radius-l);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
+}
+
+.edit-row + .del-row {
+  margin-top: var(--gap-sm);
 }
 
 /* 删除入口：一条独立的危险动作行。放在内容流末尾而不是钉底 —— 抽屉内容可滚动，

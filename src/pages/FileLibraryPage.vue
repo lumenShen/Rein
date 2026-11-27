@@ -152,6 +152,7 @@ interface ReaderState {
 }
 
 const reader = ref<ReaderState | null>(null)
+let readerSeq = 0
 
 /** 归类时的常用目标（快速 chips；文件管理器里的「移动到…」用的是同一份清单） */
 const MOVE_TARGETS = ['运动', '饮食', '日程', '笔记', '文档', '语音', '视频', '用户记忆', '未分类数据']
@@ -418,8 +419,10 @@ function applyFile(r: ReaderState, f: KbFile): void {
 }
 
 async function openDoc(docId: number): Promise<void> {
+  const seq = ++readerSeq
   try {
     const d = await kbService.read(docId, 'l2', 0, PAGE_CHUNKS)
+    if (seq !== readerSeq) return
     const r: ReaderState = {
       docId: d.id,
       title: d.title,
@@ -459,6 +462,7 @@ async function openDoc(docId: number): Promise<void> {
     if (d.sourceType === 'note') {
       // 真源直读：kb_docs.body 是带截断上限的检索缓存，原文才完整
       const f = await kbService.fileGet(d.id)
+      if (seq !== readerSeq) return
       applyFile(r, f)
     }
     reader.value = r
@@ -469,7 +473,7 @@ async function openDoc(docId: number): Promise<void> {
       r.modalities.find((m) => m === 'image')
     if (primary && r.modalities.length > 1) void viewModal(primary as KbModal)
   } catch (e) {
-    toast.toast(errMsg(e))
+    if (seq === readerSeq) toast.toast(errMsg(e))
   }
 }
 
@@ -479,12 +483,14 @@ async function openDoc(docId: number): Promise<void> {
  *  —— 两个 id 空间，直接当 doc id 用会把别的文档读出来。路径是两页都认的键，
  *  这里解析一次；解析不到（文件已被删）就安静地留在列表，不弹错。 */
 async function openPath(path: string): Promise<void> {
+  const seq = ++readerSeq
   try {
     const hits = await kbService.glob(path, 5)
+    if (seq !== readerSeq) return
     const hit = hits.find((h) => h.path === path)
     if (hit) await openDoc(hit.id)
   } catch (e) {
-    toast.toast(errMsg(e))
+    if (seq === readerSeq) toast.toast(errMsg(e))
   }
 }
 
@@ -573,7 +579,10 @@ async function removeFile(): Promise<void> {
         run: () => {
           void kbService
             .trashRestore([id])
-            .then(() => refreshExplorer())
+            .then((result) => {
+              void refreshExplorer()
+              if (result.failed.length) toast.toast(`撤销失败，文件仍在回收站：${result.failed.join('；')}`)
+            })
             .catch((e) => toast.toast(errMsg(e)))
         },
       },
@@ -679,13 +688,12 @@ onMounted(async () => {
            分类明细在总览页里讲，这一颗的职责就是「一眼看到占了多少」。 -->
       <template #action>
         <button
-          v-if="usage"
           class="hdr-btn pill"
-          :aria-label="`空间总览 · ${humanBytes(usage.totalBytes)}`"
+          :aria-label="usage ? `空间总览 · ${humanBytes(usage.totalBytes)}` : '空间总览'"
           @click="openUsage"
         >
           <HardDrive :size="15" />
-          {{ humanBytes(usage.totalBytes) }}
+          {{ usage ? humanBytes(usage.totalBytes) : '空间总览' }}
         </button>
       </template>
     </PageHeader>

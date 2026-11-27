@@ -88,6 +88,12 @@ export const useTodoStore = defineStore('todo', () => {
     await update(next)
   }
 
+  async function restore(todo: Todo): Promise<void> {
+    await todoService.restoreTodo(todo)
+    if (todo.date) await refreshDate(todo.date)
+    await loadAll()
+  }
+
   async function remove(todo: Todo): Promise<void> {
     await todoService.deleteTodo(todo.id)
     if (todo.date) await refreshDate(todo.date)
@@ -121,6 +127,7 @@ export const useTodoStore = defineStore('todo', () => {
     create,
     update,
     toggle,
+    restore,
     remove,
   }
 })

@@ -4,8 +4,9 @@ import { Plus } from 'lucide-vue-next'
 
 import { CATEGORY_META, DESKTOP_MIN } from '@/config/domain'
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useToday } from '@/composables/useToday'
 import { useZoomWheel } from '@/composables/useZoomWheel'
-import { minToHHmm, nowMin, todayStr, weekDates } from '@/utils/date'
+import { minToHHmm, nowMin, weekDates } from '@/utils/date'
 import { durationOf, layoutDayBlocks, titleLinesFor } from '@/utils/timelineLayout'
 import type { StackGroup } from '@/utils/timelineLayout'
 import type { Todo } from '@/types'
@@ -49,8 +50,8 @@ const CARD_PAD_Y = 8
  */
 const MIN_SPLIT_BLOCK_PX = 62
 
-const dates = weekDates(todayStr())
-const today = todayStr()
+const { today } = useToday()
+const dates = computed(() => weekDates(today.value))
 const px = ref(DEFAULT_PX)
 const ppm = computed(() => px.value / 60)
 const totalPx = computed(() => 24 * px.value)
@@ -101,7 +102,7 @@ const columns = computed<DayColumn[]>(() => {
     if (list) list.push(t)
     else byDate.set(t.date, [t])
   }
-  return dates.map((date, i) => {
+  return dates.value.map((date, i) => {
     const day = byDate.get(date) ?? []
     // 列宽不足时并排会压成「一字一行」，交给叠层卡（见 MIN_SPLIT_BLOCK_PX）
     const { blocks, stacks } = layoutDayBlocks(day, {
@@ -112,8 +113,8 @@ const columns = computed<DayColumn[]>(() => {
       date,
       weekday: ['一', '二', '三', '四', '五', '六', '日'][i]!,
       dayNum: Number(date.slice(8, 10)),
-      isToday: date === today,
-      isPast: date < today,
+      isToday: date === today.value,
+      isPast: date < today.value,
       blocks,
       stacks: stacks.map((s) => ({ ...s, key: stackKeyOf(s), front: frontOf(s) })),
       done: day.filter((t) => t.status === 'done').length,
@@ -172,9 +173,9 @@ function stkStyle(s: { items: Todo[]; startMin: number }): Record<string, string
 /* ---------- 底部池：按日分组的无时间待办 ---------- */
 
 const pool = computed(() =>
-  dates.map((date) => ({
+  dates.value.map((date) => ({
     date,
-    isToday: date === today,
+    isToday: date === today.value,
     items: props.unscheduled.filter((t) => t.date === date),
   })),
 )
@@ -283,7 +284,7 @@ function onTouchMove(e: TouchEvent): void {
 function onBlockDown(e: PointerEvent, t: Todo): void {
   if (t.status === 'done' || e.button !== 0) return
   const pos = pointToGrid(e)
-  const day = dates.indexOf(t.date ?? today)
+  const day = dates.value.indexOf(t.date ?? today.value)
   const base = day === -1 ? pos.day : day
   // 课表派生行是只读投影（见 types/todo.ts 的 courseSessionId）：只关掉长按武装，
   // 点选与抛滚照旧，避免用户把它拖到别的时间上造成「看起来改了其实没改」。
@@ -336,7 +337,7 @@ function onBlockUp(): void {
   const d = releaseDrag()
   if (!d) return
   if (d.moved) {
-    const date = dates[d.curDay] ?? today
+    const date = dates.value[d.curDay] ?? today.value
     emit('move', d.todo, date, d.curMin)
   } else if (!d.armed && !d.aborted) {
     emit('select', d.todo)
@@ -358,7 +359,7 @@ const isDragging = (id: number): boolean => !!drag.value?.armed && drag.value.to
 /* ---------- 池快排：点击排到当天早上 ---------- */
 
 function quickSchedule(t: Todo): void {
-  emit('move', t, t.date ?? today, 9 * 60)
+  emit('move', t, t.date ?? today.value, 9 * 60)
 }
 
 onMounted(() => {

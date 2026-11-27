@@ -88,12 +88,13 @@ export const motionOn = computed(() => effective.value !== 'off')
 /** 丰富档那几样（融合 / 形变 / 光晕 / 透镜 / 滚动边缘）要不要出：只有 rich 为 true */
 export const motionRich = computed(() => effective.value === 'rich')
 
-export function setMotionLevel(level: MotionLevel): void {
+export function setMotionLevel(level: MotionLevel): boolean {
   motionLevel.value = level
   try {
     localStorage.setItem(STORE_KEY, level)
+    return true
   } catch {
-    /* 存不下就只留内存态 */
+    return false
   }
 }
 

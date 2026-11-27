@@ -100,6 +100,17 @@ function load(): NavLayoutPayload {
   return { v: 1 }
 }
 
+export function navEntryActive(id: string, routeName: unknown): boolean {
+  const name = typeof routeName === 'string' ? routeName : ''
+  if (!name) return false
+  if (name === id || name.startsWith(`${id}-`)) return true
+  if (id === 'sports') return name === 'session-run'
+  if (id === 'me') return name.startsWith('settings')
+  if (id === 'campus-schedule') return name.startsWith('campus-')
+  if (id === 'record') return name === 'voice-layouts'
+  return false
+}
+
 export const useNavLayoutStore = defineStore('navLayout', () => {
   const payload = ref<NavLayoutPayload>(load())
 

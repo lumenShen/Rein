@@ -89,6 +89,7 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
+    saveError.value = ''
     if (props.model) {
       name.value = props.model.name
       provider.value = props.model.provider
@@ -137,6 +138,7 @@ const canSave = computed(
     !saving.value,
 )
 const saving = ref(false)
+const saveError = ref('')
 const title = computed(() => (editing.value ? '编辑模型' : '添加模型'))
 
 /** 单价输入 → 数字；空/非法为 null（=不计模型费） */
@@ -171,6 +173,8 @@ async function save(): Promise<void> {
       emit('saved', created.id)
     }
     emit('close')
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : '保存失败，请重试'
   } finally {
     saving.value = false
   }
@@ -280,6 +284,7 @@ async function save(): Promise<void> {
         <ToggleSwitch v-model="isDefault" label="设为默认" />
       </div>
 
+      <p v-if="saveError" class="save-error" role="alert" data-testid="model-form-save-error">{{ saveError }}</p>
       <button type="button" class="save" :disabled="!canSave" @click="save">
         {{ saving ? '保存中…' : '保存' }}
       </button>
@@ -388,6 +393,13 @@ async function save(): Promise<void> {
 .edge-hint {
   font-size: var(--fs-caption);
   line-height: var(--lh-body);
+}
+
+.save-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
 }
 
 .save {

@@ -47,9 +47,9 @@ const emit = defineEmits<{ click: [] }>()
 const router = useRouter()
 
 const iconStyle = computed(() =>
-  props.accent
-    ? { background: `var(${props.accent}-soft)`, color: `var(${props.accent}-strong)` }
-    : { background: 'var(--accent-soft)', color: 'var(--accent)' },
+  props.accent === '--danger'
+    ? { background: 'var(--danger-soft)', color: 'var(--danger-strong)' }
+    : { background: 'var(--surface-2)', color: 'var(--text-1)' },
 )
 
 /** 行高跟内容走：有副标才需要 64，单行压回 48 */

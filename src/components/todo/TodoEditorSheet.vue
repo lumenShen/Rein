@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ChevronDown, Image as ImageIcon, Mic, Minus, Paperclip, Plus, Square, Trash2, Type, X } from 'lucide-vue-next'
 
 import InfoHint from '@/components/common/InfoHint.vue'
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import NumberStepper from '@/components/common/NumberStepper.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import { CATEGORY_META } from '@/config/domain'
@@ -247,10 +248,45 @@ async function save(): Promise<void> {
   }
 }
 
-async function remove(): Promise<void> {
-  if (!props.todo) return
-  await store.remove(props.todo)
-  emit('close')
+const delOpen = ref(false)
+const removing = ref(false)
+let undoRunning = false
+
+function askRemove(): void {
+  delOpen.value = true
+}
+
+async function restoreTodo(todo: Todo): Promise<void> {
+  await store.restore(todo)
+}
+
+async function undoRemove(todo: Todo): Promise<void> {
+  if (undoRunning) return
+  undoRunning = true
+  try {
+    await restoreTodo(todo)
+    toast('已恢复待办')
+  } catch {
+    toast('撤销失败，请重试')
+  } finally {
+    undoRunning = false
+  }
+}
+
+async function confirmRemove(value: string): Promise<void> {
+  if (value !== 'delete' || !props.todo || removing.value) return
+  const todo = props.todo
+  const undoable = !todo.programId && !todo.recKey && !todo.courseSessionId
+  removing.value = true
+  try {
+    await store.remove(todo)
+    emit('close')
+    toast('已删除待办', undoable
+      ? { action: { label: '撤销', run: () => { void undoRemove(todo) } }, duration: 5000 }
+      : undefined)
+  } finally {
+    removing.value = false
+  }
 }
 
 /* ---------- 附件与标记：文字 / 图片 / 文件 / 录音 ---------- */
@@ -349,7 +385,7 @@ function fmtDur(totalSec: number): string {
 }
 
 async function toggleRecord(): Promise<void> {
-  if (recorder.status === 'recording') {
+  if (recorder.status !== 'idle') {
     if (!recMine.value) {
       toast('已有录音在进行中（见录音浮条）')
       return
@@ -684,13 +720,21 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="actions row between">
-      <button v-if="todo" class="danger" aria-label="删除待办" @click="remove">
+      <button v-if="todo" class="danger" aria-label="删除待办" @click="askRemove">
         <Trash2 :size="16" />
       </button>
       <span v-else />
       <button class="save" :disabled="!canSave || saving" @click="save">保存</button>
     </div>
   </SheetModal>
+
+  <ActionSheet
+    :open="delOpen"
+    title="删除后这条待办会从列表与统计中移除。普通待办可在提示条中撤销。"
+    :actions="[{ label: '删除这条待办', value: 'delete', danger: true }]"
+    @close="delOpen = false"
+    @select="confirmRemove"
+  />
 </template>
 
 <style scoped>

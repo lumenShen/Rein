@@ -151,12 +151,13 @@ export const liquidGlass = computed(
  */
 export const glassPipeline = computed<GlassPipeline>(() => (liquidGlass.value ? 'collapsed' : 'off'))
 
-export function setPerfMode(mode: PerfMode): void {
+export function setPerfMode(mode: PerfMode): boolean {
   perfMode.value = mode
   try {
     localStorage.setItem(STORE_KEY, mode)
+    return true
   } catch {
-    /* 存不下就只留内存态 */
+    return false
   }
 }
 

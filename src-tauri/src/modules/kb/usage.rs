@@ -86,6 +86,7 @@ pub struct KbUsageReport {
 pub struct KbUsageCleanResult {
     pub removed: i64,
     pub bytes: i64,
+    pub failed: i64,
     /// 试运行：只统计不删
     pub dry_run: bool,
     pub message: String,
@@ -353,11 +354,13 @@ pub fn clean_orphans(conn: &Connection, root: &Path, dry_run: bool) -> Result<Kb
     let orphans = list_orphans(conn, root)?;
     let mut removed = 0i64;
     let mut bytes = 0i64;
+    let mut failed = 0i64;
     for (rel, size) in &orphans {
         if !dry_run {
             match std::fs::remove_file(root.join(rel)) {
                 Ok(()) => {}
                 Err(e) => {
+                    failed += 1;
                     eprintln!("[kb] 清理孤儿本体失败 {rel}: {e}");
                     continue;
                 }
@@ -372,12 +375,19 @@ pub fn clean_orphans(conn: &Connection, root: &Path, dry_run: bool) -> Result<Kb
             removed,
             human_size(bytes)
         )
+    } else if failed > 0 {
+        format!(
+            "已清理 {} 个孤儿本体，回收 {}；{failed} 项删除失败",
+            removed,
+            human_size(bytes)
+        )
     } else {
         format!("已清理 {} 个孤儿本体，回收 {}", removed, human_size(bytes))
     };
     Ok(KbUsageCleanResult {
         removed,
         bytes,
+        failed,
         dry_run,
         message,
     })

@@ -16,7 +16,7 @@ import StatusChip from '@/components/common/StatusChip.vue'
 import { useModelRolesStore } from '@/stores/modelRoles'
 import type { ModelRole } from '@/types'
 
-defineProps<{ loading?: boolean }>()
+defineProps<{ loading?: boolean; error?: boolean }>()
 
 const emit = defineEmits<{ pick: [ModelRole] }>()
 
@@ -43,7 +43,7 @@ const ICONS = {
           type="button"
           class="row center slot"
           :class="{ locked: !s.interactive }"
-          :disabled="!s.interactive || loading"
+          :disabled="!s.interactive || loading || error"
           @click="emit('pick', s.role)"
         >
           <span class="ic" :class="`ic-${s.role}`">
@@ -54,15 +54,15 @@ const ICONS = {
               <i class="label">{{ s.label }}</i>
               <!-- 就绪状态写成可见文字（原先只有色点，含义藏在 aria-label 里）；
                    圆点降为胶囊内的前导点 -->
-              <StatusChip :tone="s.ok ? 'ok' : 'neutral'" size="sm" :aria-label="s.ok ? '已就绪' : '未就绪'">
-                <i class="dot" :class="s.ok ? 'ok' : 'warn'" />
-                {{ s.ok ? '已就绪' : '未就绪' }}
+              <StatusChip :tone="error ? 'danger' : s.ok ? 'ok' : 'neutral'" size="sm" :aria-label="error ? '读取失败' : loading ? '读取中' : s.ok ? '已就绪' : '未就绪'">
+                <i class="dot" :class="error ? 'warn' : s.ok ? 'ok' : 'warn'" />
+                {{ error ? '读取失败' : loading ? '读取中' : s.ok ? '已就绪' : '未就绪' }}
               </StatusChip>
             </span>
-            <b>{{ s.value }}</b>
-            <small>{{ s.sub }}</small>
-            <em v-if="s.warn" class="warn-line">{{ s.warn }}</em>
-            <em v-else-if="s.lockedNote" class="lock-line">{{ s.lockedNote }}</em>
+            <b>{{ error ? '暂时读不到配置' : loading ? '正在读取…' : s.value }}</b>
+            <small>{{ error ? '请在上方重试' : loading ? '正在检查模型与凭据' : s.sub }}</small>
+            <em v-if="!loading && !error && s.warn" class="warn-line">{{ s.warn }}</em>
+            <em v-else-if="!loading && !error && s.lockedNote" class="lock-line">{{ s.lockedNote }}</em>
           </span>
           <span class="go">›</span>
         </button>

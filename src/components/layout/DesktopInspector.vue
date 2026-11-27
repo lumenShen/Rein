@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowRight,
@@ -20,13 +20,14 @@ import ActivityRings from '@/components/common/ActivityRings.vue'
 import WorkoutSourceTag from '@/components/exercise/WorkoutSourceTag.vue'
 import { CATEGORY_META } from '@/config/domain'
 import { categoryOf, fmtCents } from '@/config/ledger'
+import { useToday } from '@/composables/useToday'
 import { useExerciseStore } from '@/stores/exercise'
 import { useFeaturesStore } from '@/stores/features'
 import { useLedgerStore } from '@/stores/ledger'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useTodoStore } from '@/stores/todo'
-import { todayStr } from '@/utils/date'
+import type { ProgramRecord } from '@/types'
 
 /**
  * 桌面三窗格壳 · 右侧信息栏。
@@ -103,7 +104,7 @@ const ASK_HINT: Record<AsideGroup, string> = {
 /** AI 页的常用问句：把「能问什么」摊开，比一个空输入框有用 */
 const AI_QUICK = ['分析今日饮食', '这周运动量怎么样', '帮我把明天安排满', '总结这个月的开销']
 
-const today = todayStr()
+const { today } = useToday()
 const route = useRoute()
 const router = useRouter()
 
@@ -125,25 +126,32 @@ function load(g: AsideGroup): void {
   if (loaded === g) return
   loaded = g
   if (g === 'today') {
-    void nutrition.loadSummary(today)
+    void nutrition.loadSummary(today.value)
     void pomo.loadToday()
-    void todo.loadDay(today)
+    void todo.loadDay(today.value)
+    ledger.month = today.value.slice(0, 7)
     void ledger.loadMonth()
     if (features.isEnabled('program')) void loadProgramAside()
   } else if (g === 'sports') {
-    void exercise.loadWeek(today)
-    void todo.loadDay(today)
+    void exercise.loadWeek(today.value)
+    void todo.loadDay(today.value)
   } else if (g === 'nutrition') {
-    void nutrition.loadSummary(today)
+    void nutrition.loadSummary(today.value)
   } else if (g === 'ledger') {
+    ledger.month = today.value.slice(0, 7)
     void ledger.loadMonth()
   } else if (g === 'account') {
-    void nutrition.loadSummary(today)
+    void nutrition.loadSummary(today.value)
     void pomo.loadToday()
     if (features.isEnabled('program')) void loadProgramAside()
   }
   /* ai / campus 不需要数据：它们给的是入口 */
 }
+
+watch(today, () => {
+  loaded = null
+  load(group.value)
+})
 
 /* ---- 方案信息栏卡：右栏是桌面端的常驻入口（动态 import，见文件头纪律②） ---- */
 
@@ -155,6 +163,7 @@ interface ProgramAside {
 }
 
 const programAside = ref<ProgramAside | null>(null)
+const programStoreRef = shallowRef<{ loaded: boolean; active: ProgramRecord | null } | null>(null)
 
 async function loadProgramAside(): Promise<void> {
   try {
@@ -165,6 +174,7 @@ async function loadProgramAside(): Promise<void> {
         import('@/utils/programCycle'),
       ])
     const store = useProgramStore()
+    programStoreRef.value = store
     if (!store.loaded) await store.load()
     const rec = store.active
     if (!rec) {
@@ -177,7 +187,7 @@ async function loadProgramAside(): Promise<void> {
       programAside.value = null
       return
     }
-    const course = st.ended || st.upcoming ? null : courseOnDate(blob, today)
+    const course = st.ended || st.upcoming ? null : courseOnDate(blob, today.value)
     programAside.value = {
       id: rec.id,
       heading: `第 ${st.week} 周 / ${st.weeks}`,
@@ -191,9 +201,17 @@ async function loadProgramAside(): Promise<void> {
 
 onMounted(() => load(group.value))
 watch(group, (g) => load(g))
+watch(
+  () => [programStoreRef.value?.active?.id, programStoreRef.value?.active?.version] as const,
+  () => {
+    if ((group.value === 'today' || group.value === 'account') && features.isEnabled('program')) {
+      void loadProgramAside()
+    }
+  },
+)
 
 const todayExpenseCents = computed(() =>
-  ledger.entries.filter((e) => e.date === today && e.kind === 'expense').reduce((s, e) => s + e.amountCents, 0),
+  ledger.entries.filter((e) => e.date === today.value && e.kind === 'expense').reduce((s, e) => s + e.amountCents, 0),
 )
 
 /** 本月最近三笔（按日期、再按 id 倒序 —— 同一天的顺序就是录入顺序） */

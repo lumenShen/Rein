@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, Pencil, Trash2 } from 'lucide-vue-next'
+import { Check, Pencil } from 'lucide-vue-next'
 
 import { CATEGORY_META, priorityMeta } from '@/config/domain'
 import { useTodoStore } from '@/stores/todo'
 import { minToHHmm } from '@/utils/date'
 import type { Todo } from '@/types'
 import TodoEditorSheet from './TodoEditorSheet.vue'
+import DeleteTodoButton from './DeleteTodoButton.vue'
 
 /** 单条待办行：点按勾选切换完成，点正文打开编辑（时间段/重要程度等完整字段），悬停显示编辑/删除。 */
 const props = defineProps<{ todo: Todo }>()
@@ -53,9 +54,7 @@ function openEditor(): void {
       <button class="edit" aria-label="编辑待办" @click="editorOpen = true">
         <Pencil :size="16" />
       </button>
-      <button class="del" aria-label="删除待办" @click="store.remove(todo)">
-        <Trash2 :size="16" />
-      </button>
+      <DeleteTodoButton class="del" :todo="todo" icon-only />
     </div>
 
     <TodoEditorSheet :open="editorOpen" :todo @close="editorOpen = false" />

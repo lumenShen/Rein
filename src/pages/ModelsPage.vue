@@ -15,7 +15,6 @@ import ServiceModelsCard from '@/components/ai/ServiceModelsCard.vue'
 import VoiceConfigSheet from '@/components/voice/VoiceConfigSheet.vue'
 import { KIND_LABEL } from '@/ai/providerCatalog'
 import { voiceService } from '@/services/voiceService'
-import { useToast } from '@/composables/useToast'
 import { useModelRolesStore } from '@/stores/modelRoles'
 import { useModelsStore } from '@/stores/models'
 import { useOnlineServiceStore } from '@/stores/onlineService'
@@ -39,7 +38,6 @@ const models = useModelsStore()
 const providers = useProvidersStore()
 const roles = useModelRolesStore()
 const online = useOnlineServiceStore()
-const toast = useToast()
 const router = useRouter()
 
 /** 选择抽屉（四行槽位共用） */
@@ -62,6 +60,27 @@ const editingModel = ref<AiModel | null>(null)
 /* ---- 豆包语音服务：一张卡管一对模型（ASR/TTS），独立于 LLM 列表 ---- */
 const voiceConfig = ref<VoiceConfig | null>(null)
 const voiceOpen = ref(false)
+const loadError = ref('')
+const loadingSetup = ref(false)
+
+async function loadSetup(): Promise<void> {
+  if (loadingSetup.value) return
+  loadingSetup.value = true
+  loadError.value = ''
+  try {
+    await roles.load()
+    await models.loadUsage()
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : '模型配置读取失败'
+  } finally {
+    loadingSetup.value = false
+  }
+}
+
+const needsMainModel = computed(() => roles.loaded && !roles.mainModel)
+const pageSubtitle = computed(() =>
+  needsMainModel.value ? '先配置一个能对话的模型' : '聊天、看图、语音与检索各用哪个模型',
+)
 
 async function loadVoiceConfig(): Promise<void> {
   voiceConfig.value = await voiceService.configGet().catch(() => null)
@@ -82,10 +101,7 @@ onMounted(() => {
   // 在线服务先读一次（设置 + 上次成功的目录快照 + 后台核对）：否则这张卡在
   // 打开过抽屉之前一直显示「未配置服务密钥」，而密钥明明在本机
   void online.load()
-  void roles
-    .load()
-    .then(() => models.loadUsage())
-    .catch(() => toast.toast('模型列表加载失败'))
+  void loadSetup()
   void loadVoiceConfig()
 })
 
@@ -93,7 +109,7 @@ onMounted(() => {
 function askAiSetup(): void {
   void router.push({
     path: '/ai',
-    query: { ask: '帮我检查模型与提供商的配置（主模型、语音识别、向量），有问题直接帮我修好并测试验证' },
+    query: { ask: '帮我检查模型与提供商的配置（主模型、语音识别、向量），缺什么请带我到对应配置表单；不要让我在聊天里贴 API Key，最后测试连接' },
   })
 }
 
@@ -161,7 +177,7 @@ const onlineTone = computed(() => {
 
 <template>
   <div class="page">
-    <PageHeader title="管理模型" subtitle="选服务模型 · 接服务商 · 拉模型目录" back>
+    <PageHeader :title="needsMainModel ? '配置 AI' : '管理模型'" :subtitle="pageSubtitle" back>
       <template #action>
         <button class="hdr-btn accent" aria-label="添加提供商" @click="addProvider()">
           <Plus :size="19" />
@@ -172,8 +188,26 @@ const onlineTone = computed(() => {
     <!-- 超范围平移层：页面级滚动区走 item 超伸 —— 页面框与吸顶页头站住，只有 item 位移
          （system/rubberScroll）。页头留在层外，拖动时不跟着漂 -->
     <div class="rubber-layer" data-rubber-content>
+      <p v-if="loadError" class="refresh-fault" role="alert" data-testid="model-load-error">
+        <span class="flex-1">模型配置读取失败：{{ loadError }}</span>
+        <button type="button" class="inline-link" :disabled="loadingSetup" @click="loadSetup">
+          {{ loadingSetup ? '读取中…' : '重试' }}
+        </button>
+      </p>
+
+      <section v-if="needsMainModel" class="card setup" aria-labelledby="setup-title" data-testid="model-setup-guide">
+        <div class="setup-copy">
+          <b id="setup-title">先配置一个能对话的模型</b>
+          <p>添加服务商并拉取模型清单，或手动填写模型信息。配好后才能使用 AI 记录、语音和知识检索。</p>
+        </div>
+        <div class="setup-actions">
+          <button type="button" class="primary" @click="addProvider()">添加服务商</button>
+          <button type="button" class="mini" @click="openModelForm(null)">手动添加模型</button>
+        </div>
+      </section>
+
       <!-- 1 · 服务模型：四个接口各用哪个，点一行换一个 -->
-      <ServiceModelsCard :loading="!roles.loaded" @pick="openPicker" />
+      <ServiceModelsCard :loading="loadingSetup || (!roles.loaded && !loadError)" :error="!!loadError" @pick="openPicker" />
 
       <!-- 2 · Rein 在线服务：点开看状态（地址/密钥/目录/调用条件/对账） -->
       <button class="card onl" @click="onlineOpen = true">
@@ -189,7 +223,7 @@ const onlineTone = computed(() => {
       </button>
 
       <!-- 3 · 提供商：服务商账号 → 模型目录 → 逐条启用 -->
-      <section class="prov">
+      <section v-if="providerCards.length > 0 || (roles.loaded && !needsMainModel)" class="prov">
         <div class="row between center sec-head">
           <b>提供商</b>
           <button class="mini" @click="listOpen = true">
@@ -247,11 +281,11 @@ const onlineTone = computed(() => {
         </span>
         <span class="v-go">›</span>
       </button>
-      <button class="card ai-setup" @click="askAiSetup">
+      <button v-if="roles.mainModel" class="card ai-setup" @click="askAiSetup">
         <span class="ic ic-spark"><Sparkles :size="15" /></span>
         <span class="vt">
           <b>让 AI 帮我配置</b>
-          <em>聊天里直接填 API Key、拉模型、切换服务模型</em>
+          <em>检查缺失项、拉取模型并测试连接；密钥仍在配置表单里填写</em>
         </span>
         <span class="v-go">›</span>
       </button>
@@ -337,6 +371,55 @@ button.card {
   min-height: var(--row-h-double);
   padding: var(--pad-card-tight) var(--pad-card);
   text-align: left;
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  padding: var(--pad-card);
+  border-color: var(--accent-soft);
+}
+
+.setup-copy b {
+  font-size: var(--fs-subhead);
+  font-weight: var(--fw-semibold);
+}
+
+.setup-copy p {
+  margin: var(--gap-text) 0 0;
+  color: var(--text-2);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
+}
+
+.setup-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex-wrap: wrap;
+}
+
+.refresh-fault {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin: 0;
+  padding: var(--sp-12) var(--sp-16);
+  border: 1px solid var(--danger-soft);
+  border-radius: var(--radius-m);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.inline-link {
+  flex: none;
+  min-height: var(--control-sm);
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
 }
 
 /* 卡与卡之间 12（间隔规范「卡片之间 12vp」） */

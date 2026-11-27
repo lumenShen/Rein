@@ -69,7 +69,7 @@ const ACTIONS: Record<TopbarAction, () => void> = {
     else pomo.start()
   },
   'record-toggle': () => {
-    if (recorder.status === 'recording') {
+    if (recorder.status !== 'idle') {
       stopRecording()
       return
     }

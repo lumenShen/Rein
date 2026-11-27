@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import PillChip from '@/components/common/PillChip.vue'
@@ -17,6 +18,10 @@ const { toast } = useToast()
 
 /* ---- 手动微调（本地副本，防抖自动保存） ---- */
 const targets = reactive<DailyTargets>({ kcal: 2000, protein: 80, carb: 250, fat: 65, sodiumMg: 1500, waterMl: 1700 })
+const saving = ref(false)
+const dirty = ref(false)
+const saveError = ref('')
+const lastSaved = ref<DailyTargets | null>(null)
 
 onMounted(async () => {
   if (!n.profile) await n.loadProfile()
@@ -25,18 +30,85 @@ onMounted(async () => {
 watch(
   () => n.profile?.targets,
   (t) => {
-    if (t) Object.assign(targets, t)
+    if (t) {
+      lastSaved.value = { ...t }
+      Object.assign(targets, t)
+      dirty.value = false
+    }
   },
   { immediate: true },
 )
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+let saveChain: Promise<unknown> = Promise.resolve()
+
+function sameTargets(a: DailyTargets, b: DailyTargets): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 watch(targets, () => {
+  if (lastSaved.value && sameTargets(targets, lastSaved.value)) {
+    dirty.value = false
+    return
+  }
+  dirty.value = true
+  saveError.value = ''
   clearTimeout(saveTimer)
-  saveTimer = setTimeout(async () => {
-    await n.saveTargets({ ...targets })
-    toast('每日目标已更新')
-  }, 600)
+  saveTimer = setTimeout(() => void flushSave(), 600)
+})
+
+function flushSave(): Promise<boolean> {
+  clearTimeout(saveTimer)
+  if (!dirty.value) return saveChain.then(() => true)
+  const run = saveChain.then(async () => {
+    if (!dirty.value) return true
+    const payload = { ...targets }
+    saving.value = true
+    saveError.value = ''
+    try {
+      await n.saveTargets(payload)
+      lastSaved.value = payload
+      if (sameTargets(targets, payload)) dirty.value = false
+      toast('每日目标已更新')
+      return true
+    } catch (e) {
+      saveError.value = e instanceof Error ? e.message : '每日目标保存失败'
+      toast(saveError.value)
+      return false
+    } finally {
+      saving.value = false
+    }
+  })
+  saveChain = run.catch(() => undefined)
+  return run
+}
+
+const saveState = computed(() => {
+  if (saveError.value) return '保存失败'
+  if (saving.value) return '保存中…'
+  return dirty.value ? '等待保存' : '已自动保存'
+})
+
+function onBeforeUnload(e: BeforeUnloadEvent): void {
+  if (!dirty.value && !saving.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+onBeforeRouteLeave(async () => {
+  if (!dirty.value && !saving.value) return true
+  return flushSave()
+})
+
+onMounted(async () => {
+  window.addEventListener('beforeunload', onBeforeUnload)
+  if (!n.profile) await n.loadProfile()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  clearTimeout(saveTimer)
+  if (dirty.value) void flushSave()
 })
 </script>
 
@@ -60,9 +132,14 @@ watch(targets, () => {
     <section class="card lp-targets">
       <header class="head">
         <h2>手动微调</h2>
-        <PillChip tone="muted">自动保存</PillChip>
+        <PillChip :tone="saveError ? 'label' : dirty || saving ? 'action' : 'muted'" aria-live="polite">
+          {{ saveState }}
+        </PillChip>
       </header>
       <TargetsEditor v-model="targets" />
+      <p v-if="saveError" class="save-error" role="alert">
+        {{ saveError }} <button type="button" @click="flushSave">重试</button>
+      </p>
     </section>
     </div>
   </div>
@@ -84,6 +161,20 @@ watch(targets, () => {
    做成中性胶囊与周围 --text-3 正文分层 */
 .head .chip {
   margin-top: var(--gap-tight);
+}
+
+.save-error {
+  margin-top: var(--gap-sm);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.save-error button {
+  min-height: var(--control-sm);
+  margin-left: var(--gap-sm);
+  color: var(--accent);
+  font-weight: var(--fw-medium);
 }
 
 /* ---------- 桌面（≥ --desk-min 时壳层才渲染 .desk-main，所以这里不用写断点） ----------

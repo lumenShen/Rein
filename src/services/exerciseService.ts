@@ -1,6 +1,6 @@
 /** 运动域 IPC 封装 · 对应 modules/exercise/commands.rs */
 
-import type { Workout, WorkoutInput } from '@/types'
+import type { Workout, WorkoutInput, WorkoutUpdateInput } from '@/types'
 import { invoke } from './transport'
 
 export const exerciseService = {
@@ -22,6 +22,9 @@ export const exerciseService = {
       kcal: input.kcal,
       note: input.note ?? null,
     }),
+
+  updateWorkout: (id: number, input: WorkoutUpdateInput) =>
+    invoke<Workout>('update_workout', { id, input }),
 
   deleteWorkout: (id: number) => invoke<void>('delete_workout', { id }),
 }

@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
+import { useToday } from '@/composables/useToday'
 import { useTodoStore } from '@/stores/todo'
-import { WEEKDAY_LABELS, todayStr, weekDates } from '@/utils/date'
+import { WEEKDAY_LABELS, weekDates } from '@/utils/date'
 
 /** 周回顾：本周完成率环 + 按天分布 + 一句话洞察（与周视图同数据源）。 */
 const store = useTodoStore()
-const today = todayStr()
-const dates = weekDates(today)
+const { today } = useToday()
+const dates = computed(() => weekDates(today.value))
 
-onMounted(() => {
-  void store.loadStats(dates[0]!, dates[6]!)
-})
+function loadWeek(): void {
+  void store.loadStats(dates.value[0]!, dates.value[6]!)
+}
+
+onMounted(loadWeek)
+watch(today, loadWeek)
 
 const stats = computed(() => {
   let total = 0
   let done = 0
-  const perDay = dates.map((d) => {
+  const perDay = dates.value.map((d) => {
     const s = store.statsByDate[d] ?? { total: 0, done: 0 }
     total += s.total
     done += s.done
@@ -32,9 +36,9 @@ const CIRC = 2 * Math.PI * R
 const insight = computed(() => {
   let worst = -1
   let worstRatio = 2
-  dates.forEach((d, i) => {
+  dates.value.forEach((d, i) => {
     const s = stats.value.perDay[i]!
-    if (d >= today || s.total === 0) return
+    if (d >= today.value || s.total === 0) return
     const r = s.done / s.total
     if (r < worstRatio) {
       worstRatio = r

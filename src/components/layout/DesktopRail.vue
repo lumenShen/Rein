@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { LayoutGrid, Minus, PanelRight, Search, User } from 'lucide-vue-next'
+import { LayoutGrid, Minus, PanelRight, Plus, Search, User } from 'lucide-vue-next'
 
 import RailAllMenu from '@/components/layout/RailAllMenu.vue'
+import QuickRecordSheet from '@/components/common/QuickRecordSheet.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useNavDrag } from '@/composables/useNavDrag'
 import { useNavEdit } from '@/composables/useNavEdit'
-import type { NavEntry } from '@/stores/navLayout'
-import { useNavLayoutStore } from '@/stores/navLayout'
+import { useNavLayoutStore, navEntryActive, type NavEntry } from '@/stores/navLayout'
 import { MOD } from '@/system/deskShell'
 
 /** 信息栏的开关状态与命令面板入口都由壳层持有，导航轨只负责显示与转发 */
@@ -87,6 +87,7 @@ function onEditItemClick(it: NavEntry): void {
 const hoverOK = useMediaQuery('(hover: hover)')
 const allMenuOpen = ref(false)
 const allBtnEl = ref<HTMLElement | null>(null)
+const quickOpen = ref(false)
 function onAllHover(): void {
   if (!hoverOK.value || editing.value) return
   allMenuOpen.value = true
@@ -110,6 +111,19 @@ function onAllClick(): void {
       :tabindex="editing ? -1 : undefined"
       @click="onLogo"
     />
+    <button
+      type="button"
+      class="ric quick-record"
+      :class="{ gated: editing }"
+      aria-label="快速记录"
+      data-label="快速记录"
+      :tabindex="editing ? -1 : undefined"
+      :aria-disabled="editing || undefined"
+      @click="quickOpen = true"
+    >
+      <Plus :size="22" :stroke-width="2.2" />
+      <span class="ric-label">记录</span>
+    </button>
     <div ref="navsEl" class="navs col" :class="{ editing }">
       <!-- 正常态：路由直达。aria-label / data-label 逐字保持（e2e 锚点） -->
       <template v-if="!editing">
@@ -118,12 +132,14 @@ function onAllClick(): void {
           :key="it.id"
           :to="{ name: it.id }"
           class="ric"
-          :class="{ on: route.name === it.id }"
+          :class="{ on: navEntryActive(it.id, route.name) }"
           :data-nav-id="it.id"
           :aria-label="it.label"
+          :aria-current="navEntryActive(it.id, route.name) ? 'page' : undefined"
           :data-label="it.label"
         >
-          <component :is="it.icon" :size="21" :stroke-width="route.name === it.id ? 2.2 : 1.9" />
+          <component :is="it.icon" :size="21" :stroke-width="navEntryActive(it.id, route.name) ? 2.2 : 1.9" />
+          <span class="ric-label">{{ it.label }}</span>
         </RouterLink>
       </template>
       <!-- 编辑态：条目换成 button（点击 = 撤回，跳转语义必须消失）；非固定项右上角叠
@@ -137,14 +153,16 @@ function onAllClick(): void {
           :key="it.id"
           type="button"
           class="ric"
-          :class="{ on: route.name === it.id, dragging: drag.dragId.value === it.id }"
+          :class="{ on: navEntryActive(it.id, route.name), dragging: drag.dragId.value === it.id }"
           :data-nav-id="it.id"
           :data-label="it.label"
           :aria-label="it.fixed ? `${it.label}（固定，不可移除）` : `从左栏移除『${it.label}』`"
+          :aria-current="navEntryActive(it.id, route.name) ? 'page' : undefined"
           @click="onEditItemClick(it)"
           @pointerdown="onItemPointerDown($event, it)"
         >
           <component :is="it.icon" :size="21" :stroke-width="2" />
+          <span class="ric-label">{{ it.label }}</span>
           <span v-if="!it.fixed" class="ric-badge" data-nav-badge="-" aria-hidden="true">
             <Minus :size="12" :stroke-width="2.6" />
           </span>
@@ -164,6 +182,7 @@ function onAllClick(): void {
       @click="onCmd"
     >
       <Search :size="20" :stroke-width="2" />
+      <span class="ric-label">命令</span>
     </button>
     <button
       class="ric insp"
@@ -176,6 +195,7 @@ function onAllClick(): void {
       @click="onInsp"
     >
       <PanelRight :size="20" :stroke-width="2" />
+      <span class="ric-label">信息栏</span>
     </button>
     <!-- 「关于你」：正常态 RouterLink；编辑态换成 dead button（无点击处理）—— RouterLink 的
          跳转语义在编辑态必须消失，与 .navs 条目的按钮化同一条理由（§6.2/§4.3） -->
@@ -183,14 +203,17 @@ function onAllClick(): void {
       v-if="!editing"
       :to="{ name: 'me' }"
       class="ric me"
-      :class="{ on: route.name === 'me' }"
+      :class="{ on: navEntryActive('me', route.name) }"
       aria-label="关于你"
+      :aria-current="navEntryActive('me', route.name) ? 'page' : undefined"
       data-label="关于你"
     >
-      <User :size="21" :stroke-width="route.name === 'me' ? 2.2 : 1.9" />
+      <User :size="21" :stroke-width="navEntryActive('me', route.name) ? 2.2 : 1.9" />
+      <span class="ric-label">关于你</span>
     </RouterLink>
     <button v-else type="button" class="ric me gated" aria-label="关于你" data-label="关于你" aria-disabled="true" tabindex="-1">
       <User :size="21" :stroke-width="2" />
+      <span class="ric-label">关于你</span>
     </button>
     <!-- 全部菜单：列出所有注册功能的悬浮入口（RailAllMenu），也是编辑态的入口与出口 -->
     <button
@@ -204,8 +227,10 @@ function onAllClick(): void {
       @click="onAllClick"
     >
       <LayoutGrid :size="20" :stroke-width="2" />
+      <span class="ric-label">全部</span>
     </button>
     <RailAllMenu :anchor="allBtnEl" :open="allMenuOpen" @update:open="allMenuOpen = $event" />
+    <QuickRecordSheet :open="quickOpen" @close="quickOpen = false" />
   </nav>
 </template>
 
@@ -215,7 +240,7 @@ function onAllClick(): void {
    各写一套的代价是**档位升级要改两遍**，而超高档正是靠改令牌整套升级的。
    glass-edge-r：只保留靠内那一条描边 —— 左边贴着屏幕边缘，画框就是在边上多一条亮线。 */
 .rail {
-  width: 64px;
+  width: 88px;
   flex: none;
   height: 100%;
   display: flex;
@@ -236,11 +261,33 @@ function onAllClick(): void {
   /* 品牌标与导航簇分开 12（加上 .rail 的 gap 8 共 20，原来是一条 22 的裸边距） */
   margin-bottom: var(--sp-12);
   border-radius: var(--radius-xs);
-  background: conic-gradient(from 210deg, var(--c-intake), var(--c-exercise), var(--c-balance), var(--c-intake));
+  background: var(--accent);
+}
+
+.quick-record {
+  flex: none;
+  margin-bottom: var(--gap-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.quick-record:hover {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 .navs {
-  gap: var(--gap-sm);
+  gap: var(--gap-tight);
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  align-items: center;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.navs::-webkit-scrollbar {
+  display: none;
 }
 
 /* 编辑态的拖拽面前置 touch-action:none（docs/nav-redesign.md §4.2）：base.css 给文档
@@ -257,12 +304,16 @@ function onAllClick(): void {
    文字走 data-label 而不是 title：title 会同时弹一个原生提示，两个叠在一起。 */
 .ric {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 72px;
+  min-height: 48px;
+  height: auto;
+  padding: var(--sp-6) var(--sp-4);
   border-radius: var(--radius-m);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--gap-text);
   color: var(--text-3);
   text-decoration: none;
   transition:
@@ -270,23 +321,18 @@ function onAllClick(): void {
     background-color var(--dur-fast) var(--ease-standard);
 }
 
-.ric::after {
-  content: attr(data-label);
-  position: absolute;
-  left: calc(100% + var(--sp-12));
-  top: 50%;
-  translate: 0 -50%;
-  /* 悬停标签：4×10 内距（吸附自 5 上下），是真标签的尺寸而不是按钮 */
-  padding: var(--sp-4) var(--sp-10);
-  border-radius: var(--radius-s);
-  background: color-mix(in srgb, var(--text-1) 88%, transparent);
-  color: var(--bg);
-  font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
+.ric-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-fast) var(--ease-standard);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-caption);
+}
+
+.ric::after {
+  display: none;
 }
 
 /* 只给有指针的设备：触屏上悬停会粘住，标签会一直挂在那儿 */
@@ -354,7 +400,7 @@ function onAllClick(): void {
 /* 两颗开关贴着导航轨底部、排在「我」之上：容量类的开关属于壳层，
    与页面导航分成两簇 —— 自动外边距把它们推到底部，.me / .all 是最后两项。 */
 .cmd {
-  margin-top: auto;
+  margin-top: var(--gap-sm);
 }
 
 /* 信息栏收起后这颗钮保持「关」的读数：只有描边色差，不做位移 ——

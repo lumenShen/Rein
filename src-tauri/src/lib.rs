@@ -123,6 +123,7 @@ pub fn run() {
             modules::diet::commands::list_meals,
             modules::diet::commands::list_meals_range,
             modules::diet::commands::log_meal,
+            modules::diet::commands::update_meal,
             modules::diet::commands::delete_meal,
             modules::diet::commands::recipe_prefs_list,
             modules::diet::commands::recipe_prefs_set,
@@ -146,6 +147,7 @@ pub fn run() {
             modules::todo::commands::todo_distribution,
             modules::todo::commands::create_todo,
             modules::todo::commands::update_todo,
+            modules::todo::commands::restore_todo,
             modules::todo::commands::delete_todo,
             modules::todo::commands::sync_recurrences,
             // ledger（记账：流水 + 月度预算）
@@ -159,6 +161,7 @@ pub fn run() {
             modules::exercise::commands::list_workouts,
             modules::exercise::commands::list_all_workouts,
             modules::exercise::commands::create_workout,
+            modules::exercise::commands::update_workout,
             modules::exercise::commands::delete_workout,
             // healthsync（第三方健康数据：Android Health Connect 双向同步运动记录）
             modules::healthsync::commands::health_sync_status,

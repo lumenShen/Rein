@@ -11,12 +11,14 @@ export const usePlanStore = defineStore('plan', () => {
   const plans = ref<WorkoutPlanRecord[]>([])
   const loaded = ref(false)
   const loading = ref(false)
+  const error = ref('')
 
   /** 内置课程种子升级状态；null = 未查询到（列表加载时顺带查） */
   const seed = ref<PlanSeedStatus | null>(null)
 
   async function load(): Promise<void> {
     loading.value = true
+    error.value = ''
     try {
       plans.value = await planService.list()
       loaded.value = true
@@ -31,6 +33,8 @@ export const usePlanStore = defineStore('plan', () => {
       } catch {
         seed.value = null
       }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '训练课程读取失败'
     } finally {
       loading.value = false
     }
@@ -101,6 +105,7 @@ export const usePlanStore = defineStore('plan', () => {
     plans,
     loaded,
     loading,
+    error,
     seed,
     seedPending,
     load,

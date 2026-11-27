@@ -128,11 +128,12 @@ export const glassTuned = computed(() =>
   GLASS_PARAM_SPECS.some((spec) => glassParams.value[spec.key] !== GLASS_DEFAULTS[spec.key]),
 )
 
-function persist(): void {
+function persist(): boolean {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({ rev: DEFAULTS_REV, values: glassParams.value }))
+    return true
   } catch {
-    /* 存不下就只留内存态 */
+    return false
   }
 }
 
@@ -140,13 +141,13 @@ export function specOf(key: GlassParamKey): GlassParamSpec {
   return GLASS_PARAM_SPECS.find((spec) => spec.key === key)!
 }
 
-export function setGlassParam(key: GlassParamKey, value: number): void {
-  if (!Number.isFinite(value)) return
+export function setGlassParam(key: GlassParamKey, value: number): boolean {
+  if (!Number.isFinite(value)) return false
   glassParams.value = { ...glassParams.value, [key]: clamp(specOf(key), value) }
-  persist()
+  return persist()
 }
 
-export function resetGlassParams(): void {
+export function resetGlassParams(): boolean {
   glassParams.value = { ...GLASS_DEFAULTS }
-  persist()
+  return persist()
 }

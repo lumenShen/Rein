@@ -106,7 +106,7 @@ object HealthConnectBridge {
    * 写死比多引一层 API 更清楚。
    */
 
-  /** 运动：导入课程与记录的根基（缺它整个同步不开工，见 startRead 与 Rust 侧门禁） */
+  /** 运动：导入课程与记录的根基；新桥按分组授权放行其它组 */
   private val CATEGORY_EXERCISE =
     setOf(
       "android.permission.health.READ_EXERCISE",
@@ -748,9 +748,8 @@ object HealthConnectBridge {
       try {
         val granted =
           HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions()
-        // readGranted 只看 READ_EXERCISE：它是「能不能导入运动记录」的门禁
-        // （Rust 的 start 拿它做闸）。逐项放行后，缺消耗/距离/心率的授权不再
-        // 阻塞同步 —— 旧口径的 containsAll 会把「只差心率」的用户整个挡在门外。
+        // readGranted 保留旧语义（READ_EXERCISE）；Rust 会同时看 grantedCategories，
+        // 任一组已授权即可开始同步，逐项读取会跳过没授权的类型。
         readGranted = "android.permission.health.READ_EXERCISE" in granted
         writeGranted = granted.containsAll(WRITE_PERMS)
         // 每组是否齐全：前端据此在数据源卡里逐组显示「已授权 / 去授权」

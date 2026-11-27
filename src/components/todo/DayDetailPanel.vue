@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CalendarDays, Check, Paperclip, Pencil, Repeat2, Sparkles, Trash2 } from 'lucide-vue-next'
+import { CalendarDays, Check, Paperclip, Pencil, Repeat2, Sparkles } from 'lucide-vue-next'
 
 import { CATEGORY_META, priorityMeta } from '@/config/domain'
 import { minToHHmm } from '@/utils/date'
 import { describeRule } from '@/utils/recurrence'
 import type { Todo, TodoSubtask } from '@/types'
+import DeleteTodoButton from './DeleteTodoButton.vue'
 
 /** 画布详情面板（桌面右栏）：选中块的字段、子任务勾选与快捷操作。 */
 const props = defineProps<{ todo: Todo | null }>()
@@ -81,7 +82,7 @@ function flipSub(i: number): void {
         <!-- 课表派生行是只读投影：标题/时间由同步生成，下一次同步会覆盖，所以不给编辑与删除 -->
         <template v-if="todo.courseSessionId == null">
           <button class="ghost" aria-label="编辑" @click="emit('edit')"><Pencil :size="15" /></button>
-          <button class="ghost danger" aria-label="删除" @click="emit('remove')"><Trash2 :size="15" /></button>
+          <DeleteTodoButton class="ghost danger" :todo="todo" icon-only @removed="emit('remove')" />
         </template>
       </div>
 

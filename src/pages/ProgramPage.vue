@@ -31,6 +31,7 @@ import {
   type CheckedRow,
 } from '@/utils/shoppingList'
 import { GOAL_LABELS } from '@/config/domain'
+import { useToday } from '@/composables/useToday'
 import { useModelsStore } from '@/stores/models'
 import { useNutritionStore } from '@/stores/nutrition'
 import {
@@ -69,22 +70,32 @@ const router = useRouter()
 const store = useProgramStore()
 const n = useNutritionStore()
 const models = useModelsStore()
+const { today } = useToday()
 
-type Phase = 'loading' | 'setup' | 'active'
+type Phase = 'loading' | 'error' | 'setup' | 'active'
 const phase = ref<Phase>('loading')
+const loadError = ref('')
 
-onMounted(async () => {
-  await Promise.all([store.load(), n.loadProfile()])
-  phase.value = store.active ? 'active' : 'setup'
-  // 课程名（首练选择的展示用），失败不影响主流程
-  planService
-    .list()
-    .then((ps) => {
-      courseNames.value = Object.fromEntries(ps.map((x) => [x.id, x.name]))
-    })
-    .catch(() => undefined)
-  maybeAutoReview()
-})
+async function initialize(): Promise<void> {
+  phase.value = 'loading'
+  loadError.value = ''
+  try {
+    await Promise.all([store.load(), n.loadProfile()])
+    phase.value = store.active ? 'active' : 'setup'
+    planService
+      .list()
+      .then((ps) => {
+        courseNames.value = Object.fromEntries(ps.map((x) => [x.id, x.name]))
+      })
+      .catch(() => undefined)
+    maybeAutoReview()
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : '健康方案读取失败'
+    phase.value = 'error'
+  }
+}
+
+onMounted(initialize)
 
 /** 主页状态卡 / 桌面右栏的「本周复盘」深链：进入即发起；已在页时只变 query，
  *  也要能触发——所以挂在 watcher 上，而不是只在 onMounted 里读一次。
@@ -101,8 +112,11 @@ watch(() => route.query.review, () => maybeAutoReview())
 
 const generating = ref(false)
 const drafts = ref<ProgramPlan[] | null>(null)
-const selectedTier = ref<ProgramTier>('balanced')
+const selectedTier = ref<ProgramTier>(
+  route.query.tier === 'conservative' || route.query.tier === 'aggressive' ? route.query.tier : 'balanced',
+)
 const activating = ref(false)
+const activationError = ref('')
 const confirmOpen = ref(false)
 
 /** 开始日与首练：提前开跑 + 相位平移（接续当前训练节奏）。
@@ -153,11 +167,28 @@ function askActivate(): void {
 async function activate(): Promise<void> {
   if (!selectedPlan.value) return
   activating.value = true
+  activationError.value = ''
   try {
     await store.activate(selectedPlan.value)
     confirmOpen.value = false
     drafts.value = null
     phase.value = 'active'
+  } catch (e) {
+    activationError.value = e instanceof Error ? e.message : '方案启用失败'
+    if (store.active) phase.value = 'active'
+  } finally {
+    activating.value = false
+  }
+}
+
+async function retryActivation(): Promise<void> {
+  if (!store.active || activating.value) return
+  activating.value = true
+  activationError.value = ''
+  try {
+    await store.finishActivation(store.active)
+  } catch (e) {
+    activationError.value = e instanceof Error ? e.message : '方案同步失败'
   } finally {
     activating.value = false
   }
@@ -183,7 +214,7 @@ const blobError = computed(() => parsedBlob.value.error)
 
 /** 周期口径：起止 / 周次 / 进度 / 是否结束（主页状态卡同源） */
 const status = computed(() =>
-  store.active && blob.value ? programStatus(store.active, blob.value) : null,
+  store.active && blob.value ? programStatus(store.active, blob.value, today.value) : null,
 )
 const isEnded = computed(() => status.value?.ended ?? false)
 
@@ -261,17 +292,23 @@ interface ReviewState {
   error: string
 }
 const reviewOpen = ref(false)
+const reviewApplying = ref(false)
+let reviewSeq = 0
 const review = ref<ReviewState>({ phase: 'running', diagnosis: '', advice: [], proposed: {}, error: '' })
 const reviewCompare = ref<WeekCompare | null>(null)
 
 async function startReview(): Promise<void> {
   if (!store.active) return
+  const seq = ++reviewSeq
+  const activeId = store.active.id
   reviewOpen.value = true
   review.value = { phase: 'running', diagnosis: '', advice: [], proposed: {}, error: '' }
   // 数据先行区与 AI 请求并行：模型慢的时候对比条已经在了
   reviewCompare.value = null
   const comparePromise = buildWeekCompare().then(
-    (c) => (reviewCompare.value = c),
+    (c) => {
+      if (seq === reviewSeq) reviewCompare.value = c
+    },
     () => undefined,
   )
   try {
@@ -280,9 +317,9 @@ async function startReview(): Promise<void> {
     if (!cfg) throw new Error('未配置 AI 模型，请先在「AI › 管理模型」添加')
     const payload = await buildReviewPayload(store.active)
     const sug = await reviewProgram(cfg, payload, (partial) => {
-      // 流式：诊断文本边生成边上屏（phase 保持 running）
-      review.value = { ...review.value, diagnosis: partial }
+      if (seq === reviewSeq) review.value = { ...review.value, diagnosis: partial }
     })
+    if (seq !== reviewSeq) return
     review.value = {
       phase: 'done',
       diagnosis: sug.diagnosis,
@@ -291,21 +328,34 @@ async function startReview(): Promise<void> {
       error: '',
     }
     // 复盘完成即重新计时，主页的「本周复盘」提醒满 7 天后再出现
-    markReviewed(store.active.id)
+    markReviewed(activeId)
   } catch (e) {
-    review.value = { ...review.value, phase: 'error', error: e instanceof Error ? e.message : String(e) }
+    if (seq === reviewSeq) {
+      review.value = { ...review.value, phase: 'error', error: e instanceof Error ? e.message : String(e) }
+    }
   }
   await comparePromise
 }
 
 /** 弹层「应用」：只提交勾选的子集（钳制在 store.adjust 内仍会再走一遍） */
 async function applyReview(patch: AdjustmentPatch, summary: string): Promise<void> {
-  if (!store.active) return
-  await store.adjust(store.active, patch, summary, 'ai')
-  // 逐条采纳的结果落在 adjustments_json（模型查得到），查不到的是「刚采纳了复盘建议」这条因果。
-  // 只记这条界面链路；聊天工具 adjust_program 那条不记（模型自己刚做完，再报一遍是噪音）
-  recordCardOutcome('program-review', `方案复盘采纳调整 —— ${summary}`)
-  reviewOpen.value = false
+  if (!store.active || reviewApplying.value) return
+  reviewApplying.value = true
+  try {
+    await store.adjust(store.active, patch, summary, 'ai')
+    // 逐条采纳的结果落在 adjustments_json（模型查得到），查不到的是「刚采纳了复盘建议」这条因果。
+    // 只记这条界面链路；聊天工具 adjust_program 那条不记（模型自己刚做完，再报一遍是噪音）
+    recordCardOutcome('program-review', `方案复盘采纳调整 —— ${summary}`)
+    reviewOpen.value = false
+  } catch (e) {
+    review.value = {
+      ...review.value,
+      phase: 'error',
+      error: e instanceof Error ? e.message : '复盘调整应用失败',
+    }
+  } finally {
+    reviewApplying.value = false
+  }
 }
 
 /* ---------------- 本周采购清单（未来 7 天菜单食材聚合 + 勾选已买） ---------------- */
@@ -395,23 +445,59 @@ async function copyShopping(): Promise<void> {
 
 /* ---------------- 归档 / 删除 ---------------- */
 
-const deleteArmed = ref(false)
+const deleteArmedId = ref<number | null>(null)
+const deleteArmed = computed(() => store.active?.id === deleteArmedId.value)
+const archiveOpen = ref(false)
+const archiveBusy = ref(false)
+const deleting = ref(false)
+const managementError = ref('')
+
+watch(
+  () => store.active?.id,
+  () => {
+    deleteArmedId.value = null
+  },
+)
 
 async function archiveCurrent(): Promise<void> {
   if (!store.active) return
-  await store.archive(store.active.id)
-  phase.value = 'setup'
+  archiveOpen.value = true
+}
+
+async function confirmArchive(): Promise<void> {
+  if (!store.active || archiveBusy.value) return
+  archiveBusy.value = true
+  managementError.value = ''
+  try {
+    await store.archive(store.active.id)
+    archiveOpen.value = false
+    deleteArmedId.value = null
+    phase.value = 'setup'
+  } catch (e) {
+    managementError.value = e instanceof Error ? e.message : '归档失败，请重试'
+  } finally {
+    archiveBusy.value = false
+  }
 }
 
 async function deleteCurrent(): Promise<void> {
-  if (!store.active) return
-  if (!deleteArmed.value) {
-    deleteArmed.value = true
+  if (!store.active || deleting.value) return
+  const id = store.active.id
+  if (deleteArmedId.value !== id) {
+    deleteArmedId.value = id
     return
   }
-  await store.remove(store.active.id)
-  deleteArmed.value = false
-  phase.value = 'setup'
+  deleting.value = true
+  managementError.value = ''
+  try {
+    await store.remove(id)
+    deleteArmedId.value = null
+    phase.value = 'setup'
+  } catch (e) {
+    managementError.value = e instanceof Error ? e.message : '删除失败，请重试'
+  } finally {
+    deleting.value = false
+  }
 }
 
 /* ---------------- 历史方案（结营成绩单入口） ---------------- */
@@ -457,6 +543,11 @@ function adjustmentsOf(r: ProgramRecord): number {
     <!-- 加载 -->
     <section v-if="phase === 'loading'" class="card center empty">
       <span class="t-3">加载中…</span>
+    </section>
+
+    <section v-else-if="phase === 'error'" class="card center empty" role="alert">
+      <span class="t-3">{{ loadError }}</span>
+      <button class="primary" type="button" @click="initialize">重试</button>
     </section>
 
     <!-- 方案数据损坏：给明确出口，而不是白屏或静默回落到向导 -->
@@ -519,6 +610,12 @@ function adjustmentsOf(r: ProgramRecord): number {
 
     <!-- 生效中：一屏管理（状态条 + 操作 + 调整历史） -->
     <template v-else-if="blob && store.active && status">
+      <section v-if="activationError" class="card warn t-2" role="alert">
+        {{ activationError }}
+        <button class="linkbtn" type="button" :disabled="activating" @click="retryActivation">
+          {{ activating ? '正在同步…' : '重试同步' }}<ChevronRight :size="13" />
+        </button>
+      </section>
       <!-- 状态条：一行概要（目标·档位·周次·截止），点开展开静态参数 -->
       <section class="head-strip">
         <button class="strip" :aria-expanded="stripOpen" @click="stripOpen = !stripOpen">
@@ -558,6 +655,7 @@ function adjustmentsOf(r: ProgramRecord): number {
       </section>
 
       <section class="card acts">
+        <p v-if="managementError" class="manage-error" role="alert">{{ managementError }}</p>
         <button v-if="isEnded" class="primary" @click="openWrapup(store.active!)">
           生成本期成绩单<span class="primary-sub">方案期已结束 · 对照与下一期建议</span>
         </button>
@@ -578,10 +676,10 @@ function adjustmentsOf(r: ProgramRecord): number {
         <div class="acts-minor">
           <button v-if="!isEnded" class="cap" @click="archiveCurrent">
             <Archive :size="14" />归档方案
-          </button>
-          <button
+          </button>          <button
             class="cap danger"
             :class="{ armed: deleteArmed }"
+            :disabled="deleting"
             :title="
               deleteArmed
                 ? '再点一次：方案与它排的日程待办一并移除，无法恢复'
@@ -590,7 +688,7 @@ function adjustmentsOf(r: ProgramRecord): number {
             @click="deleteCurrent"
           >
             <Trash2 :size="14" />
-            {{ deleteArmed ? '再点一次确认删除' : '删除方案' }}
+            {{ deleting ? '正在删除…' : deleteArmed ? '再点一次确认删除' : '删除方案' }}
           </button>
         </div>
       </section>
@@ -618,6 +716,15 @@ function adjustmentsOf(r: ProgramRecord): number {
           </li>
         </ul>
       </section>
+
+      <SheetModal :open="archiveOpen" title="归档当前方案？" @close="archiveOpen = false">
+        <div class="form">
+          <p class="t-2">方案记录会保留在历史中，但今天起未完成的方案日程会被回收，每日营养目标也会恢复为档案默认值。</p>
+          <button class="primary" type="button" :disabled="archiveBusy" @click="confirmArchive">
+            {{ archiveBusy ? '正在归档…' : '确认归档' }}
+          </button>
+        </div>
+      </SheetModal>
 
       <!-- 手动调参 -->
       <SheetModal :open="adjustOpen" title="手动调参" @close="adjustOpen = false">
@@ -661,6 +768,7 @@ function adjustmentsOf(r: ProgramRecord): number {
         :proposed="review.proposed"
         :current="blob?.params ?? null"
         :compare="reviewCompare"
+        :applying="reviewApplying"
         @apply="applyReview"
         @retry="startReview"
         @close="reviewOpen = false"
@@ -786,6 +894,13 @@ function adjustmentsOf(r: ProgramRecord): number {
 
 .primary:disabled {
   opacity: var(--disabled-opacity);
+}
+
+.manage-error {
+  margin-bottom: var(--gap-sm);
+  color: var(--danger);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
 }
 
 .linkbtn {

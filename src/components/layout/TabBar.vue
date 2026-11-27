@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Minus } from 'lucide-vue-next'
+import { Minus, GripHorizontal, Plus } from 'lucide-vue-next'
 
 import DockEditTray from '@/components/mobile/DockEditTray.vue'
 import ComposerBar from '@/components/common/ComposerBar.vue'
+import QuickRecordSheet from '@/components/common/QuickRecordSheet.vue'
 import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
 import VoiceInputMask from '@/components/ai/VoiceInputMask.vue'
 import { useNavDrag } from '@/composables/useNavDrag'
@@ -13,7 +14,7 @@ import { usePressGlow } from '@/composables/usePressGlow'
 import { useToast } from '@/composables/useToast'
 import { useAiStore } from '@/stores/ai'
 import { useComposerStore } from '@/stores/composer'
-import { useNavLayoutStore, TABBAR_MAX, type NavEntry } from '@/stores/navLayout'
+import { useNavLayoutStore, TABBAR_MAX, navEntryActive, type NavEntry } from '@/stores/navLayout'
 import { composerEngaged } from '@/system/composerFocus'
 import {
   aiVoiceCancel,
@@ -102,7 +103,8 @@ const tabs = computed<NavEntry[]>(() => {
 const fixedIds = computed(() => new Set(tabs.value.filter((t) => t.fixed).map((t) => t.id)))
 
 /** 页签行里当前选中的那一格（-1 = 这一页不在 Dock 上，此时不画任何活动底） */
-const tabIndex = computed(() => tabs.value.findIndex((t) => route.name === t.id))
+const activeTabId = computed(() => tabs.value.find((t) => navEntryActive(t.id, route.name))?.id ?? '')
+const tabIndex = computed(() => tabs.value.findIndex((t) => t.id === activeTabId.value))
 
 /**
  * 液态活动底（丰富档）：挂上之后原来那层纯色活动底让位（见 base.css 的 .goo 规则）。
@@ -156,10 +158,11 @@ function sendQuick(): void {
   void router.push({ name: 'ai' })
 }
 
-/** 「+」：去 AI 页的完整输入条（附件 / 文档 / 引用在那边）。草稿已经是全局共享的，
- *  不需要交接 —— 保留「带草稿过去、只填不发」的既有语义。 */
-function openFullComposer(): void {
-  void router.push({ name: 'ai' })
+const quickOpen = ref(false)
+
+/** 「+」：打开快速记录，不再把用户送去 AI 页。 */
+function openQuickRecord(): void {
+  quickOpen.value = true
 }
 
 /* 语音输入（按住说话 / 轻点连听）：链路与 AI 页同一条（system/aiVoiceInput），
@@ -328,24 +331,55 @@ onBeforeUnmount(() => {
          与画质预览页的标本共用 base.css 那份，图标尺寸由装配层给，调用处不再各写 21/22） -->
     <GlassDockAssembly
       :items="dockItems"
-      :active="String(route.name ?? '')"
+      :active="activeTabId"
       :goo="goo"
       data-slot="dock"
     >
       <template #quick>
+        <div v-if="quickBar" class="quick-wrap">
+          <ComposerBar
+            v-model="composer.text"
+            :sendable="composer.hasContent"
+            add-label="快速记录"
+            @add="openQuickRecord"
+            @send="sendQuick"
+            @voice-down="onDockVoiceDown"
+          />
+          <button
+            type="button"
+            class="dock-manage"
+            aria-label="编辑底部导航"
+            title="编辑底部导航"
+            @click="navEdit.enter()"
+          >
+            <GripHorizontal :size="18" :stroke-width="2" />
+          </button>
+        </div>
         <!-- AI 页：这里渲染的是**宿主** —— AIPage 的输入条（同一颗 ComposerBar +
              引用 / @纪要 / 附图 / 文档芯片）Teleport 进来，合成同一块玻璃的大 Dock；
              其余页是底栏自己渲染的 ComposerBar。宿主常驻 DOM（v-show）：Teleport 目标
              必须在 AIPage 挂载前就存在，否则首帧定位失败。 -->
-        <ComposerBar
-          v-if="quickBar"
-          v-model="composer.text"
-          :sendable="composer.hasContent"
-          @add="openFullComposer"
-          @send="sendQuick"
-          @voice-down="onDockVoiceDown"
-        />
-        <div v-show="aiEmbed" id="dock-ai-composer" class="dock-ai-host" />
+        <div v-show="aiEmbed" class="quick-wrap ai-quick-wrap">
+          <div id="dock-ai-composer" class="dock-ai-host" />
+          <button
+            type="button"
+            class="dock-manage"
+            aria-label="快速记录"
+            title="快速记录"
+            @click="openQuickRecord"
+          >
+            <Plus :size="18" :stroke-width="2" />
+          </button>
+          <button
+            type="button"
+            class="dock-manage"
+            aria-label="编辑底部导航"
+            title="编辑底部导航"
+            @click="navEdit.enter()"
+          >
+            <GripHorizontal :size="18" :stroke-width="2" />
+          </button>
+        </div>
       </template>
       <template #tab="{ item, active }">
         <!-- 编辑态：页签按钮化 —— 整格点击 = 撤回（键盘 / 读屏可达，「−」只是装饰），
@@ -410,6 +444,7 @@ onBeforeUnmount(() => {
     <!-- 语音输入全屏遮罩（按住/轻点说话时渐入，结束时渐出回收）。只在底栏这条
          ComposerBar 可见时挂：AI 页的输入条有自己的遮罩实例，两份叠着只会互相拉扯透明度 -->
     <VoiceInputMask v-if="quickBar" />
+    <QuickRecordSheet :open="quickOpen" @close="quickOpen = false" />
   </nav>
 </template>
 
@@ -425,6 +460,46 @@ onBeforeUnmount(() => {
   left: var(--page-pad-x);
   right: var(--page-pad-x);
   z-index: 60;
+}
+
+.quick-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.quick-wrap :deep(.dock-quick) {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-quick-wrap .dock-ai-host {
+  flex: 1;
+  min-width: 0;
+}
+
+.dock-manage {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--dock-radius-in);
+  background: transparent;
+  color: var(--text-2);
+}
+
+.dock-manage::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+}
+
+.dock-manage:active {
+  color: var(--accent);
+  transform: scale(0.94);
 }
 
 /* ---------- 输入中：页签行收起（一块玻璃只剩输入行） ----------

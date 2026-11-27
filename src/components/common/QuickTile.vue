@@ -1,15 +1,12 @@
 <script setup lang="ts">
-/** 快捷入口磁贴：圆形图标 + 文字标签。图标底色/颜色由父级以内联样式传入。 */
 defineProps<{
   label: string
-  iconBg?: string
-  iconColor?: string
 }>()
 </script>
 
 <template>
   <button class="qa col center">
-    <i class="ic center" :style="{ background: iconBg, color: iconColor }">
+    <i class="ic center">
       <slot />
     </i>
     {{ label }}
@@ -38,5 +35,17 @@ defineProps<{
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-1);
+  transition:
+    color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard);
+}
+
+@media (hover: hover) {
+  .qa:hover .ic {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 </style>

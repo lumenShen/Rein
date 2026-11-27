@@ -25,7 +25,6 @@ import NavEditMask from '@/components/common/NavEditMask.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useNavEdit } from '@/composables/useNavEdit'
 import { DESKTOP_MIN } from '@/config/domain'
-import { toneForRoute } from '@/config/tones'
 import { campusService } from '@/services/campusService'
 import { gatewayService } from '@/services/gatewayService'
 import { recorder, stopRecording } from '@/system/recorderRuntime'
@@ -88,6 +87,11 @@ const paletteOpen = ref(false)
  * 历史导航（浏览器返回 / Alt+Left）是已知边界 —— 会话跨路由存活，不为它拦 popstate。 */
 const { activeScope: navEditScope, discard: discardNavEdit } = useNavEdit()
 const navEditAnyEditing = computed(() => navEditScope.value !== null)
+
+router.beforeEach(() => {
+  if (navEditScope.value !== null) discardNavEdit()
+  return true
+})
 
 const deskKeys: Record<string, string> = {
   '1': 'home',
@@ -243,7 +247,7 @@ watch(voiceOn, (on) => {
   })
 })
 watch(recordOn, (on) => {
-  if (!on && recorder.status === 'recording') stopRecording()
+  if (!on && recorder.status !== 'idle') stopRecording()
 })
 
 /**
@@ -298,19 +302,6 @@ watch(shellVisible, (on) => {
 watch(inspectorOpen, (v) => {
   document.documentElement.dataset.inspector = v ? 'on' : 'off'
 }, { immediate: true })
-
-/* 当前页的模块色调写到 <html>（与 data-shell / data-inspector 同一条做法）：
-   页内的页头、按钮与 **teleport 到 body 的弹层** 都要读同一个 --accent；
-   只包 RouterView 的话，弹层会停在品牌蓝，同一页里两种主色。 */
-watch(
-  () => route.name,
-  (name) => {
-    const tone = toneForRoute(name)
-    if (tone) document.documentElement.dataset.tone = tone
-    else delete document.documentElement.dataset.tone
-  },
-  { immediate: true },
-)
 
 onBeforeUnmount(() => window.removeEventListener('keydown', onDeskKey))
 

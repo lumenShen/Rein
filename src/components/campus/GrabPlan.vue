@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { AlertTriangle, Clock, Info, ListPlus, RefreshCw, Search, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
+import { AlertTriangle, Check, Clock, Info, ListPlus, RefreshCw, Search, Sparkles, Trash2, Wand2 } from 'lucide-vue-next'
 
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import { useToast } from '@/composables/useToast'
+import { useTwoStepConfirm } from '@/composables/useTwoStepConfirm'
 import { grabStatusMeta, idOf, useCourseSelectStore } from '@/stores/courseSelect'
 import type { GrabIntent, GrabMatch, GrabPreview } from '@/types'
 
@@ -25,6 +26,7 @@ import type { GrabIntent, GrabMatch, GrabPreview } from '@/types'
  */
 const store = useCourseSelectStore()
 const toast = useToast()
+const { pending: pendingRemove, ask } = useTwoStepConfirm()
 
 const query = ref('')
 /** true = 每门课各抢一个班；false = 所有命中合成一组，只中一个 */
@@ -395,8 +397,15 @@ async function onReparse(i: GrabIntent): Promise<void> {
           <button class="op" title="重新解析" aria-label="重新解析" @click="onReparse(i)">
             <RefreshCw :size="14" />
           </button>
-          <button class="op" title="移除计划" aria-label="移除计划" @click="onRemove(i)">
-            <Trash2 :size="14" />
+          <button
+            class="op"
+            :class="{ danger: pendingRemove === i.id }"
+            :title="pendingRemove === i.id ? '再点一次确认移除计划及其派生任务' : '移除计划'"
+            :aria-label="pendingRemove === i.id ? '确认移除计划' : '移除计划'"
+            @click="ask(i.id, () => void onRemove(i))"
+          >
+            <Check v-if="pendingRemove === i.id" :size="14" />
+            <Trash2 v-else :size="14" />
           </button>
         </div>
         <!-- 「下次唤醒」是这行上唯一能当凭据的信息：抢课是人不在场的动作，
@@ -748,8 +757,9 @@ async function onReparse(i: GrabIntent): Promise<void> {
   inset: -8px;
 }
 
-.op:active {
-  transform: scale(0.9);
+.op.danger {
+  background: var(--danger-soft);
+  color: var(--danger-strong);
 }
 
 /* 目标批次 + 抢法：只是背景信息，降到 caption/text-3。

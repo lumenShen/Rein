@@ -1153,8 +1153,10 @@ async function doTrash(list: FileItem[]): Promise<void> {
           void queue
             .run('restore', `恢复 ${ids.length} 项`, 1, async (ctx) => {
               const r = await kbService.trashRestore(ids)
+              const restored = Math.max(0, ids.length - r.failed.length)
               ctx.step()
               for (const f of r.failed) ctx.fail(f)
+              if (r.failed.length) toast.toast(`已恢复 ${restored} 项，${r.failed.length} 项失败`)
             })
             .then(async () => {
               await refresh()
@@ -1169,14 +1171,22 @@ async function doTrash(list: FileItem[]): Promise<void> {
 async function doRestore(list: FileItem[]): Promise<void> {
   const ids = list.map((i) => i.fileId).filter((v): v is number => v !== undefined)
   if (!ids.length) return
+  let restored = 0
+  let failed = 0
   await queue.run('restore', `恢复 ${ids.length} 项`, 1, async (ctx) => {
     const r = await kbService.trashRestore(ids)
+    restored = Math.max(0, ids.length - r.failed.length)
+    failed = r.failed.length
     ctx.step()
     for (const f of r.failed) ctx.fail(f)
   })
   await refresh()
   await loadTrashCount()
-  toast.toast(`已恢复 ${ids.length} 项`)
+  if (failed > 0) {
+    toast.toast(`已恢复 ${restored} 项，${failed} 项失败`)
+  } else {
+    toast.toast(`已恢复 ${restored} 项`)
+  }
 }
 
 async function doPurge(list: FileItem[]): Promise<void> {
@@ -1192,15 +1202,20 @@ async function doPurge(list: FileItem[]): Promise<void> {
 }
 
 async function doEmptyTrash(): Promise<void> {
+  let failed = 0
+  let freedBytes = 0
   await queue.run('emptyTrash', '清空回收站', 1, async (ctx) => {
     const r = await kbService.trashEmpty()
+    failed = r.failed.length
+    freedBytes = r.freedBytes
     ctx.step()
-    toast.toast(
-      r.freedBytes > 0 ? `回收站已清空，释放 ${humanBytes(r.freedBytes)}` : '回收站已清空',
-    )
+    for (const f of r.failed) ctx.fail(f)
   })
   await refresh()
   await loadTrashCount()
+  if (failed > 0) toast.toast(`回收站已处理，${failed} 项删除失败`)
+  else if (freedBytes > 0) toast.toast(`回收站已清空，释放 ${humanBytes(freedBytes)}`)
+  else toast.toast('回收站已清空')
 }
 
 async function togglePin(list: FileItem[]): Promise<void> {
@@ -1555,8 +1570,11 @@ function onKeydown(ev: KeyboardEvent): void {
     }
     case 'Delete': {
       ev.preventDefault()
-      if (trashMode.value) void doPurge(selectedItems.value)
-      else void doTrash(selectedItems.value)
+      if (trashMode.value) {
+        armOrRun('purge', selectedItems.value.length || 1, () => void doPurge(selectedItems.value))
+      } else {
+        void doTrash(selectedItems.value)
+      }
       return
     }
     case 'Backspace': {
@@ -2348,7 +2366,13 @@ defineExpose({ refresh, navigate, path, importFiles: pickUpload })
         title="回收站"
         content="回收站只是把条目移出了目录，磁盘空间还占着：恢复会把条目放回原来的位置，彻底删除才会释放空间。清空会一次性删掉回收站里的全部条目。"
       />
-      <button class="btn ghost tiny" :disabled="!trashItems.length" @click="doEmptyTrash">清空</button>
+      <button
+        class="btn ghost tiny"
+        :disabled="!trashItems.length"
+        @click="armOrRun('empty', trashItems.length, () => void doEmptyTrash())"
+      >
+        清空{{ armed?.act === 'empty' ? ' · 再点一次确认' : '' }}
+      </button>
       <button class="btn ghost tiny" @click="toggleTrash">退出</button>
     </div>
 

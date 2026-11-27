@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import NumberStepper from '@/components/common/NumberStepper.vue'
+import ActionSheet from '@/components/common/ActionSheet.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import { EXERCISE_CATEGORY_META, EXERCISE_EQUIPMENT_LABELS, EXERCISE_KIND_LABELS } from '@/config/domain'
@@ -42,11 +43,48 @@ const targetSec = ref(45)
 const durationMin = ref(20)
 const restSec = ref(90)
 const saving = ref(false)
+const baseline = ref('')
+const confirmClose = ref(false)
+
+function snapshot(): string {
+  return JSON.stringify({
+    name: name.value,
+    kind: kind.value,
+    category: category.value,
+    equipment: equipment.value,
+    tips: tips.value,
+    stepsText: stepsText.value,
+    muscles: Object.entries(muscles.value).sort(([a], [b]) => a.localeCompare(b)),
+    sets: sets.value,
+    reps: reps.value,
+    weightKg: weightKg.value,
+    targetSec: targetSec.value,
+    durationMin: durationMin.value,
+    restSec: restSec.value,
+  })
+}
+
+const dirty = computed(() => baseline.value !== '' && snapshot() !== baseline.value)
+
+function requestClose(): void {
+  if (saving.value) return
+  if (dirty.value) confirmClose.value = true
+  else emit('close')
+}
+
+function discardDraft(): void {
+  confirmClose.value = false
+  emit('close')
+}
 
 watch(
   () => props.open,
   (open) => {
-    if (!open) return
+    if (!open) {
+      baseline.value = ''
+      confirmClose.value = false
+      return
+    }
     const e = props.exercise
     name.value = e?.name ?? ''
     kind.value = e?.kind ?? 'strength'
@@ -61,6 +99,7 @@ watch(
     targetSec.value = e?.defaultTargetSec ?? 45
     durationMin.value = e?.defaultDurationMin ?? 20
     restSec.value = e?.defaultRestSec ?? 90
+    baseline.value = snapshot()
   },
   { immediate: true },
 )
@@ -122,7 +161,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <SheetModal :open="open" :title="isEdit ? '编辑动作' : '新建动作'" initial-snap="large" @close="emit('close')">
+  <SheetModal :open="open" :title="isEdit ? '编辑动作' : '新建动作'" initial-snap="large" @close="requestClose">
     <label class="field">
       <span class="flabel">动作名称</span>
       <input v-model="name" type="text" maxlength="20" placeholder="如：反向飞鸟" />
@@ -219,6 +258,14 @@ async function save(): Promise<void> {
       {{ saving ? '保存中…' : isEdit ? '保存修改' : '创建动作' }}
     </button>
   </SheetModal>
+
+  <ActionSheet
+    :open="confirmClose"
+    title="放弃未保存的动作修改？"
+    :actions="[{ label: '放弃修改', value: 'discard', danger: true }]"
+    @select="(v: string) => (v === 'discard' ? discardDraft() : (confirmClose = false))"
+    @close="confirmClose = false"
+  />
 </template>
 
 <style scoped>

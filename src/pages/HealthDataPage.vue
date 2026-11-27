@@ -76,6 +76,7 @@ const report = ref<HealthSyncReport | null>(null)
 const metrics = ref<HealthMetricSeries[]>([])
 /** 上一次同步的失败原因：留在页面上，不只闪一条 toast（授权没了这类问题要能反复看） */
 const message = ref<string | null>(null)
+const statusError = ref('')
 const loading = ref(true)
 const syncing = ref(false)
 /** 本机存着的第三方运动记录（导入块 + 缺开始时间块），同步后与进页时各拉一次 */
@@ -177,6 +178,9 @@ const POLL_MAX = 120
 const supported = computed(() => status.value?.supported ?? false)
 const available = computed(() => status.value?.availability === 'available')
 const readGranted = computed(() => status.value?.readGranted ?? false)
+const anyReadGranted = computed(
+  () => readGranted.value || categories.value.some((category) => category.granted),
+)
 const writeGranted = computed(() => status.value?.writeGranted ?? false)
 const pushEnabled = computed(() => status.value?.pushEnabled ?? false)
 
@@ -190,11 +194,12 @@ const categories = computed(() =>
 
 /** 阻塞操作的原因（没有原因 = 可以点「立即同步」） */
 const blockedReason = computed(() => {
+  if (statusError.value) return '健康数据状态读取失败，请重试'
   if (!supported.value) return '桌面端没有 Health Connect，这个功能只在 Android 手机上可用'
   if (status.value?.availability === 'unknown') return '正在检测本机的 Health Connect…'
   if (status.value?.availability === 'update_required') return '系统的 Health Connect 需要更新后才能使用'
   if (status.value?.availability !== 'available') return '本机没有 Health Connect（Android 14 起才内置）'
-  if (!readGranted.value) return '还没有拿到「运动」组的读取授权 —— 导入运动记录从这一组开始'
+  if (!anyReadGranted.value) return '还没有拿到任何一组读取授权 —— 任选一组授权后即可同步'
   return ''
 })
 
@@ -214,8 +219,10 @@ const FIRST_POLL_INTERVAL_MS = 400
 async function refresh() {
   try {
     status.value = await healthSyncService.status()
+    statusError.value = ''
   } catch (e) {
-    toast(e instanceof Error ? e.message : String(e))
+    statusError.value = e instanceof Error ? e.message : '健康数据状态读取失败'
+    toast(statusError.value)
   } finally {
     loading.value = false
   }
@@ -232,6 +239,7 @@ async function refresh() {
 async function converge() {
   for (let i = 0; i < FIRST_POLL_ATTEMPTS; i++) {
     await refresh()
+    if (statusError.value) return
     const a = status.value?.availability
     if (a !== 'unknown' && a !== undefined) {
       // 可用性已定；授权状态与可用性同一份文件，再补一拍等它写完
@@ -364,7 +372,7 @@ async function runSync() {
       report.value = step.report
       const total =
         step.report.imported + step.report.updated + step.report.removed +
-        step.report.exported + step.report.reExported
+        step.report.exported + step.report.reExported + step.report.metricsImported
       toast(total > 0 ? `同步完成，共处理 ${total} 条` : '同步完成，没有变化')
       // 体征镜像刚被整表替换，预览跟着重拉一次；导入/回写也变了，记录列表同拉
       await loadMetrics()
@@ -408,9 +416,9 @@ const metricGroups = computed(() =>
 
 /** 预览空态该说哪句话：没授权和授权了但没数据是两件事 */
 const previewEmptyText = computed(() =>
-  readGranted.value
+  anyReadGranted.value
     ? '同步一次后，这里会显示从 Health Connect 读到的每日数据'
-    : '先在上方完成「运动」组的授权，再同步一次即可',
+    : '先在上方完成任意一组读取授权，再同步一次即可',
 )
 
 /** 同步规则全文：四条「谁能改谁」收进「同步规则」卡面的 InfoHint，卡面只留一行结论 */
@@ -466,6 +474,11 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
     <PageHeader title="健康数据" back />
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
+
+    <p v-if="statusError" class="hint" role="alert">
+      <AlertTriangle :size="14" /> {{ statusError }}
+      <button type="button" class="act" @click="converge">重试</button>
+    </p>
 
     <!-- 1. 状态与授权 -->
     <section class="card">
@@ -587,7 +600,7 @@ onUnmounted(() => document.removeEventListener('visibilitychange', onVisibility)
           <span v-if="report.exported">回写 <span class="num">{{ report.exported }}</span></span>
           <span v-if="report.reExported">重写 <span class="num">{{ report.reExported }}</span></span>
           <span v-if="report.skipped">跳过 <span class="num">{{ report.skipped }}</span>（没填开始时间，见下方）</span>
-          <span v-if="!report.imported && !report.updated && !report.removed && !report.exported && !report.reExported">
+          <span v-if="!report.imported && !report.updated && !report.removed && !report.exported && !report.reExported && !report.metricsImported">
             读到 <span class="num">{{ report.scanned }}</span> 条，没有变化
           </span>
         </div>

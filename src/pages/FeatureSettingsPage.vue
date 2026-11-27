@@ -107,7 +107,7 @@ function iconStyle(p: PluginSpec): Record<string, string> {
     <!-- 页尾说明：一行结论胶囊 + 「子模块默认关闭」的状态交代（完整解释在页头帮助入口） -->
     <div class="note">
       <PillChip tone="muted">关闭只隐藏入口，数据保留</PillChip>
-      <p class="t-3">子模块默认关闭，开启后它才真正开始工作（含后台任务）。</p>
+      <p class="t-3">子模块默认关闭，开启后它才真正开始工作（含后台任务）；重新开启父模块会恢复之前开启的子模块。</p>
     </div>
     </div>
   </div>

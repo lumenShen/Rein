@@ -27,8 +27,8 @@ export interface RecTake {
 }
 
 export interface RecState {
-  status: 'idle' | 'recording'
-  /** 录音中经过秒数 */
+  status: 'idle' | 'recording' | 'paused'
+  /** 录音中经过秒数（暂停时不增加） */
   elapsedSec: number
   takes: RecTake[]
   /** 最近一次启动失败的文案（供 UI 提示），成功启动后清空 */
@@ -45,18 +45,23 @@ let discard = false
 let elapsed = 0
 let onTake: ((t: RecTake) => void) | null = null
 let seq = 0
+let starting = false
 
 export function fmtDur(totalSec: number): string {
   return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, '0')}`
 }
 
 export function recordingNow(): boolean {
-  return recorder.status === 'recording'
+  return recorder.status !== 'idle'
 }
 
-/** 开始录音；已在录音中返回 true（幂等）。失败返回 false（原因写入 lastError） */
+/** 开始录音；已在录音中或启动中返回 true（幂等）。失败返回 false。 */
 export async function startRecording(opts?: { onTake?: (t: RecTake) => void }): Promise<boolean> {
-  if (recorder.status === 'recording') return true
+  if (starting || recorder.status === 'recording') return true
+  if (recorder.status === 'paused') {
+    resumeRecording()
+    return true
+  }
   if (micOwner() === 'voice') {
     recorder.lastError = '麦克风被语音对话占用中'
     return false
@@ -65,54 +70,86 @@ export async function startRecording(opts?: { onTake?: (t: RecTake) => void }): 
     recorder.lastError = '当前环境不支持录音'
     return false
   }
+  starting = true
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  } catch {
-    recorder.lastError = '无法访问麦克风，请检查权限'
-    return false
+    let acquiredStream: MediaStream
+    try {
+      acquiredStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      recorder.lastError = '无法访问麦克风，请检查权限'
+      return false
+    }
+    if (!claimMic('recorder')) {
+      acquiredStream.getTracks().forEach((t) => t.stop())
+      recorder.lastError = '麦克风被其他功能占用中'
+      return false
+    }
+    let recorderInstance: MediaRecorder
+    try {
+      recorderInstance = new MediaRecorder(acquiredStream)
+    } catch {
+      acquiredStream.getTracks().forEach((t) => t.stop())
+      releaseMic('recorder')
+      recorder.lastError = '当前环境不支持录音'
+      return false
+    }
+    chunks = []
+    discard = false
+    elapsed = 0
+    onTake = opts?.onTake ?? null
+    recorderInstance.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data)
+    }
+    recorderInstance.onstop = onRecorderStop
+    stream = acquiredStream
+    mr = recorderInstance
+    try {
+      recorderInstance.start()
+    } catch {
+      stream.getTracks().forEach((t) => t.stop())
+      stream = null
+      mr = null
+      releaseMic('recorder')
+      recorder.lastError = '录音启动失败，请重试'
+      return false
+    }
+    recorder.status = 'recording'
+    recorder.elapsedSec = 0
+    recorder.lastError = ''
+    timer = window.setInterval(() => {
+      if (recorder.status !== 'recording') return
+      elapsed++
+      recorder.elapsedSec = elapsed
+    }, 1000)
+    return true
+  } finally {
+    starting = false
   }
-  if (!claimMic('recorder')) {
-    stream.getTracks().forEach((t) => t.stop())
-    stream = null
-    recorder.lastError = '麦克风被其他功能占用中'
-    return false
-  }
-  try {
-    mr = new MediaRecorder(stream)
-  } catch {
-    stream.getTracks().forEach((t) => t.stop())
-    stream = null
-    recorder.lastError = '当前环境不支持录音'
-    return false
-  }
-  chunks = []
-  discard = false
-  elapsed = 0
-  onTake = opts?.onTake ?? null
-  mr.ondataavailable = (e) => {
-    if (e.data.size) chunks.push(e.data)
-  }
-  mr.onstop = onRecorderStop
-  mr.start()
+}
+
+/** 暂停采集并停表；MediaRecorder 会继续持有麦克风，避免其它功能抢走。 */
+export function pauseRecording(): void {
+  if (recorder.status !== 'recording' || !mr || mr.state !== 'recording') return
+  mr.pause()
+  recorder.status = 'paused'
+}
+
+/** 从暂停处继续采集与计时。 */
+export function resumeRecording(): void {
+  if (recorder.status !== 'paused' || !mr || mr.state !== 'paused') return
+  mr.resume()
   recorder.status = 'recording'
-  recorder.elapsedSec = 0
-  recorder.lastError = ''
-  timer = window.setInterval(() => {
-    elapsed++
-    recorder.elapsedSec = elapsed
-  }, 1000)
-  return true
 }
 
 /** 停止并产出 take（异步：MediaRecorder onstop 后落列表）；未在录音时为 no-op */
 export function stopRecording(): void {
-  if (recorder.status !== 'recording' || !mr) return
+  if (!recordingNow() || !mr) return
   if (mr.state !== 'inactive') mr.stop()
 }
 
 /** 取消本次录音：不产出 take */
 export function cancelRecording(): void {
-  if (recorder.status !== 'recording' || !mr) return
+  if (!recordingNow() || !mr) return
   discard = true
   if (mr.state !== 'inactive') mr.stop()
 }
@@ -127,6 +164,8 @@ function onRecorderStop(): void {
   }
   const dur = elapsed
   const blob = new Blob(chunks, { type: mr?.mimeType || 'audio/webm' })
+  const takeCallback = onTake
+  onTake = null
   mr = null
   recorder.status = 'idle'
   recorder.elapsedSec = 0
@@ -144,8 +183,7 @@ function onRecorderStop(): void {
       createdAt: new Date().toISOString(),
     }
     recorder.takes.unshift(take)
-    onTake?.(take)
-    onTake = null
+    takeCallback?.(take)
   }
   fr.readAsDataURL(blob)
 }

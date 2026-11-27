@@ -21,9 +21,13 @@ export const useDietStore = defineStore('diet', () => {
     }
   }
 
-  async function add(input: MealLogInput): Promise<void> {
-    await dietService.logMeal(input)
-    await Promise.all([load(input.date), useNutritionStore().loadSummary(input.date)])
+  async function add(input: MealLogInput): Promise<{ meal: MealLog; refreshed: boolean }> {
+    const meal = await dietService.logMeal(input)
+    const results = await Promise.allSettled([
+      load(input.date),
+      useNutritionStore().loadSummary(input.date),
+    ])
+    return { meal, refreshed: results.every((r) => r.status === 'fulfilled') }
   }
 
   async function remove(id: number, date: string): Promise<void> {

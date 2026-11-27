@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, Sparkles } from 'lucide-vue-next'
 
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useToday } from '@/composables/useToday'
 import { useToast } from '@/composables/useToast'
 import { useScheduleUndo } from '@/composables/useScheduleUndo'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
@@ -51,7 +52,13 @@ const VIEW_OPTIONS: { value: Segment; label: string }[] = [
   { value: 'list', label: '清单' },
 ]
 const canvasDate = ref(todayStr())
-const today = todayStr()
+const { today } = useToday()
+watch(today, (next, previous) => {
+  if (canvasDate.value === previous) {
+    clearGhosts()
+    canvasDate.value = next
+  }
+})
 
 /* ---------- 数据 ---------- */
 
@@ -72,12 +79,12 @@ const doneCount = computed(() => dayTodos.value.filter((t) => t.status === 'done
 
 /* ---------- 周时间线数据 ---------- */
 
-const weekSet = new Set(weekDates(today))
+const weekSet = computed(() => new Set(weekDates(today.value)))
 const weekScheduled = computed(() =>
-  store.allTodos.filter((t) => t.date != null && weekSet.has(t.date) && t.startMin != null),
+  store.allTodos.filter((t) => t.date != null && weekSet.value.has(t.date) && t.startMin != null),
 )
 const weekUnscheduled = computed(() =>
-  store.allTodos.filter((t) => t.date != null && weekSet.has(t.date) && t.startMin == null && t.status !== 'done'),
+  store.allTodos.filter((t) => t.date != null && weekSet.value.has(t.date) && t.startMin == null && t.status !== 'done'),
 )
 
 const headTitle = computed(() =>
@@ -90,6 +97,7 @@ const headSub = computed(() => {
 })
 
 function shiftDay(n: number): void {
+  clearGhosts()
   canvasDate.value = addDays(canvasDate.value, n)
 }
 
@@ -159,6 +167,7 @@ function onWeekMove(t: Todo, date: string, startMin: number): void {
 }
 
 function onWeekDaySelect(d: string): void {
+  clearGhosts()
   canvasDate.value = d
   segment.value = 'canvas'
 }
@@ -179,10 +188,7 @@ function editSelected(): void {
   editorOpen.value = true
 }
 
-async function removeSelected(): Promise<void> {
-  const t = selectedTodo.value
-  if (!t) return
-  await store.remove(t)
+function removeSelected(): void {
   selectedId.value = null
 }
 
@@ -196,7 +202,7 @@ const chipDrag = ref<Todo | null>(null)
 /** 把未安排事项放进"现在之后"的第一个装得下的空档 */
 async function placeInNextGap(t: Todo): Promise<void> {
   const busy = busyIntervals(scheduled.value, canvasDate.value)
-  const from = canvasDate.value === today ? Math.max(nowMin(), 6 * 60) : 6 * 60
+  const from = canvasDate.value === today.value ? Math.max(nowMin(), 6 * 60) : 6 * 60
   const gaps = freeGaps(busy, from, 22 * 60)
   const dur = t.durationMin ?? 30
   const gap = gaps.find((g) => g.end - g.start >= dur)
@@ -244,6 +250,12 @@ function onChipMove(e: PointerEvent): void {
   dropMin.value = Math.max(0, Math.min(1435, Math.round(min / 5) * 5))
 }
 
+function onChipCancel(): void {
+  chipDrag.value = null
+  dropMin.value = null
+  chipMoved = false
+}
+
 async function onChipUp(): Promise<void> {
   const t = chipDrag.value
   const min = dropMin.value
@@ -260,29 +272,54 @@ const aiRunning = ref(false)
 /** AI 排程流式进度（已安排 N/M 项），运行中显示在排程按钮上 */
 const aiProgress = ref('')
 const ghosts = ref<{ todo: Todo; startMin: number }[]>([])
+const ghostDate = ref('')
+const unplacedCount = ref(0)
 const aiReason = ref('')
 const aiSource = ref<'ai' | 'heuristic'>('heuristic')
+const scheduleRevision = ref(0)
+const ghostRevision = ref(0)
 
 function clearGhosts(): void {
-  if (ghosts.value.length) ghosts.value = []
+  ghosts.value = []
+  ghostDate.value = ''
+  ghostRevision.value = 0
+  unplacedCount.value = 0
 }
+
+watch(
+  [scheduled, pool],
+  () => {
+    scheduleRevision.value++
+    if (ghosts.value.length) clearGhosts()
+  },
+  { deep: true, flush: 'sync' },
+)
 
 async function runSchedule(): Promise<void> {
   if (aiRunning.value || !pool.value.length) return
   clearGhosts()
   aiRunning.value = true
   aiProgress.value = ''
+  const targetDate = canvasDate.value
+  const revision = scheduleRevision.value
   try {
     if (!models.loaded) await models.load()
-    const from = canvasDate.value === today ? Math.max(nowMin(), 6 * 60) : 6 * 60
+    const from = targetDate === today.value ? Math.max(nowMin(), 6 * 60) : 6 * 60
     const res = await autoSchedule(
       pool.value,
       scheduled.value,
-      canvasDate.value,
+      targetDate,
       from,
       models.defaultModel(),
       (n, total) => (aiProgress.value = `已排 ${n}/${total} 项`),
     )
+    if (targetDate !== canvasDate.value || revision !== scheduleRevision.value) {
+      if (targetDate === canvasDate.value) toast('日程已变化，请重新生成排程建议')
+      return
+    }
+    ghostDate.value = targetDate
+    ghostRevision.value = revision
+    unplacedCount.value = res.unplaced.length
     const byId = new Map(pool.value.map((t) => [t.id, t]))
     ghosts.value = res.placements
       .filter((p: Placement) => byId.has(p.id))
@@ -297,13 +334,28 @@ async function runSchedule(): Promise<void> {
 
 async function applyGhosts(): Promise<void> {
   const list = ghosts.value
-  ghosts.value = []
+  const targetDate = ghostDate.value
+  if (
+    !list.length ||
+    targetDate !== canvasDate.value ||
+    ghostRevision.value !== scheduleRevision.value
+  ) {
+    clearGhosts()
+    if (list.length) toast('日程已变化，请重新生成排程建议')
+    return
+  }
   const items: { todo: Todo; date: string | null; startMin: number | null }[] = []
   for (const g of list) {
     const cur = store.allTodos.find((t) => t.id === g.todo.id)
-    if (cur) items.push({ todo: cur, date: canvasDate.value, startMin: g.startMin })
+    if (cur) items.push({ todo: cur, date: targetDate, startMin: g.startMin })
   }
-  await applyMoves(items, `已排入 ${items.length} 项，可拖动微调`)
+  try {
+    await applyMoves(items, `已排入 ${items.length} 项，可拖动微调`)
+    clearGhosts()
+  } catch (e) {
+    toast(e instanceof Error ? `排程未完成：${e.message}` : '排程未完成，请重试')
+    return
+  }
   // 智能排程是「AI 提议 → 幽灵块预览 → 用户确认」，确认这一步只有界面知道：
   // 记一条给聊天模型（@/ai/cardOutcomes），省得它回过头又问「要不要我帮你排一下」
   if (items.length > 0) {
@@ -323,7 +375,7 @@ const ritualOpen = ref(false)
 
 const ritualCandidates = computed(() => {
   const overdue = store.allTodos.filter(
-    (t) => t.date !== null && t.date < today && t.status !== 'done',
+    (t) => t.date !== null && t.date < today.value && t.status !== 'done',
   )
   // 池子已含无日期（收件箱）待办；翻到过去日期时池与逾期可能重叠，按 id 去重
   const ids = new Set(overdue.map((t) => t.id))
@@ -331,14 +383,14 @@ const ritualCandidates = computed(() => {
 })
 
 function maybeOpenRitual(): void {
-  const key = `rein.ritual.${today}`
+  const key = `rein.ritual.${today.value}`
   if (localStorage.getItem(key)) return
   if (!ritualCandidates.value.length) return
   ritualOpen.value = true
 }
 
 function closeRitual(): void {
-  localStorage.setItem(`rein.ritual.${today}`, '1')
+  localStorage.setItem(`rein.ritual.${today.value}`, '1')
   ritualOpen.value = false
 }
 
@@ -347,9 +399,9 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
   for (const id of ids) {
     const t = store.allTodos.find((x) => x.id === id)
     if (!t) continue
-    const next: Todo = { ...t, date: t.date === null || t.date < today ? today : t.date }
-    if (next.date === today && next.startMin != null && t.date === null) next.startMin = null
-    if (t.date !== today) await store.update(next)
+    const next: Todo = { ...t, date: t.date === null || t.date < today.value ? today.value : t.date }
+    if (next.date === today.value && next.startMin != null && t.date === null) next.startMin = null
+    if (t.date !== today.value) await store.update(next)
   }
   if (mode === 'ai') await runSchedule()
   else toast('已加入今天，拖进时间轴安排时间')
@@ -395,7 +447,7 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
       <section v-if="pool.length" class="pool" data-testid="pool">
         <header class="row between poolh">
           <b>未安排 <span class="num">{{ pool.length }}</span></b>
-          <span class="hint">拖进时间轴，或点卡片快排</span>
+          <span class="hint">拖进时间轴，或点卡片选择</span>
         </header>
         <div class="chips">
           <button
@@ -407,7 +459,7 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
             @pointerdown="onChipDown($event, t)"
             @pointermove="onChipMove"
             @pointerup="onChipUp"
-            @pointercancel="onChipUp"
+            @pointercancel="onChipCancel"
             @click="!chipMoved && onSelect(t)"
           >
             <i class="pdot" />{{ t.title }}
@@ -422,6 +474,7 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
         <p class="cr">
           <b>{{ aiSource === 'ai' ? 'AI 建议' : '规则排程' }}</b>
           {{ aiReason }}
+          <span v-if="unplacedCount" class="unplaced">另有 {{ unplacedCount }} 项未能安排</span>
         </p>
         <div class="row gap">
           <button class="cbtn ghost" @click="clearGhosts">取消</button>
@@ -686,6 +739,13 @@ async function onRitualConfirm(ids: number[], mode: 'ai' | 'manual'): Promise<vo
 .confirm b {
   color: var(--accent);
   margin-right: var(--gap-text-inline);
+}
+
+.unplaced {
+  display: block;
+  margin-top: var(--gap-sm);
+  color: var(--warn-strong);
+  font-size: var(--fs-caption);
 }
 
 .gap {

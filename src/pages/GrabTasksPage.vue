@@ -116,21 +116,66 @@ onBeforeUnmount(() => {
 
 /* ---------------- 行操作 ---------------- */
 const busy = ref(false)
+const bulkBusy = ref(false)
 
 async function act(id: number, action: 'pause' | 'cancel' | 'retry' | 'remove'): Promise<void> {
+  if (busy.value) return
+  busy.value = true
   try {
     await store.taskAction(id, action)
     if (action === 'remove') toast.toast('已移除这条任务')
     if (action === 'retry') toast.toast('已重新排队')
   } catch (e) {
     toast.toast(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function pauseAll(): Promise<void> {
+  if (bulkBusy.value) return
+  bulkBusy.value = true
+  try {
+    await store.pauseAll()
+    toast.toast('已暂停全部进行中任务')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '全部暂停失败')
+  } finally {
+    bulkBusy.value = false
+  }
+}
+
+async function resumeAll(): Promise<void> {
+  if (bulkBusy.value) return
+  bulkBusy.value = true
+  try {
+    await store.resumeAll()
+    toast.toast('已恢复全部暂停任务')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '全部恢复失败')
+  } finally {
+    bulkBusy.value = false
   }
 }
 
 /** 移除是两步的：这些行是「抢到了什么」的唯一本地记录，一次误触就删掉不值 */
 const { pending: pendingRemove, ask } = useTwoStepConfirm()
+const { pending: pendingClear, ask: askClear } = useTwoStepConfirm()
 function askRemove(id: number): void {
   ask(id, () => void act(id, 'remove'))
+}
+
+async function clearFinished(): Promise<void> {
+  if (bulkBusy.value) return
+  bulkBusy.value = true
+  try {
+    const n = await store.clearFinished()
+    toast.toast(`已清掉 ${n} 条结束任务`)
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '清空失败')
+  } finally {
+    bulkBusy.value = false
+  }
 }
 
 /* ---------------- 改设置并重排 ----------------
@@ -158,22 +203,43 @@ async function onSaveEdit(payload: {
   const t = editing.value
   if (!t || busy.value) return
   busy.value = true
+  let removed = false
+  let restored = false
   try {
     // 先撤掉旧的再排新的：不留一条已取消的垃圾在列表里（引擎里 remove 是无状态守卫的纯删除）
     await store.taskAction(t.id, 'remove')
-    await store.enqueue([lessonOf(t)], {
-      mode: payload.mode,
-      virtualCost: payload.virtualCost > 0 ? payload.virtualCost : null,
-      scheduleGroupId: t.scheduleGroupId ?? null,
-      groupKey: t.groupKey ?? null,
-      groupName: t.groupName ?? null,
-      priority: payload.priority,
-      turnId: t.turnId,
-    })
+    removed = true
+    try {
+      await store.enqueue([lessonOf(t)], {
+        mode: payload.mode,
+        virtualCost: payload.virtualCost > 0 ? payload.virtualCost : null,
+        scheduleGroupId: t.scheduleGroupId ?? null,
+        groupKey: t.groupKey ?? null,
+        groupName: t.groupName ?? null,
+        priority: payload.priority,
+        turnId: t.turnId,
+      })
+    } catch (enqueueError) {
+      // 新任务没建成时立即按原设置恢复，避免「先删后建」把用户的任务单弄丢。
+      await store.enqueue([lessonOf(t)], {
+        mode: t.mode,
+        virtualCost: t.virtualCost ?? null,
+        scheduleGroupId: t.scheduleGroupId ?? null,
+        groupKey: t.groupKey ?? null,
+        groupName: t.groupName ?? null,
+        priority: t.priority ?? 0,
+        turnId: t.turnId,
+      })
+      restored = true
+      throw enqueueError
+    }
     editing.value = null
     toast.toast('已按新设置重新排队')
   } catch (e) {
-    toast.toast(e instanceof Error ? e.message : '重排失败')
+    const message = e instanceof Error ? e.message : '重排失败'
+    toast.toast(removed
+      ? (restored ? `${message}；原任务已恢复` : `${message}；原任务恢复失败，请手动重新加入`)
+      : `${message}；原任务未改动`)
   } finally {
     busy.value = false
   }
@@ -187,18 +253,20 @@ async function onSaveEdit(payload: {
         <button
           v-if="running.some((t) => t.status !== 'paused')"
           class="hdr-btn"
+          :disabled="bulkBusy"
           aria-label="全部暂停"
           title="全部暂停"
-          @click="store.pauseAll()"
+          @click="pauseAll"
         >
           <Pause :size="19" />
         </button>
         <button
           v-else-if="running.length"
           class="hdr-btn"
+          :disabled="bulkBusy"
           aria-label="全部恢复"
           title="全部恢复"
-          @click="store.resumeAll()"
+          @click="resumeAll"
         >
           <Play :size="19" />
         </button>
@@ -208,7 +276,18 @@ async function onSaveEdit(payload: {
     <div class="rubber-layer" data-rubber-content>
 
     <EmptyState
-      v-if="!tasks.length"
+      v-if="store.grabLoadError && !tasks.length"
+      :icon="Ban"
+      title="抢课任务读取失败"
+      :hint="store.grabLoadError"
+    >
+      <template #action>
+        <button class="cta" :disabled="bulkBusy" @click="store.refreshGrab()">重新读取</button>
+      </template>
+    </EmptyState>
+
+    <EmptyState
+      v-else-if="!tasks.length"
       :icon="ListChecks"
       title="还没有抢课任务"
       hint="在选课页挑一门课加入抢课，或者写一条抢课计划 —— 之后它们都会出现在这里。"
@@ -219,7 +298,11 @@ async function onSaveEdit(payload: {
     </EmptyState>
 
     <template v-else>
-      <!-- 引擎级故障：这一页也要说，否则用户只会看到一串「不动」的任务 -->
+      <!-- 读取失败与引擎故障分开：前者保留旧任务，后者说明引擎为什么停。 -->
+      <p v-if="store.grabLoadError" class="fault" role="status">
+        <Ban :size="14" />
+        <span>任务列表刷新失败，当前显示上次结果：{{ store.grabLoadError }}</span>
+      </p>
       <p v-if="store.grabError" class="fault" role="status">
         <Ban :size="14" />
         <span>{{ store.grabError }}</span>
@@ -370,8 +453,14 @@ async function onSaveEdit(payload: {
       </div>
 
       <div class="bulk">
-        <button class="link" @click="store.clearFinished()">
-          <CheckCircle2 :size="13" /> 清掉已结束的 {{ won.length + lost.length }} 条
+        <button
+          class="link"
+          :class="{ danger: pendingClear === -1 }"
+          :disabled="bulkBusy"
+          @click="askClear(-1, () => void clearFinished())"
+        >
+          <CheckCircle2 :size="13" />
+          {{ pendingClear === -1 ? '再点一次确认清空' : `清掉已结束的 ${won.length + lost.length} 条` }}
         </button>
         <RouterLink :to="{ name: 'campus-course-select' }" class="link">
           去选课页
@@ -612,8 +701,12 @@ async function onSaveEdit(payload: {
   transition: transform var(--dur-fast) var(--ease-standard);
 }
 
-.link:active {
-  transform: scale(0.96);
+.link:disabled {
+  opacity: var(--disabled-opacity);
+}
+
+.link.danger {
+  color: var(--danger-strong);
 }
 
 .hint {

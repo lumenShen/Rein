@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Plus } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -9,9 +9,9 @@ import TodoListCard from '@/components/todo/TodoListCard.vue'
 import ScheduleCard from '@/components/todo/ScheduleCard.vue'
 import AllTodoList from '@/components/todo/AllTodoList.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useToday } from '@/composables/useToday'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useTodoStore } from '@/stores/todo'
-import { todayStr } from '@/utils/date'
 
 /**
  * 专注 · 二级页：番茄钟 + 待办 + 日程时间线；完整时间线与超量待办收进抽屉。
@@ -19,7 +19,7 @@ import { todayStr } from '@/utils/date'
  * 横屏（手机 / 平板转到横屏，仍是 < 900 的手机壳）：一叠卡摊成「计时 | 全部待办」两栏 ——
  * 竖屏那套「先看计时、再翻待办」的顺序是按一屏一卡写的，横屏多出来的宽度只会白白空着。
  */
-const today = todayStr()
+const { today } = useToday()
 
 /**
  * 横屏双栏是否成立。查询串与下面 style 里那条媒体查询**逐字相同**，分工是
@@ -43,11 +43,16 @@ const todo = useTodoStore()
  */
 const addOpen = ref(false)
 
+watch(today, () => {
+  void pomo.loadToday()
+  void todo.loadDay(today.value)
+})
+
 onMounted(() => {
   void pomo.loadToday()
   // 近 7 天完成段：供番茄钟卡的建议时长（循证建议，非硬编码最优时长）
   void pomo.loadRecent()
-  void todo.loadDay(today)
+  void todo.loadDay(today.value)
   /* 横屏右栏的「全部待办」要 store.allTodos：只在侧栏真会挂出来时才拉
      （竖屏那份内联列表只用 dayTodos，不该为看不见的一栏多付一次全量查询）。
      AllTodoList 自己挂载时也会拉一次，这里不依赖它 —— 侧栏一挂上就有数据。 */

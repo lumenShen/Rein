@@ -1175,11 +1175,14 @@ pub fn campus_semesters(state: State<AppState>) -> Result<Vec<CampusSemester>> {
 /// 切换当前学期 —— 只改标记，时间线由 `campus_sync` / `campus_schedule` 重新对齐。
 #[tauri::command]
 pub fn campus_set_current_semester(state: State<AppState>, semester_id: i64) -> Result<()> {
-    let conn = state.db.lock();
+    let mut conn = state.db.lock();
     let account = require_account(&conn)?;
-    // 只做存在性校验，值本身用不上
-    load_semester(&conn, account.id, semester_id)?;
-    switch_semester(&conn, account.id, semester_id)
+    let tx = conn.transaction()?;
+    // 校验与切换在同一事务里；任一步失败都不会留下「旧日程已删、学期标记却没换」的半状态。
+    load_semester(&tx, account.id, semester_id)?;
+    switch_semester(&tx, account.id, semester_id)?;
+    tx.commit()?;
+    Ok(())
 }
 
 /* ─────────────────────────── 同步 ─────────────────────────── */

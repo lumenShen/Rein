@@ -141,7 +141,7 @@ const unsupportedNote = computed(() => {
             <b class="slabel">把进行中的会话浮在最上层</b>
             <em class="t-3">关闭后只在程序内显示浮条</em>
           </span>
-          <ToggleSwitch v-model="enabled" label="全局浮窗" />
+          <ToggleSwitch v-model="enabled" label="全局浮窗" :disabled="!available" />
         </div>
       </div>
     </section>

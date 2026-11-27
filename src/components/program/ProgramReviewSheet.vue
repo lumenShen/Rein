@@ -26,6 +26,7 @@ const props = defineProps<{
   current: ProgramParams | null
   /** 本周 vs 上周执行对比（数据先行：先看数据再看 AI 说了什么） */
   compare: WeekCompare | null
+  applying?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -280,8 +281,8 @@ const arrowOf = (p: { now: number; prev: number }): { text: string; cls: string 
             </ul>
           </template>
 
-          <button v-if="selectedCount" class="primary" @click="apply">
-            应用这 {{ selectedCount }} 条并重排日程
+          <button v-if="selectedCount" class="primary" :disabled="applying" @click="apply">
+            {{ applying ? '正在应用…' : `应用这 ${selectedCount} 条并重排日程` }}
           </button>
           <p v-if="selectedCount" class="foot">日程将从今天起重排，已完成的记录不受影响</p>
         </div>

@@ -132,7 +132,8 @@ export async function buildWrapup(record: ProgramRecord): Promise<WrapupData> {
 
   /* 下一期档位：完成率决定，完成率比野心更重要 */
   const rate = completion ?? 0.7
-  const nextTier: ProgramTier = rate < 0.6 ? 'conservative' : rate < 0.85 ? 'balanced' : 'aggressive'
+  const nextTier: ProgramTier =
+    completion == null ? 'conservative' : rate < 0.6 ? 'conservative' : rate < 0.85 ? 'balanced' : 'aggressive'
   const tierLabel = { conservative: '保守', balanced: '均衡', aggressive: '进取' }[nextTier]
   const trainRateText = fmtRate(report.training.done, report.training.planned)
   const nextTierText =

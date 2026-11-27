@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, Plus } from 'lucide-vue-next'
+import { AlertCircle, ChevronRight, Plus } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import PlanSeedUpgradeBanner from '@/components/exercise/PlanSeedUpgradeBanner.vue'
 import { usePlanStore } from '@/stores/plan'
+import { useToday } from '@/composables/useToday'
 import { estimatePlanMinutes, planTypeLabel } from '@/utils/plan'
 
 /** 全部课程：训练课程的管理入口（列表 → 详情/编辑/新建）。 */
 const router = useRouter()
 const planStore = usePlanStore()
+const { today } = useToday()
 
 onMounted(() => {
   void planStore.ensureLoaded()
 })
 
 function fmtUsed(lastUsedAt: string | null): string {
+  void today.value
   if (!lastUsedAt) return '未使用'
   const ms = Date.now() - Date.parse(lastUsedAt.includes('T') ? lastUsedAt : `${lastUsedAt.replace(' ', 'T')}Z`)
   if (Number.isNaN(ms)) return '未使用'
@@ -45,7 +48,23 @@ function fmtUsed(lastUsedAt: string | null): string {
     <!-- d-full：课程清单这张卡通栏，多栏摊到卡**内部**去（理由见样式里的桌面段） -->
     <section class="card d-full plans-card">
       <EmptyState
-        v-if="planStore.loaded && planStore.plans.length === 0"
+        v-if="planStore.error"
+        :icon="AlertCircle"
+        title="训练课程读取失败"
+        :hint="planStore.error"
+      >
+        <template #action>
+          <button class="cta" type="button" @click="planStore.load()">重试</button>
+        </template>
+      </EmptyState>
+      <EmptyState
+        v-else-if="planStore.loading || !planStore.loaded"
+        :icon="Plus"
+        title="正在读取训练课程…"
+        hint="课程与动作库正在加载"
+      />
+      <EmptyState
+        v-else-if="planStore.loaded && planStore.plans.length === 0"
         :icon="Plus"
         title="还没有训练课程"
         hint="点上方「新建课程」创建一个"

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { ChevronRight, Dumbbell, Scale, Timer, TrendingUp, Wallet } from 'lucide-vue-next'
 
 import WorkoutSourceTag from '@/components/exercise/WorkoutSourceTag.vue'
+import { useToday } from '@/composables/useToday'
 import { CATEGORY_META, MEAL_LABELS, MEAL_META, mealKcal } from '@/config/domain'
 import { categoryOf, fmtCents } from '@/config/ledger'
 import { useDietStore } from '@/stores/diet'
@@ -12,7 +13,7 @@ import { useLedgerStore } from '@/stores/ledger'
 import { useNutritionStore } from '@/stores/nutrition'
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useTodoStore } from '@/stores/todo'
-import { minToHHmm, nowMin, todayStr } from '@/utils/date'
+import { minToHHmm, nowMin } from '@/utils/date'
 import type { WorkoutSource } from '@/types'
 
 /** 桌面主页 · 一日脊柱：把今天已发生的记录按时间轴纵向陈列，未来安排用虚线标示。 */
@@ -33,7 +34,7 @@ interface SpineEvent {
   live?: boolean
 }
 
-const today = todayStr()
+const { today } = useToday()
 /* 挂载时算一次会随时间失真：每 30s 刷新，保证「现在」分界与计划/已发生判定始终成立 */
 const now = ref(nowMin())
 let clockTimer: ReturnType<typeof setInterval> | null = null
@@ -50,16 +51,25 @@ const features = useFeaturesStore()
    脊柱把这些域的事件并进同一条时间轴，域不在就自然没有条目，不留空洞 */
 const nutritionOn = computed(() => features.isEnabled('nutrition'))
 
-onMounted(() => {
+function loadDay(): void {
   if (nutritionOn.value) {
-    void nutrition.loadSummary(today)
+    void nutrition.loadSummary(today.value)
     void nutrition.loadMetrics(30)
   }
-  void diet.load(today)
-  void exercise.loadWeek(today)
+  void diet.load(today.value)
+  void exercise.loadWeek(today.value)
   if (features.isEnabled('focus')) void pomo.loadToday()
-  if (features.isEnabled('ledger')) void ledger.loadMonth()
-  void todo.loadDay(today)
+  if (features.isEnabled('ledger')) {
+    ledger.month = today.value.slice(0, 7)
+    void ledger.loadMonth()
+  }
+  void todo.loadDay(today.value)
+}
+
+watch(today, loadDay)
+
+onMounted(() => {
+  loadDay()
   clockTimer = setInterval(() => {
     now.value = nowMin()
   }, 30_000)
@@ -74,9 +84,9 @@ const events = computed<SpineEvent[]>(() => {
 
   // 晨重（无准确时刻，固定排首）
   const metrics = nutrition.metrics
-  const m0 = metrics.find((m) => m.date === today && m.weightKg != null)
+  const m0 = metrics.find((m) => m.date === today.value && m.weightKg != null)
   if (m0) {
-    const prev = metrics.find((m) => m.date < today && m.weightKg != null)
+    const prev = metrics.find((m) => m.date < today.value && m.weightKg != null)
     // 副行不再复述「体重记录」（标题「晨重 x kg」+ 左侧 Scale 图标已表态）；
     // 只留变化量，并补上单位
     let sub = ''
@@ -103,7 +113,7 @@ const events = computed<SpineEvent[]>(() => {
   }
 
   // 今日运动
-  for (const w of exercise.weekWorkouts.filter((x) => x.date === today)) {
+  for (const w of exercise.weekWorkouts.filter((x) => x.date === today.value)) {
     out.push({
       key: `workout-${w.id}`,
       min: w.startMin,
@@ -144,7 +154,7 @@ const events = computed<SpineEvent[]>(() => {
   }
 
   // 今日收支
-  for (const e of ledger.entries.filter((x) => x.date === today)) {
+  for (const e of ledger.entries.filter((x) => x.date === today.value)) {
     const cat = categoryOf(e.category)
     const income = e.kind === 'income'
     out.push({

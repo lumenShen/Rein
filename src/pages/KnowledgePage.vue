@@ -69,6 +69,7 @@ const status = ref<KbStatus | null>(null)
 /** kb://index 订阅的退订句柄（卸载时释放，否则重挂载会重复派发） */
 let offIndex: (() => void) | null = null
 const settings = ref<KbSettings | null>(null)
+const settingsError = ref('')
 const busy = ref(false)
 const probing = ref(false)
 const settingsOpen = ref(false)
@@ -118,8 +119,11 @@ const testLines = computed(() =>
 const query = ref('')
 const hits = ref<KbHit[] | null>(null)
 const searching = ref(false)
+let searchSeq = 0
 
 const memories = ref<MemoryShard[]>([])
+const memoryError = ref('')
+let memorySeq = 0
 const memoryStats = ref<MemoryShardStats | null>(null)
 /** 三态视角（服务端过滤；默认只看活跃） */
 const stateFilter = ref<MemoryShardState | 'all'>('active')
@@ -382,12 +386,20 @@ function openAnchor(m: MemoryShard): void {
 
 /** 只刷新记忆区（记忆操作后调用；不必整页重来）——按当前 chip 的服务端过滤重取 */
 async function refreshMemories(): Promise<void> {
-  const [mem, stats] = await Promise.all([
-    fetchShards(),
-    kbService.memoryShardStats(),
-  ])
-  memories.value = mem
-  memoryStats.value = stats
+  const seq = ++memorySeq
+  memoryError.value = ''
+  try {
+    const [mem, stats] = await Promise.all([
+      fetchShards(),
+      kbService.memoryShardStats(),
+    ])
+    if (seq !== memorySeq) return
+    memories.value = mem
+    memoryStats.value = stats
+  } catch (e) {
+    if (seq === memorySeq) memoryError.value = e instanceof Error ? e.message : '长期记忆读取失败'
+    throw e
+  }
 }
 
 async function setStateFilter(value: MemoryShardState | 'all'): Promise<void> {
@@ -471,6 +483,7 @@ function onModelProgress(e: KbModelEvent): void {
  *  返回是否落库成功——乐观更新的调用方（如换模型）要拿它决定回不回滚。 */
 async function saveSettings(silent = false): Promise<boolean> {
   busy.value = true
+  settingsError.value = ''
   try {
     const input: Record<string, unknown> = {
       embeddingMode: mode.value,
@@ -491,7 +504,8 @@ async function saveSettings(silent = false): Promise<boolean> {
     if (!silent) toast.toast('已保存')
     return true
   } catch (e) {
-    toast.toast(e instanceof Error ? e.message : String(e))
+    settingsError.value = e instanceof Error ? e.message : '检索设置保存失败'
+    toast.toast(settingsError.value)
     return false
   } finally {
     busy.value = false
@@ -549,13 +563,15 @@ async function rebuild(): Promise<void> {
 /* ---------- 检索 ---------- */
 
 async function runSearch(): Promise<void> {
+  const seq = ++searchSeq
   searching.value = true
   try {
-    hits.value = await kbService.search({ query: query.value.trim(), limit: 12 })
+    const result = await kbService.search({ query: query.value.trim(), limit: 12 })
+    if (seq === searchSeq) hits.value = result
   } catch (e) {
-    toast.toast(e instanceof Error ? e.message : String(e))
+    if (seq === searchSeq) toast.toast(e instanceof Error ? e.message : String(e))
   } finally {
-    searching.value = false
+    if (seq === searchSeq) searching.value = false
   }
 }
 
@@ -576,11 +592,14 @@ interface ReaderState {
 }
 const reader = ref<ReaderState | null>(null)
 const reading = ref(false)
+let readerSeq = 0
 
 async function openReader(docId: number, level: 'l1' | 'l2' = 'l1', offset = 0): Promise<void> {
+  const seq = ++readerSeq
   reading.value = true
   try {
     const d = await kbService.read(docId, level, offset, level === 'l1' ? 1 : 8)
+    if (seq !== readerSeq) return
     reader.value = {
       docId: d.id,
       level: d.level as 'l1' | 'l2',
@@ -593,9 +612,9 @@ async function openReader(docId: number, level: 'l1' | 'l2' = 'l1', offset = 0):
       busy: false,
     }
   } catch (e) {
-    toast.toast(e instanceof Error ? e.message : String(e))
+    if (seq === readerSeq) toast.toast(e instanceof Error ? e.message : String(e))
   } finally {
-    reading.value = false
+    if (seq === readerSeq) reading.value = false
   }
 }
 
@@ -901,6 +920,11 @@ function requestCloseEditor(): void {
           </button>
         </div>
 
+        <p v-if="memoryError" class="err" role="alert">
+          <AlertCircle :size="14" /> {{ memoryError }}
+          <button type="button" class="src-act" @click="refreshMemories().catch(() => undefined)">重试</button>
+        </p>
+
         <!-- 健康度：一句结论 + 可展开的详情（数字墙默认收起） -->
         <div v-if="memoryStats" class="snr">
           <p class="snr-sum">{{ memorySummary }}</p>
@@ -1073,6 +1097,10 @@ function requestCloseEditor(): void {
 
     <!-- 检索设置抽屉：索引概况 / 模式 / 范围 —— 低频的机器层全在这里 -->
     <SheetModal :open="settingsOpen" title="检索设置" initial-snap="large" @close="settingsOpen = false">
+      <p v-if="settingsError" class="err" role="alert">
+        <AlertCircle :size="14" /> {{ settingsError }}
+        <button type="button" class="src-act" @click="saveSettings()">重试</button>
+      </p>
       <!-- 索引概况 -->
       <section class="set-block">
         <div class="set-head">

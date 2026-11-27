@@ -26,8 +26,12 @@ const syncOn = computed(() => features.isEnabled('sync'))
 /** 清除软件数据抽屉（四档深度 + 两段确认，见 DataClearSheet） */
 const clearOpen = ref(false)
 
-/** 功能行副标：列出可开关模块，一眼看到有哪些功能可关 */
-const featureNames = computed(() => toggleablePlugins().map((p) => p.name).join(' · '))
+/** 功能行只报数量与数据安全，不把十来个模块名塞进一行副标题。 */
+const featureSummary = computed(() => {
+  const all = toggleablePlugins()
+  const enabled = all.filter((p) => features.isEnabled(p.id)).length
+  return `已开启 ${enabled}/${all.length} 个模块 · 关闭不会删除数据`
+})
 
 /** 全局浮窗入口副标：入口这一行就说清「现在是什么状态」，不必点进去才知道 */
 const floatHint = computed(() => {
@@ -80,7 +84,7 @@ onMounted(() => {
         />
         <SettingsRow
           title="打开或关闭功能"
-          :subtitle="featureNames"
+          :subtitle="featureSummary"
           :icon="ToggleLeft"
           :to="{ name: 'settings-features' }"
           testid="settings-row-features"

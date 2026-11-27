@@ -32,6 +32,8 @@ export const useCampusStore = defineStore('campus', () => {
   const view = ref<ScheduleView | null>(null)
 
   const loading = ref(false)
+  const error = ref('')
+  let loadSeq = 0
   const syncing = ref(false)
   const loggingIn = ref(false)
   /** 最近一次同步的结果，配置页用来展示「18 门课 / 42 个时段」这类回执 */
@@ -111,15 +113,26 @@ export const useCampusStore = defineStore('campus', () => {
 
   /** 读一段日期区间的课表。区间由调用方按当前视图算好。 */
   async function loadRange(from: string, to: string, semesterId?: number | null): Promise<void> {
+    const seq = ++loadSeq
     loading.value = true
+    error.value = ''
     try {
-      view.value = await campusService.schedule({ from, to, semesterId: semesterId ?? null })
-      account.value = view.value.account
-      if (view.value.semester) {
-        semesters.value = await campusService.semesters()
+      const next = await campusService.schedule({ from, to, semesterId: semesterId ?? null })
+      if (seq !== loadSeq) return
+      view.value = next
+      account.value = next.account
+      if (next.semester) {
+        try {
+          const list = await campusService.semesters()
+          if (seq === loadSeq) semesters.value = list
+        } catch (e) {
+          console.warn('[campus] 学期列表刷新失败', e)
+        }
       }
+    } catch (e) {
+      if (seq === loadSeq) error.value = e instanceof Error ? e.message : '课表读取失败'
     } finally {
-      loading.value = false
+      if (seq === loadSeq) loading.value = false
     }
   }
 
@@ -215,6 +228,7 @@ export const useCampusStore = defineStore('campus', () => {
     semesters,
     view,
     loading,
+    error,
     syncing,
     loggingIn,
     lastSync,

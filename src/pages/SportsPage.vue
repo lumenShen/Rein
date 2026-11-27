@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Footprints, Heart, ListChecks, PenLine, Settings2 } from 'lucide-vue-next'
 
@@ -17,8 +17,8 @@ import { useHeartRateStore } from '@/stores/heartRate'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useTodoStore } from '@/stores/todo'
 import { useMarqueeText } from '@/composables/useMarqueeText'
+import { useToday } from '@/composables/useToday'
 import { motionOn } from '@/system/motion'
-import { todayStr } from '@/utils/date'
 
 /** 运动页（训练主页）：周概览（含最近一次）+ 跑步/手动记快速入口 + 课程启动 + 运动负荷 + 运动待办。 */
 const router = useRouter()
@@ -26,18 +26,20 @@ const ex = useExerciseStore()
 const todo = useTodoStore()
 const nutrition = useNutritionStore()
 const hr = useHeartRateStore()
-const today = todayStr()
+const { today } = useToday()
 
-onMounted(() => {
-  void ex.loadWeek(today)
-  void todo.loadDay(today)
-  void nutrition.loadSummary(today)
-  // 心率区间需要年龄（由生日换算）；画像拉回来后同步给采集线程
+function loadDay(): void {
+  void ex.loadWeek(today.value)
+  void todo.loadDay(today.value)
+  void nutrition.loadSummary(today.value)
   void nutrition
     .loadProfile()
     .then(() => hr.configureProfile(nutrition.profile))
     .catch(() => {})
-})
+}
+
+watch(today, loadDay)
+onMounted(loadDay)
 
 const manualOpen = ref(false)
 /** 设备管理抽屉：页头入口统一打开它（运动页不再占一张内容卡） */
@@ -141,17 +143,17 @@ const hrAria = computed(() =>
          通栏铺开时每个磁贴会宽到 230px，读起来像把手机上的四列网格拉变了形。 -->
     <ul class="quick d-half">
       <li>
-        <QuickTile label="跑步" icon-bg="var(--mod-sports-soft)" icon-color="var(--mod-sports-strong)" @click="router.push('/session/run')">
+        <QuickTile label="跑步" @click="router.push('/session/run')">
           <Footprints :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="手动记" icon-bg="var(--mod-todo-soft)" icon-color="var(--mod-todo-strong)" @click="manualOpen = true">
+        <QuickTile label="手动记" @click="manualOpen = true">
           <PenLine :size="20" />
         </QuickTile>
       </li>
       <li>
-        <QuickTile label="动作库" icon-bg="var(--mod-focus-soft)" icon-color="var(--mod-focus-strong)" @click="router.push('/sports/exercises')">
+        <QuickTile label="动作库" @click="router.push('/sports/exercises')">
           <ListChecks :size="20" />
         </QuickTile>
       </li>

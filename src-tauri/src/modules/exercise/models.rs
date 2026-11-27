@@ -4,6 +4,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::modules::heartrate::models::HrWorkoutSummary;
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkoutUpdateInput {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub workout_type: String,
+    pub date: String,
+    pub start_min: Option<i64>,
+    pub duration_min: f64,
+    /// None = 保留原客观档位（课程 / 跑步记录）
+    pub intensity: Option<String>,
+    /// 手动补录的体感；课程 / 跑步传 None
+    pub effort: Option<i64>,
+    pub kcal: f64,
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workout {

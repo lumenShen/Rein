@@ -4,9 +4,10 @@ import { computed, ref, watch } from 'vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import { DIET_RESTRICTION_PRESETS, EQUIPMENT_LABELS, TIME_SLOT_LABELS } from '@/config/domain'
 import { useNutritionStore } from '@/stores/nutrition'
+import { useToday } from '@/composables/useToday'
 import type { ProgramStart } from '@/types'
 import type { Equipment, Profile, TimeSlot } from '@/types'
-import { addDays, fmtDateCn, startOfWeek, todayStr } from '@/utils/date'
+import { addDays, fmtDateCn, startOfWeek } from '@/utils/date'
 import { phaseForFirstCourse, pickWeekTemplate } from '@/utils/programEngine'
 import { constraintSummary, constraintWarning } from '@/utils/programSetup'
 
@@ -36,6 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const n = useNutritionStore()
+const { today } = useToday()
 
 const draftDays = ref(4)
 const draftEquipment = ref<string>('gym')
@@ -75,10 +77,10 @@ const SLOT_OPTIONS = ['morning', 'noon', 'evening']
 
 const startDate = computed(() =>
   startMode.value === 'today'
-    ? todayStr()
+    ? today.value
     : startMode.value === 'tomorrow'
-      ? addDays(todayStr(), 1)
-      : startOfWeek(addDays(todayStr(), 7)),
+      ? addDays(today.value, 1)
+      : startOfWeek(addDays(today.value, 7)),
 )
 
 /** 本地草稿（频率/器械）对应的周模板——首练选项与相位都按它算，跟手不滞后 */
@@ -93,14 +95,14 @@ const phase = computed(() =>
   firstCourseId.value ? phaseForFirstCourse(draftTpl.value, firstCourseId.value) : 0,
 )
 
-const tomorrow = computed(() => addDays(todayStr(), 1))
-const nextMonday = computed(() => startOfWeek(addDays(todayStr(), 7)))
+const tomorrow = computed(() => addDays(today.value, 1))
+const nextMonday = computed(() => startOfWeek(addDays(today.value, 7)))
 /** 下周一恰好是明天（今天周日）时，两个选项是同一天：隐藏「明天开始」，并入「下周一」 */
 const nextIsTomorrow = computed(() => nextMonday.value === tomorrow.value)
 
 const startOptions = computed(() => {
   const opts: { value: 'next' | 'today' | 'tomorrow'; label: string }[] = [
-    { value: 'today', label: `今天开始 · ${fmtDateCn(todayStr())}` },
+    { value: 'today', label: `今天开始 · ${fmtDateCn(today.value)}` },
   ]
   if (!nextIsTomorrow.value) {
     opts.push({ value: 'tomorrow', label: `明天开始 · ${fmtDateCn(tomorrow.value)}` })

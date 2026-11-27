@@ -6,6 +6,7 @@ import InfoHint from '@/components/common/InfoHint.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
+import { useToast } from '@/composables/useToast'
 import { MOTION_LEVELS, motionEffective, motionLevel, setMotionLevel, type MotionLevel } from '@/system/motion'
 import { PERF_MODES, liquidGlass, perfMode, setPerfMode, type PerfMode } from '@/system/perf'
 
@@ -16,13 +17,19 @@ import { PERF_MODES, liquidGlass, perfMode, setPerfMode, type PerfMode } from '@
  * 画质管「玻璃画不画得出来」，动效管「界面动不动」。设置页只留一行入口，
  * 需要调的时候再进来；液态玻璃的标本台仍在三级页 `/settings/perf`。
  */
+const { toast } = useToast()
+
+function reportSave(ok: boolean): void {
+  if (!ok) toast('本地保存失败，设置仅在本次生效')
+}
+
 /** 性能档位：四个固定档（low / high / ultra / extreme）都是手动钉死（判定逻辑见 system/perf） */
 const PERF_OPTIONS = PERF_MODES.map(({ value, label }) => ({ value, label }))
 
 const perfChoice = computed({
   get: () => perfMode.value as string,
   set: (v: string) => {
-    if (PERF_MODES.some((m) => m.value === v)) setPerfMode(v as PerfMode)
+    if (PERF_MODES.some((m) => m.value === v)) reportSave(setPerfMode(v as PerfMode))
   },
 })
 
@@ -44,7 +51,7 @@ const MOTION_OPTIONS = MOTION_LEVELS.map(({ value, label }) => ({ value, label }
 const motionChoice = computed({
   get: () => motionLevel.value as string,
   set: (v: string) => {
-    if (MOTION_LEVELS.some((m) => m.value === v)) setMotionLevel(v as MotionLevel)
+    if (MOTION_LEVELS.some((m) => m.value === v)) reportSave(setMotionLevel(v as MotionLevel))
   },
 })
 
@@ -98,13 +105,13 @@ const motionHint = computed(() => {
         <span class="hint-slot">
           <InfoHint title="动效档位说明">
             <p>「默认」就是现在这一套，不加装饰；「丰富」多加液态动作；「关闭」不做补间，状态直接切换。</p>
-            <p>画质档位管「玻璃画不画得出来」，这里管「界面动不动」——两件事互不影响。</p>
-            <p>画质选「流畅」时，「丰富」会退回「默认」；系统要求减弱动效时，全部档位都按「关闭」执行。</p>
+            <p>画质档位管「玻璃画不画得出来」，这里管「界面动不动」；「流畅」会停用液态动效，「丰富」会退回默认。</p>
+            <p>系统要求减弱动效时，全部档位都按「关闭」执行。</p>
           </InfoHint>
         </span>
       </header>
       <SegmentedControl v-model="motionChoice" class="perfseg" :options="MOTION_OPTIONS" />
-      <p class="pnote t-2">画质管玻璃画不画得出来，动效管界面动不动；系统要求减弱动效时全部按「关闭」执行。</p>
+      <p class="pnote t-2">画质管玻璃与性能，动效管界面反馈；「流畅」会停用液态动效，系统减弱动效时全部按「关闭」执行。</p>
     </section>
     </div>
   </div>

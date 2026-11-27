@@ -20,9 +20,12 @@ export const useLedgerStore = defineStore('ledger', () => {
   /** 近 6 个月窗口流水（含当前月），按日期倒序 */
   const entries = ref<LedgerEntry[]>([])
   const settings = ref<LedgerSettings | null>(null)
-  const loading = ref(false)
+  const loading = ref(true)
+  const error = ref('')
   /** 已加载的窗口范围，避免重复请求 */
   let loadedWindow: [string, string] | null = null
+  let monthSeq = 0
+  let mutationTail: Promise<void> = Promise.resolve()
 
   const winStart = computed(() => startOfMonth(addMonths(`${month.value}-01`, -5)))
   const winEnd = computed(() => endOfMonth(`${month.value}-01`))
@@ -31,13 +34,19 @@ export const useLedgerStore = defineStore('ledger', () => {
     if (m) month.value = m
     const start = winStart.value
     const end = winEnd.value
-    if (loadedWindow && loadedWindow[0] === start && loadedWindow[1] === end) return
+    const seq = ++monthSeq
+    if (!error.value && loadedWindow && loadedWindow[0] === start && loadedWindow[1] === end) return
     loading.value = true
+    error.value = ''
     try {
-      entries.value = await ledgerService.listLedgerEntries(start, end)
+      const list = await ledgerService.listLedgerEntries(start, end)
+      if (seq !== monthSeq) return
+      entries.value = list
       loadedWindow = [start, end]
+    } catch (e) {
+      if (seq === monthSeq) error.value = e instanceof Error ? e.message : '流水读取失败'
     } finally {
-      loading.value = false
+      if (seq === monthSeq) loading.value = false
     }
   }
 
@@ -45,24 +54,50 @@ export const useLedgerStore = defineStore('ledger', () => {
     settings.value = await ledgerService.getLedgerBudget()
   }
 
-  /** 写操作后刷新窗口（保证聚合与新数据一致） */
+  /** 写操作后刷新窗口；序号保证旧月份/旧请求不会覆盖当前结果。 */
   async function refresh(): Promise<void> {
-    entries.value = await ledgerService.listLedgerEntries(winStart.value, winEnd.value)
+    const start = winStart.value
+    const end = winEnd.value
+    const seq = ++monthSeq
+    loading.value = true
+    error.value = ''
+    try {
+      const list = await ledgerService.listLedgerEntries(start, end)
+      if (seq !== monthSeq) return
+      entries.value = list
+      loadedWindow = [start, end]
+    } catch (e) {
+      if (seq === monthSeq) error.value = e instanceof Error ? e.message : '流水刷新失败'
+      throw e
+    } finally {
+      if (seq === monthSeq) loading.value = false
+    }
+  }
+
+  /** 写操作按用户发起顺序串行，避免慢请求回写覆盖新操作。 */
+  function enqueueMutation(action: () => Promise<unknown>): Promise<void> {
+    const run = mutationTail.then(async () => {
+      await action()
+      try {
+        await refresh()
+      } catch {
+        // 写入已成功；列表刷新失败由页面错误条承载，不能把表单弹回去诱发重复记账。
+      }
+    })
+    mutationTail = run.catch(() => undefined)
+    return run
   }
 
   async function create(input: LedgerEntryInput): Promise<void> {
-    await ledgerService.createLedgerEntry(input)
-    await refresh()
+    await enqueueMutation(() => ledgerService.createLedgerEntry(input))
   }
 
   async function update(entry: LedgerEntry): Promise<void> {
-    await ledgerService.updateLedgerEntry(entry)
-    await refresh()
+    await enqueueMutation(() => ledgerService.updateLedgerEntry(entry))
   }
 
   async function remove(id: number): Promise<void> {
-    await ledgerService.deleteLedgerEntry(id)
-    await refresh()
+    await enqueueMutation(() => ledgerService.deleteLedgerEntry(id))
   }
 
   async function setBudget(monthlyBudgetCents: number): Promise<void> {
@@ -120,6 +155,7 @@ export const useLedgerStore = defineStore('ledger', () => {
     entries,
     settings,
     loading,
+    error,
     monthEntries,
     monthExpenseCents,
     monthIncomeCents,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronRight, Dumbbell, Plus, Search, SlidersHorizontal, Star } from 'lucide-vue-next'
+import { AlertCircle, ChevronRight, Dumbbell, Plus, Search, SlidersHorizontal, Star } from 'lucide-vue-next'
 
 import ExerciseFilterSheet from '@/components/exercise/ExerciseFilterSheet.vue'
 import ExerciseFormSheet from '@/components/exercise/ExerciseFormSheet.vue'
@@ -121,6 +121,14 @@ function onSaved(e: ExerciseRecord): void {
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
+    <EmptyState v-if="lib.error" :icon="AlertCircle" title="动作库读取失败" :hint="lib.error">
+      <template #action>
+        <button class="cta" type="button" @click="lib.load(true)">重试</button>
+      </template>
+    </EmptyState>
+    <EmptyState v-else-if="lib.loading || !lib.loaded" :icon="Dumbbell" title="正在读取动作库…" hint="动作、肌群与训练参数正在加载" />
+
+    <template v-else>
     <div class="searchrow row">
       <Search :size="15" />
       <input v-model="kw" class="search" type="search" placeholder="搜索动作名" aria-label="搜索动作" />
@@ -192,6 +200,7 @@ function onSaved(e: ExerciseRecord): void {
       title="没有匹配的动作"
       hint="换个关键词，或在下方新建一个自定义动作"
     />
+    </template>
 
     <button class="newrow row center" @click="startCreate">
       <Plus :size="17" /> 新建自定义动作

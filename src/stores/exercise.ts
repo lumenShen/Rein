@@ -6,7 +6,7 @@ import { defineStore } from 'pinia'
 import { exerciseService } from '@/services/exerciseService'
 import { useNutritionStore } from '@/stores/nutrition'
 import { addDays, startOfWeek, todayStr } from '@/utils/date'
-import type { Workout, WorkoutInput } from '@/types'
+import type { Workout, WorkoutInput, WorkoutUpdateInput } from '@/types'
 
 export const useExerciseStore = defineStore('exercise', () => {
   const weekWorkouts = ref<Workout[]>([])
@@ -41,6 +41,18 @@ export const useExerciseStore = defineStore('exercise', () => {
     const jobs: Promise<void>[] = [loadWeek(input.date), useNutritionStore().loadSummary(todayStr())]
     if (allLoaded) jobs.push(loadAll())
     await Promise.all(jobs)
+  }
+
+  async function update(id: number, input: WorkoutUpdateInput, previousDate: string): Promise<Workout> {
+    const updated = await exerciseService.updateWorkout(id, input)
+    const today = todayStr()
+    const jobs: Promise<void>[] = [loadWeek()]
+    if (previousDate === today || input.date === today) {
+      jobs.push(useNutritionStore().loadSummary(today))
+    }
+    if (allLoaded) jobs.push(loadAll())
+    await Promise.all(jobs)
+    return updated
   }
 
   async function remove(id: number): Promise<void> {
@@ -84,5 +96,5 @@ export const useExerciseStore = defineStore('exercise', () => {
 
   const recent = computed(() => [...weekWorkouts.value].sort((a, b) => b.id - a.id).slice(0, 8))
 
-  return { weekWorkouts, allWorkouts, loading, loadWeek, loadAll, add, remove, todayKcal, weekKcal, weekMinutes, minutesByDay, recent, strengthRev, bumpStrength }
+  return { weekWorkouts, allWorkouts, loading, loadWeek, loadAll, add, update, remove, todayKcal, weekKcal, weekMinutes, minutesByDay, recent, strengthRev, bumpStrength }
 })

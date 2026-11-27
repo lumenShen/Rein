@@ -1115,7 +1115,7 @@ html[data-motion='rich'] .glow-layer:active::after {
    矮卡填满行高——灰底从卡下漏出来会读成「没画完」。 */
 .desk-main .d-grid {
   display: grid;
-  grid-template-columns: repeat(var(--d-cols, 2), minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: var(--desk-gap);
   align-items: stretch;
 }
@@ -1132,9 +1132,20 @@ html[data-motion='rich'] .glow-layer:active::after {
 /* 主区 + 侧栏：详情/表单页在桌面上的基本构图（正文在左，上下文在右） */
 .desk-main .d-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--desk-aside);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, var(--desk-aside));
   gap: var(--desk-gap);
   align-items: start;
+}
+
+@media (max-width: 1150px) {
+  html[data-inspector='on'] .desk-main .d-grid,
+  html[data-inspector='on'] .desk-main .d-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-inspector='on'] .desk-main .d-list {
+    columns: 1;
+  }
 }
 
 /* ---------- 桌面：游离子孙的落点（teleport 到 body 的那几个） ----------

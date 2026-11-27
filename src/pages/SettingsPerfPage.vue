@@ -10,6 +10,7 @@ import PageHeader from '@/components/layout/PageHeader.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import GlassTunerSheet from '@/components/perf/GlassTunerSheet.vue'
 import { usePressGlow } from '@/composables/usePressGlow'
+import { useToast } from '@/composables/useToast'
 import { motionEffective, motionLevel, motionRich, setMotionLevel, MOTION_LEVELS, type MotionLevel } from '@/system/motion'
 import { PERF_MODES, perfMode, setPerfMode, supportsSvgBackdrop, type PerfMode } from '@/system/perf'
 import { GLASS_PARAM_SPECS } from '@/system/glassParams'
@@ -39,11 +40,17 @@ import { GLASS_PARAM_SPECS } from '@/system/glassParams'
  * 见 GlassSurface 头注释；现在**可调**，见 system/glassParams），
  * 调用处只给尺寸、圆角与"压在暗底上"这一个语义（tint="dark"）。
  */
+const { toast } = useToast()
+
+function reportSave(ok: boolean): void {
+  if (!ok) toast('本地保存失败，设置仅在本次生效')
+}
+
 const mode = computed({
   get: () => perfMode.value as string,
   // 与设置页同一条白名单：分段控件的值也只认清单里有的档
   set: (v: string) => {
-    if (PERF_MODES.some((m) => m.value === v)) setPerfMode(v as PerfMode)
+    if (PERF_MODES.some((m) => m.value === v)) reportSave(setPerfMode(v as PerfMode))
   },
 })
 
@@ -94,7 +101,7 @@ const MOTION_OPTIONS = MOTION_LEVELS.map(({ value, label }) => ({ value, label }
 const motionMode = computed({
   get: () => motionLevel.value as string,
   set: (v: string) => {
-    if (MOTION_LEVELS.some((m) => m.value === v)) setMotionLevel(v as MotionLevel)
+    if (MOTION_LEVELS.some((m) => m.value === v)) reportSave(setMotionLevel(v as MotionLevel))
   },
 })
 

@@ -15,7 +15,8 @@ import {
 
 import { usePomodoroStore } from '@/stores/pomodoro'
 import { useTodoStore } from '@/stores/todo'
-import { minToHHmm, todayStr } from '@/utils/date'
+import { useToday } from '@/composables/useToday'
+import { minToHHmm } from '@/utils/date'
 import {
   planCount,
   planUntil,
@@ -48,7 +49,7 @@ const emit = defineEmits<{ close: []; settings: [] }>()
 
 const pomo = usePomodoroStore()
 const todo = useTodoStore()
-const today = todayStr()
+const { today } = useToday()
 
 const mode = ref<Mode>('smart')
 const nowMs = ref(Date.now())
@@ -309,13 +310,17 @@ function onKeydown(e: KeyboardEvent): void {
 
 /* ---------- 生命周期 ---------- */
 
+watch(today, () => {
+  if (props.open) void todo.loadDay(today.value)
+})
+
 watch(
   () => props.open,
   (open) => {
     if (open) {
       mode.value = props.initialMode
       nowMs.value = Date.now()
-      void todo.loadDay(today)
+      void todo.loadDay(today.value)
       resetUntilDefault()
       window.addEventListener('keydown', onKeydown)
       tickTimer ??= setInterval(() => {

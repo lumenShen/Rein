@@ -1,6 +1,6 @@
 /** 饮食域 IPC 封装 · 命令名与 src-tauri/src/modules/diet/commands.rs 一一对应 */
 
-import type { Food, FoodCreateInput, FoodCreateResult, MealLog, MealLogInput, RecipePref } from '@/types'
+import type { Food, FoodCreateInput, FoodCreateResult, MealLog, MealLogInput, MealLogUpdateInput, RecipePref } from '@/types'
 import { invoke } from './transport'
 
 export const dietService = {
@@ -23,6 +23,9 @@ export const dietService = {
     invoke<MealLog[]>('list_meals_range', { startDate, endDate }),
 
   logMeal: (input: MealLogInput) => invoke<MealLog>('log_meal', { ...input }),
+
+  updateMeal: (id: number, input: MealLogUpdateInput) =>
+    invoke<MealLog>('update_meal', { id, input }),
 
   deleteMeal: (id: number) => invoke<void>('delete_meal', { id }),
 

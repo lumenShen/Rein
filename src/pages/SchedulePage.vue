@@ -11,10 +11,11 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import { useToast } from '@/composables/useToast'
+import { useToday } from '@/composables/useToday'
 import { isSessionLostMessage, useCampusStore } from '@/stores/campus'
 import { useFeaturesStore } from '@/stores/features'
 import type { CourseDetail, ScheduleEntry } from '@/types'
-import { addDays, addMonths, endOfMonth, fmtDateCn, startOfMonth, todayStr, weekDates } from '@/utils/date'
+import { addDays, addMonths, endOfMonth, fmtDateCn, startOfMonth, weekDates } from '@/utils/date'
 
 type ViewKey = 'day' | 'week' | 'month'
 
@@ -25,7 +26,10 @@ const toast = useToast()
 const features = useFeaturesStore()
 
 const view = ref<ViewKey>('week')
-const anchor = ref(todayStr())
+const { today } = useToday()
+const anchor = ref(today.value)
+const initializing = ref(true)
+const initError = ref('')
 
 const viewOptions: { value: ViewKey; label: string }[] = [
   { value: 'day', label: '日' },
@@ -57,7 +61,7 @@ const periodLabel = computed(() => {
 })
 
 const isThisPeriod = computed(() => {
-  const t = todayStr()
+  const t = today.value
   const [from, to] = range.value
   return t >= from && t <= to
 })
@@ -77,8 +81,10 @@ const semesterCovers = computed(() => {
   return from <= s.endDate && to >= s.startDate
 })
 
-const showEmpty = computed(() => !store.hasAccount)
-const showNoData = computed(() => store.hasAccount && store.entries.length === 0)
+const showError = computed(() => initError.value || store.error)
+const showLoading = computed(() => initializing.value || (store.loading && !showError.value))
+const showEmpty = computed(() => !initializing.value && !showError.value && !store.hasAccount)
+const showNoData = computed(() => !showLoading.value && !showError.value && store.hasAccount && store.entries.length === 0)
 
 /**
  * 「没课」有三种，说法必须分开 —— 用户下一步要做的事完全不同：
@@ -105,7 +111,7 @@ function step(dir: -1 | 1): void {
 }
 
 function goToday(): void {
-  anchor.value = todayStr()
+  anchor.value = today.value
 }
 
 function goDay(date: string): void {
@@ -188,11 +194,21 @@ async function healLegacyData(): Promise<void> {
   await onSync()
 }
 
-onMounted(async () => {
-  await store.init()
-  await reload()
-  await healLegacyData()
-})
+async function initialize(): Promise<void> {
+  initializing.value = true
+  initError.value = ''
+  try {
+    await store.init()
+    await reload()
+    await healLegacyData()
+  } catch (e) {
+    initError.value = e instanceof Error ? e.message : '课表初始化失败'
+  } finally {
+    initializing.value = false
+  }
+}
+
+onMounted(initialize)
 
 watch([view, anchor], reload)
 </script>
@@ -219,9 +235,30 @@ watch([view, anchor], reload)
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
+    <EmptyState
+      v-if="showError"
+      :icon="CalendarX2"
+      title="课表读取失败"
+      :hint="showError"
+    >
+      <template v-if="isSessionLostMessage(showError)" #action>
+        <RouterLink :to="{ name: 'campus-settings' }" class="cta">去重新登录</RouterLink>
+      </template>
+      <template v-else #action>
+        <button class="cta" type="button" @click="initialize">重试</button>
+      </template>
+    </EmptyState>
+
+    <EmptyState
+      v-else-if="showLoading"
+      :icon="GraduationCap"
+      title="正在读取课表…"
+      hint="正在加载当前视图的课程与时段"
+    />
+
     <!-- 空态：还没绑定学校教务系统 -->
     <EmptyState
-      v-if="showEmpty"
+      v-else-if="showEmpty"
       :icon="CalendarOff"
       title="还没有课表数据"
       hint="绑定学校教务系统后，课表会自动同步到这里，并写进时间线"

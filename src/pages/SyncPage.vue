@@ -42,6 +42,8 @@ const SYNC_ERRORS = {
   pairClaim: '配对失败，请重试',
   run: '同步没成功，请稍后重试',
   settings: '设置没保存成功，请重试',
+  refresh: '设备状态读取失败，请重试',
+  pairPoll: '配对连接中断，请重新开码',
 } as const
 
 function failToast(key: keyof typeof SYNC_ERRORS, e: unknown): void {
@@ -56,6 +58,9 @@ const offer = ref<string | null>(null)
 const claimCode = ref('')
 const lastRun = ref<SyncRunStats | null>(null)
 const peerSheet = ref<SyncPeerInfo | null>(null)
+const loadError = ref('')
+const pairError = ref('')
+let pollErrors = 0
 let pollTimer: number | null = null
 
 /** 自动同步：开关与间隔都在 Rust 侧（`sync_meta`），界面只读写，不自己计时 */
@@ -144,9 +149,15 @@ function secs(ms: number): string {
 }
 
 async function refresh(): Promise<void> {
-  const [st, set] = await Promise.all([syncService.status(), syncService.settings()])
-  status.value = st
-  settings.value = set
+  try {
+    const [st, set] = await Promise.all([syncService.status(), syncService.settings()])
+    status.value = st
+    settings.value = set
+    loadError.value = ''
+  } catch (e) {
+    loadError.value = '无法读取设备状态，请检查同步服务后重试'
+    failToast('refresh', e)
+  }
 }
 
 /** 自动同步开关：先落本地（开关手感不等 IPC），失败再翻回去 */
@@ -174,6 +185,8 @@ async function pairStart(): Promise<void> {
   try {
     const res = await syncService.pairStart()
     offer.value = res.code
+    pairError.value = ''
+    pollErrors = 0
     stopPoll()
     // 另一台输完码这边就该收尾；过期由服务端判，这里只管问
     pollTimer = window.setInterval(() => void pollOnce(), 2000)
@@ -190,11 +203,19 @@ async function pollOnce(): Promise<void> {
     if (st.peer) {
       stopPoll()
       offer.value = null
+      pairError.value = ''
+      pollErrors = 0
       await refresh()
       toast(`配对完成：${st.peer.name || st.peer.short} 已加入`)
     }
-  } catch {
-    // 轮询失败不打扰：下一拍再试，码过期会由服务端返回错误
+  } catch (e) {
+    pollErrors += 1
+    if (pollErrors >= 3) {
+      stopPoll()
+      offer.value = null
+      pairError.value = '配对连接中断，请重新开码后再试'
+      failToast('pairPoll', e)
+    }
   }
 }
 
@@ -291,6 +312,11 @@ onUnmounted(() => {
     <PageHeader title="设备" back />
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
+
+    <p v-if="loadError" class="sync-error" role="alert">
+      <span class="flex-1">{{ loadError }}</span>
+      <button type="button" class="link" @click="refresh">重试</button>
+    </p>
 
     <!-- 桌面栅格：壳层只把 .page 的**直接子项**摊成两栏，而这一页要的是
          「本机 | 已配对设备 并排 + 加一台设备通栏」，所以自带一层 .d-grid 承接。
@@ -401,6 +427,8 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <p v-if="pairError" class="sync-error" role="alert">{{ pairError }}</p>
+
       <div v-if="offer" class="code">
         <b class="mono">{{ offer }}</b>
         <em class="t-2">在另一台上输入这串码，这边会自动收尾</em>
@@ -436,6 +464,19 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.sync-error {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
+  padding: var(--sp-10) var(--pad-inline);
+  border-radius: var(--radius-m);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-body);
+}
+
 .page {
   /* 顶部走 --page-pad-top（手机 12 / 桌面 40）：状态栏那段已由 --safe-top 让开，
      这里只剩页头与内容之间那一档呼吸 */

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter, type NavigationGuardNext } from 'vue-router'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-vue-next'
 
 import ExercisePickerSheet from '@/components/exercise/ExercisePickerSheet.vue'
 import NumberStepper from '@/components/common/NumberStepper.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
+import SheetModal from '@/components/common/SheetModal.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
@@ -38,6 +39,56 @@ const exercises = ref<PlanExercise[]>([])
 const ready = ref(false)
 const saving = ref(false)
 const pickerIdx = ref<number | null>(null)
+const baseline = ref('')
+const dirty = ref(false)
+const leaveOpen = ref(false)
+let pendingLeave: NavigationGuardNext | null = null
+
+function snapshot(): string {
+  return JSON.stringify({
+    name: name.value,
+    subtitle: subtitle.value,
+    workoutType: workoutType.value,
+    exercises: exercises.value,
+  })
+}
+
+watch(
+  [name, subtitle, workoutType, exercises],
+  () => {
+    if (ready.value) dirty.value = snapshot() !== baseline.value
+  },
+  { deep: true },
+)
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!dirty.value || saving.value) return true
+  pendingLeave = next
+  leaveOpen.value = true
+  return false
+})
+
+function keepEditing(): void {
+  pendingLeave = null
+  leaveOpen.value = false
+}
+
+function discardAndLeave(): void {
+  dirty.value = false
+  leaveOpen.value = false
+  const next = pendingLeave
+  pendingLeave = null
+  next?.()
+}
+
+function beforeUnload(e: BeforeUnloadEvent): void {
+  if (!dirty.value) return
+  e.preventDefault()
+  e.returnValue = ''
+}
+
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
 function defaultExercise(kind: PlanExerciseKind): PlanExercise {
   return {
@@ -75,6 +126,8 @@ onMounted(async () => {
       return
     }
   }
+  baseline.value = snapshot()
+  dirty.value = false
   ready.value = true
 })
 
@@ -203,6 +256,7 @@ async function save(): Promise<void> {
       exercises: finalExercises,
     }
     await planStore.upsert(input)
+    dirty.value = false
     toast(isNew.value ? '课程已创建' : '课程已更新')
     void router.replace(`/sports/plans/${id.value}`)
   } catch (e) {
@@ -342,6 +396,16 @@ async function save(): Promise<void> {
     </template>
     </div>
   </div>
+
+  <SheetModal :open="leaveOpen" title="放弃未保存的修改？" initial-snap="small" @close="keepEditing">
+    <p class="leave-copy">课程名称、动作和处方还没保存。离开后，这些修改会丢失。</p>
+    <template #footer>
+      <div class="leave-actions">
+        <button type="button" class="leave-keep" @click="keepEditing">继续编辑</button>
+        <button type="button" class="leave-drop" @click="discardAndLeave">放弃并离开</button>
+      </div>
+    </template>
+  </SheetModal>
 </template>
 
 <style scoped>
@@ -352,6 +416,35 @@ async function save(): Promise<void> {
 .field {
   display: block;
   padding: var(--sp-8) 0;
+}
+
+.leave-copy {
+  color: var(--text-2);
+  font-size: var(--fs-subhead);
+  line-height: var(--lh-body);
+}
+
+.leave-actions {
+  display: flex;
+  gap: var(--gap-md);
+}
+
+.leave-actions button {
+  flex: 1;
+  min-height: var(--control-md);
+  border-radius: var(--radius-l);
+  font-size: var(--fs-callout);
+  font-weight: var(--fw-semibold);
+}
+
+.leave-keep {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+.leave-drop {
+  background: var(--danger-strong);
+  color: var(--on-accent);
 }
 
 .field + .field {

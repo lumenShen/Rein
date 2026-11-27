@@ -128,8 +128,13 @@ onMounted(async () => {
       :title="error"
       :hint="isSessionLostMessage(error) ? '重新登录一次教务系统就能继续看' : '检查课表配置里的登录状态后重试'"
     >
-      <template v-if="isSessionLostMessage(error)" #action>
-        <RouterLink :to="{ name: 'campus-settings' }" class="cta">去重新登录</RouterLink>
+      <template v-if="isSessionLostMessage(error) || error === '还没有绑定教务系统账号'" #action>
+        <RouterLink :to="{ name: 'campus-settings' }" class="cta">
+          {{ isSessionLostMessage(error) ? '去重新登录' : '去绑定教务账号' }}
+        </RouterLink>
+      </template>
+      <template v-else #action>
+        <button class="cta" type="button" @click="load()">重试</button>
       </template>
     </EmptyState>
 
@@ -200,12 +205,25 @@ onMounted(async () => {
           <Search :size="15" />
           <input v-model="keyword" type="search" placeholder="搜索课程名或代码" />
         </div>
-        <ul class="courses" data-rubber-self>
+        <p class="course-note t-3">
+          这里只读展示培养方案课程；上课时间与当前安排请到<RouterLink :to="{ name: 'campus-schedule' }">我的课表</RouterLink>查看。
+        </p>
+        <ul v-if="filteredCourses.length" class="courses" data-rubber-self>
           <li v-for="c in filteredCourses" :key="c.id" class="course">
             <span class="cname">{{ c.nameZh }}</span>
             <span v-if="c.code" class="ccode num">{{ c.code }}</span>
           </li>
         </ul>
+        <EmptyState
+          v-else
+          :icon="Search"
+          title="没有匹配的课程"
+          hint="换个课程名或代码试试，培养方案里的课程清单不会因搜索改变。"
+        >
+          <template #action>
+            <button class="cta" type="button" @click="keyword = ''">清除搜索</button>
+          </template>
+        </EmptyState>
       </section>
       </div>
 
@@ -219,6 +237,17 @@ onMounted(async () => {
 .page {
   /* 顶距走 --page-pad-top（手机 12 / 桌面 40），与全库页面同一处来源 */
   padding: var(--page-pad-top) var(--page-pad-x) var(--page-pad-bottom);
+}
+
+.course-note {
+  margin: var(--gap-sm) 0;
+  color: var(--text-2);
+  line-height: var(--lh-caption);
+}
+
+.course-note a {
+  color: var(--accent);
+  font-weight: var(--fw-medium);
 }
 
 .sec {

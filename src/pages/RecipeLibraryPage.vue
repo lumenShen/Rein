@@ -7,7 +7,9 @@ import InfoHint from '@/components/common/InfoHint.vue'
 import PillChip from '@/components/common/PillChip.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
+import RecipeDetailSheet from '@/components/diet/RecipeDetailSheet.vue'
 import { dietService } from '@/services/dietService'
+import { useToast } from '@/composables/useToast'
 import { useModelsStore } from '@/stores/models'
 import { useNutritionStore } from '@/stores/nutrition'
 import { generateAiMenu, type AiMenuMeal } from '@/ai/recipeGen'
@@ -20,9 +22,17 @@ import { isRestricted, RECIPES } from '@/utils/recipeFilter'
  */
 const n = useNutritionStore()
 const models = useModelsStore()
+const { toast } = useToast()
 
 const filter = ref<string>('all')
 const prefs = ref<Record<string, 1 | -1>>({})
+const detailOpen = ref(false)
+const selectedRecipe = ref<RecipeTemplate | null>(null)
+
+function openRecipe(recipe: RecipeTemplate): void {
+  selectedRecipe.value = recipe
+  detailOpen.value = true
+}
 
 onMounted(async () => {
   await Promise.all([n.loadProfile(), loadPrefs()])
@@ -67,7 +77,7 @@ async function togglePref(r: RecipeTemplate, rating: 1 | -1): Promise<void> {
     }
   } catch (e) {
     await loadPrefs()
-    throw e
+    toast(e instanceof Error ? e.message : '偏好保存失败，请重试')
   }
 }
 
@@ -88,14 +98,14 @@ async function startAiMenu(): Promise<void> {
 }
 
 async function generateAi(): Promise<void> {
-  const profile = n.profile
-  if (!profile) throw new Error('个人资料未加载')
   aiGenerating.value = true
   aiError.value = ''
   aiMeals.value = []
   aiWarnings.value = []
   aiStreamMeals.value = []
   try {
+    const profile = n.profile
+    if (!profile) throw new Error('个人资料未加载，请稍后重试')
     await models.load()
     const cfg = models.defaultModel()
     if (!cfg) throw new Error('未配置 AI 模型，请先在「AI › 管理模型」添加')
@@ -171,7 +181,7 @@ const aiTotal = computed(() =>
     <!-- 食谱列表（d-grid：桌面上按 2 栏摊开，栏数缺省就是 2） -->
     <ul class="rlist d-grid">
       <li v-for="r in visible" :key="r.id" class="row rrow" :class="{ off: isRestrictedFor(r) }">
-        <div class="col flex-1" style="gap: var(--gap-tight); min-width: 0">
+        <button type="button" class="ropen col flex-1" style="gap: var(--gap-tight); min-width: 0" :aria-label="`查看食谱 ${r.name}`" @click="openRecipe(r)">
           <p class="rname">
             {{ r.name }}<em class="slot">{{ MEAL_TYPE_LABEL[r.mealType] }}</em>
             <span v-if="isRestrictedFor(r)" class="badge">忌口</span>
@@ -186,7 +196,7 @@ const aiTotal = computed(() =>
             <span v-for="a in r.allergens" :key="a" class="tag">{{ a }}</span>
             <span v-if="!r.allergens.length" class="tag">无常见过敏原</span>
           </p>
-        </div>
+        </button>
         <div class="row prefs">
           <button
             class="pf pressable"
@@ -269,6 +279,8 @@ const aiTotal = computed(() =>
         </template>
       </div>
     </SheetModal>
+
+    <RecipeDetailSheet :open="detailOpen" :recipe="selectedRecipe" @close="detailOpen = false" />
     </div>
   </div>
 </template>
@@ -353,6 +365,17 @@ const aiTotal = computed(() =>
   margin-top: var(--gap-md);
   display: grid;
   gap: var(--gap-md);
+}
+
+.ropen {
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.ropen:active .rname {
+  color: var(--accent);
 }
 
 .rrow {

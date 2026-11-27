@@ -56,6 +56,9 @@ const conflictOpen = ref(false)
 const countdownOpen = ref(false)
 /** 开跑前预检进行中（按钮切成「正在准备定位…」） */
 const preflightBusy = ref(false)
+const starting = ref(false)
+const saving = ref(false)
+const discarding = ref(false)
 /** 预检判定为「没有后台保活」：照跑，但在准备页说明这次按无 GPS 兜底 */
 const preflightDegraded = ref(false)
 /**
@@ -100,20 +103,31 @@ onMounted(async () => {
  * 与 run.ts 的 armKeepalive 同一形状（那边等的是同一个字段）。
  */
 const trackStatus = ref<TrackingStatus | null>(null)
+const trackStatusBusy = ref(false)
+const trackStatusError = ref('')
 /** 通知权限提示被用户关掉：本次跑步不再提（下次进入重新评估） */
 const notifyNudgeClosed = ref(false)
 
 async function refreshTrackStatus(): Promise<void> {
-  for (let i = 0; i < 5; i += 1) {
-    const st = await trackingService.status()
-    if (!st.busy) {
-      trackStatus.value = st
-      return
+  if (trackStatusBusy.value) return
+  trackStatusBusy.value = true
+  trackStatusError.value = ''
+  try {
+    for (let i = 0; i < 5; i += 1) {
+      const st = await trackingService.status()
+      if (!st.busy) {
+        trackStatus.value = st
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400))
     }
-    await new Promise((resolve) => setTimeout(resolve, 400))
+    trackStatus.value = await trackingService.status()
+  } catch (e) {
+    trackStatus.value = null
+    trackStatusError.value = e instanceof Error ? e.message : '后台记录状态读取失败'
+  } finally {
+    trackStatusBusy.value = false
   }
-  // 五次仍未收敛：按最后一次读到的值落状态（busy 与 granted 同读，不会误报「已授权」）
-  trackStatus.value = await trackingService.status()
 }
 
 // 运行态与准备页都要这份状态（就绪行 / 通知提示），阶段一变就重读一次；
@@ -180,6 +194,7 @@ const notifyNudge = computed(() => {
  * 它是这次记录可不可信的承诺，不是通用安抚语；没有原生保活的桌面/浏览器不显示这一行。
  */
 const readyLine = computed(() => {
+  if (trackStatusError.value) return '后台记录状态读取失败 · 本次仍可开始'
   const st = trackStatus.value
   if (!st || !st.native) return ''
   return st.granted ? '后台记录：已就绪 · 锁屏也继续记录' : '未授权 · 锁屏后可能中断'
@@ -231,6 +246,14 @@ const manualKm = computed<number | null>(() => {
   const v = Number(t)
   if (!Number.isFinite(v) || v <= 0) return null
   return kmOverridden.value ? v : null
+})
+
+const manualKmError = computed(() => {
+  const t = String(manualKmText.value ?? '').trim()
+  if (!t) return ''
+  const v = Number(t)
+  if (!Number.isFinite(v) || v <= 0 || v > 999) return '请输入 0 到 999 之间的有效距离'
+  return ''
 })
 
 /**
@@ -962,6 +985,7 @@ const dragStyle = computed(() =>
 
 function onHandleDown(e: PointerEvent): void {
   if (r.phase !== 'running' && r.phase !== 'paused') return
+  if (e.button !== 0) return
   if ((e.target as HTMLElement).closest('button')) return
   const el = e.currentTarget as HTMLElement | null
   if (!el) return
@@ -1000,6 +1024,12 @@ function onHandleUp(): void {
   scheduleSyncCanvas() // 抽屉落定 = 画布窗口的下沿确定，重量一次
 }
 
+function onHandleCancel(): void {
+  drawerDragging.value = false
+  dragY.value = null
+  scheduleSyncCanvas()
+}
+
 function syncManualKm(): void {
   manualKmText.value = r.km > 0.005 ? r.km.toFixed(2) : ''
 }
@@ -1015,21 +1045,42 @@ function minimize(): void {
  * 把它做成硬门等于用权限绑架用户：没给定位就不能跑步是说不通的。
  */
 async function onGo(): Promise<void> {
-  if (preflightBusy.value) return
+  if (preflightBusy.value || starting.value) return
   preflightBusy.value = true
   preflightDegraded.value = false
   try {
     const res = await r.preflight()
     preflightDegraded.value = res === 'degraded'
+    countdownOpen.value = true
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '定位准备失败，请重试')
   } finally {
     preflightBusy.value = false
   }
-  countdownOpen.value = true
 }
 
 async function onCountdownDone(): Promise<void> {
-  const res = await r.begin()
-  if (res === 'conflict' && r.courseConflict) conflictOpen.value = true
+  if (starting.value) return
+  starting.value = true
+  try {
+    const res = await r.begin()
+    if (res === 'conflict' && r.courseConflict) conflictOpen.value = true
+  } catch (e) {
+    if (r.sessionId) {
+      try {
+        const restored = await r.hydrateFromServer()
+        if (restored) {
+          toast('已恢复本次跑步，可以继续')
+          return
+        }
+      } catch {
+        /* 恢复失败保留原始错误 */
+      }
+    }
+    toast(e instanceof Error ? e.message : '开跑失败，请重试')
+  } finally {
+    starting.value = false
+  }
 }
 
 function onEndPick(value: string): void {
@@ -1044,6 +1095,8 @@ function onEndPick(value: string): void {
 }
 
 async function doDiscard(): Promise<void> {
+  if (discarding.value) return
+  discarding.value = true
   try {
     await r.discard()
     toast('已放弃本次跑步')
@@ -1051,10 +1104,18 @@ async function doDiscard(): Promise<void> {
   } catch (e) {
     // 放弃失败：总结/暂停态保留，可原样再点（会话仍 active）
     toast(e instanceof Error ? e.message : '放弃失败，请重试')
+  } finally {
+    discarding.value = false
   }
 }
 
 async function doSave(): Promise<void> {
+  if (saving.value) return
+  if (manualKmError.value) {
+    toast(manualKmError.value)
+    return
+  }
+  saving.value = true
   // String(...) 归一：type=number 的 v-model 给回的是**数字**而非字符串
   // （理由见 kmOverridden 的注释）。parseFloat 对数字虽能工作，
   // 但那依赖隐式转字符串，属于「碰巧对」，与上面两处保持同一写法。
@@ -1069,6 +1130,8 @@ async function doSave(): Promise<void> {
   } catch (e) {
     // 写库本身失败：停在总结页、保留补填距离，按钮可再点（重试用同一 sessionId）
     toast(e instanceof Error ? e.message : '保存失败，请重试')
+  } finally {
+    saving.value = false
   }
 }
 
@@ -1179,7 +1242,7 @@ function bumpKm(delta: number): void {
         @pointerdown="onHandleDown"
         @pointermove="onHandleMove"
         @pointerup="onHandleUp"
-        @pointercancel="onHandleUp"
+        @pointercancel="onHandleCancel"
       >
         <span
           class="sat"
@@ -1250,9 +1313,9 @@ function bumpKm(delta: number): void {
                否则冷启动第一眼会把「已就绪」读成「未授权」。 -->
           <p v-if="readyLine" class="pf-line">{{ readyLine }}</p>
 
-          <button class="gobtn glass-surface glow-layer" :disabled="preflightBusy" @click="onGo">
+          <button class="gobtn glass-surface glow-layer" :disabled="preflightBusy || starting" @click="onGo">
             <Play :size="30" :stroke-width="2.6" />
-            <span>{{ preflightBusy ? '正在准备定位…' : '开始跑步' }}</span>
+            <span>{{ starting ? '正在开始…' : preflightBusy ? '正在准备定位…' : '开始跑步' }}</span>
           </button>
           <!-- 预检降级：照跑，但先说清这次拿不到后台保活（结束后可补填距离） -->
           <p v-if="preflightDegraded" class="hint warnhint">
@@ -1474,6 +1537,7 @@ function bumpKm(delta: number): void {
               placeholder="未测得，可补填"
             />
           </label>
+          <p v-if="manualKmError" class="hint left error" role="alert">{{ manualKmError }}</p>
           <p class="hint left">{{ distHint }}</p>
           <!-- 有断档/自动暂停时给一条捷径：轨迹是没被闸门丢点的原始记录，
                断档之后它比入账距离更接近实际跑量 -->
@@ -1481,8 +1545,12 @@ function bumpKm(delta: number): void {
             按轨迹距离 {{ (r.trackM / 1000).toFixed(2) }} km 修正
           </button>
 
-          <button class="primary" @click="doSave">保存训练</button>
-          <button class="ghost glass-surface glow-layer danger" @click="endOpen = true">放弃不保存</button>
+          <button class="primary" :disabled="saving || !!manualKmError" @click="doSave">
+            {{ saving ? '正在保存…' : '保存训练' }}
+          </button>
+          <button class="ghost glass-surface glow-layer danger" :disabled="discarding" @click="endOpen = true">
+            {{ discarding ? '正在放弃…' : '放弃不保存' }}
+          </button>
         </div>
       </div>
     </main>
@@ -1558,6 +1626,7 @@ function bumpKm(delta: number): void {
 }
 
 /* 底图网格：向右上渐隐 */
+/* impeccable-disable-next-line codex-grid-background: trajectory map scale grid */
 .hero::before {
   content: '';
   position: absolute;
@@ -2119,6 +2188,10 @@ html[data-motion='rich'] .drawer.is-scrolled::before {
   align-self: stretch;
   text-align: left;
   margin: calc(-1 * var(--sp-8)) 0 0;
+}
+
+.hint.error {
+  color: var(--danger-strong);
 }
 
 /* 心率读数：一行事实（平均 / 最高 / 主要区间）+ 热量来源徽标。

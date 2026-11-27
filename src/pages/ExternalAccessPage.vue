@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { Monitor } from 'lucide-vue-next'
+
+import EmptyState from '@/components/common/EmptyState.vue'
 import PageHeader from '@/components/layout/PageHeader.vue'
 import StatusChip from '@/components/common/StatusChip.vue'
 import ExternalAccessSection from '@/components/settings/ExternalAccessSection.vue'
+import { currentPlatform } from '@/utils/platform'
+
+const isAndroid = currentPlatform() === 'android'
 
 /**
  * 外部访问（`/settings/apps/external`）。
@@ -41,10 +47,16 @@ import ExternalAccessSection from '@/components/settings/ExternalAccessSection.v
 
       <!-- 网关分区：开关 / 绑定模式 / 端口 / 配对令牌 / 授权名单 / 审计记录。
            它自己已经是 .card，页面不再包一层；卡头由 showHeader=false 收掉。 -->
-      <ExternalAccessSection :show-header="false" />
+      <ExternalAccessSection v-if="!isAndroid" :show-header="false" />
+      <EmptyState
+        v-else
+        :icon="Monitor"
+        title="外部访问仅桌面端可用"
+        hint="Android 上不监听局域网端口；连接应用与健康数据授权仍可正常使用。"
+      />
 
       <p class="foot">
-        只有桌面端支持绑定端口与局域网访问；Android 上这个页面只做说明。
+        {{ isAndroid ? '请在桌面端 Rein 中配置对外服务网关。' : '只有桌面端支持绑定端口与局域网访问。' }}
       </p>
     </div>
   </div>

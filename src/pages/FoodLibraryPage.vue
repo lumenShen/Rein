@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowDownUp, ChevronRight, Plus, Search, SlidersHorizontal } from 'lucide-vue-next'
+import { AlertCircle, ArrowDownUp, ChevronRight, Plus, Search, SlidersHorizontal } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -22,6 +22,8 @@ import type { Food, FoodFilter, FoodUnit } from '@/types'
  */
 const all = ref<Food[]>([])
 const ready = ref(false)
+const error = ref('')
+let loadSeq = 0
 const query = ref('')
 const category = ref<string | null>(null)
 
@@ -152,10 +154,20 @@ const CAP = 150
 const expanded = ref(false)
 watch([query, category, sortKey, appliedFilter], () => (expanded.value = false))
 
-onMounted(async () => {
-  all.value = await dietService.listFoods(undefined, null, 9999)
-  ready.value = true
-})
+async function load(): Promise<void> {
+  const seq = ++loadSeq
+  error.value = ''
+  try {
+    const list = await dietService.listFoods(undefined, null, 9999)
+    if (seq !== loadSeq) return
+    all.value = list
+    ready.value = true
+  } catch (e) {
+    if (seq === loadSeq) error.value = e instanceof Error ? e.message : '食物库读取失败'
+  }
+}
+
+onMounted(load)
 
 const categories = computed(() => [...new Set(all.value.map((f) => f.category ?? '其他'))])
 
@@ -203,6 +215,14 @@ function unitOf(f: Food): FoodUnit | null {
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
+    <EmptyState v-if="error" :icon="AlertCircle" title="食物库读取失败" :hint="error">
+      <template #action>
+        <button class="cta" type="button" @click="load">重试</button>
+      </template>
+    </EmptyState>
+    <EmptyState v-else-if="!ready" :icon="Search" title="正在读取食物库…" hint="食物与份量数据正在加载" />
+
+    <template v-else>
     <!-- 搜索 + 主操作同一行：「记录」是这一页唯一的入口，按施工单 §4「列表页主操作不放
          fixed 悬浮钮」收回内容流 —— 悬浮钮会长期盖住列表最后两行（截图里压的正是土豆那一行）。 -->
     <div class="searchrow row">
@@ -277,6 +297,7 @@ function unitOf(f: Food): FoodUnit | null {
       </button>
       <EmptyState v-else-if="ready" :icon="Search" title="没有匹配的食物" hint="换个关键词或筛选条件试试" />
     </section>
+    </template>
 
     <!-- 排序菜单：bind 式锚定弹出（Teleport 到 body），选中后 AppMenu 自行收起 -->
     <AppMenu

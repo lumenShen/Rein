@@ -66,6 +66,8 @@ export const todoService = {
 
   updateTodo: (todo: Todo) => invoke<Todo>('update_todo', { todo }),
 
+  restoreTodo: (todo: Todo) => invoke<Todo>('restore_todo', { todo }),
+
   deleteTodo: (id: number) => invoke<void>('delete_todo', { id }),
 
   /** 重复实例物化（幂等）：返回本次新增实例数。loadAll 前调用。 */

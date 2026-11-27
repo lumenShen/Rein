@@ -43,6 +43,7 @@ import type {
   MemoryShardStats,
 } from '@/types'
 import { fmtDateCn, toDateStr } from '@/utils/date'
+import { currentPlatform } from '@/utils/platform'
 import { bmiBand, bmiOf } from '@/utils/health'
 
 /**
@@ -65,6 +66,7 @@ import { bmiBand, bmiOf } from '@/utils/health'
 
 const router = useRouter()
 const n = useNutritionStore()
+const healthAuthAvailable = currentPlatform() === 'android'
 
 /* ============================================================
    身体资料：只为健康大卡底部「身体数据与训练约束」与 BMI 读数服务。
@@ -445,8 +447,8 @@ function openMemoryFile(name: string): void {
 }
 
 /** 图标章的模块色：accent 是 `--mod-*` 变量名，soft/strong 是它的两支派生色。 */
-function accentStyle(accent: string): string {
-  return `--fic-bg: var(${accent}-soft); --fic-fg: var(${accent}-strong)`
+function accentStyle(_accent: string): string {
+  return '--fic-bg: var(--surface-2); --fic-fg: var(--text-1)'
 }
 </script>
 
@@ -645,10 +647,15 @@ function accentStyle(accent: string): string {
                 <span class="hrow-action">{{ profileReady ? '编辑' : '稍候' }}</span>
                 <ChevronRight :size="14" class="t-3" />
               </button>
-              <button class="hrow" data-testid="about-health-auth" @click="goHealthData">
+              <button
+                class="hrow"
+                data-testid="about-health-auth"
+                :disabled="!healthAuthAvailable"
+                @click="goHealthData"
+              >
                 <span class="hrow-main">
                   <b>健康数据授权</b>
-                  <em>仅 Android 有 Health Connect</em>
+                  <em>{{ healthAuthAvailable ? '连接 Health Connect' : '仅 Android 可授权' }}</em>
                 </span>
                 <ChevronRight :size="14" class="t-3" />
               </button>

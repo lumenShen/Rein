@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { ScheduleEntry } from '@/types'
-import { parseDate, weekDates, todayStr } from '@/utils/date'
+import { useToday } from '@/composables/useToday'
+import { parseDate, weekDates } from '@/utils/date'
 import {
   buildTimeAxis,
   cellKey,
@@ -43,7 +44,7 @@ const props = defineProps<{
 /** 点某格课程 → 交给课表页拉该时段的教务课程详情 */
 const emit = defineEmits<{ select: [entry: ScheduleEntry] }>()
 
-const today = todayStr()
+const { today } = useToday()
 
 /** 行高的下限：一行要装下「开始时间 + 第N节」两行字和一个课块，再矮就读不出来了。
  *  52 是两行时间（12/10）加 8 内距再加一个单行课块的下限；比原来的 56 矮 4，
@@ -55,7 +56,7 @@ const VISIBLE_LIMIT = 2
 
 const days = computed(() => weekDates(props.anchor))
 
-const todayIndex = computed(() => days.value.findIndex((d) => d === today))
+const todayIndex = computed(() => days.value.findIndex((d) => d === today.value))
 
 /** 行轴：后端同步出的 `timeSlots`。按节次排 —— 时刻只是它的展示，节次才是行的身份 */
 const rows = computed<AxisRow[]>(() =>
@@ -212,7 +213,7 @@ function scrollToToday(): void {
   const grid = el.querySelector<HTMLElement>('.grid')
   const timeCell = el.querySelector<HTMLElement>('.cell.time')
   if (!grid || !timeCell) return
-  const idx = days.value.findIndex((d) => d === today)
+  const idx = days.value.findIndex((d) => d === today.value)
   if (idx < 0) {
     el.scrollLeft = 0
     refreshEdge()
@@ -648,6 +649,7 @@ watch(() => props.anchor, scrollToToday)
 }
 
 /* 左侧色条：钉在块的左边，上下由块自己的圆角裁齐（overflow:hidden） */
+/* impeccable-disable-next-line side-tab: course identity color marker */
 .blk::before {
   content: '';
   position: absolute;

@@ -8,13 +8,14 @@ import MealDetailSheet from '@/components/diet/MealDetailSheet.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import IntakeDetailSheet from '@/components/nutrition/IntakeDetailSheet.vue'
 import IntakeOverview from '@/components/nutrition/IntakeOverview.vue'
+import { useToday } from '@/composables/useToday'
 import { MEAL_LABELS, MEAL_META, MEAL_ORDER, fmtGrams, mealKcal, mealQtyText } from '@/config/domain'
 import { useToast } from '@/composables/useToast'
 import { dietService } from '@/services/dietService'
 import { nutritionService } from '@/services/nutritionService'
 import { useDietStore } from '@/stores/diet'
 import { useNutritionStore } from '@/stores/nutrition'
-import { WEEKDAY_LABELS, addDays, fmtDateCn, startOfWeek, todayStr, weekDates } from '@/utils/date'
+import { WEEKDAY_LABELS, addDays, fmtDateCn, startOfWeek, weekDates } from '@/utils/date'
 import type { DailySummary, MealLog } from '@/types'
 
 /** 饮食历史悬浮窗：Dock 式日选栏 + 当日摄入总览 + 分餐次记录列表。
@@ -28,11 +29,13 @@ const toast = useToast().toast
 const diet = useDietStore()
 const nutrition = useNutritionStore()
 
-const today = todayStr()
-const anchor = ref(today) // 当前显示周的锚点（周内任意一天）
-const selected = ref(today)
+const { today } = useToday()
+const anchor = ref(today.value) // 当前显示周的锚点（周内任意一天）
+const selected = ref(today.value)
 const logs = ref<MealLog[]>([])
 const loading = ref(false)
+const weekError = ref('')
+const summaryError = ref('')
 
 /* ---------- 当日汇总（摄入总览 / 行占比 / 单笔详情 / 迷你条的分母都用它） ---------- */
 /** 看过的日期汇总：来回翻日不必再等一次往返，也就不会先闪一屏空档 */
@@ -51,7 +54,7 @@ const targetKcal = computed(() => Math.round(summary.value?.targets.kcal ?? 0))
 
 /* ---------- 日选栏（Dock 栏目风格） ---------- */
 const days = computed(() => weekDates(anchor.value))
-const atCurrentWeek = computed(() => anchor.value === startOfWeek(today))
+const atCurrentWeek = computed(() => anchor.value === startOfWeek(today.value))
 
 /** 周内每日摄入占目标百分比（迷你条）；目标未设时全为 0（不显示） */
 const dayPct = computed(() => {
@@ -70,10 +73,13 @@ let summarySeq = 0
 async function fetchWeek(): Promise<void> {
   const seq = ++weekSeq
   loading.value = true
+  weekError.value = ''
   try {
     const ws = startOfWeek(anchor.value)
     const list = await dietService.listMealsRange(ws, addDays(ws, 6))
     if (seq === weekSeq) logs.value = list
+  } catch (e) {
+    if (seq === weekSeq) weekError.value = e instanceof Error ? e.message : '饮食记录读取失败'
   } finally {
     if (seq === weekSeq) loading.value = false
   }
@@ -82,16 +88,23 @@ async function fetchWeek(): Promise<void> {
 async function fetchSummary(): Promise<void> {
   const date = selected.value
   const seq = ++summarySeq
+  summaryError.value = ''
   const cached = summaryCache.get(date)
   if (cached) {
     summary.value = cached
     summaryDate.value = date
   }
-  const s = await nutritionService.getDailySummary(date)
-  summaryCache.set(date, s)
-  if (seq === summarySeq && date === selected.value) {
-    summary.value = s
-    summaryDate.value = date
+  try {
+    const s = await nutritionService.getDailySummary(date)
+    summaryCache.set(date, s)
+    if (seq === summarySeq && date === selected.value) {
+      summary.value = s
+      summaryDate.value = date
+    }
+  } catch (e) {
+    if (seq === summarySeq && date === selected.value) {
+      summaryError.value = e instanceof Error ? e.message : '当日营养汇总读取失败'
+    }
   }
 }
 
@@ -105,7 +118,7 @@ function pickDay(d: string): void {
 function shiftWeek(delta: number): void {
   const ws = startOfWeek(addDays(anchor.value, delta * 7))
   const we = addDays(ws, 6)
-  const limit = we < today ? we : today
+  const limit = we < today.value ? we : today.value
   let next = addDays(selected.value, delta * 7)
   if (next < ws) next = ws
   if (next > limit) next = limit
@@ -118,12 +131,20 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    anchor.value = startOfWeek(today)
-    selected.value = today
+    anchor.value = startOfWeek(today.value)
+    selected.value = today.value
     void fetchWeek()
     void fetchSummary()
   },
 )
+
+watch(today, (next, previous) => {
+  if (!props.open || selected.value !== previous) return
+  anchor.value = startOfWeek(next)
+  selected.value = next
+  void fetchWeek()
+  void fetchSummary()
+})
 
 /* ---------- 当日列表 ---------- */
 const dayLogs = computed(() => logs.value.filter((l) => l.date === selected.value))
@@ -193,17 +214,38 @@ async function onDelete(): Promise<void> {
   try {
     await dietService.deleteMeal(t.id)
     logs.value = logs.value.filter((x) => x.id !== t.id)
+    summaryCache.delete(t.date)
     void fetchSummary()
     // 删的是今天的记录 → 回流刷新首页的能量汇总与时间轴
-    if (t.date === today) {
-      void diet.load(today)
-      void nutrition.loadSummary(today)
+    if (t.date === today.value) {
+      void diet.load(today.value)
+      void nutrition.loadSummary(today.value)
     }
     toast('已删除')
   } finally {
     busy.value = false
     delTarget.value = null
     detail.value = null
+  }
+}
+
+function onUpdated(updated: MealLog): void {
+  const previous = detail.value
+  if (!previous) return
+  logs.value = logs.value.map((item) => item.id === updated.id ? updated : item)
+  summaryCache.delete(previous.date)
+  summaryCache.delete(updated.date)
+  if (previous.date === today.value || updated.date === today.value) {
+    void diet.load(today.value)
+    void nutrition.loadSummary(today.value)
+  }
+  if (updated.date === selected.value) {
+    detail.value = updated
+    void fetchSummary()
+  } else {
+    detail.value = null
+    void fetchWeek()
+    void fetchSummary()
   }
 }
 </script>
@@ -239,6 +281,11 @@ async function onDelete(): Promise<void> {
         </button>
       </div>
 
+      <p v-if="summaryError" class="hist-error" role="alert">
+        <span class="flex-1">当日汇总读取失败：{{ summaryError }}</span>
+        <button type="button" @click="fetchSummary">重试</button>
+      </p>
+
       <!-- 当日摄入总览：与主页、营养全览页同一个组件（传这一天的汇总）；整块是按钮，
            点开这一天的营养实际全览。壳用抽屉白卡材质，理由见 IntakeDetailSheet。 -->
       <button class="ovcard pressable" aria-label="查看当日营养全览" @click="ovOpen = true">
@@ -251,6 +298,11 @@ async function onDelete(): Promise<void> {
           </template>
         </IntakeOverview>
       </button>
+
+      <p v-if="weekError" class="hist-error" role="alert">
+        <span class="flex-1">饮食记录读取失败：{{ weekError }}；当前列表可能是上次结果。</span>
+        <button type="button" @click="fetchWeek">重试</button>
+      </p>
 
       <!-- 分餐次列表 -->
       <section v-for="g in groups" :key="g.type" class="meal">
@@ -290,7 +342,7 @@ async function onDelete(): Promise<void> {
       </section>
 
       <EmptyState
-        v-if="!loading && dayLogs.length === 0"
+        v-if="!loading && !weekError && dayLogs.length === 0"
         :icon="Utensils"
         title="这一天还没有饮食记录"
         hint="从首页「记一笔」或 AI 助手添加"
@@ -307,6 +359,7 @@ async function onDelete(): Promise<void> {
       :targets="summary?.targets ?? null"
       @close="detail = null"
       @delete="askDelete"
+      @updated="onUpdated"
     />
 
     <!-- 删除确认（Teleport 到 body） -->
@@ -321,6 +374,26 @@ async function onDelete(): Promise<void> {
 </template>
 
 <style scoped>
+.hist-error {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin: var(--gap-sm) 0;
+  padding: var(--sp-10) var(--sp-12);
+  border-radius: var(--radius-m);
+  background: var(--danger-soft);
+  color: var(--danger-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+}
+
+.hist-error button {
+  flex: none;
+  min-height: var(--control-sm);
+  color: var(--accent);
+  font-weight: var(--fw-medium);
+}
+
 .hist {
   padding-bottom: var(--gap-sm);
 }

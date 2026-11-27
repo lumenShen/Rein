@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, type ComponentPublicInstance } from 'vue'
 import { ListTodo, MessageCircle, Users } from 'lucide-vue-next'
 
 import InfoHint from '@/components/common/InfoHint.vue'
@@ -121,6 +121,16 @@ const heardBars = computed(() => Math.round((wave.value.length * 31_000) / SESSI
 
 /** 小地图：每句一条，当前句高亮 */
 const readAt = ref(3)
+const sentenceEls = ref<Array<HTMLElement | null>>([])
+
+function setSentenceRef(el: Element | ComponentPublicInstance | null, index: number): void {
+  sentenceEls.value[index] = el as HTMLElement | null
+}
+
+function jumpTo(index: number): void {
+  readAt.value = index
+  void nextTick(() => sentenceEls.value[index]?.scrollIntoView({ block: 'center' }))
+}
 
 function pick(id: number): void {
   active.value = id
@@ -319,8 +329,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <li
               v-for="(s, i) in SESSION.segments"
               :key="s.t"
+              :ref="(el) => setSentenceRef(el, i)"
               :class="{ cur: i === readAt }"
-              @click="readAt = i"
+              @click="jumpTo(i)"
             >
               <time class="num">{{ fmt(s.t) }}</time>
               <p>{{ s.text }}</p>
@@ -333,9 +344,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             :key="s.t"
             class="mini"
             :class="{ on: i === readAt, them: s.who === 'B' }"
-            :style="{ width: `${Math.min(100, 34 + s.text.length * 1.6)}%` }"
+            :style="{ '--mini-w': `${Math.min(100, 34 + s.text.length * 1.6)}%` }"
             :aria-label="`第 ${i + 1} 句`"
-            @click="readAt = i"
+            @click="jumpTo(i)"
           />
         </nav>
       </section>
@@ -904,6 +915,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .mini {
+  width: var(--mini-w, 34%);
   height: 4px;
   border-radius: var(--radius-full);
   background: var(--line-strong);
@@ -1086,11 +1098,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   .minimap {
     flex-direction: row;
     align-items: center;
+    gap: var(--sp-4);
     padding-top: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .minimap::-webkit-scrollbar {
+    display: none;
   }
 
   .mini {
-    flex: none;
+    position: relative;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 24px;
+    background: transparent;
+  }
+
+  .mini::after {
+    content: '';
+    position: absolute;
+    inset: 10px 0 auto;
+    height: 4px;
+    border-radius: var(--radius-full);
+    background: var(--line-strong);
+  }
+
+  .mini.them::after {
+    background: var(--line);
+  }
+
+  .mini.on::after {
+    inset-block-start: 9px;
+    height: 6px;
+    background: var(--led-shopping);
   }
 
   .duo {

@@ -196,7 +196,8 @@ async function cleanOrphans(): Promise<void> {
   cleaning.value = true
   try {
     const r = await kbService.usageClean(false)
-    toast.toast(r.removed > 0 ? r.message : '没有需要清理的碎片')
+    if (r.failed > 0) toast.toast(`已清理 ${r.removed} 项，${r.failed} 项失败`)
+    else toast.toast(r.removed > 0 ? r.message : '没有需要清理的碎片')
     cleanConfirm.value = false
     invalidateUsage()
     await load()

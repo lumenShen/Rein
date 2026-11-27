@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Mic, Search, Square, Trash2 } from 'lucide-vue-next'
+import { Mic, Pause, Play, Search, Square, Trash2 } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
 import { useToast } from '@/composables/useToast'
 import { useTodoStore } from '@/stores/todo'
-import { cancelRecording, fmtDur, recorder, startRecording, stopRecording, type RecTake } from '@/system/recorderRuntime'
+import { cancelRecording, fmtDur, pauseRecording, recorder, resumeRecording, startRecording, stopRecording, type RecTake } from '@/system/recorderRuntime'
 import { minToHHmm, todayStr } from '@/utils/date'
 import { humanBytes } from '@/utils/format'
 import type { Todo, TodoAttachment } from '@/types'
@@ -25,7 +25,8 @@ onMounted(() => {
   void store.loadAll()
 })
 
-const recording = computed(() => recorder.status === 'recording')
+const recording = computed(() => recorder.status !== 'idle')
+const paused = computed(() => recorder.status === 'paused')
 
 async function toggle(): Promise<void> {
   if (recording.value) {
@@ -96,6 +97,8 @@ async function attachTo(todo: Todo): Promise<void> {
     removeTake(t)
     pickOpen.value = false
     toast(`已附加到「${cur.title}」`)
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '附加失败，请重试')
   } finally {
     attaching.value = false
   }
@@ -124,12 +127,17 @@ async function attachTo(todo: Todo): Promise<void> {
         <Square v-if="recording" :size="30" :stroke-width="2.2" />
         <Mic v-else :size="32" :stroke-width="1.9" />
       </button>
-      <p class="num timer" :class="{ live: recording }">{{ fmtDur(recorder.elapsedSec) }}</p>
+      <p class="num timer" :class="{ live: recording && !paused }">{{ fmtDur(recorder.elapsedSec) }}</p>
       <!-- 卡面只留一行结论（保存语义同时写进圆钮的 aria-label）——
            「可切到别的页面，悬浮条会跟着你」这类背景说明收进未归档录音卡头的 InfoHint -->
-      <p v-if="recording" class="hint t-2">正在录音 — 点按圆钮停止并保存</p>
+      <p v-if="recording" class="hint t-2">
+        {{ paused ? '已暂停，计时停止 — 可继续录音或停止保存' : '正在录音 — 点按圆钮停止并保存' }}
+      </p>
       <div v-if="recording" class="row rec-acts">
-        <button class="cancel" @click="cancelRecording">取消</button>
+        <button class="cancel" type="button" @click="paused ? resumeRecording() : pauseRecording()">
+          <Play v-if="paused" :size="15" />{{ paused ? '继续' : '暂停' }}<Pause v-if="!paused" :size="15" />
+        </button>
+        <button class="cancel" type="button" @click="cancelRecording">取消</button>
       </div>
       <p v-if="recorder.lastError && !recording" class="err">{{ recorder.lastError }}</p>
     </section>

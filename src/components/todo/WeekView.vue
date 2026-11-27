@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
+import { useToday } from '@/composables/useToday'
 import { useTodoStore } from '@/stores/todo'
-import { WEEKDAY_LABELS, todayStr, weekDates } from '@/utils/date'
+import { WEEKDAY_LABELS, weekDates } from '@/utils/date'
 
 /**
  * 周视图（完成度速览）：横轴七日一排，每天只留「星期 · 日号 · 完成数 · 进度条」，
@@ -16,12 +17,15 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [date: string] }>()
 
 const store = useTodoStore()
-const today = todayStr()
-const dates = weekDates(today)
+const { today } = useToday()
+const dates = computed(() => weekDates(today.value))
 
-onMounted(() => {
-  void store.loadStats(dates[0]!, dates[6]!)
-})
+function loadWeek(): void {
+  void store.loadStats(dates.value[0]!, dates.value[6]!)
+}
+
+onMounted(loadWeek)
+watch(today, loadWeek)
 
 interface DayColumn {
   date: string
@@ -34,13 +38,13 @@ interface DayColumn {
 }
 
 const columns = computed<DayColumn[]>(() =>
-  dates.map((date, i) => {
+  dates.value.map((date, i) => {
     const day = store.allTodos.filter((t) => t.date === date)
     return {
       date,
       label: WEEKDAY_LABELS[i] ?? '',
       dayNum: Number(date.slice(8, 10)),
-      isToday: date === today,
+      isToday: date === today.value,
       isSelected: date === props.selected,
       total: day.length,
       done: day.filter((t) => t.status === 'done').length,

@@ -508,6 +508,46 @@ pub(crate) fn update_todo_on(conn: &rusqlite::Connection, todo: &Todo) -> Result
 }
 
 #[tauri::command]
+pub fn restore_todo(state: State<AppState>, todo: Todo) -> Result<Todo> {
+    let conn = state.db.lock();
+    restore_todo_on(&conn, &todo)
+}
+
+fn restore_todo_on(conn: &rusqlite::Connection, todo: &Todo) -> Result<Todo> {
+    if todo.program_id.is_some() || todo.rec_key.is_some() || todo.course_session_id.is_some() {
+        return Err(crate::error::ReinError::coded(
+            "restore_not_supported",
+            "只有普通待办支持撤销恢复",
+        ));
+    }
+    conn.execute(
+        "INSERT INTO todos (id, title, notes, date, start_min, duration_min, category, priority, status, completed_at, created_at, program_id, rec_rule, rec_key, subtasks, attachments, course_session_id) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+        rusqlite::params![
+            todo.id,
+            todo.title,
+            todo.notes,
+            todo.date,
+            todo.start_min,
+            todo.duration_min,
+            todo.category,
+            todo.priority,
+            todo.status,
+            todo.completed_at,
+            todo.created_at,
+            todo.program_id,
+            json_str(&todo.rec_rule)?,
+            todo.rec_key,
+            json_str(&todo.subtasks)?,
+            json_str(&todo.attachments)?,
+            todo.course_session_id,
+        ],
+    )?;
+    let sql = format!("SELECT {COLS} FROM todos WHERE id = ?1");
+    Ok(conn.query_row(&sql, [todo.id], from_row)?)
+}
+
+#[tauri::command]
 pub fn delete_todo(state: State<AppState>, id: i64) -> Result<()> {
     let conn = state.db.lock();
     delete_todo_on(&conn, id)
@@ -762,6 +802,53 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::migrate_for_test(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn restore_todo_preserves_identity_status_and_created_at() {
+        let conn = fresh();
+        let created = create_todo_on(
+            &conn,
+            "复盘".into(),
+            Some("保留附件".into()),
+            Some("2026-11-26".into()),
+            Some(540),
+            Some(30),
+            Some("work".into()),
+            Some(2),
+            None,
+            Some(vec![TodoSubtask { title: "整理".into(), done: true }]),
+            Some(vec![TodoAttachment {
+                kind: "text".into(),
+                name: "备注".into(),
+                content: Some("原文".into()),
+                size: None,
+                created_at: "2026-11-26T08:00:00Z".into(),
+            }]),
+        )
+        .unwrap();
+        let mut snapshot = created.clone();
+        snapshot.status = "doing".into();
+        snapshot.completed_at = Some("2026-11-26T09:00:00Z".into());
+        update_todo_on(&conn, &snapshot).unwrap();
+        let before = get_todo_on(&conn, created.id).unwrap().unwrap();
+
+        delete_todo_on_as_of(&conn, created.id, "2026-11-26").unwrap();
+        assert!(get_todo_on(&conn, created.id).unwrap().is_none());
+
+        let restored = restore_todo_on(&conn, &before).unwrap();
+        assert_eq!(restored.id, before.id);
+        assert_eq!(restored.status, "doing");
+        assert_eq!(restored.completed_at, before.completed_at);
+        assert_eq!(restored.created_at, before.created_at);
+        assert_eq!(
+            serde_json::to_value(&restored.subtasks).unwrap(),
+            serde_json::to_value(&before.subtasks).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&restored.attachments).unwrap(),
+            serde_json::to_value(&before.attachments).unwrap()
+        );
     }
 
     /// 对外网关专用的 LIMIT 变体：SQL 侧就限行，别让外部拉全表（contract §6.4）。

@@ -6,6 +6,7 @@ import GlassDockAssembly from '@/components/common/GlassDockAssembly.vue'
 import ComposerBar from '@/components/common/ComposerBar.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import SheetModal from '@/components/common/SheetModal.vue'
+import { useToast } from '@/composables/useToast'
 import {
   GLASS_PARAM_SPECS,
   glassParams,
@@ -31,6 +32,13 @@ import { liquidGlass, setPerfMode } from '@/system/perf'
  */
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
+const { toast } = useToast()
+const saveError = ref(false)
+
+function reportSave(ok: boolean, notify = true): void {
+  saveError.value = !ok
+  if (!ok && notify) toast('本地保存失败，玻璃参数仅在本次生效')
+}
 
 const previewItems = [
   { id: 'home', label: '主页', icon: House },
@@ -79,11 +87,19 @@ function commit(spec: GlassParamSpec): void {
   const n = Number(draft.value.replace(/[，,\s]/g, ''))
   if (!Number.isFinite(n)) return
   const snapped = spec.min + Math.round((n - spec.min) / spec.step) * spec.step
-  setGlassParam(spec.key, Number(snapped.toFixed(decimals(spec.step))))
+  reportSave(setGlassParam(spec.key, Number(snapped.toFixed(decimals(spec.step)))))
 }
 
 function onSlide(spec: GlassParamSpec, e: Event): void {
-  setGlassParam(spec.key, Number((e.target as HTMLInputElement).value))
+  reportSave(setGlassParam(spec.key, Number((e.target as HTMLInputElement).value)), false)
+}
+
+function reset(): void {
+  reportSave(resetGlassParams())
+}
+
+function enableGlass(): void {
+  reportSave(setPerfMode('ultra'))
 }
 
 const stateText = computed(() =>
@@ -94,7 +110,7 @@ const stateText = computed(() =>
 <template>
   <SheetModal :open="props.open" title="液态玻璃参数" initial-snap="large" @close="emit('close')">
     <template #action>
-      <button type="button" class="reset" :disabled="!glassTuned" @click="resetGlassParams">恢复默认</button>
+      <button type="button" class="reset" :disabled="!glassTuned" @click="reset">恢复默认</button>
     </template>
 
     <!-- 暗场预览：直接渲染生产 Dock 的共享玻璃装配，圆角与尺寸不会再漂。
@@ -113,7 +129,12 @@ const stateText = computed(() =>
     <p class="state" :class="liquidGlass ? 'on' : 'warn'">
       <span class="sdot" />
       <span class="stxt">{{ stateText }}</span>
-      <button v-if="!liquidGlass" type="button" class="jump" @click="setPerfMode('ultra')">切到超高</button>
+      <button v-if="!liquidGlass" type="button" class="jump" @click="enableGlass">切到超高</button>
+    </p>
+
+    <p v-if="saveError" class="state warn" role="alert">
+      <span class="sdot" />
+      <span class="stxt">本地保存失败，当前参数仅在本次生效</span>
     </p>
 
     <div class="params">

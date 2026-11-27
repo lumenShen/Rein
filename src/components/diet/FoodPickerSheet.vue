@@ -9,7 +9,7 @@ import { dietService } from '@/services/dietService'
 import { useDietStore } from '@/stores/diet'
 import { useToast } from '@/composables/useToast'
 import { todayStr } from '@/utils/date'
-import type { Food, MealType } from '@/types'
+import type { Food, FoodUnit, MealType } from '@/types'
 
 /**
  * 食物库选择器：搜索 → 选食物 → 克重 / 份量 → 餐次 → 写入当日记录。
@@ -42,6 +42,7 @@ const external = computed(() => !!props.initialFood)
 
 const query = ref('')
 const results = ref<Food[]>([])
+const searchError = ref('')
 const selected = ref<Food | null>(null)
 
 const mode = ref<'grams' | 'unit'>('grams')
@@ -57,6 +58,8 @@ watch(
     if (!open) return
     query.value = ''
     results.value = []
+    searchError.value = ''
+    searchSeq++
     selected.value = null
     mealType.value = props.defaultMeal ?? 'breakfast'
     if (props.initialFood) pick(props.initialFood)
@@ -65,6 +68,7 @@ watch(
 )
 
 let timer: ReturnType<typeof setTimeout> | undefined
+let searchSeq = 0
 watch(query, () => {
   clearTimeout(timer)
   timer = setTimeout(() => void search(), 220)
@@ -72,8 +76,15 @@ watch(query, () => {
 
 async function search(): Promise<void> {
   const q = query.value.trim()
-  // 有输入走 Rust 模糊搜索（按相似度排序），空输入回退常用列表
-  results.value = q ? await dietService.searchFoodsFuzzy(q, 30) : await dietService.listFoods()
+  const seq = ++searchSeq
+  searchError.value = ''
+  try {
+    // 有输入走 Rust 模糊搜索（按相似度排序），空输入回退常用列表
+    const list = q ? await dietService.searchFoodsFuzzy(q, 30) : await dietService.listFoods()
+    if (seq === searchSeq) results.value = list
+  } catch (e) {
+    if (seq === searchSeq) searchError.value = e instanceof Error ? e.message : '食物库读取失败'
+  }
 }
 
 function pick(f: Food): void {
@@ -88,6 +99,11 @@ function pick(f: Food): void {
   unitName.value = f.defaultUnit ?? f.units[0]?.name ?? ''
   unitCount.value = 1
   grams.value = 100
+}
+
+function unitOf(f: Food): FoodUnit | null {
+  if (!f.units.length) return null
+  return f.units.find((u) => u.name === f.defaultUnit) ?? f.units[0]!
 }
 
 const effGrams = computed(() => {
@@ -108,7 +124,7 @@ async function confirmAdd(): Promise<void> {
   if (!f || effGrams.value <= 0 || adding.value) return
   adding.value = true
   try {
-    await diet.add({
+    const result = await diet.add({
       foodId: f.id,
       date: todayStr(),
       mealType: mealType.value,
@@ -119,9 +135,15 @@ async function confirmAdd(): Promise<void> {
       source: 'search',
       note: null,
     })
-    toast(`已记录 ${f.name} ${kcalPreview.value} 大卡`)
+    toast(
+      result.refreshed
+        ? `已记录 ${f.name} ${kcalPreview.value} 大卡`
+        : `已记录 ${f.name}，但摘要刷新失败，请稍后重试`,
+    )
     selected.value = null
     emit('close')
+  } catch (e) {
+    toast(e instanceof Error ? e.message : '记录失败，请重试')
   } finally {
     adding.value = false
   }
@@ -131,10 +153,14 @@ function bump(delta: number): void {
   if (mode.value === 'grams') grams.value = Math.max(0, grams.value + delta)
   else unitCount.value = Math.max(0, Math.round((unitCount.value + delta) * 2) / 2)
 }
+
+function requestClose(): void {
+  if (!adding.value) emit('close')
+}
 </script>
 
 <template>
-  <SheetModal :open :title @close="emit('close')">
+  <SheetModal :open :title @close="requestClose">
     <!-- 搜索（外部带食物时隐藏） -->
     <div v-if="!external" class="finder row">
       <Search :size="17" class="t-3" />
@@ -147,12 +173,15 @@ function bump(delta: number): void {
         <button class="row item" @click="pick(f)">
           <span class="flex-1">
             <b>{{ f.name }}</b>
-            <small>{{ f.category ?? '其他' }}<template v-if="f.units.length"> · 1{{ f.defaultUnit ?? f.units[0]!.name }}≈{{ f.units[0]!.grams }}g</template></small>
+            <small>{{ f.category ?? '其他' }}<template v-if="unitOf(f)"> · 1{{ unitOf(f)!.name }}≈{{ unitOf(f)!.grams }}g</template></small>
           </span>
           <span class="num kcal">{{ f.kcal }}<em>大卡 / 100 g</em></span>
         </button>
       </li>
-      <li v-if="results.length === 0" class="none t-3">没有匹配的食物</li>
+      <li v-if="searchError" class="none t-3" role="alert">
+        {{ searchError }} <button type="button" class="retry" @click="search">重试</button>
+      </li>
+      <li v-if="results.length === 0 && !searchError" class="none t-3">没有匹配的食物</li>
     </ul>
 
     <!-- 数量与餐次 -->
@@ -282,6 +311,13 @@ function bump(delta: number): void {
   text-align: center;
   padding: var(--sp-28) 0;
   font-size: var(--fs-subhead);
+}
+
+.retry {
+  min-height: var(--control-sm);
+  margin-left: var(--gap-sm);
+  color: var(--accent);
+  font-weight: var(--fw-medium);
 }
 
 .detail {

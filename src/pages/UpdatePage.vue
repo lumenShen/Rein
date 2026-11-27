@@ -110,8 +110,10 @@ const statusLine = computed(() => {
 })
 
 /** 设置类写操作统一走这里：失败要吵（toast），成功不出声 */
-async function save(patch: UpdateSettingsPatch): Promise<void> {
-  if (!(await update.save(patch))) toast(update.error ?? '保存失败')
+async function save(patch: UpdateSettingsPatch): Promise<boolean> {
+  const ok = await update.save(patch)
+  if (!ok) toast(update.error ?? '保存失败')
+  return ok
 }
 
 async function onCheck(): Promise<void> {
@@ -173,7 +175,7 @@ async function onAddSource(): Promise<void> {
     enabled: true,
     priority: 20 + list.length,
   }
-  if (await update.save({ sources: [...list, next] })) {
+  if (await save({ sources: [...list, next] })) {
     customUrl.value = ''
     customName.value = ''
     showSourceEditor.value = false
@@ -185,7 +187,8 @@ async function onAddSource(): Promise<void> {
 
 async function onRemoveCustom(id: string): Promise<void> {
   const list = (update.settings?.sources ?? []).filter((s) => s.id !== id)
-  if (await update.save({ sources: list })) toast('已移除（内置源会自动补回）')
+  if (await save({ sources: list })) toast('已移除（内置源会自动补回）')
+  else toast(update.error ?? '移除失败')
 }
 
 async function onPrune(): Promise<void> {
@@ -334,7 +337,7 @@ onMounted(async () => {
           <ToggleSwitch
             :model-value="update.settings?.autoCheck ?? true"
             label="自动检查更新"
-            @update:model-value="update.save({ autoCheck: $event })"
+            @update:model-value="save({ autoCheck: $event })"
           />
         </div>
         <NumberStepper
@@ -344,7 +347,7 @@ onMounted(async () => {
           :step="6"
           :min="1"
           :max="168"
-          @update:model-value="update.save({ checkIntervalHours: $event })"
+          @update:model-value="save({ checkIntervalHours: $event })"
         />
         <div class="row between frow">
           <span class="col ftxt"><b>更新通道</b><em class="t-3">选择跟随哪个发布通道</em></span>
@@ -355,7 +358,7 @@ onMounted(async () => {
               as="button"
               size="sm"
               :tone="update.settings?.channel === c ? 'action' : 'muted'"
-              @click="update.save({ channel: c })"
+              @click="save({ channel: c })"
             >
               {{ CHANNEL_LABELS[c] }}
             </PillChip>
@@ -375,7 +378,7 @@ onMounted(async () => {
           <ToggleSwitch
             :model-value="update.settings?.allowHttp ?? true"
             label="允许明文 http 源"
-            @update:model-value="update.save({ allowHttp: $event })"
+            @update:model-value="save({ allowHttp: $event })"
           />
         </div>
         <div v-if="update.snapshot?.platform.startsWith('windows')" class="row between frow">
@@ -383,7 +386,7 @@ onMounted(async () => {
           <ToggleSwitch
             :model-value="update.settings?.silentInstall ?? false"
             label="静默安装"
-            @update:model-value="update.save({ silentInstall: $event })"
+            @update:model-value="save({ silentInstall: $event })"
           />
         </div>
         <div class="row between frow">

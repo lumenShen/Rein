@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   Archive,
-  Camera,
   ChartPie,
   Dumbbell,
+  MessageCircle,
   NotebookPen,
   Search as SearchIcon,
   Sparkles,
@@ -16,10 +16,10 @@ import ActivityRings from '@/components/common/ActivityRings.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import InfoHint from '@/components/common/InfoHint.vue'
 import PillChip from '@/components/common/PillChip.vue'
+import { useToday } from '@/composables/useToday'
 import { useAiStore } from '@/stores/ai'
 import { useNutritionStore } from '@/stores/nutrition'
 import { listFoodDrafts, type FoodDraft } from '@/utils/foodDrafts'
-import { todayStr } from '@/utils/date'
 import { fmtSameDayTime } from '@/utils/format'
 import type { RingItem } from '@/components/common/ActivityRings.vue'
 
@@ -47,11 +47,15 @@ const emit = defineEmits<{
 const ai = useAiStore()
 const nutrition = useNutritionStore()
 
-const today = todayStr()
+const { today } = useToday()
 const drafts = ref<FoodDraft[]>([])
 
+watch(today, () => {
+  void nutrition.loadSummary(today.value)
+})
+
 onMounted(() => {
-  if (!nutrition.summary) void nutrition.loadSummary(today)
+  if (!nutrition.summary) void nutrition.loadSummary(today.value)
   drafts.value = listFoodDrafts()
 })
 
@@ -96,7 +100,7 @@ interface QuickAsk {
   id: string
   label: string
   hint: string
-  icon: typeof Camera
+  icon: typeof MessageCircle
   /** 圆章底与前景：走域色，与主页工具格同一套配方 */
   bg: string
   fg: string
@@ -106,9 +110,9 @@ interface QuickAsk {
 const quickAsks: QuickAsk[] = [
   {
     id: 'photo',
-    label: '拍照识食',
-    hint: '一句话记一餐',
-    icon: Camera,
+    label: '说一句记一餐',
+    hint: '描述吃了什么',
+    icon: MessageCircle,
     bg: 'var(--mod-nutrition-soft)',
     fg: 'var(--mod-nutrition-strong)',
     text: '我刚吃了',

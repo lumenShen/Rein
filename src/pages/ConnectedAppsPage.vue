@@ -75,12 +75,16 @@ const isRealCurrent = computed(
   () => platform !== 'browser' && activeTab.value === platform,
 )
 
+/** 非当前平台只展示能力清单，不读取本机状态、不提供连接动作。 */
+const isReference = computed(() => activeTab.value !== platform)
+
 const query = computed(() => search.value.trim().toLowerCase())
 
 const platformNote = computed(() => CONNECTED_APP_PLATFORM_NOTES[contentPlatform.value] ?? '')
 
 const groupTitle = computed(() => {
   const label = PLATFORM_LABELS[contentPlatform.value]
+  if (isReference.value) return `${label} · 仅参考`
   // 只有一条平台说明、没有行可列的页签（iOS）：标题只写平台名，别用「可用」自相矛盾
   if (platformNote.value) return label
   return `${isRealCurrent.value ? '当前 ' : ''}${label} 可用`
@@ -124,6 +128,7 @@ function needsRoot(id: string): boolean {
 
 /** 行右侧状态文字：不支持 / 检测中 / 连接 / 去授权 / 选文件夹 / 已连接 */
 function rowLabel(app: ConnectedApp): string {
+  if (isReference.value) return '仅参考'
   // health 保持既有真实入口语义：桌面 / 浏览器上只有说明，安卓上给「管理 / 已连接」
   if (app.route) {
     if (healthUnavailable.value) return '仅安卓'
@@ -165,6 +170,10 @@ const sheetApp = ref<ConnectedApp | null>(null)
 const sheetOpen = ref(false)
 
 function onRow(app: ConnectedApp): void {
+  if (isReference.value) {
+    toast('这里只展示其他平台的能力，切回当前平台后才能连接')
+    return
+  }
   if (app.route) {
     if (healthUnavailable.value) {
       // 桌面 / 不支持时先给一句原因，再照旧进页：健康数据页自己是说明性禁用态，
@@ -344,6 +353,7 @@ const externalSubtitle = computed(() =>
               :icon="app.icon"
               :accent="app.accent"
               :testid="`connected-app-${app.id}`"
+              :disabled="isReference"
               :aria-label="rowAria(app)"
               @click="onRow(app)"
             >

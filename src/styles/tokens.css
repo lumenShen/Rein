@@ -181,10 +181,8 @@
      压在 #f5f5f7 上实测 4.39:1，差 0.11 到 AA。#0062d6 让两类一起过，肉眼仍是同一支
      iOS 蓝（G/B 各压 12/18 级，色相不动）。
      暗色档**故意不动**，理由写在那个块里。 */
-  /* **品牌蓝的真源**。--accent 会在模块页被 data-tone 改写成该模块的主色，
-     所以「蓝色本身」必须另留一个不被改写的名字：饮水、交通、存储文字这些
-     **数据分类色**跟随品牌蓝，不能因为用户此刻站在饮食页就变成珊瑚色。
-     需要品牌蓝的地方一律写 --accent-base，需要「当前页操作色」的地方才写 --accent。 */
+  /* **品牌蓝的真源**。界面操作色统一使用 --accent-base；模块识别色只用于数据与状态语义，
+     不随路由改写按钮、链接与选中态。饮水、交通、存储文字等数据分类色也跟随它。 */
   --accent-base: #0062d6;
   --accent: var(--accent-base);
   /* soft 与主色**同源同色相、只是浓度不同**（12%；暗色块同构，是 --accent 的 18%）——
@@ -192,8 +190,7 @@
   --accent-soft: rgba(0, 98, 214, 0.12);
   --accent-strong: #0a5ec2; /* accent-soft 底或白底上的文字蓝 */
   --on-accent: #ffffff; /* accent 及语义色实底按钮 / 分类彩底图标的前景白 */
-  /* 模块色实底上的前景。与 --on-accent 分开：--on-accent 会被模块页在暗色下
-     改成深墨（见文件末尾），而 float / 沉浸层这类**游离子孙**并不总在模块页里。
+  /* 模块色实底上的前景。与 --on-accent 分开：模块色只用于数据与状态语义，
      这里按亮暗两档固定反色：亮色模块底压白、暗色提亮后的模块底压深墨。 */
   --on-tone: #ffffff;
   /* 实底档的绿。**真源** —— --c-protein / --cat-workout / --led-income / --led-salary
@@ -227,9 +224,9 @@
        --mod-<m>         实底层：按钮填充、实心模块徽标。白字压上去 ≥4.5:1，
                           同时当文字压在画布 #f5f5f7 上也 ≥4.5:1（双用途，见 --accent 注释）；
        --mod-<m>-strong  浅底文字层：soft 底 / 白底上的模块色文字，≥4.5:1。
-     暗色档统一提亮（tone 在 #1c1c1e 上 ≥4.5），模块页的 --on-accent 同步改深墨，
-     让亮色实底上的前景也过 AA —— 见文件末尾 html[data-tone] 段。
-     ============================================================ */
+     暗色档统一提亮（tone 在 #1c1c1e 上 ≥4.5）；这些颜色只承担数据与状态语义，
+     不参与界面主操作色。
+   ============================================================ */
   --mod-nutrition: #c92a2a;
   --mod-nutrition-strong: #b42318;
   --mod-nutrition-tone: #f04452;
@@ -579,7 +576,7 @@
   /* ---------- 布局 ----------
      --wbar-reserve：悬浮运动条停靠在 bottom 时由组件写入的高度预留，
      让页面内容滚得出悬浮条盖住的区域；其他槽位 / 无运动时为缺省 0。 */
-  --frame-max: 480px;
+  --frame-max: 720px; /* 手机按视口收窄；平板不再锁在 480px 窄栏 */
   --frame-max-wide: 1240px; /* 桌面工作台 · 主人区内容上限（便当总览/一日脊柱） */
   --tabbar-h: 58px;
   /* 合并底栏（2026-11）· AI 快捷输入行的高度：一块玻璃 = 输入行 + 页签行，
@@ -798,6 +795,7 @@ html[data-shell='desk'] {
     --accent: var(--accent-base);
     --accent-soft: rgba(10, 132, 255, 0.18);
     --accent-strong: #4da3ff;
+    --on-accent: #0b0b0e;
     --on-tone: #0b0b0e;
     --ok-strong: #30d158;
     --warn-soft: rgba(255, 179, 64, 0.16);
@@ -806,8 +804,7 @@ html[data-shell='desk'] {
 
     /* 模块识别色 · 暗色档：整组提亮（压在 #1c1c1e 上文字 ≥4.5），
        soft 浓度也从 14% 抬到 20% —— 黑底上的淡色需要更多实体才立得住。
-       实底档（--mod-<m>）在暗色里就是亮色本身，因此模块页会把 --on-accent
-       改成深墨（见文件末尾 html[data-tone] 段），否则白字压上去会掉到 2–3:1。 */
+       实底档（--mod-<m>）在暗色里就是亮色本身；需要反色文字时使用 --on-tone。 */
     --mod-nutrition: #ff6b6b;
     --mod-nutrition-strong: #ffa8a8;
     --mod-nutrition-tone: #ff6b6b;
@@ -900,91 +897,4 @@ html[data-shell='desk'] {
   }
 }
 
-/* ============================================================
-   模块页色调作用域
-   ------------------------------------------------------------
-   data-tone 由 App.vue 写在 <html> 上（与 data-shell / data-perf / data-inspector
-   同一条做法）—— 所以要照顾 teleport 到 body 的弹层，而不是只包住 RouterView。
-
-   只改写「当前页操作色」的四个名字，不动任何数据分类色：
-     --accent        实底层（按钮填充 / 链接 / 选中态）
-     --accent-strong 浅底上的文字层
-     --accent-soft   soft 底
-     --tone          图形层（进度环 / 图表 / 大图标；比实底更饱和）
-
-   为什么实底与图形要分两层：实底要托住白字（≥4.5:1），必须压深；图形只需 3:1，
-   可以保住「活力橙」的高饱和。若只留一层，要么按钮不合格，要么图标发灰发褐。
-
-   总览 / 我 / 设置不写 data-tone：它们是壳，不是一个功能域，沿用品牌蓝。
-   ============================================================ */
-html[data-tone='nutrition'] {
-  --accent: var(--mod-nutrition);
-  --accent-strong: var(--mod-nutrition-strong);
-  --accent-soft: var(--mod-nutrition-soft);
-  --tone: var(--mod-nutrition-tone);
-}
-
-html[data-tone='sports'] {
-  --accent: var(--mod-sports);
-  --accent-strong: var(--mod-sports-strong);
-  --accent-soft: var(--mod-sports-soft);
-  --tone: var(--mod-sports-tone);
-}
-
-html[data-tone='focus'] {
-  --accent: var(--mod-focus);
-  --accent-strong: var(--mod-focus-strong);
-  --accent-soft: var(--mod-focus-soft);
-  --tone: var(--mod-focus-tone);
-}
-
-html[data-tone='todo'] {
-  --accent: var(--mod-todo);
-  --accent-strong: var(--mod-todo-strong);
-  --accent-soft: var(--mod-todo-soft);
-  --tone: var(--mod-todo-tone);
-}
-
-html[data-tone='campus'] {
-  --accent: var(--mod-campus);
-  --accent-strong: var(--mod-campus-strong);
-  --accent-soft: var(--mod-campus-soft);
-  --tone: var(--mod-campus-tone);
-}
-
-html[data-tone='ledger'] {
-  --accent: var(--mod-ledger);
-  --accent-strong: var(--mod-ledger-strong);
-  --accent-soft: var(--mod-ledger-soft);
-  --tone: var(--mod-ledger-tone);
-}
-
-html[data-tone='program'] {
-  --accent: var(--mod-program);
-  --accent-strong: var(--mod-program-strong);
-  --accent-soft: var(--mod-program-soft);
-  --tone: var(--mod-program-tone);
-}
-
-html[data-tone='ai'] {
-  --accent: var(--mod-ai);
-  --accent-strong: var(--mod-ai-strong);
-  --accent-soft: var(--mod-ai-soft);
-  --tone: var(--mod-ai-tone);
-}
-
-html[data-tone='record'] {
-  --accent: var(--mod-record);
-  --accent-strong: var(--mod-record-strong);
-  --accent-soft: var(--mod-record-soft);
-  --tone: var(--mod-record-tone);
-}
-
-/* 暗色档：模块色整组提亮，白字压上去会掉到 2–3:1，所以模块页的前景翻成深墨。
-   这同时修好了语义实底（--ok / --warn / --danger）在暗色里压白字的老问题 ——
-   这些亮色实底配深墨本来就更清楚，而模块页恰好是它们最密集的地方。 */
-@media (prefers-color-scheme: dark) {
-  html[data-tone] {
-    --on-accent: #0b0b0e;
-  }
-}
+/* 模块识别色只用于数据与状态语义；界面操作色统一沿用 --accent-base。 */

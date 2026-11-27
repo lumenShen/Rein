@@ -4,10 +4,10 @@ use tauri::State;
 
 use crate::error::{ReinError, Result};
 use crate::state::AppState;
-use chrono::Utc;
+use chrono::{Local, NaiveDate, Utc};
 
 use super::models::{
-    Food, FoodCreateInput, FoodCreateResult, MealLog, RecipePref, RecipePrefInput,
+    Food, FoodCreateInput, FoodCreateResult, MealLog, MealLogUpdateInput, RecipePref, RecipePrefInput,
 };
 use super::{attach_units, food_from_row, food_from_row_at, FOOD_COLS};
 
@@ -139,7 +139,75 @@ pub fn search_foods_fuzzy(
 
 #[cfg(test)]
 mod tests {
-    use super::name_similarity;
+    use super::*;
+    use rusqlite::Connection;
+
+    fn fresh() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrate_for_test(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn update_meal_preserves_identity_and_updates_fields() {
+        let conn = fresh();
+        conn.execute(
+            "INSERT INTO foods (id, name, kcal, protein, carb, fat, created_at) \
+             VALUES (1, '鸡胸肉', 165, 31, 0, 3.6, '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO food_units (food_id, name, grams) VALUES (1, '份', 100)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO meal_logs (id, food_id, date, meal_type, quantity_mode, grams, source, note, created_at) \
+             VALUES (7, 1, '2026-11-25', 'lunch', 'grams', 100, 'search', '原备注', '2026-11-25T10:00:00Z')",
+            [],
+        )
+        .unwrap();
+        let updated = update_meal_on(
+            &conn,
+            7,
+            &MealLogUpdateInput {
+                food_id: 1,
+                date: "2026-11-26".into(),
+                meal_type: "dinner".into(),
+                quantity_mode: "unit".into(),
+                grams: 200.0,
+                units: Some(2.0),
+                unit_name: Some("份".into()),
+                note: Some("少油".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.id, 7);
+        assert_eq!(updated.date, "2026-11-26");
+        assert_eq!(updated.meal_type, "dinner");
+        assert_eq!(updated.grams, 200.0);
+        assert_eq!(updated.units, Some(2.0));
+        assert_eq!(updated.food.as_ref().unwrap().units.len(), 1);
+        assert_eq!(updated.food.as_ref().unwrap().units[0].name, "份");
+        assert_eq!(updated.source, "search");
+        assert_eq!(updated.created_at, "2026-11-25T10:00:00Z");
+        assert!(update_meal_on(
+            &conn,
+            7,
+            &MealLogUpdateInput {
+                food_id: 1,
+                date: "2026-11-26".into(),
+                meal_type: "dinner".into(),
+                quantity_mode: "grams".into(),
+                grams: 0.0,
+                units: None,
+                unit_name: None,
+                note: None,
+            },
+        )
+        .is_err());
+    }
 
     fn pct(q: &str, n: &str) -> i32 {
         (name_similarity(q, n) * 100.0).round() as i32
@@ -260,6 +328,15 @@ pub fn create_food(state: State<AppState>, food: FoodCreateInput) -> Result<Food
 const MEAL_SELECT: &str = "ml.id, ml.food_id, ml.date, ml.meal_type, ml.quantity_mode, ml.grams, \
      ml.units, ml.unit_name, ml.source, ml.note, ml.created_at";
 
+fn attach_meal_units(conn: &rusqlite::Connection, logs: &mut [MealLog]) -> Result<()> {
+    for log in logs {
+        if let Some(food) = &mut log.food {
+            attach_units(conn, std::slice::from_mut(food))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn list_meals(state: State<AppState>, date: String) -> Result<Vec<MealLog>> {
     let conn = state.db.lock();
@@ -269,9 +346,10 @@ pub fn list_meals(state: State<AppState>, date: String) -> Result<Vec<MealLog>> 
          WHERE ml.date = ?1 ORDER BY ml.created_at, ml.id"
     );
     let mut stmt = conn.prepare(&sql)?;
-    let logs = stmt
+    let mut logs = stmt
         .query_map([&date], meal_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    attach_meal_units(&conn, &mut logs)?;
     Ok(logs)
 }
 
@@ -289,9 +367,10 @@ pub fn list_meals_range(
          WHERE ml.date BETWEEN ?1 AND ?2 ORDER BY ml.date DESC, ml.id DESC"
     );
     let mut stmt = conn.prepare(&sql)?;
-    let logs = stmt
+    let mut logs = stmt
         .query_map([&start_date, &end_date], meal_from_row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    attach_meal_units(&conn, &mut logs)?;
     Ok(logs)
 }
 
@@ -337,7 +416,95 @@ pub fn log_meal(
     let id = conn.last_insert_rowid();
 
     let sql = format!("SELECT {MEAL_SELECT}, {FOOD_COLS} FROM meal_logs ml JOIN foods f ON f.id = ml.food_id WHERE ml.id = ?1");
-    let log = conn.query_row(&sql, [id], meal_from_row)?;
+    let mut log = conn.query_row(&sql, [id], meal_from_row)?;
+    attach_meal_units(&conn, std::slice::from_mut(&mut log))?;
+    Ok(log)
+}
+
+#[tauri::command]
+pub fn update_meal(state: State<AppState>, id: i64, input: MealLogUpdateInput) -> Result<MealLog> {
+    let conn = state.db.lock();
+    update_meal_on(&conn, id, &input)
+}
+
+fn update_meal_on(
+    conn: &rusqlite::Connection,
+    id: i64,
+    input: &MealLogUpdateInput,
+) -> Result<MealLog> {
+    let parsed_date = NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
+        .map_err(|_| ReinError::Message("日期应为 YYYY-MM-DD".into()))?;
+    if parsed_date > Local::now().date_naive() {
+        return Err(ReinError::Message("饮食记录不能记在未来".into()));
+    }
+    if !["breakfast", "lunch", "dinner", "snack"].contains(&input.meal_type.as_str()) {
+        return Err(ReinError::Message("餐次无效".into()));
+    }
+    if !input.grams.is_finite() || input.grams <= 0.0 {
+        return Err(ReinError::Message("克重必须大于 0".into()));
+    }
+    let (units, unit_name) = match input.quantity_mode.as_str() {
+        "grams" => (None, None),
+        "unit" => {
+            let units = input
+                .units
+                .filter(|v| v.is_finite() && *v > 0.0)
+                .ok_or_else(|| ReinError::Message("份量必须大于 0".into()))?;
+            let name = input
+                .unit_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| ReinError::Message("请选择份量单位".into()))?;
+            let unit_grams: Option<f64> = conn
+                .query_row(
+                    "SELECT grams FROM food_units WHERE food_id = ?1 AND name = ?2",
+                    rusqlite::params![input.food_id, name],
+                    |r| r.get(0),
+                )
+                .ok();
+            let expected = unit_grams
+                .map(|g| (g * units).round())
+                .ok_or_else(|| ReinError::Message("份量单位不属于所选食物".into()))?;
+            if (expected - input.grams).abs() > 0.01 {
+                return Err(ReinError::Message("克重与份量换算不一致".into()));
+            }
+            (Some(units), Some(name.to_string()))
+        }
+        _ => return Err(ReinError::Message("数量模式无效".into())),
+    };
+    if input.note.as_deref().is_some_and(|v| v.chars().count() > 300) {
+        return Err(ReinError::Message("备注不能超过 300 个字".into()));
+    }
+    let food_exists: bool = conn
+        .query_row("SELECT 1 FROM foods WHERE id = ?1", [input.food_id], |_| {
+            Ok(true)
+        })
+        .unwrap_or(false);
+    if !food_exists {
+        return Err(ReinError::Message("食物不存在".into()));
+    }
+    let changed = conn.execute(
+        "UPDATE meal_logs SET food_id = ?1, date = ?2, meal_type = ?3, quantity_mode = ?4, \
+         grams = ?5, units = ?6, unit_name = ?7, note = ?8 WHERE id = ?9",
+        rusqlite::params![
+            input.food_id,
+            input.date,
+            input.meal_type,
+            input.quantity_mode,
+            input.grams,
+            units,
+            unit_name,
+            input.note,
+            id,
+        ],
+    )?;
+    if changed == 0 {
+        return Err(ReinError::Message("饮食记录不存在".into()));
+    }
+    let sql = format!("SELECT {MEAL_SELECT}, {FOOD_COLS} FROM meal_logs ml JOIN foods f ON f.id = ml.food_id WHERE ml.id = ?1");
+    let mut log = conn.query_row(&sql, [id], meal_from_row)?;
+    attach_meal_units(&conn, std::slice::from_mut(&mut log))?;
     Ok(log)
 }
 

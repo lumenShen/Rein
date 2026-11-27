@@ -194,6 +194,7 @@ let healthLastSync: string | null = null
 let healthImported = 12
 let healthExported = 0
 let healthSteps = 0
+let healthGrantedCategories = { exercise: true, activity: true, body: true, vitals: true }
 
 /**
  * 心率设备 mock：浏览器没有蓝牙，给一台演示手环与随时间波动的心率，便于调 UI。
@@ -7602,6 +7603,40 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(structuredClone(log) as T)
     }
 
+    case 'update_meal': {
+      const input = JSON.parse(JSON.stringify(args.input)) as MealLog
+      const i = meals.findIndex((m) => m.id === args.id)
+      if (i === -1) throw new Error('饮食记录不存在')
+      const f = foods.find((x) => x.id === input.foodId)
+      if (!f) throw new Error('食物不存在')
+      if (!Number.isFinite(input.grams) || input.grams <= 0) throw new Error('克重必须大于 0')
+      if (!['breakfast', 'lunch', 'dinner', 'snack'].includes(String(input.mealType))) throw new Error('餐次无效')
+      if (!['grams', 'unit'].includes(String(input.quantityMode))) throw new Error('数量模式无效')
+      if (String(input.note ?? '').length > 300) throw new Error('备注不能超过 300 个字')
+      if (String(input.date) > ymd(new Date())) throw new Error('饮食记录不能记在未来')
+      if (input.quantityMode === 'unit') {
+        const unit = f.units.find((u) => u.name === input.unitName)
+        if (!unit || !input.units || Number(input.units) <= 0) throw new Error('份量或单位无效')
+        if (Math.abs(Math.round(unit.grams * Number(input.units)) - Number(input.grams)) > 0.01) {
+          throw new Error('克重与份量换算不一致')
+        }
+      }
+      const next: MealLog = {
+        ...meals[i]!,
+        foodId: f.id,
+        date: String(input.date),
+        mealType: input.mealType,
+        quantityMode: input.quantityMode,
+        grams: Number(input.grams),
+        units: input.quantityMode === 'unit' ? Number(input.units) : null,
+        unitName: input.quantityMode === 'unit' ? String(input.unitName) : null,
+        note: (input.note as string | null) ?? null,
+        food: f,
+      }
+      meals[i] = next
+      return delay(structuredClone(next) as T)
+    }
+
     case 'delete_meal': {
       const i = meals.findIndex((m) => m.id === args.id)
       if (i !== -1) meals.splice(i, 1)
@@ -7867,6 +7902,14 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(JSON.parse(JSON.stringify(patch)) as T)
     }
 
+    case 'restore_todo': {
+      const restored = JSON.parse(JSON.stringify(args.todo)) as Todo
+      const i = todos.findIndex((t) => t.id === restored.id)
+      if (i !== -1) throw new Error(`待办已存在：${restored.id}`)
+      todos.push(restored)
+      return delay(JSON.parse(JSON.stringify(restored)) as T)
+    }
+
     case 'delete_todo': {
       const i = todos.findIndex((t) => t.id === args.id)
       if (i === -1) return delay(undefined as T)
@@ -7996,6 +8039,38 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay(structuredClone(w) as T)
     }
 
+    case 'update_workout': {
+      const input = JSON.parse(JSON.stringify(args.input)) as Workout
+      const i = workouts.findIndex((w) => w.id === args.id)
+      if (i === -1) throw new Error('运动记录不存在')
+      if (workouts[i]!.source !== 'local') throw new Error('手机同步记录以 Health Connect 为准')
+      if (workouts[i]!.sessionId != null && (input.type !== workouts[i]!.type || input.intensity != null || input.effort != null)) {
+        throw new Error('课程与跑步的类型和强度来自过程记录')
+      }
+      if (!String(input.name).trim() || String(input.name).length > 80) throw new Error('名称应为 1–80 个字')
+      if (!String(input.type).trim() || String(input.type).length > 40) throw new Error('运动类型无效')
+      if (String(input.date) > ymd(new Date())) throw new Error('运动记录不能记在未来')
+      if (!Number.isFinite(Number(input.durationMin)) || Number(input.durationMin) <= 0 || Number(input.durationMin) > 1440) throw new Error('时长应在 0–1440 分钟之间')
+      if (!Number.isFinite(Number(input.kcal)) || Number(input.kcal) < 0 || Number(input.kcal) > 10000) throw new Error('消耗应在 0–10000 大卡之间')
+      if (input.intensity != null && !['low', 'moderate', 'high'].includes(String(input.intensity))) throw new Error('强度档位无效')
+      if (input.effort != null && (!Number.isInteger(Number(input.effort)) || Number(input.effort) < 1 || Number(input.effort) > 5)) throw new Error('体感应为 1–5')
+      if (String(input.note ?? '').length > 500) throw new Error('备注不能超过 500 个字')
+      const next: Workout = {
+        ...workouts[i]!,
+        name: String(input.name).trim(),
+        type: input.type,
+        date: String(input.date),
+        startMin: (input.startMin as number | null) ?? null,
+        durationMin: Number(input.durationMin),
+        kcal: Number(input.kcal),
+        intensity: input.intensity ?? workouts[i]!.intensity,
+        effort: input.effort ?? null,
+        note: (input.note as string | null) ?? null,
+      }
+      workouts[i] = next
+      return delay(structuredClone(next) as T)
+    }
+
     case 'delete_workout': {
       const i = workouts.findIndex((w) => w.id === args.id)
       if (i !== -1) workouts.splice(i, 1)
@@ -8013,10 +8088,10 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
       return delay({
         supported: true,
         availability: 'available',
-        readGranted: true,
+        readGranted: healthGrantedCategories.exercise,
         // 四组全授：浏览器里迭代预览卡与「已授权」胶囊用的样子；
         // 要看「按组去授权」的引导态，把某组改成 false 即可
-        grantedCategories: { exercise: true, activity: true, body: true, vitals: true },
+        grantedCategories: healthGrantedCategories,
         // 写授权跟着回写开关走，好让「打开开关 → 提示去补授权」这条路在 mock 里也能走一遍
         writeGranted: healthPush,
         pushEnabled: healthPush,
@@ -8036,6 +8111,9 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     }
 
     case 'health_sync_start': {
+      if (!Object.values(healthGrantedCategories).some(Boolean)) {
+        return delay({ phase: 'needs_auth', report: null, message: null } as T)
+      }
       // windowStart 在 mock 里刻意忽略：这里只推进相位，真实读取窗口对 UI 迭代没有可见影响
       healthSteps = 0
       return delay({ phase: 'pending', report: null, message: null } as T)
@@ -10783,7 +10861,7 @@ export async function mockInvoke<T>(cmd: string, args: Args = {}): Promise<T> {
     }
 
     case 'kb_usage_clean':
-      return delay({ removed: 0, bytes: 0, dryRun: Boolean(args.dryRun), message: '浏览器 mock 环境没有可清理的碎片' } as T)
+      return delay({ removed: 0, bytes: 0, failed: 0, dryRun: Boolean(args.dryRun), message: '浏览器 mock 环境没有可清理的碎片' } as T)
 
     /* ---------- 本地嵌入模型（目录与 Rust 注册表一致；浏览器不能下载） ---------- */
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronDown, Play, Pencil, SearchX, Trash2 } from 'lucide-vue-next'
+import { AlertCircle, ChevronDown, Play, Pencil, SearchX, Trash2 } from 'lucide-vue-next'
 
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -36,10 +36,16 @@ const delOpen = ref(false)
  */
 const starting = ref(false)
 
-onMounted(async () => {
-  await Promise.all([planStore.ensureLoaded(), lib.ensureLoaded()])
+async function loadDetail(): Promise<void> {
+  ready.value = false
+  await Promise.all([
+    planStore.error ? planStore.load() : planStore.ensureLoaded(),
+    lib.error ? lib.load(true) : lib.ensureLoaded(),
+  ])
   ready.value = true
-})
+}
+
+onMounted(loadDetail)
 
 const plan = computed(() => planStore.byId(String(route.params.id)))
 
@@ -101,7 +107,25 @@ async function doDelete(): Promise<void> {
     <div class="rubber-layer" data-rubber-content>
 
     <EmptyState
-      v-if="ready && !plan"
+      v-if="ready && planStore.error"
+      :icon="AlertCircle"
+      title="训练课程读取失败"
+      :hint="planStore.error"
+    >
+      <template #action>
+        <button class="cta" type="button" @click="loadDetail">重试</button>
+      </template>
+    </EmptyState>
+
+    <EmptyState
+      v-else-if="!ready"
+      :icon="Play"
+      title="正在读取课程…"
+      hint="课程与动作明细正在加载"
+    />
+
+    <EmptyState
+      v-else-if="!plan"
       :icon="SearchX"
       title="课程不存在或已删除"
       hint="回到全部课程看看其他内容"

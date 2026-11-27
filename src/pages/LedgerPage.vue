@@ -9,8 +9,9 @@ import LedgerEntrySheet from '@/components/ledger/LedgerEntrySheet.vue'
 import LedgerList from '@/components/ledger/LedgerList.vue'
 import LedgerStats from '@/components/ledger/LedgerStats.vue'
 import { categoryOf } from '@/config/ledger'
+import { useToday } from '@/composables/useToday'
 import { useLedgerStore } from '@/stores/ledger'
-import { addMonths, monthKey, todayStr } from '@/utils/date'
+import { addMonths, monthKey } from '@/utils/date'
 import type { LedgerEntry } from '@/types'
 
 /** 记账：月度统计 + 流水列表 + 记一笔 / 编辑 / 预算设置。 */
@@ -22,8 +23,9 @@ onMounted(() => {
 })
 
 /* ---- 月份切换 ---- */
-const currentMonth = monthKey(todayStr())
-const canNext = computed(() => store.month < currentMonth)
+const { today } = useToday()
+const currentMonth = computed(() => monthKey(today.value))
+const canNext = computed(() => store.month < currentMonth.value)
 
 const monthTitle = computed(() => {
   const [y, m] = store.month.split('-')
@@ -32,7 +34,7 @@ const monthTitle = computed(() => {
 
 function shiftMonth(n: number): void {
   const next = monthKey(addMonths(`${store.month}-01`, n))
-  if (n > 0 && next > currentMonth) return
+  if (n > 0 && next > currentMonth.value) return
   void store.loadMonth(next)
 }
 
@@ -56,8 +58,8 @@ const filtered = computed(() => {
 })
 
 /** 本月一条流水都没有。区别于「筛出来是空」——后者是关键词/分类的锅，筛选条得留着让人撤回来。 */
-const noEntries = computed(() => store.monthEntries.length === 0)
-const noMatch = computed(() => kw.value.trim() !== '' || filterCat.value !== null)
+const noEntries = computed(() => !store.loading && !store.error && store.monthEntries.length === 0)
+const noMatch = computed(() => !store.loading && !store.error && (kw.value.trim() !== '' || filterCat.value !== null))
 /** 空月份整条收起筛选：没有东西可筛，那条孤零零的「全部」胶囊还占着 40px，
  *  把空态卡一路顶到悬浮钮底下（用户截图里被压住的正是这一块）。 */
 const showFilters = computed(() => !noEntries.value || noMatch.value)
@@ -107,11 +109,19 @@ const emptyCopy = computed(() => {
     <!-- 超范围平移层：页头留在层外，到边拖动时只有内容位移（system/rubberScroll） -->
     <div class="rubber-layer" data-rubber-content>
 
+    <section v-if="store.loading" class="card flow-state" data-testid="ledger-loading">
+      正在读取本月流水…
+    </section>
+    <section v-else-if="store.error" class="card flow-state" role="alert" data-testid="ledger-error">
+      <p>流水读取失败：{{ store.error }}</p>
+      <button type="button" @click="store.loadMonth()">重试</button>
+    </section>
+
     <!-- 桌面：左统计 / 右流水的主从构图。
          .board 在移动端就是普通的一列（内容与顺序**完全不变**），桌面才分成两栏 ——
          495px 高的统计卡独占一栏、整列流水交给右栏，省掉的是眼睛在
          「月份数字 ↔ 流水条目」之间来回横跳的距离。 -->
-    <div class="board d-full">
+    <div v-else class="board d-full">
       <!-- 本月统计 + 预算 + 趋势。桌面左栏定宽 360px（见样式末尾的桌面段）；
            桌面主从构图里它退成 .card.sub 那口浅井（配角），移动端恢复普通卡片外观 -->
       <LedgerStats class="card sub flow-card" @edit-budget="budgetOpen = true" />
@@ -222,6 +232,20 @@ const emptyCopy = computed(() => {
   text-align: center;
   font-size: var(--fs-subhead);
   font-weight: var(--fw-bold);
+}
+
+.flow-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-sm);
+  color: var(--text-2);
+}
+
+.flow-state button {
+  min-height: var(--control-sm);
+  color: var(--accent);
+  font-weight: var(--fw-medium);
 }
 
 /* ---------- 桌面主从构图（.board 内的一切在移动端都是普通块） ---------- */

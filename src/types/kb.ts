@@ -905,6 +905,7 @@ export interface KbUsageReport {
 export interface KbUsageCleanResult {
   removed: number
   bytes: number
+  failed: number
   dryRun: boolean
   message: string
 }

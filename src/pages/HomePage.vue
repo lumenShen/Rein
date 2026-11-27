@@ -12,17 +12,18 @@ import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import BentoOverview from '@/components/workbench/BentoOverview.vue'
 import DaySpine from '@/components/workbench/DaySpine.vue'
 import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useToday } from '@/composables/useToday'
 import { DESKTOP_MIN } from '@/config/domain'
 import { useFeaturesStore } from '@/stores/features'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useProgramStore } from '@/stores/program'
-import { fmtDateCn, todayStr } from '@/utils/date'
+import { fmtDateCn } from '@/utils/date'
 import { weightTrendAlert } from '@/utils/weightTrend'
 
 /** 主页。桌面端（≥ DESKTOP_MIN）：工作台双视图（便当总览 / 一日脊柱）。
  *  移动端：状态条 + 一日时间线 + 页脚动作区——主页即今天。 */
 const router = useRouter()
-const today = todayStr()
+const { today } = useToday()
 const isDesktop = useMediaQuery(`(min-width: ${DESKTOP_MIN}px)`)
 
 /** 桌面主页视图模式，localStorage 持久化 */
@@ -54,15 +55,17 @@ const features = useFeaturesStore()
 /** 摄入总览与营养数据属「营养」模块：关掉之后数据也不拉（不产生请求）、整条也不渲染 */
 const nutritionOn = computed(() => features.isEnabled('nutrition'))
 
-onMounted(() => {
+function loadDayData(): void {
   if (nutritionOn.value) {
-    void nutrition.loadSummary(today)
+    void nutrition.loadSummary(today.value)
     void nutrition.loadProfile()
     void nutrition.loadMetrics(10)
   }
-  // 健康方案被关掉时不必拉方案数据（插件层的收益之一：关掉的模块不产生请求）
   if (features.isEnabled('program')) void program.load()
-})
+}
+
+watch(today, loadDayData)
+onMounted(loadDayData)
 
 /* ---- 体重趋势异常：连续异常时自动提醒复盘（主页卡片，可忽略）。
        提醒的落点是方案页复盘，方案模块关掉时整卡不出现 ---- */

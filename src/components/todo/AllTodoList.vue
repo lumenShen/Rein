@@ -4,14 +4,15 @@ import { ListTodo } from 'lucide-vue-next'
 
 import EmptyState from '@/components/common/EmptyState.vue'
 import TodoItem from '@/components/todo/TodoItem.vue'
+import { useToday } from '@/composables/useToday'
 import { useTodoStore } from '@/stores/todo'
-import { diffDays, fmtDateCn, todayStr } from '@/utils/date'
+import { diffDays, fmtDateCn } from '@/utils/date'
 import { cmpUrgency } from '@/utils/todo'
 import type { Todo } from '@/types'
 
 /** 全部待办清单：按紧急程度排序、按日期分组（今天 → 明天 → 未来 → 历史 → 收件箱）。 */
 const store = useTodoStore()
-const today = todayStr()
+const { today } = useToday()
 
 onMounted(() => {
   void store.loadAll()
@@ -19,7 +20,7 @@ onMounted(() => {
 
 function groupLabel(d: string | null): string {
   if (!d) return '收件箱'
-  const diff = diffDays(today, d)
+  const diff = diffDays(today.value, d)
   if (diff === 0) return '今天'
   if (diff === 1) return '明天'
   if (diff === -1) return '昨天'
@@ -28,7 +29,7 @@ function groupLabel(d: string | null): string {
 
 function groupKey(d: string | null): number {
   if (!d) return 1e9
-  const diff = diffDays(today, d)
+  const diff = diffDays(today.value, d)
   return diff >= 0 ? diff : 1000 - diff
 }
 

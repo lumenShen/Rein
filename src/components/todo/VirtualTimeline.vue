@@ -3,8 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ChevronDown, LocateFixed } from 'lucide-vue-next'
 
 import { CATEGORY_META } from '@/config/domain'
+import { useToday } from '@/composables/useToday'
 import { useTodoStore } from '@/stores/todo'
-import { addDays, diffDays, fmtDateCn, minToHHmm, nowMin, todayStr } from '@/utils/date'
+import { addDays, diffDays, fmtDateCn, minToHHmm, nowMin } from '@/utils/date'
 import type { Todo } from '@/types'
 
 /**
@@ -38,7 +39,7 @@ const scrollTop = ref(0)
 const viewH = ref(0)
 const host = ref<HTMLElement | null>(null)
 
-const today = todayStr()
+const { today } = useToday()
 const isPreview = computed(() => !!props.preview)
 
 const scheduled = computed(() => props.todos.filter((t) => t.date != null && t.startMin != null))
@@ -91,7 +92,7 @@ const dayHeads = computed(() =>
     .filter((x) => x.y >= range.value.top && x.y <= range.value.bottom),
 )
 
-const nowTop = computed(() => yOf(today, nowMin()))
+const nowTop = computed(() => yOf(today.value, nowMin()))
 const showNow = computed(() => nowTop.value >= range.value.top && nowTop.value <= range.value.bottom)
 
 const blocks = computed(() => {
@@ -118,7 +119,7 @@ const gauge = computed(() => {
   return {
     date: d,
     min: Math.min(1439, m),
-    isNow: d === today && Math.abs(m - nowMin()) < 5,
+    isNow: d === today.value && Math.abs(m - nowMin()) < 5,
   }
 })
 
@@ -224,7 +225,7 @@ function scrollToAnchor(anchorY: number, pct = 0.2): void {
 
 /** 打开抽屉后：锚定在"现在"（今天），否则今天第一个安排或今天 09:00 */
 function scrollToNow(): void {
-  if (allDates.value.includes(today)) {
+  if (allDates.value.includes(today.value)) {
     scrollToAnchor(nowTop.value)
     return
   }

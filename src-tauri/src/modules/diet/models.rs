@@ -90,6 +90,19 @@ pub struct MealLog {
 }
 
 /// 食谱偏好（食谱库 / AI 生成 / 方案引擎选菜共用）
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MealLogUpdateInput {
+    pub food_id: i64,
+    pub date: String,
+    pub meal_type: String,
+    pub quantity_mode: String,
+    pub grams: f64,
+    pub units: Option<f64>,
+    pub unit_name: Option<String>,
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecipePref {

@@ -91,6 +91,7 @@ type Filter = 'all' | 'folder' | 'file'
 const rows = ref<FolderRow[]>([])
 const loading = ref(true)
 const error = ref('')
+const partialError = ref('')
 const truncated = ref(false)
 /** 分组根各物理 root 的直接子项数（健康二级卡用） */
 const sourceCounts = ref<ReadonlyMap<string, number>>(new Map())
@@ -240,6 +241,7 @@ async function load(): Promise<void> {
   const g = group.value
   const seq = ++loadSeq
   error.value = ''
+  partialError.value = ''
   truncated.value = false
   excerpts.value = new Map()
   sourceCounts.value = new Map()
@@ -263,10 +265,13 @@ async function load(): Promise<void> {
         g.sources.map((source) => kbService.listDir(source)),
       )
       const counts = new Map<string, number>()
+      const failedSources: string[] = []
       results.forEach((result, i) => {
         if (result.status === 'fulfilled') {
           listings.push(result.value)
           counts.set(g.sources[i], result.value.entries.length)
+        } else {
+          failedSources.push(g.sources[i])
         }
       })
       if (!listings.length) {
@@ -274,6 +279,9 @@ async function load(): Promise<void> {
           (result): result is PromiseRejectedResult => result.status === 'rejected',
         )
         throw failed?.reason ?? new Error('工作区目录读取失败')
+      }
+      if (failedSources.length) {
+        partialError.value = `${failedSources.join('、')} 读取失败，当前列表可能不完整`
       }
       sourceCounts.value = counts
     }
@@ -522,6 +530,11 @@ function nestedCountText(nested: WorkspaceNestedGroup): string {
             </span>
           </button>
         </div>
+
+        <p v-if="partialError" class="partial" role="status" data-testid="about-folder-partial-error">
+          <span class="flex-1">{{ partialError }}</span>
+          <button type="button" class="trunc-link" @click="load">重试</button>
+        </p>
 
         <div class="entries" data-testid="about-folder-list">
           <template v-if="loading">
@@ -899,6 +912,19 @@ function nestedCountText(nested: WorkspaceNestedGroup): string {
   flex-wrap: wrap;
   gap: var(--gap-sm);
   margin-top: var(--gap-tight);
+}
+
+.partial {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap-md);
+  padding: var(--sp-10) var(--sp-12);
+  border-radius: var(--radius-m);
+  background: var(--warn-soft);
+  color: var(--warn-strong);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
 }
 
 .trunc {

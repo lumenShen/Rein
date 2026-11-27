@@ -106,6 +106,8 @@ export const useCourseSelectStore = defineStore('courseSelect', () => {
   const grab = ref<GrabState | null>(null)
   const grabSettings = ref<GrabSettings | null>(null)
   const grabBusy = ref(false)
+  /** 最近一次读取任务单失败的原因；与引擎自身的 grabError 分开，避免把网络失败当成空任务。 */
+  const grabLoadError = ref('')
   /** 订阅取消函数。**由 `subscribers` 计数决定何时真的调用**（见 attachGrab） */
   let unlisten: (() => void) | null = null
 
@@ -177,7 +179,7 @@ export const useCourseSelectStore = defineStore('courseSelect', () => {
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '获取选课状态失败'
-      status.value = null
+      // 保留上一次成功读取的批次与教学班；瞬时刷新失败不应把整个选课面板变成错误空态。
     } finally {
       loading.value = false
     }
@@ -309,6 +311,7 @@ export const useCourseSelectStore = defineStore('courseSelect', () => {
     if (unlisten) return
     attaching ??= onGrabState((s) => {
       grab.value = s
+      grabLoadError.value = ''
     }).then((fn) => {
       unlisten = fn
       attaching = null
@@ -327,8 +330,9 @@ export const useCourseSelectStore = defineStore('courseSelect', () => {
   async function refreshGrab(): Promise<void> {
     try {
       grab.value = await campusService.grabState()
-    } catch {
-      /* 拉不到就先这样：没有任务单不等于出错，事件推来时会补上 */
+      grabLoadError.value = ''
+    } catch (e) {
+      grabLoadError.value = e instanceof Error ? e.message : '读取抢课任务失败'
     }
   }
 
@@ -507,6 +511,7 @@ export const useCourseSelectStore = defineStore('courseSelect', () => {
     grab,
     grabSettings,
     grabBusy,
+    grabLoadError,
     turns,
     hasTurn,
     serverTime,

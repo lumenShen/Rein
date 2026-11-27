@@ -85,6 +85,17 @@ export interface MealLogInput {
   note?: string | null
 }
 
+export interface MealLogUpdateInput {
+  foodId: number
+  date: string
+  mealType: MealType
+  quantityMode: QuantityMode
+  grams: number
+  units?: number | null
+  unitName?: string | null
+  note?: string | null
+}
+
 /** 新建自定义食品入参（营养为每 100g；AI create_food 工具与后续 UI 共用） */
 export interface FoodCreateInput {
   name: string

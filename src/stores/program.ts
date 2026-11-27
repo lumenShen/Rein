@@ -157,8 +157,6 @@ export const useProgramStore = defineStore('program', () => {
 
   /** 启用一套方案：落库 → 写日程 → 同步每日营养目标 → 刷新待办 */
   async function activate(plan: ProgramPlan): Promise<ProgramRecord> {
-    const n = useNutritionStore()
-    const t = useTodoStore()
     const blob = { params: plan.params, days: plan.days }
     const record = await programService.createProgram({
       goal: plan.goal,
@@ -166,12 +164,28 @@ export const useProgramStore = defineStore('program', () => {
       weeks: plan.weeks,
       paramsJson: JSON.stringify(blob),
     })
-    await scheduleTodos(record.id, blob, blob.days[0]?.date ?? todayStr())
-    await n.saveTargets(plan.params.targets)
+    try {
+      await finishActivation(record)
+      return record
+    } catch (e) {
+      try {
+        await load()
+      } catch {
+        // 已创建的方案仍以 active 记录为准，页面提供重试同步，不能再次创建。
+      }
+      throw new Error('方案已启用，但日程或营养目标尚未同步完成，请重试同步', { cause: e })
+    }
+  }
+
+  /** 启用后的排程与目标同步可独立重试，避免半成功后重复创建方案。 */
+  async function finishActivation(record: ProgramRecord): Promise<void> {
+    const n = useNutritionStore()
+    const blob = parseBlob(record)
     active.value = record
-    await t.loadAll()
+    await scheduleTodos(record.id, blob, blob.days[0]?.date ?? todayStr())
+    await n.saveTargets(blob.params.targets)
+    await useTodoStore().loadAll()
     await load()
-    return record
   }
 
   /** 调整进行中标志（adjust 的并发闸门，见 adjust） */
@@ -416,6 +430,7 @@ export const useProgramStore = defineStore('program', () => {
     load,
     generateDrafts,
     activate,
+    finishActivation,
     adjust,
     archive,
     remove,

@@ -154,6 +154,8 @@ async function save(): Promise<void> {
     pushRecentCat(category.value)
     emit('saved')
     emit('close')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '保存失败，请重试')
   } finally {
     saving.value = false
   }
@@ -161,10 +163,14 @@ async function save(): Promise<void> {
 
 async function remove(): Promise<void> {
   if (!editing.value) return
-  await store.remove(editing.value.id)
-  toast.toast('已删除')
-  emit('saved')
-  emit('close')
+  try {
+    await store.remove(editing.value.id)
+    toast.toast('已删除')
+    emit('saved')
+    emit('close')
+  } catch (e) {
+    toast.toast(e instanceof Error ? e.message : '删除失败，请重试')
+  }
 }
 
 /* 删除是破坏性操作：先经 ActionSheet 确认 */

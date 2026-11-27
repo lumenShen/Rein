@@ -156,10 +156,14 @@ export async function aiSchedule(
     placements.push({ id: t.id, startMin: p.startMin })
     occupied.push({ start: slot.start - SCHEDULE_BUFFER, end: slot.end + SCHEDULE_BUFFER })
   }
-  // 模型漏排的回落启发式
+  // 模型漏排的回落启发式：已接受的 AI 槽位也算占用，避免回落项覆盖它们。
   const missed = pool.filter((t) => !placements.some((p) => p.id === t.id) && !unplaced.includes(t.id))
   if (missed.length) {
-    const rest = heuristicSchedule(missed, busyTodos, date, fromMin)
+    const acceptedAsBusy: Todo[] = placements.flatMap((p) => {
+      const todo = poolById.get(p.id)
+      return todo ? [{ ...todo, date, startMin: p.startMin }] : []
+    })
+    const rest = heuristicSchedule(missed, [...busyTodos, ...acceptedAsBusy], date, fromMin)
     placements.push(...rest.placements)
     unplaced.push(...rest.unplaced)
   }

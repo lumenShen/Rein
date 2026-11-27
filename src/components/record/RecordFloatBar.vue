@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { Expand, Square } from 'lucide-vue-next'
+import { Expand, Pause, Play, Square } from 'lucide-vue-next'
 
 import FloatDock from '@/components/common/FloatDock.vue'
-import { fmtDur, recorder, stopRecording } from '@/system/recorderRuntime'
+import { fmtDur, pauseRecording, recorder, resumeRecording, stopRecording } from '@/system/recorderRuntime'
 
 /**
  * 录音悬浮条：录音进行中常驻（App.vue 挂载，沉浸形态隐藏）。
@@ -22,19 +22,28 @@ function openPage(): void {
 
 <template>
   <FloatDock
-    :open="recorder.status === 'recording'"
+    :open="recorder.status !== 'idle'"
     storage-key="rein.rbar.dock.v1"
-    region-label="正在录音"
+    :region-label="recorder.status === 'paused' ? '录音已暂停' : '正在录音'"
     blob-label="展开录音控制"
     root-class="rdock-root"
   >
     <template #bar>
       <button class="info row" type="button" @click="openPage">
-        <span class="dot live" />
-        <b class="t">录音中</b>
+        <span class="dot" :class="{ live: recorder.status === 'recording' }" />
+        <b class="t">{{ recorder.status === 'paused' ? '已暂停' : '录音中' }}</b>
         <span class="s num">{{ fmtDur(recorder.elapsedSec) }}</span>
       </button>
       <div class="acts row">
+        <button
+          class="abtn pause"
+          type="button"
+          :aria-label="recorder.status === 'paused' ? '继续录音' : '暂停录音'"
+          @click="recorder.status === 'paused' ? resumeRecording() : pauseRecording()"
+        >
+          <Play v-if="recorder.status === 'paused'" :size="13" />
+          <Pause v-else :size="13" />
+        </button>
         <button class="abtn end" type="button" @click="stopRecording">
           <Square :size="13" :stroke-width="2.5" /> 停止
         </button>
@@ -45,7 +54,7 @@ function openPage(): void {
     </template>
 
     <template #blob>
-      <span class="dot live" />
+      <span class="dot" :class="{ live: recorder.status === 'recording' }" />
       <b class="bt num">{{ fmtDur(recorder.elapsedSec) }}</b>
     </template>
   </FloatDock>
@@ -119,7 +128,7 @@ function openPage(): void {
 
 .acts {
   flex: none;
-  /* 浮条里两枚按钮之间 8（无边界控件间距） */
+  /* 浮条按钮之间 8 */
   gap: var(--gap-sm);
 }
 
@@ -159,6 +168,14 @@ function openPage(): void {
      两层都偏离令牌，且实底档当文字用对比度不够 */
   color: var(--danger-strong);
   background: var(--danger-soft);
+}
+
+.abtn.pause {
+  width: var(--control-icon);
+  padding: 0;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-1);
 }
 
 .abtn.ico {

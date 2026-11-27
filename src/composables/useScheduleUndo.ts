@@ -47,9 +47,9 @@ export function useScheduleUndo() {
       id: ++seq,
       snaps: [{ id: t.id, date: t.date, startMin: t.startMin }],
     }
+    await store.update({ ...t, date: next.date, startMin: next.startMin })
     stack.push(group)
     if (stack.length > MAX_GROUPS) stack.shift()
-    await store.update({ ...t, date: next.date, startMin: next.startMin })
     const fallback = dayChanged
       ? '已移到另一天'
       : `已挪到 ${hhmm(next.startMin)}`
@@ -70,11 +70,41 @@ export function useScheduleUndo() {
       id: ++seq,
       snaps: changed.map((it) => ({ id: it.todo.id, date: it.todo.date, startMin: it.todo.startMin })),
     }
+    const applied: MoveSnap[] = []
+    try {
+      for (const it of changed) {
+        const snap = { id: it.todo.id, date: it.todo.date, startMin: it.todo.startMin }
+        // 写库可能已成功，随后刷新失败；先登记，才能把这一项也恢复。
+        applied.push(snap)
+        await store.update({ ...it.todo, date: it.date, startMin: it.startMin })
+      }
+    } catch (e) {
+      // 批量排程不是事务；中途失败时把已经写入的项逐个挪回原位，避免留下半套安排。
+      const failed: number[] = []
+      for (const snap of applied.reverse()) {
+        const cur = store.allTodos.find((t) => t.id === snap.id)
+        if (!cur) {
+          failed.push(snap.id)
+          continue
+        }
+        try {
+          await store.update({ ...cur, date: snap.date, startMin: snap.startMin })
+        } catch {
+          failed.push(snap.id)
+        }
+      }
+      if (failed.length) {
+        const reason = e instanceof Error ? e.message : '未知错误'
+        throw new Error(`${reason}；${failed.length} 项未能确认恢复，请检查排程`, { cause: e })
+      }
+      if (applied.length) {
+        const reason = e instanceof Error ? e.message : '未知错误'
+        throw new Error(`${reason}；本次排程已恢复`, { cause: e })
+      }
+      throw e
+    }
     stack.push(group)
     if (stack.length > MAX_GROUPS) stack.shift()
-    for (const it of changed) {
-      await store.update({ ...it.todo, date: it.date, startMin: it.startMin })
-    }
     toast(text, { action: { label: '撤销', run: () => void undo(group) } })
   }
 

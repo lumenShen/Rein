@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, Dumbbell, Flame } from 'lucide-vue-next'
 
 import PageHeader from '@/components/layout/PageHeader.vue'
@@ -9,9 +9,10 @@ import WorkoutRow from '@/components/exercise/WorkoutRow.vue'
 import WorkoutDetailDrawer from '@/components/exercise/WorkoutDetailDrawer.vue'
 import ActionSheet from '@/components/common/ActionSheet.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useToday } from '@/composables/useToday'
 import { useExerciseStore } from '@/stores/exercise'
 import type { Workout } from '@/types'
-import { WEEKDAY_LABELS, addDays, addMonths, fmtDateCn, monthKey, parseDate, todayStr, weekDates } from '@/utils/date'
+import { WEEKDAY_LABELS, addDays, addMonths, fmtDateCn, monthKey, parseDate, weekDates } from '@/utils/date'
 
 /** 全部运动记录 · 二级页：日 / 周 / 年三视图。
  *  结构沿用本周运动卡的视觉语言：概览卡（周期导航 + 分钟柱状图 + 统计行）+ 分组记录列表。 */
@@ -27,10 +28,16 @@ const ex = useExerciseStore()
 const view = ref<ViewKey>('week')
 
 // 各视图独立的周期锚点（锚在周期内任一天），默认今天
-const today = todayStr()
-const dayAnchor = ref(today)
-const weekAnchor = ref(today)
-const yearAnchor = ref(today)
+const { today } = useToday()
+const dayAnchor = ref(today.value)
+const weekAnchor = ref(today.value)
+const yearAnchor = ref(today.value)
+
+watch(today, (next, previous) => {
+  if (dayAnchor.value === previous) dayAnchor.value = next
+  if (weekAnchor.value === previous) weekAnchor.value = next
+  if (yearAnchor.value === previous) yearAnchor.value = next
+})
 
 onMounted(() => {
   void ex.loadAll()
@@ -51,11 +58,11 @@ const yearNum = computed(() => parseDate(yearAnchor.value).getFullYear())
 const atCurrent = computed(() => {
   switch (view.value) {
     case 'day':
-      return dayAnchor.value === today
+      return dayAnchor.value === today.value
     case 'week':
-      return weekRange.value[1]! >= today
+      return weekRange.value[1]! >= today.value
     case 'year':
-      return yearNum.value === Number(today.slice(0, 4))
+      return yearNum.value === Number(today.value.slice(0, 4))
     default:
       return false
   }
@@ -76,9 +83,9 @@ function shift(n: number): void {
 }
 
 function backToCurrent(): void {
-  dayAnchor.value = today
-  weekAnchor.value = today
-  yearAnchor.value = today
+  dayAnchor.value = today.value
+  weekAnchor.value = today.value
+  yearAnchor.value = today.value
 }
 
 /* ---------- 周期标签 ---------- */
@@ -148,12 +155,12 @@ const bars = computed(() => {
     return weekDates(weekAnchor.value).map((date) => ({
       label: WEEKDAY_LABELS[(parseDate(date).getDay() + 6) % 7],
       value: periodWorkouts.value.filter((w) => w.date === date).reduce((s, w) => s + w.durationMin, 0),
-      highlight: date === today,
+      highlight: date === today.value,
     }))
   }
   if (view.value === 'year') {
-    const curYear = Number(today.slice(0, 4))
-    const curMonth = Number(today.slice(5, 7))
+    const curYear = Number(today.value.slice(0, 4))
+    const curMonth = Number(today.value.slice(5, 7))
     return Array.from({ length: 12 }, (_, i) => {
       const mk = `${yearNum.value}-${String(i + 1).padStart(2, '0')}`
       return {
@@ -175,8 +182,8 @@ interface Group {
 }
 
 function dayGroupLabel(date: string): string {
-  if (date === today) return '今天'
-  if (date === addDays(today, -1)) return '昨天'
+  if (date === today.value) return '今天'
+  if (date === addDays(today.value, -1)) return '昨天'
   return fmtDateCn(date)
 }
 
@@ -303,7 +310,12 @@ async function confirmDelete(value: string): Promise<void> {
     </main>
 
     <!-- 运动详情抽屉（Teleport；保证页面单根） -->
-    <WorkoutDetailDrawer :open="detailOpen" :workout="detailWorkout" @close="detailOpen = false" />
+    <WorkoutDetailDrawer
+      :open="detailOpen"
+      :workout="detailWorkout"
+      @close="detailOpen = false"
+      @updated="detailWorkout = $event"
+    />
 
     <!-- 删除确认层：行尾删除钮只负责开门，删除本身必须过这一层 -->
     <ActionSheet

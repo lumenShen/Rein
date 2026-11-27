@@ -183,6 +183,9 @@ export const useRunStore = defineStore('run', () => {
   /** 自动暂停开关与阈值（随快照保留；缺省 600 = 10'00"/km） */
   const autoPauseOn = ref(readAutoPauseOn())
   const autoPausePaceSec = ref(600)
+  /** 恢复中的会话使用当时的开关快照，不覆盖用户当前的全局偏好。 */
+  const sessionAutoPauseOn = ref<boolean | null>(null)
+  const effectiveAutoPauseOn = computed(() => sessionAutoPauseOn.value ?? autoPauseOn.value)
 
   /** 手动暂停段墙钟（ms）+ 次数 */
   const manualPauseMs = ref(0)
@@ -427,7 +430,7 @@ export const useRunStore = defineStore('run', () => {
       gapDropCount: gapDropCount.value,
       decimated: trackDecimated.value || pts.length < trackPoints.value.length,
       finalKm: finalKmSnap.value,
-      autoPauseOn: autoPauseOn.value,
+      autoPauseOn: effectiveAutoPauseOn.value,
       autoPausePaceSec: autoPausePaceSec.value,
     }
   }
@@ -463,7 +466,7 @@ export const useRunStore = defineStore('run', () => {
   /* ---------- 阈值归一化（与 Rust normalize_auto_pause 同规则） ---------- */
 
   function autoPauseThresholds(): { enter: number; exit: number } {
-    if (!autoPauseOn.value || autoPausePaceSec.value <= 0) return { enter: 0, exit: 0 }
+    if (!effectiveAutoPauseOn.value || autoPausePaceSec.value <= 0) return { enter: 0, exit: 0 }
     const enter = Math.min(1200, Math.max(300, Math.round(autoPausePaceSec.value)))
     const exit = Math.min(enter - 30, Math.max(300, enter - 60))
     return { enter, exit }
@@ -1343,6 +1346,7 @@ export const useRunStore = defineStore('run', () => {
     void trackingService.runEnd() // 未运行时为无害空操作（服务不在跑）
     void trackingService.setKeepalive(false)
     sessionId.value = null
+    sessionAutoPauseOn.value = null
     startedAtIso.value = ''
     accumMs.value = 0
     segStartedMs = 0
@@ -1448,7 +1452,7 @@ export const useRunStore = defineStore('run', () => {
     gapSlowCount.value = Math.max(0, s.gapSlowCount ?? 0)
     gapFastCount.value = Math.max(0, s.gapFastCount ?? 0)
     gapDropCount.value = Math.max(0, s.gapDropCount ?? 0)
-    autoPauseOn.value = s.autoPauseOn ?? true
+    sessionAutoPauseOn.value = s.autoPauseOn ?? readAutoPauseOn()
     autoPausePaceSec.value = s.autoPausePaceSec ?? 600
     finalKmSnap.value = s.finalKm ?? null
     nativeElapsedMs.value = accumMs.value

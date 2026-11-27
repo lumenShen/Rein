@@ -2,12 +2,12 @@
 
 use tauri::State;
 
-use crate::error::Result;
+use crate::error::{ReinError, Result};
 use crate::state::AppState;
-use chrono::Utc;
+use chrono::{Local, NaiveDate, Utc};
 
-use super::models::Workout;
-use super::{workout_from_row, WORKOUT_COLS};
+use super::models::{Workout, WorkoutUpdateInput};
+use super::{workout_by_id, workout_from_row, WORKOUT_COLS};
 
 #[tauri::command]
 pub fn list_workouts(
@@ -140,6 +140,89 @@ pub(crate) fn create_workout_on(
     Ok(conn.query_row(&sql, [id], workout_from_row)?)
 }
 
+#[tauri::command]
+pub fn update_workout(state: State<AppState>, id: i64, input: WorkoutUpdateInput) -> Result<Workout> {
+    let conn = state.db.lock();
+    update_workout_on(&conn, id, &input)
+}
+
+fn update_workout_on(
+    conn: &rusqlite::Connection,
+    id: i64,
+    input: &WorkoutUpdateInput,
+) -> Result<Workout> {
+    use rusqlite::OptionalExtension;
+
+    let existing: Option<(String, Option<i64>, String)> = conn
+        .query_row(
+            "SELECT source, session_id, type FROM workouts WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    let Some((source, session_id, current_type)) = existing else {
+        return Err(ReinError::Message("运动记录不存在".into()));
+    };
+    if source != "local" {
+        return Err(ReinError::coded("read_only", "手机同步记录以 Health Connect 为准"));
+    }
+    if session_id.is_some()
+        && (input.workout_type != current_type || input.intensity.is_some() || input.effort.is_some())
+    {
+        return Err(ReinError::coded(
+            "read_only",
+            "课程与跑步的类型和强度来自过程记录",
+        ));
+    }
+    let name = input.name.trim();
+    if name.is_empty() || name.chars().count() > 80 {
+        return Err(ReinError::Message("名称应为 1–80 个字".into()));
+    }
+    let parsed_date = NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
+        .map_err(|_| ReinError::Message("日期应为 YYYY-MM-DD".into()))?;
+    if parsed_date > Local::now().date_naive() {
+        return Err(ReinError::Message("运动记录不能记在未来".into()));
+    }
+    if input.workout_type.trim().is_empty() || input.workout_type.chars().count() > 40 {
+        return Err(ReinError::Message("运动类型无效".into()));
+    }
+    if input.start_min.is_some_and(|v| !(0..1440).contains(&v)) {
+        return Err(ReinError::Message("开始时刻无效".into()));
+    }
+    if !input.duration_min.is_finite() || input.duration_min <= 0.0 || input.duration_min > 1440.0 {
+        return Err(ReinError::Message("时长应在 0–1440 分钟之间".into()));
+    }
+    if !input.kcal.is_finite() || input.kcal < 0.0 || input.kcal > 10000.0 {
+        return Err(ReinError::Message("消耗应在 0–10000 大卡之间".into()));
+    }
+    if input.intensity.as_deref().is_some_and(|v| !["low", "moderate", "high"].contains(&v)) {
+        return Err(ReinError::Message("强度档位无效".into()));
+    }
+    if input.effort.is_some_and(|v| !(1..=5).contains(&v)) {
+        return Err(ReinError::Message("体感应为 1–5".into()));
+    }
+    if input.note.as_deref().is_some_and(|v| v.chars().count() > 500) {
+        return Err(ReinError::Message("备注不能超过 500 个字".into()));
+    }
+    conn.execute(
+        "UPDATE workouts SET name = ?1, type = ?2, date = ?3, start_min = ?4, duration_min = ?5, \
+         kcal = ?6, intensity = COALESCE(?7, intensity), effort = ?8, note = ?9 WHERE id = ?10",
+        rusqlite::params![
+            name,
+            input.workout_type,
+            input.date,
+            input.start_min,
+            input.duration_min,
+            input.kcal,
+            input.intensity,
+            input.effort,
+            input.note,
+            id,
+        ],
+    )?;
+    workout_by_id(conn, id)
+}
+
 /// 删除一条运动记录。
 ///
 /// 从迁移 0036 起，`workouts` 里可能混着两种记录，删除的语义不同（见
@@ -209,6 +292,135 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         crate::db::migrate_for_test(&conn).unwrap();
         conn
+    }
+
+    #[test]
+    fn update_workout_preserves_source_and_rejects_imported_records() {
+        let conn = fresh();
+        let created = create_workout_on(
+            &conn,
+            "晨跑".into(),
+            "run".into(),
+            "2026-11-25".into(),
+            Some(7 * 60),
+            30.0,
+            Some("moderate".into()),
+            None,
+            300.0,
+            Some("原备注".into()),
+        )
+        .unwrap();
+        let updated = update_workout_on(
+            &conn,
+            created.id,
+            &WorkoutUpdateInput {
+                name: "晨跑（修正）".into(),
+                workout_type: "run".into(),
+                date: "2026-11-26".into(),
+                start_min: Some(7 * 60 + 30),
+                duration_min: 42.5,
+                intensity: None,
+                effort: None,
+                kcal: 420.0,
+                note: Some("手表实测".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.name, "晨跑（修正）");
+        assert_eq!(updated.date, "2026-11-26");
+        assert_eq!(updated.duration_min, 42.5);
+        assert_eq!(updated.kcal, 420.0);
+        assert_eq!(updated.intensity, "moderate");
+        assert_eq!(updated.source, "local");
+        assert_eq!(updated.created_at, created.created_at);
+
+        conn.execute("UPDATE workouts SET source = 'health_connect' WHERE id = ?1", [created.id]).unwrap();
+        assert!(update_workout_on(
+            &conn,
+            created.id,
+            &WorkoutUpdateInput {
+                name: "不允许修改".into(),
+                workout_type: "run".into(),
+                date: "2026-11-26".into(),
+                start_min: None,
+                duration_min: 30.0,
+                intensity: None,
+                effort: None,
+                kcal: 300.0,
+                note: None,
+            },
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn session_workout_rejects_type_and_intensity_changes() {
+        let conn = fresh();
+        let created = create_workout_on(
+            &conn,
+            "力量训练".into(),
+            "strength".into(),
+            "2026-11-26".into(),
+            None,
+            45.0,
+            Some("high".into()),
+            None,
+            360.0,
+            None,
+        )
+        .unwrap();
+        let session = crate::modules::session::commands::session_start_on(
+            &conn,
+            "plan-1".into(),
+            "力量训练".into(),
+            "2026-11-26T09:00:00Z".into(),
+            serde_json::Value::Null,
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE workouts SET session_id = ?1 WHERE id = ?2",
+            rusqlite::params![session.id, created.id],
+        )
+        .unwrap();
+
+        let blocked = update_workout_on(
+            &conn,
+            created.id,
+            &WorkoutUpdateInput {
+                name: "力量训练".into(),
+                workout_type: "run".into(),
+                date: "2026-11-26".into(),
+                start_min: None,
+                duration_min: 45.0,
+                intensity: Some("low".into()),
+                effort: Some(2),
+                kcal: 360.0,
+                note: None,
+            },
+        );
+        assert!(blocked.is_err());
+
+        let updated = update_workout_on(
+            &conn,
+            created.id,
+            &WorkoutUpdateInput {
+                name: "力量训练（修正）".into(),
+                workout_type: "strength".into(),
+                date: "2026-11-26".into(),
+                start_min: Some(9 * 60),
+                duration_min: 50.0,
+                intensity: None,
+                effort: None,
+                kcal: 400.0,
+                note: Some("手表实测".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.r#type, "strength");
+        assert_eq!(updated.intensity, "high");
+        assert_eq!(updated.effort, None);
+        assert_eq!(updated.duration_min, 50.0);
     }
 
     /// 对外网关专用的 LIMIT 变体：SQL 侧限行（contract §6.4）。
