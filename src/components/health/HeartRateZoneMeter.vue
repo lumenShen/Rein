@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 心率区间组件：大号读数 + 五段区间条 + 当前心率位置三角。
+ * 心率区间组件：大号读数 + 手表式五段区间条 + 底部位置三角。
  *
  * 三角的位置不是「按区间等分取中点」，而是按 50%–100% HRmax 连续映射：
  * 五个区间的边界正好落在 20% / 40% / 60% / 80% 上，所以三角滑动时读到的
@@ -44,24 +44,25 @@ const meta = computed(() => hrZoneMeta(props.zone))
         <b>{{ bpm ?? '—' }}</b>
         <em>次/分</em>
       </span>
-      <span v-if="meta" class="hzm-zone">{{ meta.label }}</span>
+      <!-- 区间名视觉上只由彩条里的白字承担；这里留一份读屏文本 -->
+      <span v-if="meta" class="hzm-sr">{{ meta.label }}</span>
       <slot name="trailing" />
     </div>
 
-    <!-- 条本身是装饰：读数与区间名在上面已经是文本，读屏不必再听一遍颜色。
+    <!-- 区间名只写在当前段里（手表式，视觉上唯一指示）；读屏拿上面的 .hzm-sr。
          同一份条也用在训练顶栏的紧凑档（见 HeartRateZoneBar）。 -->
-    <HeartRateZoneBar :bpm="bpm" :max-hr="maxHr" :live="live" />
+    <HeartRateZoneBar :bpm="bpm" :max-hr="maxHr" :zone="zone" :live="live" />
   </section>
 </template>
 
 <style scoped>
 .hzm {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-12);
+  gap: var(--sp-8);
   width: 100%;
-  /* 三角吊在条下方，留出它自己那 6px 的落点 */
-  padding-bottom: var(--sp-8);
+  /* 当前段向上长高 13px，头部与条之间留 8px 即可，不额外占卡片高度 */
 }
 
 .hzm-head {
@@ -119,10 +120,16 @@ const meta = computed(() => hrZoneMeta(props.zone))
   color: var(--text-2);
 }
 
-.hzm-zone {
-  font-size: var(--fs-subhead);
-  font-weight: var(--fw-medium);
-  /* 区间名保持中性色：色相只由条表达（config/hr 的约定） */
-  color: var(--text-2);
+/* 只给读屏用：视觉上的区间名统一交给彩条里的白字，避免两处重复 */
+.hzm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

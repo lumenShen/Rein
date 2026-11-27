@@ -8,7 +8,7 @@
  *  1 左上角不再有心率 / GPS / 后台对账 chip（页头只剩「收起」，状态不重复上屏）；
  *  2 卫星状态是把手行**左端**的一枚图标（与内容列同线），四档 class 之一；
  *  3 底部四栏收成三栏（时长 / 平均配速 / 消耗），心率整行独占下方；
- *  4 心率条：圆角 SVG 三角 + mask 缺口（mask-image 含 SVG、composite=exclude）；
+ *  4 心率条：手表式（等高五段、仅首尾圆角、当前段写区间名、底沿上指三角 + mask 缺口）；
  *  5 分段控件是胶囊材质：实色灰轨道 + --surface 滑块（丰富档 GlassThumb blob /
  *    默认档 .mthumb），两种动效档都必须有选中底；
  *  6 轨迹上有行进方向箭头（≤8 枚，落在可见窗口内）。
@@ -196,6 +196,22 @@ const FACTS = `(async () => {
     hrZone: hr.zone,
     hzbDim: bar?.classList.contains('dim') ?? null,
     markerSvg: marker?.tagName?.toLowerCase() ?? null,
+    zoneLabel: bar?.querySelector('.hzb-label')?.textContent?.trim() ?? null,
+    activeSegCount: bar?.querySelectorAll('.hzb-seg.active').length ?? 0,
+    markerAtBottom:
+      markerRect && barRect
+        ? markerRect.bottom <= barRect.bottom + 2 && markerRect.top >= barRect.y
+        : null,
+    activeSameHeight:
+      bar?.querySelector('.hzb-seg.active')?.getBoundingClientRect().height ===
+      (bar?.querySelector('.hzb-seg:not(.active)')?.getBoundingClientRect().height ?? 0),
+    firstRadius: bar?.querySelector('.hzb-seg:first-child')
+      ? getComputedStyle(bar.querySelector('.hzb-seg:first-child')).borderTopLeftRadius
+      : null,
+    midRadius: (() => {
+      const segs = bar ? [...bar.querySelectorAll('.hzb-seg')] : []
+      return segs.length > 2 ? getComputedStyle(segs[1]).borderTopLeftRadius : null
+    })(),
     maskImage: trackCs ? (trackCs.maskImage || trackCs.webkitMaskImage) : null,
     maskComposite: trackCs ? (trackCs.maskComposite || trackCs.webkitMaskComposite) : null,
     maskSize: trackCs ? trackCs.maskSize : null,
@@ -372,12 +388,20 @@ async function main() {
     ok('R3c 心率卡与三栏卡同宽同位', !!sameLeft && !!sameRight, JSON.stringify({ pace: f.paceRect, hr: f.livehrRect }))
     ok('R3d 心率卡在三栏卡下方', !!f.livehrRect && !!f.paceRect && f.livehrRect.y >= f.paceRect.bottom - 1, JSON.stringify({ hrY: f.livehrRect?.y, paceBottom: f.paceRect?.bottom }))
 
-    /* ---------- 4. 圆角三角 + mask 缺口 ---------- */
+    /* ---------- 4. 手表式彩条：等高五段 + 当前段写区间名 + 底沿上指三角 + mask 缺口 ---------- */
     ok('R4a 指示器是 SVG（圆角路径）', f.markerSvg === 'svg', String(f.markerSvg))
-    ok('R4b 条带挂了 SVG mask', !!f.maskImage && f.maskImage.includes('data:image/svg+xml'), String(f.maskImage ?? '').slice(0, 80))
-    ok('R4c mask 用 exclude 合成（挖洞）', String(f.maskComposite).includes('exclude') || String(f.maskComposite).includes('xor'), String(f.maskComposite))
+    ok('R4b 当前段写着区间名', !!f.zoneLabel && f.activeSegCount === 1, JSON.stringify({ label: f.zoneLabel, active: f.activeSegCount }))
+    ok('R4c 三角在条底沿内（上指）', f.markerAtBottom === true, String(f.markerAtBottom))
+    ok('R4e 五段等高', f.activeSameHeight === true, String(f.activeSameHeight))
+    ok(
+      'R4f 只有首尾外端是圆角',
+      !!f.firstRadius && f.firstRadius !== '0px' && (f.midRadius === '0px' || f.midRadius === '0'),
+      JSON.stringify({ first: f.firstRadius, mid: f.midRadius }),
+    )
+    ok('R4g 条带挂了 SVG mask（缺口）', !!f.maskImage && f.maskImage.includes('data:image/svg+xml'), String(f.maskImage ?? '').slice(0, 80))
+    ok('R4h mask 用 exclude 合成（挖洞）', String(f.maskComposite).includes('exclude') || String(f.maskComposite).includes('xor'), String(f.maskComposite))
     const centerOk = f.markerCenter != null && f.expectedCenter != null && Math.abs(f.markerCenter - f.expectedCenter) <= 2
-    ok('R4d 缺口/三角落在当前心率位置', !!centerOk, JSON.stringify({ got: f.markerCenter, want: f.expectedCenter }))
+    ok('R4d 三角落在当前心率位置', !!centerOk, JSON.stringify({ got: f.markerCenter, want: f.expectedCenter }))
 
     /* ---------- 5. 分段控件：实色灰轨道 + --surface 胶囊滑块 ---------- */
     const bg = String(f.msegSelectedBg ?? '')
