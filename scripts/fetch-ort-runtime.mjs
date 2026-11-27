@@ -32,18 +32,20 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const winOut = join(root, 'src-tauri', 'resources', 'ort')
 const androidOut = join(root, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'jniLibs', 'arm64-v8a')
 
-const ORT_VERSION = '1.28.2'
+const ORT_VERSION = '1.28.0'
+// GitHub Release 未提供 1.28.x Windows CPU 资产，改从同版本官方 NuGet 包取 DLL。
 const ANDROID_ORT_VERSION = '1.28.0' // Maven 上 android 制品滞后于 GitHub release
+const WINDOWS_ORT_PACKAGE = `https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ORT_VERSION}/microsoft.ml.onnxruntime.${ORT_VERSION}.nupkg`
 
 const TARGETS = {
   'win-x64': {
-    archive: `https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip`,
+    archive: WINDOWS_ORT_PACKAGE,
     want: 'onnxruntime.dll',
     dest: join(winOut, 'win-x64', 'onnxruntime.dll'),
     label: 'Windows x64',
   },
   'win-arm64': {
-    archive: `https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-arm64-${ORT_VERSION}.zip`,
+    archive: WINDOWS_ORT_PACKAGE,
     want: 'onnxruntime.dll',
     dest: join(winOut, 'win-arm64', 'onnxruntime.dll'),
     label: 'Windows ARM64',
